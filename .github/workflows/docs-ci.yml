@@ -1,0 +1,22 @@
+name: Documentation CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate project documentation
+        shell: pwsh
+        run: ./scripts/quality/validate-docs.ps1
+      - name: Validate agent assets
+        shell: pwsh
+        run: ./scripts/quality/validate-agent-assets.ps1

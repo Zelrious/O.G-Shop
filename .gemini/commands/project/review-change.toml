@@ -1,0 +1,4 @@
+description = "Review current O.G Shop changes against scope, security, tests, and documentation"
+prompt = """
+Read @AGENTS.md, @.agents/workflows/code-review.md and @.agents/skills/secure-change-review/SKILL.md. Review the current diff against the active task and affected module documents. Ground every finding in repository evidence and do not make edits without approval.
+"""

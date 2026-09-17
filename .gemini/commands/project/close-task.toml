@@ -1,0 +1,4 @@
+description = "Verify and document an O.G Shop task before handoff"
+prompt = """
+Read @AGENTS.md, @.agents/workflows/session-close.md and @.agents/skills/session-handoff/SKILL.md. Run only relevant approved checks, synchronize project/module progress from observed evidence, and prepare the exact before/after report.
+"""

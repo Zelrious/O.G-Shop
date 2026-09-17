@@ -1,0 +1,22 @@
+name: og-shop
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-og_shop}
+      POSTGRES_USER: ${POSTGRES_USER:-og_shop}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-for-local-only}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - og_shop_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-og_shop} -d ${POSTGRES_DB:-og_shop}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  og_shop_postgres_data:

@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: og-shop-backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/og_shop}
+    username: ${DB_USERNAME:og_shop}
+    password: ${DB_PASSWORD:change-me-for-local-only}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+
+server:
+  port: ${BACKEND_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

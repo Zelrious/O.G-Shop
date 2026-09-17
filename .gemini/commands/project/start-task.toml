@@ -1,0 +1,4 @@
+description = "Load verified O.G Shop context and prepare an approval-gated task report"
+prompt = """
+Read and follow @AGENTS.md, @.agents/workflows/session-start.md and @.agents/skills/repo-onboarding/SKILL.md. Inspect the current repository state and relevant module documents. Prepare the required pre-change report and do not edit until the project owner approves it.
+"""

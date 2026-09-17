@@ -1,0 +1,36 @@
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Java / Maven
+backend/target/
+backend/.mvn-user-home/
+.cache/
+*.class
+.mvn/timing.properties
+
+# Node / Vite
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+
+# Agent-local files
+CLAUDE.local.md
+.codex/
