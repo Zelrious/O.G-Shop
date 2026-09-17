@@ -1,7 +1,8 @@
 # TASK-0001 — Project foundation
 
-- Status: IN_PROGRESS
+- Status: DONE
 - Started: 2026-09-17
+- Completed: 2026-09-17
 - Approved by: Project owner
 - Modules: repository-wide
 
@@ -30,7 +31,8 @@ Tạo monorepo có thể build cho Old but Gold, thiết lập cấu trúc modul
 
 ## Remaining
 
-- Commit và push.
+- Không còn việc nào trong phạm vi task đã duyệt.
+- Việc nhập tài liệu nguồn và tạo database baseline thuộc task tiếp theo, cần báo cáo và phê duyệt riêng.
 
 ## Verification evidence
 
@@ -45,6 +47,7 @@ Tạo monorepo có thể build cho Old but Gold, thiết lập cấu trúc modul
 - `validate-docs.ps1`: 9 tài liệu lõi và 8 tài liệu module hợp lệ.
 - `validate-agent-assets.ps1`: 9 skill chuẩn, 9 Claude adapter và 10 workflow hợp lệ.
 - `quick_validate.py`: 18/18 skill/adapter hợp lệ.
+- `git push -u origin main`: thành công; baseline `40e3f8c` đã có trên `origin/main`.
 
 ## Changed files
 
@@ -60,3 +63,9 @@ Tạo monorepo có thể build cho Old but Gold, thiết lập cấu trúc modul
 
 - `mvnw.cmd` của Apache không nạp được JAR bằng đường dẫn tuyệt đối chứa ký tự tiếng Việt trên JDK Windows hiện tại. `scripts/quality/verify-backend.ps1` dùng cùng Maven Wrapper qua classpath tương đối và đã kiểm tra thành công; CI Linux tiếp tục dùng `./mvnw` chuẩn.
 - Docker Engine không thể khởi động trong phiên này. Cấu hình Compose đã parse thành công; chưa chạy PostgreSQL container vì baseline migration chưa tồn tại.
+
+## Publication
+
+- Repository: `https://github.com/Zelrious/O.G-Shop`
+- Branch: `main`
+- Baseline commit: `40e3f8c`

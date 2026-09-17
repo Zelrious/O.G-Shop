@@ -3,8 +3,9 @@
 - Project: Old but Gold (O.G Shop)
 - Updated: 2026-09-17
 - Phase: FOUNDATION
-- Overall status: READY_TO_PUBLISH
-- Active task: `TASK-0001-project-foundation`
+- Overall status: FOUNDATION_READY
+- Active task: None
+- Published baseline: `40e3f8c` on `origin/main`
 
 ## Completed
 
@@ -16,10 +17,11 @@
 - Hoàn thành agent governance cho Codex, Claude Code và Gemini CLI.
 - Backend đạt 3/3 test; Frontend đạt lint, typecheck, 1/1 test và production build.
 - Docker Compose, tài liệu và agent assets đã qua kiểm tra cấu trúc.
+- Công bố scaffold lên `https://github.com/Zelrious/O.G-Shop` tại commit `40e3f8c`.
 
 ## In progress
 
-- Commit scaffold và push nhánh `main` lên GitHub.
+- Không có task triển khai đang hoạt động. Task tiếp theo phải qua approval gate.
 
 ## Next
 

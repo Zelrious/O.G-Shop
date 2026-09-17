@@ -1,5 +1,13 @@
 # Project Backlog
 
+## Completed foundation
+
+- [x] Tạo monorepo Backend, Frontend, Database, Reference, Docs và Infra.
+- [x] Thiết lập rules, workflows và skills cho Codex, Claude Code và Gemini CLI.
+- [x] Thiết lập Maven/npm lock, local quality scripts và GitHub Actions.
+- [x] Kiểm tra Backend, Frontend, documentation, agent assets và Compose config.
+- [x] Push baseline lên `origin/main` tại commit `40e3f8c`.
+
 ## P0 — Foundation
 
 - [ ] Đưa tài liệu yêu cầu đã duyệt vào `reference/requirements/`.
