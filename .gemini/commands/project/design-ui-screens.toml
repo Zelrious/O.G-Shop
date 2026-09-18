@@ -1,0 +1,5 @@
+description = "Plan an approval-gated O.G Shop UI screen batch from verified use cases"
+prompt = """
+Read and follow @AGENTS.md, @docs/progress/STATUS.md, @docs/modules/INDEX.md, @.agents/skills/frontend-feature-change/SKILL.md, and @.agents/skills/marketplace-ui-implementation/SKILL.md. Read the module documents affected by the requested screens and inspect the current frontend and Git diff. Map every screen and action to an existing UC, clearly mark assumptions, and prepare the required pre-change report. Include responsive states, accessibility, mock/API boundaries, trade-offs, files, and verification. Do not edit until the project owner approves the proposed batch.
+"""
+
