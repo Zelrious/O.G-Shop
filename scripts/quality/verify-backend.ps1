@@ -6,10 +6,16 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $backendRoot = Join-Path $repoRoot 'backend'
-$wrapperJar = Join-Path $backendRoot '.mvn/wrapper/maven-wrapper.jar'
+$isWindowsPlatform = ($env:OS -eq 'Windows_NT')
+$wrapperExecutable = if ($isWindowsPlatform) {
+    Join-Path $backendRoot 'mvnw.cmd'
+}
+else {
+    Join-Path $backendRoot 'mvnw'
+}
 
-if (-not (Test-Path $wrapperJar)) {
-    throw 'Maven Wrapper JAR is missing.'
+if (-not (Test-Path $wrapperExecutable)) {
+    throw "Maven Wrapper script is missing: $wrapperExecutable"
 }
 
 if ([string]::IsNullOrWhiteSpace($env:JAVA_HOME)) {
@@ -22,23 +28,9 @@ if ([string]::IsNullOrWhiteSpace($env:JAVA_HOME)) {
     $env:JAVA_HOME = ($javaHomeLine.Line -split '=', 2)[1].Trim()
 }
 
-$javaExecutable = Join-Path $env:JAVA_HOME 'bin/java.exe'
-if (-not (Test-Path $javaExecutable)) {
-    $javaExecutable = Join-Path $env:JAVA_HOME 'bin/java'
-}
-if (-not (Test-Path $javaExecutable)) {
-    throw "Java executable not found under JAVA_HOME: $env:JAVA_HOME"
-}
-
-$env:MAVEN_USER_HOME = Join-Path $backendRoot '.mvn-user-home'
-
 Push-Location $backendRoot
 try {
-    & $javaExecutable `
-        -classpath '.mvn/wrapper/maven-wrapper.jar' `
-        '-Dmaven.multiModuleProjectDirectory=.' `
-        org.apache.maven.wrapper.MavenWrapperMain `
-        @MavenArguments
+    & $wrapperExecutable @MavenArguments
     if ($LASTEXITCODE -ne 0) {
         throw "Backend verification failed with exit code $LASTEXITCODE."
     }

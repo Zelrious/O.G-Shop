@@ -1,6 +1,6 @@
 # O.G Shop Backend
 
-Spring Boot modular monolith cho Old but Gold.
+Spring Boot modular monolith cho Old but Gold. Dự án dùng Maven Wrapper 3.3.4 loại `only-script` để mọi máy và CI chạy Maven 3.9.11 mà không cần commit bootstrap JAR.
 
 ## Chạy ứng dụng
 
@@ -8,7 +8,7 @@ Spring Boot modular monolith cho Old but Gold.
 .\mvnw.cmd spring-boot:run
 ```
 
-Nếu JDK trên Windows không nạp được Maven Wrapper qua đường dẫn tuyệt đối có ký tự Unicode, chạy quality gate bằng wrapper tương đối:
+Từ repository root có thể chạy quality gate chuẩn; script tự phát hiện `JAVA_HOME` khi biến này chưa được đặt và vẫn gọi chính Maven Wrapper:
 
 ```powershell
 ..\scripts\quality\verify-backend.ps1
@@ -23,6 +23,8 @@ Nếu JDK trên Windows không nạp được Maven Wrapper qua đường dẫn 
 ```
 
 Context test dùng H2 và không thay thế cho integration test PostgreSQL của các module nghiệp vụ.
+
+Maven Wrapper lưu bản Maven đã tải trong Maven user home mặc định. Không trỏ `MAVEN_USER_HOME` vào đường dẫn dự án có ký tự Unicode trên JDK Windows hiện tại.
 
 ## Module boundaries
 
