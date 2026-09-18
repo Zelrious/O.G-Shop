@@ -8,6 +8,7 @@ $skills = @(
     'requirement-impact-analysis',
     'backend-module-change',
     'frontend-feature-change',
+    'marketplace-ui-implementation',
     'database-migration',
     'api-contract',
     'secure-change-review',

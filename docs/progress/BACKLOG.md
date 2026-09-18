@@ -10,11 +10,21 @@
 
 ## P0 — Foundation
 
-- [ ] Đưa tài liệu yêu cầu đã duyệt vào `reference/requirements/`.
-- [ ] Đưa tài liệu database đã duyệt vào repository.
-- [ ] Tạo `V1__initial_schema.sql` từ schema đã được xác nhận.
+- [x] Đưa tài liệu yêu cầu đã duyệt vào `reference/requirements/`.
+- [x] Đưa tài liệu database đã duyệt vào repository.
+- [x] Tạo `V1__initial_schema.sql` từ schema đã được xác nhận (tích hợp pgvector và seller_biometrics).
+- [x] Triển khai UI Batch 1: Auth (Login, Register, Forgot Password, Profile) và eKYC Seller Verification.
+- [x] Tích hợp AI Microservice eKYC độc lập (services/ekyc-service: YOLOv11n + VietOCR Transformer + Gemini Flash + ArcFace 512-d).
 - [ ] Hoàn thiện `TRACEABILITY_MATRIX.md` theo UC, BR và NFR.
-- [ ] Chốt authentication và session strategy.
+- [ ] Chốt authentication và session strategy (DP-01).
+
+## Bước 2 — Tích hợp Dịch vụ Bên ngoài (External Integrations)
+
+- [ ] **Bước 2.1**: Tích hợp ImageKit lưu trữ Avatar khách hàng & hồ sơ cá nhân.
+- [ ] **Bước 2.2**: Tích hợp Cloudinary lưu trữ media sản phẩm (ảnh đa góc độ, video tình trạng, video mở gói & bằng chứng khiếu nại).
+- [ ] **Bước 2.3**: Cấu hình Gmail App Password (SMTP) gửi email OTP khôi phục mật khẩu tài khoản thật.
+- [ ] **Bước 2.4**: Tích hợp Google OAuth2 để đăng nhập nhanh bằng tài khoản Google và cấp phát token JWT an toàn.
+
 
 ## P1 — Core flow
 

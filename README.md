@@ -12,7 +12,8 @@ Theo dõi trạng thái tại [docs/progress/STATUS.md](docs/progress/STATUS.md)
 
 - Backend: Java 21, Spring Boot 3.5, Maven, Spring Security, Spring Data JPA, Flyway.
 - Frontend: React 19, TypeScript, Vite, npm.
-- Database: PostgreSQL.
+- AI Service: Python 3.11, FastAPI, YOLOv11n, VietOCR Transformer, DeepFace ArcFace (512-d), Google Gemini Flash.
+- Database: PostgreSQL (hỗ trợ extension `pgvector`).
 - Local infrastructure: Docker Compose.
 - CI: GitHub Actions.
 
@@ -21,6 +22,7 @@ Theo dõi trạng thái tại [docs/progress/STATUS.md](docs/progress/STATUS.md)
 ```text
 backend/      Spring Boot modular monolith
 frontend/     React application theo feature
+services/     AI microservices (ekyc-service: OCR CCCD & Sinh trắc học khuôn mặt)
 database/     SQL tests, seed, scripts và tài liệu database
 reference/    Tài liệu nguồn do chủ dự án chủ động đưa vào repository
 docs/         Kiến trúc, module, yêu cầu, tiến trình, ADR và kiểm thử
@@ -61,6 +63,15 @@ npm run dev
 ```
 
 Frontend mặc định: `http://localhost:5173`.
+
+### 4. Chạy eKYC AI Microservice
+
+```powershell
+python services/ekyc-service/start.py
+```
+
+Microservice mặc định: `http://localhost:8001`.
+Swagger API Docs: `http://localhost:8001/docs`.
 
 ## Quy trình làm việc với AI agent
 
