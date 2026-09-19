@@ -6,8 +6,8 @@
 2. Backend là Modular Monolith, chia theo bounded context.
 3. Frontend chia theo user-facing feature.
 4. Tài liệu nguồn chỉ được thêm bởi chủ dự án vào `reference/`.
-5. Tài liệu module là bản đồ để agent xác định phạm vi trước khi sửa.
-6. Quy tắc chuẩn nằm trong `.agents/`; file riêng cho Claude/Gemini chỉ là adapter.
+5. Tài liệu module là bản đồ xác định phạm vi và ownership trước khi sửa.
+6. Cấu hình công cụ/AI cá nhân chỉ được giữ local và bị Git ignore.
 
 ## Root directories
 
@@ -18,9 +18,6 @@
 | `database/` | Database test, seed, script và tài liệu hỗ trợ |
 | `reference/` | Nguồn đầu vào do chủ dự án chọn |
 | `docs/` | Kiến trúc, module, yêu cầu, tiến trình và ADR |
-| `.agents/` | Rule, workflow và skill chuẩn |
-| `.claude/` | Adapter native cho Claude Code |
-| `.gemini/` | Command adapter cho Gemini CLI |
 | `.github/` | CI và pull request governance |
 | `scripts/` | Automation có kết quả xác định |
 | `infra/` | Cấu hình hạ tầng ngoài ứng dụng |

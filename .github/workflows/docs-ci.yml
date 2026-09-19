@@ -17,6 +17,3 @@ jobs:
       - name: Validate project documentation
         shell: pwsh
         run: ./scripts/quality/validate-docs.ps1
-      - name: Validate agent assets
-        shell: pwsh
-        run: ./scripts/quality/validate-agent-assets.ps1

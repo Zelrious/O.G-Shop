@@ -31,9 +31,18 @@ Desktop.ini
 tmp/
 temp/
 
-# Agent-local files
+# Personal AI/agent working files (kept locally, never published)
+/.agents/
+/.claude/
+/.gemini/
+/.codex/
+**/AGENTS.md
+**/CLAUDE.md
+**/GEMINI.md
+/docs/prompts/
+/docs/adr/ADR-0002-agent-governance.md
+/scripts/quality/validate-agent-assets.ps1
 CLAUDE.local.md
-.codex/
 
 # Python
 __pycache__/
@@ -41,4 +50,3 @@ __pycache__/
 *$py.class
 *.so
 .pytest_cache/
-
