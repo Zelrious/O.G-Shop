@@ -101,11 +101,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         </button>
       </div>
 
-      <div style={{ marginTop: '16px', padding: '10px', background: 'var(--og-color-surface-subtle)', borderRadius: 'var(--og-radius-md)', fontSize: '0.8rem', color: 'var(--og-color-text-muted)' }}>
-        <strong>Tài khoản thử nghiệm:</strong><br />
-        • Buyer: <code>buyer@ogshop.vn</code> / <code>Password123@</code><br />
-        • Seller: <code>seller@ogshop.vn</code> / <code>Password123@</code>
-      </div>
     </form>
   );
 };

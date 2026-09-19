@@ -111,37 +111,11 @@ class FaceMatcher:
         except Exception as e:
             return {"status": "ERROR", "message": f"Lỗi hệ thống khi trích xuất khuôn mặt: {str(e)}"}
 
-    def set_id_card_image(self, id_img: Union[str, np.ndarray]) -> bool:
+    def verify_live_frame(self, live_img: np.ndarray, reference_embedding: np.ndarray) -> Dict[str, Any]:
         """
-        Trích xuất và lưu trước (cache) Vector Embedding của khuôn mặt trên thẻ CCCD.
-        Sử dụng RetinaFace để đảm bảo độ chuẩn xác tuyệt đối.
-        """
-        try:
-            img = self._load_image_utf8(id_img)
-            # Dùng represent để lấy embedding trực tiếp (rất chuẩn xác)
-            results = DeepFace.represent(
-                img_path=img,
-                model_name=self.model_name,
-                detector_backend=self.detector_backend, # Dùng retinaface
-                enforce_detection=True,
-                align=True
-            )
-            if len(results) > 0:
-                self.id_embedding = np.array(results[0]["embedding"])
-                return True
-            return False
-        except Exception as e:
-            print(f"[FaceMatcher] Lỗi khi set CCCD: {e}")
-            return False
-
-    def verify_live_frame(self, live_img: np.ndarray) -> Dict[str, Any]:
-        """
-        So khớp khuôn mặt thật từ Camera (live_img) với khuôn mặt CCCD đã lưu.
+        So khớp khuôn mặt từ Camera với embedding CCCD cục bộ của request.
         Tính toán bằng Cosine Distance với ngưỡng khắt khe (0.50).
         """
-        if not hasattr(self, 'id_embedding'):
-            return {"frame_status": "ERROR", "user_instruction": "Chua nap anh CCCD."}
-            
         try:
             # Dùng opencv để lấy embedding của luồng live, fallback skip nếu mặt đã crop
             try:
@@ -168,8 +142,8 @@ class FaceMatcher:
             
             # Tính Cosine Distance thủ công
             # Công thức: 1 - (dot(a, b) / (norm(a) * norm(b)))
-            dot_product = np.dot(self.id_embedding, live_embedding)
-            norm_id = np.linalg.norm(self.id_embedding)
+            dot_product = np.dot(reference_embedding, live_embedding)
+            norm_id = np.linalg.norm(reference_embedding)
             norm_live = np.linalg.norm(live_embedding)
             distance = 1.0 - (dot_product / (norm_id * norm_live))
             
@@ -232,14 +206,12 @@ class FaceMatcher:
         except Exception:
             return {"frame_status": "FACE_NOT_FOUND", "user_instruction": "Lỗi đọc khung hình."}
 
-    def process_live_frame(self, frame: np.ndarray, circle_center: tuple, circle_radius: int) -> Dict[str, Any]:
+    def process_live_frame(self, frame: np.ndarray, reference_embedding: np.ndarray,
+                           circle_center: tuple, circle_radius: int) -> Dict[str, Any]:
         """
         Hàm All-in-one: Vừa tìm mặt (1 lần duy nhất), vừa kiểm tra khoảng cách, vừa so khớp.
         Tăng tốc độ đáng kể.
         """
-        if not hasattr(self, 'id_embedding'):
-            return {"frame_status": "ERROR", "user_instruction": "Chưa nạp ảnh CCCD."}
-            
         try:
             # 1. Quét mặt nhanh bằng OpenCV backend
             faces = DeepFace.extract_faces(
@@ -319,8 +291,8 @@ class FaceMatcher:
             live_embedding = np.array(results[0]["embedding"])
             
             # Tính khoảng cách Cosine
-            dot_product = np.dot(self.id_embedding, live_embedding)
-            norm_id = np.linalg.norm(self.id_embedding)
+            dot_product = np.dot(reference_embedding, live_embedding)
+            norm_id = np.linalg.norm(reference_embedding)
             norm_live = np.linalg.norm(live_embedding)
             distance = 1.0 - (dot_product / (norm_id * norm_live))
             

@@ -6,14 +6,12 @@ import { Button, Alert, Badge } from '../../../shared/components';
 
 interface CameraCaptureProps {
   onScanComplete: (result: BiometricScanResult) => void;
-  cardEmbedding?: number[] | null;
-  cardImageBase64?: string | null;
+  cardFile: File;
 }
 
 export const CameraCapture: React.FC<CameraCaptureProps> = ({
   onScanComplete,
-  cardEmbedding,
-  cardImageBase64,
+  cardFile,
 }) => {
   const { videoRef, isStreaming, cameraError, startCamera, stopCamera, captureFrame } = useWebcam();
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
@@ -41,7 +39,7 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
     setError(null);
 
     try {
-      const result = await verificationApi.matchFace(frameBase64, cardEmbedding, cardImageBase64);
+      const result = await verificationApi.verifyIdentity(cardFile, frameBase64);
       setScanResult(result);
       if (result.isMatch) {
         onScanComplete(result);
@@ -137,8 +135,8 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '6px' }}>
               <strong>✓ Xác thực khuôn mặt thành công!</strong>
-              <Badge variant={scanResult.isRealAi ? 'verified' : 'neutral'}>
-                {scanResult.isRealAi ? '✨ DeepFace ArcFace Thật' : 'Mô phỏng'}
+              <Badge variant="neutral">
+                {scanResult.isSimulated ? 'eKYC mô phỏng — ArcFace' : 'eKYC sandbox'}
               </Badge>
             </div>
             <div style={{ fontSize: '0.85rem' }}>

@@ -4,6 +4,8 @@ Spring Boot modular monolith cho Old but Gold. Dự án dùng Maven Wrapper 3.3.
 
 ## Chạy ứng dụng
 
+Thiết lập tối thiểu `JWT_SIGNING_KEY` (32 byte trở lên) và `EKYC_INTERNAL_TOKEN` trước khi chạy. Các secret chỉ được đọc từ biến môi trường.
+
 ```powershell
 .\mvnw.cmd spring-boot:run
 ```
@@ -15,6 +17,8 @@ Từ repository root có thể chạy quality gate chuẩn; script tự phát hi
 ```
 
 Ứng dụng sử dụng PostgreSQL theo mặc định. Khởi động database từ repository root bằng `docker compose up -d postgres`.
+
+Identity API dùng access JWT 15 phút và refresh token opaque 30 ngày trong cookie HttpOnly. Browser chỉ gọi eKYC qua `/api/v1/ekyc/**`; backend gọi FastAPI bằng internal credential.
 
 ## Kiểm thử
 

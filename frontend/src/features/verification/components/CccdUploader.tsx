@@ -6,7 +6,7 @@ import { Button, Alert, Input, Badge } from '../../../shared/components';
 interface CccdUploaderProps {
   onOcrComplete: (
     data: CccdOcrData,
-    extra?: { cardFaceEmbedding: number[] | null; cardImageBase64: string | null; isRealAi: boolean }
+    extra?: { cardFile: File; isSimulated: boolean }
   ) => void;
   initialData?: CccdOcrData | null;
 }
@@ -16,7 +16,7 @@ export const CccdUploader: React.FC<CccdUploaderProps> = ({ onOcrComplete, initi
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [ocrData, setOcrData] = useState<CccdOcrData | null>(initialData || null);
-  const [isRealAi, setIsRealAi] = useState<boolean | null>(null);
+  const [isSimulated, setIsSimulated] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -36,11 +36,10 @@ export const CccdUploader: React.FC<CccdUploaderProps> = ({ onOcrComplete, initi
     try {
       const result: OcrApiResult = await verificationApi.processCccdImage(file);
       setOcrData(result.ocrData);
-      setIsRealAi(result.isRealAi);
+      setIsSimulated(result.isSimulated);
       onOcrComplete(result.ocrData, {
-        cardFaceEmbedding: result.cardFaceEmbedding,
-        cardImageBase64: result.cardImageBase64,
-        isRealAi: result.isRealAi,
+        cardFile: result.cardFile,
+        isSimulated: result.isSimulated,
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Không thể bóc tách ảnh CCCD.');
@@ -141,9 +140,9 @@ export const CccdUploader: React.FC<CccdUploaderProps> = ({ onOcrComplete, initi
               <h4 style={{ margin: 0, color: 'var(--og-color-primary)', fontSize: '1rem' }}>
                 ✓ Thông tin trích xuất từ thẻ CCCD
               </h4>
-              {isRealAi !== null && (
-                <Badge variant={isRealAi ? 'verified' : 'neutral'}>
-                  {isRealAi ? '✨ AI Thật (YOLO + VietOCR)' : 'Giả lập'}
+              {isSimulated !== null && (
+                <Badge variant="neutral">
+                  {isSimulated ? 'eKYC mô phỏng — YOLO + VietOCR' : 'eKYC sandbox'}
                 </Badge>
               )}
             </div>

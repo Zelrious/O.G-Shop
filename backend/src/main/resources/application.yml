@@ -1,6 +1,9 @@
 spring:
   application:
     name: og-shop-backend
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/og_shop}
     username: ${DB_USERNAME:og_shop}
@@ -11,6 +14,25 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  servlet:
+    multipart:
+      max-file-size: 4MB
+      max-request-size: 12MB
+
+app:
+  auth:
+    jwt-signing-key: ${JWT_SIGNING_KEY}
+    access-token-ttl: ${AUTH_ACCESS_TOKEN_TTL:PT15M}
+    refresh-token-ttl: ${AUTH_REFRESH_TOKEN_TTL:P30D}
+    frontend-origin: ${APP_FRONTEND_ORIGIN:http://localhost:5173}
+    refresh-cookie-name: ${AUTH_REFRESH_COOKIE_NAME:og_refresh}
+    refresh-cookie-secure: ${AUTH_REFRESH_COOKIE_SECURE:false}
+    refresh-cookie-path: ${AUTH_REFRESH_COOKIE_PATH:/api/v1/auth/refresh}
+  ekyc:
+    base-url: ${EKYC_SERVICE_URL:http://localhost:8001}
+    internal-token: ${EKYC_INTERNAL_TOKEN}
+    connect-timeout: ${EKYC_CONNECT_TIMEOUT:PT3S}
+    read-timeout: ${EKYC_READ_TIMEOUT:PT60S}
 
 server:
   port: ${BACKEND_PORT:8080}

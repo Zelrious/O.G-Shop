@@ -6,19 +6,17 @@ import {
   BiometricScanResult,
   CccdUploader,
   CameraCapture,
-  mockVerificationService,
 } from '../features/verification';
 import { Card, Button, Alert, Badge } from '../shared/components';
 
 export const SellerVerificationPage: React.FC = () => {
-  const { user, updateUserRoles } = useAuth();
+  const { user, reloadCurrentUser } = useAuth();
   const navigate = useNavigate();
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
   const [ocrData, setOcrData] = useState<CccdOcrData | null>(null);
-  const [cardEmbedding, setCardEmbedding] = useState<number[] | null>(null);
-  const [cardImageBase64, setCardImageBase64] = useState<string | null>(null);
-  const [isRealAi, setIsRealAi] = useState<boolean>(false);
+  const [cardFile, setCardFile] = useState<File | null>(null);
+  const [isSimulated, setIsSimulated] = useState<boolean>(true);
   const [biometricResult, setBiometricResult] = useState<BiometricScanResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,21 +28,19 @@ export const SellerVerificationPage: React.FC = () => {
 
   const handleOcrComplete = (
     data: CccdOcrData,
-    extra?: { cardFaceEmbedding: number[] | null; cardImageBase64: string | null; isRealAi: boolean }
+    extra?: { cardFile: File; isSimulated: boolean }
   ) => {
     setOcrData(data);
     if (extra) {
-      setCardEmbedding(extra.cardFaceEmbedding);
-      setCardImageBase64(extra.cardImageBase64);
-      setIsRealAi(extra.isRealAi);
+      setCardFile(extra.cardFile);
+      setIsSimulated(extra.isSimulated);
     }
   };
 
   const handleScanComplete = (result: BiometricScanResult) => {
     setBiometricResult(result);
-    if (result.isRealAi) {
-      setIsRealAi(true);
-    }
+    setIsSimulated(result.isSimulated);
+    if (result.ocrData) setOcrData(result.ocrData);
   };
 
   const handleSubmitVerification = async () => {
@@ -57,17 +53,7 @@ export const SellerVerificationPage: React.FC = () => {
     setError(null);
 
     try {
-      await mockVerificationService.submitVerification(
-        user.userId,
-        ocrData,
-        biometricResult.distance
-      );
-
-      // Cập nhật quyền người dùng lên SELLER
-      if (!user.roles.includes('SELLER')) {
-        updateUserRoles([...user.roles, 'SELLER']);
-      }
-
+      await reloadCurrentUser();
       setCurrentStep(4);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Xác minh không thành công.');
@@ -154,7 +140,7 @@ export const SellerVerificationPage: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
               <Button
                 variant="primary"
-                disabled={!ocrData || !ocrData.cccdNumber}
+                disabled={!ocrData || !ocrData.cccdNumber || !cardFile}
                 onClick={() => setCurrentStep(2)}
               >
                 Tiếp tục sang Quét khuôn mặt →
@@ -173,8 +159,7 @@ export const SellerVerificationPage: React.FC = () => {
 
             <CameraCapture
               onScanComplete={handleScanComplete}
-              cardEmbedding={cardEmbedding}
-              cardImageBase64={cardImageBase64}
+              cardFile={cardFile!}
             />
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '24px' }}>
@@ -210,8 +195,8 @@ export const SellerVerificationPage: React.FC = () => {
                 <h4 style={{ margin: 0, color: 'var(--og-color-primary)', fontSize: '1rem' }}>
                   Thông tin người bán đã xác thực:
                 </h4>
-                <Badge variant={isRealAi ? 'verified' : 'neutral'}>
-                  {isRealAi ? '✨ AI Thật (VietOCR + ArcFace)' : 'Chế độ mô phỏng'}
+                <Badge variant="neutral">
+                  {isSimulated ? 'eKYC mô phỏng (VietOCR + ArcFace)' : 'eKYC sandbox'}
                 </Badge>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
@@ -250,7 +235,7 @@ export const SellerVerificationPage: React.FC = () => {
                 onClick={handleSubmitVerification}
                 isLoading={isSubmitting}
               >
-                Gửi Hồ Sơ &amp; Kích Hoạt Quyền Người Bán
+                Hoàn tất và Tải lại Quyền từ Backend
               </Button>
             </div>
           </div>

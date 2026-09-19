@@ -10,13 +10,14 @@ export interface CccdOcrData {
 }
 
 export interface BiometricScanResult {
+  verificationId?: number;
   isMatch: boolean;
-  distance: number;              // Cosine distance (<= 0.50 là match)
-  confidenceScore?: number;       // Điểm tin cậy (0 - 1.0)
-  userInstruction?: string;      // Hướng dẫn khuôn mặt
-  faceEmbeddingPreview?: number[]; // 512 dimensions (rút gọn preview 16 phần tử)
+  distance: number;
+  confidenceScore?: number;
+  userInstruction?: string;
   capturedImageBase64: string;
-  isRealAi?: boolean;            // Đánh dấu kết quả từ mô hình AI thật
+  isSimulated: boolean;
+  ocrData?: CccdOcrData;
 }
 
 export interface VerificationRecord {

@@ -3,9 +3,9 @@
 ## Completed foundation
 
 - [x] Tạo monorepo Backend, Frontend, Database, Reference, Docs và Infra.
-- [x] Thiết lập rules, workflows và skills cho Codex, Claude Code và Gemini CLI.
+- [x] Thiết lập quy trình làm việc local (không còn theo dõi trên Git).
 - [x] Thiết lập Maven/npm lock, local quality scripts và GitHub Actions.
-- [x] Kiểm tra Backend, Frontend, documentation, agent assets và Compose config.
+- [x] Kiểm tra Backend, Frontend, documentation và Compose config.
 - [x] Push baseline lên `origin/main` tại commit `40e3f8c`.
 
 ## P0 — Foundation
@@ -16,14 +16,15 @@
 - [x] Triển khai UI Batch 1: Auth (Login, Register, Forgot Password, Profile) và eKYC Seller Verification.
 - [x] Tích hợp AI Microservice eKYC độc lập (services/ekyc-service: YOLOv11n + VietOCR Transformer + Gemini Flash + ArcFace 512-d).
 - [ ] Hoàn thiện `TRACEABILITY_MATRIX.md` theo UC, BR và NFR.
-- [ ] Chốt authentication và session strategy (DP-01).
+- [x] Chốt authentication và session strategy (DP-01): access JWT + opaque refresh cookie rotation.
 
 ## Bước 2 — Tích hợp Dịch vụ Bên ngoài (External Integrations)
 
-- [ ] **Bước 2.1**: Tích hợp ImageKit lưu trữ Avatar khách hàng & hồ sơ cá nhân.
-- [ ] **Bước 2.2**: Tích hợp Cloudinary lưu trữ media sản phẩm (ảnh đa góc độ, video tình trạng, video mở gói & bằng chứng khiếu nại).
-- [ ] **Bước 2.3**: Cấu hình Gmail App Password (SMTP) gửi email OTP khôi phục mật khẩu tài khoản thật.
-- [ ] **Bước 2.4**: Tích hợp Google OAuth2 để đăng nhập nhanh bằng tài khoản Google và cấp phát token JWT an toàn.
+- [x] TASK-0005: Identity và eKYC Security Baseline.
+- [ ] TASK-0006: Gmail SMTP/Mailpit và OTP reset password.
+- [ ] TASK-0007: Google OAuth2/OIDC.
+- [ ] TASK-0008: Cloudinary avatar.
+- [ ] TASK-0009: Cloudinary product/evidence media.
 
 
 ## P1 — Core flow

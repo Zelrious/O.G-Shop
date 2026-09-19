@@ -11,9 +11,8 @@ export interface UserPrincipal {
 }
 
 export interface TokenPair {
-  accessToken: string;       // JWT Access token
-  refreshToken: string;      // Single-use Refresh token (Rotation)
-  expiresIn: number;         // Seconds (e.g. 900s = 15m)
+  accessToken: string;
+  expiresIn: number;
 }
 
 export interface LoginCredentials {
@@ -32,7 +31,8 @@ export interface RegisterPayload {
 
 export interface AuthResponse {
   user: UserPrincipal;
-  tokens: TokenPair;
+  accessToken: string;
+  expiresIn: number;
 }
 
 export interface AuthContextType {
@@ -43,5 +43,5 @@ export interface AuthContextType {
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<boolean>;
-  updateUserRoles: (newRoles: UserRole[]) => void;
+  reloadCurrentUser: () => Promise<void>;
 }

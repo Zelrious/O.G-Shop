@@ -5,12 +5,17 @@
 - Password phải được băm bằng thuật toán được Spring Security hỗ trợ; không tự viết crypto.
 - Mọi API ghi dữ liệu kiểm tra role, ownership và trạng thái ở Backend.
 - Không cấp ADMIN qua đăng ký hoặc profile API.
+- Public registration chỉ cấp `BUYER`; `SELLER` chỉ do backend cấp sau kết quả eKYC hợp lệ.
+- Access JWT có thời hạn ngắn; refresh token opaque là single-use, chỉ lưu digest và nằm trong cookie HttpOnly.
+- Refresh/logout kiểm tra `Origin`; response session dùng `Cache-Control: no-store`.
 - Khóa tài khoản không xóa dữ liệu giao dịch hoặc bằng chứng liên quan.
 
 ## Sensitive data
 
 - Không commit secret hoặc credential.
 - KYC và evidence dùng dữ liệu mẫu trong đồ án.
+- Không lưu CCCD, ảnh mặt hoặc face embedding thật; chỉ lưu distance, threshold, model metadata và cờ simulated.
+- Face embedding không được trả qua frontend hoặc dùng làm singleton mutable state.
 - Media nhạy cảm lưu private; chỉ cấp signed URL ngắn hạn sau kiểm tra quyền.
 - Không ghi password, token, giấy tờ, signed URL hoặc nội dung evidence vào log/audit.
 
@@ -26,6 +31,7 @@
 - Validate kích thước, định dạng, enum và loại tệp.
 - Dùng parameter binding/JPA; không ghép SQL từ input.
 - Chỉ trả trường DTO đã chủ động chọn.
+- eKYC thật phải fail-closed; provider timeout/lỗi không được fallback sang verified mock.
 - Nội dung do người dùng tạo phải được escape khi hiển thị.
 
 ## Audit

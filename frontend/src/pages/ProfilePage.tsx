@@ -1,7 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth';
-import { mockVerificationService, VerificationStatusCard } from '../features/verification';
 import { Card, Badge, Button } from '../shared/components';
 
 export const ProfilePage: React.FC = () => {
@@ -10,7 +9,6 @@ export const ProfilePage: React.FC = () => {
 
   if (!user) return null;
 
-  const verificationRecord = mockVerificationService.getVerification(user.userId);
   const isSeller = user.roles.includes('SELLER');
 
   const handleLogout = async () => {
@@ -50,7 +48,14 @@ export const ProfilePage: React.FC = () => {
 
       {/* Quản lý quyền Người bán & eKYC */}
       {isSeller ? (
-        <VerificationStatusCard record={verificationRecord} />
+        <Card title="Xác minh Người bán">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Badge variant="verified">Đã xác minh</Badge>
+            <span style={{ color: 'var(--og-color-text-secondary)' }}>
+              Quyền SELLER được tải từ backend. Hồ sơ không lưu face embedding hoặc ảnh CCCD.
+            </span>
+          </div>
+        </Card>
       ) : (
         <Card title="Trở thành Người bán trên O.G Shop">
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

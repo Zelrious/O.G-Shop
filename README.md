@@ -4,7 +4,7 @@ O.G Shop là nền tảng C2C hỗ trợ mua bán đồ cũ theo hướng đáng
 
 ## Trạng thái
 
-Dự án đang ở giai đoạn **Foundation**: hoàn thiện cấu trúc monorepo, quy tắc làm việc, nền Backend/Frontend, database tooling và CI trước khi triển khai nghiệp vụ.
+Dự án đã hoàn thành **Identity và eKYC Security Baseline**; bước tiếp theo là các tích hợp email/OTP, Google OIDC và Cloudinary.
 
 Theo dõi trạng thái tại [docs/progress/STATUS.md](docs/progress/STATUS.md).
 
@@ -12,7 +12,7 @@ Theo dõi trạng thái tại [docs/progress/STATUS.md](docs/progress/STATUS.md)
 
 - Backend: Java 21, Spring Boot 3.5, Maven, Spring Security, Spring Data JPA, Flyway.
 - Frontend: React 19, TypeScript, Vite, npm.
-- AI Service: Python 3.11, FastAPI, YOLOv11n, VietOCR Transformer, DeepFace ArcFace (512-d), Google Gemini Flash.
+- AI Service: Python 3.11, FastAPI, YOLOv11n, VietOCR Transformer, DeepFace ArcFace (512-d); Gemini tùy chọn và tắt mặc định.
 - Database: PostgreSQL (hỗ trợ extension `pgvector`).
 - Local infrastructure: Docker Compose.
 - CI: GitHub Actions.
@@ -26,9 +26,6 @@ services/     AI microservices (ekyc-service: OCR CCCD & Sinh trắc học khuô
 database/     SQL tests, seed, scripts và tài liệu database
 reference/    Tài liệu nguồn do chủ dự án chủ động đưa vào repository
 docs/         Kiến trúc, module, yêu cầu, tiến trình, ADR và kiểm thử
-.agents/      Quy tắc, workflow và skill chuẩn dùng chung
-.claude/      Adapter dành cho Claude Code
-.gemini/      Adapter dành cho Gemini CLI
 .github/      Pull request template và CI workflows
 scripts/      Script bootstrap và quality gate
 infra/        Cấu hình hạ tầng hỗ trợ
@@ -72,10 +69,6 @@ python services/ekyc-service/start.py
 
 Microservice mặc định: `http://localhost:8001`.
 Swagger API Docs: `http://localhost:8001/docs`.
-
-## Quy trình làm việc với AI agent
-
-Mọi agent phải đọc [AGENTS.md](AGENTS.md), trạng thái tổng quát và tài liệu module liên quan trước khi đề xuất thay đổi. Mọi thay đổi code hoặc kiến trúc phải có báo cáo trước và được chủ dự án phê duyệt.
 
 ## Tài liệu quan trọng
 

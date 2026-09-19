@@ -1,55 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { UserPrincipal, LoginCredentials, RegisterPayload, UserRole } from './types';
-import { mockAuthService } from './mockAuthService';
+import React, { useEffect, useState } from 'react';
+import { authApi } from './authApi';
+import { LoginCredentials, RegisterPayload, UserPrincipal } from './types';
 import { AuthContext } from './context';
 
-const STORAGE_SESSION_USER = 'og_shop_session_user';
-const STORAGE_REFRESH_TOKEN = 'og_shop_refresh_token';
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<UserPrincipal | null>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_SESSION_USER);
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [, setAccessToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [user, setUser] = useState<UserPrincipal | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Khôi phục phiên làm việc bất đồng bộ khi khởi tạo
   useEffect(() => {
     let active = true;
-
-    const restore = async () => {
-      const storedRefreshToken = localStorage.getItem(STORAGE_REFRESH_TOKEN);
-      if (!storedRefreshToken) {
+    authApi.refresh()
+      .then((session) => {
+        if (active) setUser(session.user);
+      })
+      .catch(() => {
+        authApi.clearAccessToken();
+        if (active) setUser(null);
+      })
+      .finally(() => {
         if (active) setIsLoading(false);
-        return;
-      }
-      try {
-        const tokens = await mockAuthService.rotateToken(storedRefreshToken);
-        if (active) {
-          setAccessToken(tokens.accessToken);
-          localStorage.setItem(STORAGE_REFRESH_TOKEN, tokens.refreshToken);
-        }
-      } catch {
-        if (active) {
-          localStorage.removeItem(STORAGE_SESSION_USER);
-          localStorage.removeItem(STORAGE_REFRESH_TOKEN);
-          setUser(null);
-          setAccessToken(null);
-        }
-      } finally {
-        if (active) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void restore();
-
+      });
     return () => {
       active = false;
     };
@@ -58,11 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (credentials: LoginCredentials) => {
     setIsLoading(true);
     try {
-      const res = await mockAuthService.login(credentials);
-      setUser(res.user);
-      setAccessToken(res.tokens.accessToken);
-      localStorage.setItem(STORAGE_SESSION_USER, JSON.stringify(res.user));
-      localStorage.setItem(STORAGE_REFRESH_TOKEN, res.tokens.refreshToken);
+      setUser((await authApi.login(credentials)).user);
     } finally {
       setIsLoading(false);
     }
@@ -71,60 +37,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (payload: RegisterPayload) => {
     setIsLoading(true);
     try {
-      const res = await mockAuthService.register(payload);
-      setUser(res.user);
-      setAccessToken(res.tokens.accessToken);
-      localStorage.setItem(STORAGE_SESSION_USER, JSON.stringify(res.user));
-      localStorage.setItem(STORAGE_REFRESH_TOKEN, res.tokens.refreshToken);
+      setUser((await authApi.register(payload)).user);
     } finally {
       setIsLoading(false);
     }
   };
 
   const logout = async () => {
-    const currentRefreshToken = localStorage.getItem(STORAGE_REFRESH_TOKEN);
-    await mockAuthService.logout(currentRefreshToken || undefined);
-    localStorage.removeItem(STORAGE_SESSION_USER);
-    localStorage.removeItem(STORAGE_REFRESH_TOKEN);
+    await authApi.logout();
     setUser(null);
-    setAccessToken(null);
   };
 
   const refreshSession = async (): Promise<boolean> => {
     try {
-      const storedRefreshToken = localStorage.getItem(STORAGE_REFRESH_TOKEN);
-      if (!storedRefreshToken) return false;
-      const tokens = await mockAuthService.rotateToken(storedRefreshToken);
-      setAccessToken(tokens.accessToken);
-      localStorage.setItem(STORAGE_REFRESH_TOKEN, tokens.refreshToken);
+      setUser((await authApi.refresh()).user);
       return true;
     } catch {
-      await logout();
+      authApi.clearAccessToken();
+      setUser(null);
       return false;
     }
   };
 
-  const updateUserRoles = (newRoles: UserRole[]) => {
-    if (user) {
-      const updated = { ...user, roles: newRoles };
-      setUser(updated);
-      localStorage.setItem(STORAGE_SESSION_USER, JSON.stringify(updated));
-    }
+  const reloadCurrentUser = async () => {
+    setUser(await authApi.currentUser());
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: Boolean(user),
-        isLoading,
-        login,
-        register,
-        logout,
-        refreshSession,
-        updateUserRoles,
-      }}
-    >
+    <AuthContext.Provider value={{
+      user,
+      isAuthenticated: Boolean(user),
+      isLoading,
+      login,
+      register,
+      logout,
+      refreshSession,
+      reloadCurrentUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );

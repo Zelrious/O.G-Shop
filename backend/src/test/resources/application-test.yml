@@ -8,3 +8,18 @@ spring:
       ddl-auto: none
   flyway:
     enabled: false
+
+app:
+  auth:
+    jwt-signing-key: test-signing-key-with-at-least-thirty-two-bytes
+    access-token-ttl: PT15M
+    refresh-token-ttl: P30D
+    frontend-origin: http://localhost:5173
+    refresh-cookie-name: og_refresh
+    refresh-cookie-secure: false
+    refresh-cookie-path: /api/v1/auth/refresh
+  ekyc:
+    base-url: http://localhost:8001
+    internal-token: test-internal-token-with-sufficient-entropy
+    connect-timeout: PT1S
+    read-timeout: PT2S
