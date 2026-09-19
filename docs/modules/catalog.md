@@ -29,10 +29,13 @@ Reservation, giá offer được chấp nhận, thanh toán và moderation case.
 - Chỉ owner hợp lệ sửa tin đăng.
 - Product đang tham gia giao dịch không bị hard delete.
 - Media được validate loại, kích thước và quyền truy cập.
+- `products.listed_price` là giá Seller niêm yết; giá hiển thị có phí phải do Backend tính từ system-fee policy active.
+- Chấp nhận offer không thay đổi giá niêm yết công khai.
 
 ## Completed tasks
 
 - [x] Tạo package boundary và tài liệu module.
+- [x] V3 tách `listed_price` khỏi giá hiển thị và snapshot giá sản phẩm khi mở conversation.
 
 ## Remaining tasks
 

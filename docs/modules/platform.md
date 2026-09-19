@@ -29,18 +29,22 @@ Sở hữu hoặc sửa trực tiếp trạng thái nghiệp vụ của module k
 - Audit không chứa secret hoặc raw evidence.
 - Dashboard chỉ đọc aggregate/projection.
 - Notification không phải nguồn sự thật cho trạng thái giao dịch.
+- Domain event cần phát ra ngoài transaction phải được ghi cùng transaction vào `outbox_events`.
+- Outbox payload không chứa secret, raw KYC, token hoặc bằng chứng nhạy cảm.
 
 ## Completed tasks
 
 - [x] Tạo package boundary và tài liệu module.
+- [x] V3 tạo durable `outbox_events` cho Redis/WebSocket/notification worker sau này.
 
 ## Remaining tasks
 
-- [ ] Chốt event publication pattern.
+- [ ] Chốt event publication pattern sau khi command/event của core module ổn định.
+- [ ] Triển khai outbox worker idempotent sau core acceptance gate.
 - [ ] Thiết kế audit schema và retention.
 - [ ] Triển khai notification và dashboard read model.
 - [ ] Kiểm thử permission và dữ liệu nhạy cảm.
 
 ## Expected changes
 
-Platform sẽ được triển khai sau khi event/command của các core module ổn định.
+Platform sẽ được triển khai sau khi event/command của các core module ổn định. Không thêm Redis/cache để bù cho query hoặc transaction nghiệp vụ chưa đúng; core flow phải tiếp tục hoạt động khi Redis không khả dụng.

@@ -7,4 +7,10 @@ Thư mục này chứa công cụ, dữ liệu mẫu và tài liệu hỗ trợ 
 - `seed/`: dữ liệu giả dành riêng cho development/test.
 - `tests/`: kiểm thử integration, constraint và concurrency.
 
+Chạy clean migration, invariant tests và V1/V2 -> V3 legacy backfill test:
+
+```powershell
+.\database\run_database_tests.ps1
+```
+
 Không đặt dữ liệu thật, thông tin định danh thật hoặc secret trong repository.

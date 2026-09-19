@@ -10,7 +10,7 @@ Phạm vi hiện tại chỉ gồm PostgreSQL và nghiệp vụ dữ liệu. Ch�
 | DB-FR-02 | Chỉ seller đã xác minh mới được đăng bán | Lịch sử `seller_verifications`; service transaction kiểm tra KYC + role khi publish |
 | DB-FR-03 | Listing mô tả rõ tình trạng đồ cũ | Condition, thời gian sử dụng, lỗi, sửa chữa, phụ kiện và media |
 | DB-FR-04 | Mỗi listing MVP đại diện một món | `quantity = 1`; product đi qua `ACTIVE/RESERVED/SOLD` |
-| DB-FR-05 | Chat và offer theo từng sản phẩm | Unique conversation và một pending offer/buyer/product |
+| DB-FR-05 | Chat và offer theo từng sản phẩm | Unique conversation; participant cursor; idempotent message; một pending offer/conversation |
 | DB-FR-06 | Cart có thể chứa nhiều seller | Khi checkout nhóm theo seller; `checkout_group_id` nối các order sinh từ cùng checkout |
 | DB-FR-07 | Một order chỉ có một seller | `orders.seller_id`; service kiểm tra seller của mọi order item |
 | DB-FR-08 | Lịch sử đơn không đổi theo dữ liệu hiện tại | Snapshot địa chỉ và snapshot title/price trong order item |
@@ -21,6 +21,9 @@ Phạm vi hiện tại chỉ gồm PostgreSQL và nghiệp vụ dữ liệu. Ch�
 | DB-FR-13 | Report tách khỏi tranh chấp order | Report luôn có user hoặc product target |
 | DB-FR-14 | Không mất lịch sử | Soft delete hoặc state transition; FK mặc định chặn xóa dữ liệu đã tham chiếu |
 | DB-FR-15 | Theo vết thao tác nhạy cảm | `audit_logs`; quyền DB production phải chặn update/delete log |
+| DB-FR-16 | Giá hiển thị có phí hệ thống | `products.listed_price` + `system_fee_policies`; Backend tính breakdown |
+| DB-FR-17 | Deal giá không làm đổi giá công khai | Offer snapshot phí; accepted offer snapshot sang `order_items` |
+| DB-FR-18 | Event realtime không mất khi Redis/WebSocket gián đoạn | Ghi `outbox_events` cùng transaction với thay đổi domain |
 
 ## 2. Risk register
 
@@ -34,6 +37,9 @@ Phạm vi hiện tại chỉ gồm PostgreSQL và nghiệp vụ dữ liệu. Ch�
 | P0 | Admin resolve complaint hai lần | Refund và release cùng xảy ra | Lock complaint/payment/order; chỉ resolve từ `OPEN/REVIEWING`; external action có idempotency | Hai admin resolve ngược nhau đồng thời |
 | P1 | Multi-seller order vô tình trộn item | Sai người nhận tiền | Group trước khi tạo order; kiểm tra mọi product seller bằng order seller trong transaction | Cart 2 seller tạo 2 order cùng `checkout_group_id` |
 | P1 | Giá hoặc địa chỉ lịch sử bị thay đổi | Sai hóa đơn và bằng chứng tranh chấp | Snapshot address, title, price, line total | Sửa address/product sau checkout, order vẫn giữ giá trị cũ |
+| P1 | Policy phí thay đổi làm offer/bill cũ đổi tiền | Thu sai Buyer hoặc trả sai Seller | Policy có version; snapshot amount trên offer/order item; không update policy đã dùng | Retire policy cũ, kích hoạt policy mới, order cũ không đổi |
+| P1 | Retry WebSocket tạo message/offer trùng | Lịch sử sai, thông báo lặp | Unique `client_message_id`; một pending offer/conversation; outbox idempotent | Gửi lại cùng client ID và cùng command |
+| P1 | Seller accept hai offer của cùng product | Bán trùng và tạo hai bill | Lock offer + product; accepted offer unique trên order item; reserve trong cùng transaction | Hai transaction accept/checkout đồng thời, chỉ một transaction thắng |
 | P1 | Partial refund lọt vào MVP | Order/payment không có trạng thái biểu diễn đúng | Enforce `refund_amount = amount`; chỉ mở rộng cùng trạng thái `PARTIALLY_REFUNDED` sau này | Refund nhỏ hơn amount bị từ chối |
 | P1 | KYC/CCCD bị lộ | Rủi ro quyền riêng tư nghiêm trọng | Private object storage, encryption, signed URL ngắn hạn, không log số giấy tờ, retention policy | Kiểm tra role DB và log không chứa PII |
 | P1 | User sửa/xóa dữ liệu transaction | Mất audit và lịch sử | API không cấp hard delete; FK RESTRICT; DB role runtime không có `DELETE` trên bảng lịch sử | Runtime role bị từ chối delete/update audit |
@@ -51,10 +57,11 @@ Phạm vi hiện tại chỉ gồm PostgreSQL và nghiệp vụ dữ liệu. Ch�
 
 Các quy tắc sau liên quan nhiều bảng hoặc trạng thái cũ/mới nên được thực hiện trong transaction command, không sửa entity tự do:
 
-- Seller của product phải trùng seller của order/conversation/offer.
-- Sender phải thuộc conversation.
+- Seller của product phải trùng seller của order; conversation/product seller đã có composite FK.
+- Sender/proposer/responder membership đã có composite FK; service vẫn kiểm tra quyền và state transition.
 - Address nguồn phải thuộc buyer.
-- Subtotal phải bằng tổng line item.
+- Subtotal, phí và seller proceeds phải bằng tổng snapshot line item.
+- Accepted offer phải thuộc đúng product/parties, đang `PENDING` trước transition và chỉ được chốt khi product còn `ACTIVE`.
 - Payment amount phải bằng order total.
 - Review/complaint actor phải thuộc order và có đúng vai trò.
 - Admin duyệt KYC/resolve complaint phải thực sự có role `ADMIN`.
@@ -71,38 +78,22 @@ Nếu muốn cho DBA hoặc SQL client cập nhật trực tiếp trong producti
 5. **Performance test:** explain/analyze cho listing search, inbox, order history, admin queues; dùng dataset đủ lớn.
 6. **Recovery test:** dump, restore sang database rỗng, kiểm tra constraint và dữ liệu.
 
-`tests/database_tests.sql` hiện bao phủ lớp 1–2. Lớp 3–6 sẽ được bổ sung sau khi baseline chạy ổn định vì cần nhiều connection, workload và quy ước transaction command cụ thể.
+`tests/database_tests.sql` bao phủ schema/constraint hiện tại. `v3_legacy_fixture.sql` + `v3_legacy_assertions.sql` kiểm tra backfill V1/V2 -> V3. Lớp concurrency/performance/recovery sẽ được bổ sung khi application command được triển khai.
 
 ## 5. Cách chạy database độc lập
 
-Yêu cầu Docker Desktop đang chạy. Từ thư mục `Database`:
+Yêu cầu Docker Desktop đang chạy. Từ repository root:
 
 ```powershell
-.\run_database_tests.ps1 -Reset
+.\database\run_database_tests.ps1
 ```
 
-Lệnh trên tạo PostgreSQL 16 tại `127.0.0.1:5433`, chạy schema và toàn bộ smoke test. `-Reset` xóa **volume database thử nghiệm của compose project này** rồi khởi tạo lại; không dùng khi có dữ liệu cần giữ.
-
-Các lần sau, khi schema không đổi:
-
-```powershell
-.\run_database_tests.ps1
-```
+Lệnh trên tạo container tạm không gắn volume, chạy clean migration + invariant tests và legacy migration test, sau đó tự xóa chính container test. `-Reset` chỉ thay thế container test cùng tên còn sót lại.
 
 Có thể dùng một image PostgreSQL 15+ khác đã có sẵn trên máy:
 
 ```powershell
-.\run_database_tests.ps1 -Reset -PostgresImage 'ankane/pgvector:latest'
+.\database\run_database_tests.ps1 -PostgresImage 'ankane/pgvector:latest'
 ```
 
-Kết nối thủ công:
-
-```text
-Host: 127.0.0.1
-Port: 5433
-Database: marketplace
-User: marketplace
-Password: marketplace_dev_only
-```
-
-Thông tin trên chỉ dùng local development và không được tái sử dụng ở production.
+Dùng `-KeepContainer` khi cần giữ container để xem schema sau test; script không public cổng PostgreSQL ra host.

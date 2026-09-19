@@ -1,6 +1,6 @@
 # Thiết kế database — Trust-oriented Second-hand C2C Marketplace
 
-Tài liệu này chốt thiết kế MVP dựa trên file handoff. DDL triển khai nằm tại `second_hand_marketplace_schema.sql` và nhắm đến PostgreSQL 15+.
+Tài liệu này chốt thiết kế MVP trên PostgreSQL 15+. DDL chuẩn nằm trong các Flyway migration tại `backend/src/main/resources/db/migration/`; `second_hand_marketplace_schema.sql` chỉ là bản review lịch sử trước Flyway.
 
 ## 1. Các quyết định đã chốt
 
@@ -12,11 +12,15 @@ Tài liệu này chốt thiết kế MVP dựa trên file handoff. DDL triển k
 6. `orders` chứa đầy đủ snapshot địa chỉ giao hàng. `source_address_id` chỉ là tham chiếu nguồn và được phép về `NULL`.
 7. MVP coi mỗi listing là một món độc nhất: `cart_items.quantity = 1` và `order_items.quantity = 1`.
 8. Không hard-delete dữ liệu giao dịch. `users`, `addresses`, `products`, `reviews` có `deleted_at`; `orders`, `payments`, `complaints`, `audit_logs` chỉ thay đổi trạng thái.
-9. `order_items` lưu snapshot `product_title`, `unit_price`, `line_total`; lịch sử đơn không phụ thuộc dữ liệu sản phẩm hiện tại.
+9. `products.listed_price` là giá Seller công khai. `order_items` snapshot `listed_price`, `agreed_price`, phí hai phía, buyer line total và seller proceeds; lịch sử đơn không phụ thuộc product/policy hiện tại.
 10. Một đơn có đúng tối đa một payment và một shipment thông qua `UNIQUE(order_id)`.
 11. `products`, `orders`, `payments` có cột `version` để ánh xạ trực tiếp với JPA `@Version`.
 12. `products.reserved_order_id` xác định order đang giữ món hàng. Composite FK tới `(order_items.order_id, order_items.product_id)` bảo đảm order owner thực sự chứa product đó; job timeout không được giải phóng reservation nếu owner không khớp.
 13. Các order tách từ một cart nhiều seller dùng chung `checkout_group_id`.
+14. System-fee policy có version và bất biến sau khi được offer/order tham chiếu; V3 seed policy 0% chỉ để tương thích.
+15. Offer thuộc conversation. Counter-offer là row mới trỏ về `parent_offer_id`, không ghi đè giá cũ.
+16. Sản phẩm ghim là snapshot trên conversation; read state là cursor theo participant, không là `read_at` trên từng message.
+17. `outbox_events` là biên giao dịch bền vững cho Redis/WebSocket/notification; Redis không là nguồn lịch sử.
 
 ## 2. ERD mức khái quát
 
@@ -33,13 +37,18 @@ erDiagram
     USERS ||--o{ CONVERSATIONS : participates
     PRODUCTS ||--o{ CONVERSATIONS : concerns
     CONVERSATIONS ||--o{ MESSAGES : contains
-    PRODUCTS ||--o{ OFFERS : receives
+    CONVERSATIONS ||--|{ CONVERSATION_USER_STATE : has
+    CONVERSATIONS ||--o{ OFFERS : negotiates
+    OFFERS ||--o{ OFFERS : counters
+    SYSTEM_FEE_POLICIES ||--o{ OFFERS : prices
     USERS ||--|| CARTS : owns
     CARTS ||--o{ CART_ITEMS : contains
     PRODUCTS ||--o{ CART_ITEMS : appears_in
     USERS ||--o{ ORDERS : buys_or_sells
     ORDERS ||--|{ ORDER_ITEMS : contains
     PRODUCTS ||--o{ ORDER_ITEMS : snapshots
+    OFFERS ||--o| ORDER_ITEMS : accepted_as
+    SYSTEM_FEE_POLICIES ||--o{ ORDER_ITEMS : snapshots
     ORDERS ||--|| PAYMENTS : has
     ORDERS ||--o| SHIPMENTS : has
     ORDERS ||--o{ REVIEWS : receives
@@ -55,9 +64,13 @@ erDiagram
 - Mỗi user chỉ có một địa chỉ mặc định chưa xóa.
 - Mỗi user chỉ có một hồ sơ KYC đang `PENDING` hoặc đã `VERIFIED`; các lần bị từ chối vẫn được giữ lịch sử.
 - Một buyer/seller/product chỉ có một conversation.
-- Một buyer chỉ có một offer `PENDING` trên một product.
+- Mỗi conversation chỉ có một offer `PENDING`; proposer/responder phải là participant.
+- Mỗi message có `client_message_id` unique trong conversation; offer message phải tham chiếu offer cùng conversation.
+- Mỗi conversation có read cursor riêng cho Buyer và Seller.
 - Buyer và seller không được là cùng một user trong conversation, offer và order.
-- Tổng đơn luôn thỏa `total_amount = subtotal + shipping_fee`.
+- Tổng đơn luôn thỏa `total_amount = subtotal + buyer_system_fee + shipping_fee` và `seller_proceeds = subtotal - seller_system_fee`.
+- Mỗi accepted offer chỉ được một order item tham chiếu.
+- Chỉ có một system-fee policy `ACTIVE` tại một thời điểm quản trị.
 - Một review duy nhất cho mỗi bộ `(order, reviewer, reviewee)` và rating từ 1 đến 5.
 - Mỗi order chỉ có một complaint đang hoạt động (`OPEN` hoặc `REVIEWING`).
 - Complaint, payment, report có các trường kết quả/thời gian phù hợp với trạng thái.
@@ -69,11 +82,13 @@ erDiagram
 Một số rule liên quan nhiều bảng không nên nhét vào `CHECK` hoặc trigger phức tạp. Service phải kiểm tra chúng trong cùng transaction:
 
 - Chỉ user có KYC `VERIFIED` và role `SELLER` mới được publish product.
-- `products.seller_id` phải bằng seller của conversation, offer và order chứa sản phẩm đó.
-- Người gửi message phải là buyer hoặc seller của conversation.
+- `products.seller_id` phải bằng seller của order chứa sản phẩm đó; conversation/product seller đã được composite FK bảo vệ.
+- Seller accept offer phải lock offer và product, xác minh `PENDING/ACTIVE`, tạo order snapshot và reserve product trong cùng transaction.
+- `accepted_offer_id` phải trỏ đến offer `ACCEPTED` của đúng conversation/product/parties.
+- Message sender, offer proposer và responder membership đã có composite FK; service vẫn phải kiểm tra quyền và transition.
 - Address nguồn phải thuộc buyer; snapshot address phải được copy trước khi tạo order.
 - Tất cả `order_items` trong một order phải có cùng seller với `orders.seller_id`.
-- `orders.subtotal` phải bằng tổng `order_items.line_total`.
+- `orders.subtotal`, phí và seller proceeds phải bằng tổng snapshot tương ứng từ `order_items`.
 - `payments.amount` phải bằng `orders.total_amount`.
 - Chỉ buyer hoặc seller của order được mở complaint; chỉ admin được resolve.
 - Chỉ buyer/seller của order được review đối tác và chỉ khi order `COMPLETED`.
@@ -90,7 +105,7 @@ Cart nhiều seller phải được nhóm theo `products.seller_id`; mỗi nhóm
 ```sql
 BEGIN;
 
-SELECT product_id, seller_id, title, price, status
+SELECT product_id, seller_id, title, listed_price, status
 FROM products
 WHERE product_id IN (:product_ids)
 ORDER BY product_id
@@ -171,13 +186,13 @@ Mọi cập nhật hai bảng phải chạy trong cùng transaction. Ánh xạ c
 - `orders`, `order_items`, `payments`, `shipments`, `complaints`, `audit_logs`: tuyệt đối không hard-delete từ API nghiệp vụ.
 - Media/cart item chưa tham gia giao dịch có thể xóa vật lý. Việc xóa file trên object storage là workflow riêng.
 
-## 9. Ghi chú trước khi tạo migration production
+## 9. Migration và forward-fix
 
-- File hiện tại là baseline review, chưa gắn với Flyway/Liquibase vì repository chưa có backend hoặc công cụ migration.
-- Nếu chọn Flyway, đổi tên thành `src/main/resources/db/migration/V1__initial_schema.sql` khi khởi tạo Spring Boot.
-- Không để Hibernate tự sửa schema trong production; dùng `spring.jpa.hibernate.ddl-auto=validate`.
-- Cần integration test cho: checkout tranh chấp đồng thời, payment callback lặp, hết hạn reservation, resolve complaint, unique default address và review authorization.
-- Callback thanh toán cần idempotency dựa trên `transaction_code` và/hoặc một idempotency key do provider trả về.
+- Flyway V1–V3 là nguồn schema chuẩn; Hibernate dùng `ddl-auto=validate` và không tự sửa schema.
+- V3 backfill conversation cho offer V1, gán legacy offer cho Buyer proposer, sinh idempotency key cho message cũ và snapshot phí 0 cho order cũ.
+- V3 rename/drop cột nên cần maintenance window ngắn khi nâng cấp database có traffic; các `ALTER TABLE` lấy lock trên bảng liên quan.
+- Không rollback bằng cách drop schema sau khi có giao dịch V3. Khôi phục bằng migration forward-fix/compatibility view và backup đã kiểm chứng.
+- Cần integration test tiếp theo cho accept offer tranh chấp, checkout đồng thời, outbox retry, payment callback lặp và reservation timeout.
 
 ## 10. Bảo mật dữ liệu xác minh
 

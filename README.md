@@ -4,7 +4,7 @@ O.G Shop là nền tảng C2C hỗ trợ mua bán đồ cũ theo hướng đáng
 
 ## Trạng thái
 
-Dự án đã hoàn thành **Identity và eKYC Security Baseline**; bước tiếp theo là các tích hợp email/OTP, Google OIDC và Cloudinary.
+Dự án đã hoàn thành **Identity/eKYC Security Baseline** và **Database Pricing/Negotiation Baseline V3**. Ưu tiên hiện tại là hoàn thiện core flow trên PostgreSQL: catalog → chat/offer → checkout/order → payment/fulfillment mô phỏng. Email/OTP, Google OIDC, Cloudinary, WebSocket, outbox worker và Redis được triển khai sau core acceptance gate hoặc khi thật sự cần cho một luồng cơ bản.
 
 Theo dõi trạng thái tại [docs/progress/STATUS.md](docs/progress/STATUS.md).
 

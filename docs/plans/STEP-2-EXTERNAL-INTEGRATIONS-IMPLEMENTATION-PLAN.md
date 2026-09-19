@@ -3,7 +3,7 @@
 - Project: Old but Gold (O.G Shop)
 - Ngày lập: 2026-09-18
 - Ngày dự kiến bắt đầu: 2026-09-19
-- Trạng thái: APPROVED — TASK-0005 hoàn thành; TASK-0006 là bước kế tiếp
+- Trạng thái: APPROVED — TASK-0005 hoàn thành; TASK-0006 đến TASK-0009 được defer sau core acceptance gate theo DP-11
 - Phạm vi: UC-01, UC-02 và nền tảng media cho UC-03, UC-12
 
 ## 1. Mục tiêu
@@ -136,7 +136,7 @@ EKYC_ALLOW_SYNTHETIC_DATA_ONLY=true
 
 ## 3. Thứ tự triển khai
 
-Không triển khai bốn external service đồng thời. Mỗi task phải có báo cáo trước thay đổi và phê duyệt riêng.
+Không triển khai bốn external service đồng thời. TASK-0006 đến TASK-0009 vẫn giữ thứ tự tương đối dưới đây, nhưng chỉ tiếp tục sau khi core flow trên PostgreSQL đạt acceptance gate trong `docs/progress/BACKLOG.md`, trừ khi một adapter là blocker trực tiếp của use case cơ bản đang làm. Mỗi task phải có báo cáo trước thay đổi và phê duyệt riêng.
 
 ### TASK-0005 — Identity và eKYC Security Baseline
 

@@ -1,6 +1,9 @@
 -- Trust-oriented Second-hand C2C Marketplace
 -- PostgreSQL 15+
 -- Initial logical/physical schema for review before wiring Spring Data JPA.
+-- HISTORICAL REVIEW ARTIFACT: do not execute for the current application.
+-- The canonical schema is Flyway V1 + V2 + V3 under
+-- backend/src/main/resources/db/migration/.
 
 BEGIN;
 

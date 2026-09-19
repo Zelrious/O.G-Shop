@@ -30,10 +30,14 @@ Provider payment, shipment tracking và dispute resolution.
 - Checkout khóa Product theo thứ tự ổn định.
 - Total và offer price được xác nhận lại ở server.
 - OrderItem giữ snapshot lịch sử.
+- Offer được chấp nhận chỉ cập nhật giá giao dịch trong `order_items`, không ghi đè `products.listed_price`.
+- `total_amount = subtotal + buyer_system_fee + shipping_fee`; `seller_proceeds = subtotal - seller_system_fee`.
+- `accepted_offer_id` chỉ được dùng một lần và phải được xác minh `ACCEPTED` trong checkout transaction.
 
 ## Completed tasks
 
 - [x] Tạo package boundary và tài liệu module.
+- [x] V3 snapshot giá niêm yết, giá thỏa thuận, phí hai phía và seller proceeds trên order/order item.
 
 ## Remaining tasks
 

@@ -73,7 +73,7 @@ INSERT INTO categories (category_id, category_name, slug)
 VALUES (2201, 'Electronics', 'electronics');
 
 INSERT INTO products (
-    product_id, seller_id, category_id, title, description, price,
+    product_id, seller_id, category_id, title, description, listed_price,
     condition, status
 ) VALUES
     (3001, 1002, 2201, 'Used laptop', 'Smoke-test product', 10000000, 'GOOD', 'ACTIVE'),
@@ -103,14 +103,181 @@ SELECT pg_temp.expect_sqlstate(
     '23505'
 );
 
-INSERT INTO conversations (conversation_id, buyer_id, seller_id, product_id)
-VALUES (3101, 1001, 1002, 3001);
+SELECT pg_temp.expect_sqlstate(
+    'only one system fee policy can be active',
+    $test$
+        INSERT INTO system_fee_policies (
+            policy_code, policy_name, status, version, effective_from
+        ) VALUES (
+            'INVALID_SECOND_ACTIVE', 'Invalid second active policy', 'ACTIVE', 2, CURRENT_TIMESTAMP
+        )
+    $test$,
+    '23505'
+);
+
+UPDATE system_fee_policies
+SET status = 'RETIRED',
+    effective_to = CURRENT_TIMESTAMP
+WHERE policy_code = 'DEFAULT_ZERO_V1';
+
+INSERT INTO system_fee_policies (
+    policy_code, policy_name,
+    buyer_fee_rate, seller_fee_rate,
+    status, version, effective_from, created_by
+) VALUES (
+    'NEGOTIATION_TEST_V2', 'Negotiation test policy',
+    0.05, 0.02,
+    'ACTIVE', 2, CURRENT_TIMESTAMP, 1003
+);
+
+INSERT INTO conversations (
+    conversation_id, buyer_id, seller_id, product_id,
+    product_title_snapshot, product_price_at_start, currency, last_activity_at
+) VALUES (
+    3101, 1001, 1002, 3001,
+    'Used laptop', 10000000, 'VND', CURRENT_TIMESTAMP
+);
+
+INSERT INTO conversation_user_state (conversation_id, user_id) VALUES
+    (3101, 1001),
+    (3101, 1002);
 
 SELECT pg_temp.expect_sqlstate(
     'conversation is unique per buyer seller product',
-    $test$INSERT INTO conversations (buyer_id, seller_id, product_id) VALUES (1001, 1002, 3001)$test$,
+    $test$
+        INSERT INTO conversations (
+            buyer_id, seller_id, product_id,
+            product_title_snapshot, product_price_at_start, currency, last_activity_at
+        ) VALUES (
+            1001, 1002, 3001,
+            'Used laptop', 10000000, 'VND', CURRENT_TIMESTAMP
+        )
+    $test$,
     '23505'
 );
+
+INSERT INTO messages (
+    message_id, conversation_id, sender_id, client_message_id, content
+) VALUES (
+    3151, 3101, 1001, '10000000-0000-0000-0000-000000000001', 'Is this item still available?'
+);
+
+SELECT pg_temp.expect_sqlstate(
+    'message retries are idempotent inside a conversation',
+    $test$
+        INSERT INTO messages (
+            conversation_id, sender_id, client_message_id, content
+        ) VALUES (
+            3101, 1001, '10000000-0000-0000-0000-000000000001', 'Duplicate retry'
+        )
+    $test$,
+    '23505'
+);
+
+SELECT pg_temp.expect_sqlstate(
+    'non-participant cannot send a message',
+    $test$
+        INSERT INTO messages (
+            conversation_id, sender_id, client_message_id, content
+        ) VALUES (
+            3101, 1003, '10000000-0000-0000-0000-000000000002', 'Unauthorized message'
+        )
+    $test$,
+    '23503'
+);
+
+UPDATE conversation_user_state
+SET last_read_message_id = 3151,
+    last_read_at = CURRENT_TIMESTAMP
+WHERE conversation_id = 3101 AND user_id = 1002;
+
+SELECT pg_temp.assert_true(
+    'conversation stores one read cursor per participant',
+    (
+        SELECT last_read_message_id = 3151
+        FROM conversation_user_state
+        WHERE conversation_id = 3101 AND user_id = 1002
+    )
+);
+
+INSERT INTO offers (
+    offer_id, conversation_id, proposer_id, offered_item_price,
+    fee_policy_id, buyer_system_fee, seller_system_fee,
+    buyer_subtotal, seller_proceeds, currency, status
+) VALUES (
+    3301, 3101, 1001, 9000000,
+    (SELECT fee_policy_id FROM system_fee_policies WHERE policy_code = 'NEGOTIATION_TEST_V2'),
+    450000, 180000, 9450000, 8820000, 'VND', 'PENDING'
+);
+
+SELECT pg_temp.expect_sqlstate(
+    'only one pending offer is allowed per conversation',
+    $test$
+        INSERT INTO offers (
+            conversation_id, proposer_id, offered_item_price,
+            fee_policy_id, buyer_system_fee, seller_system_fee,
+            buyer_subtotal, seller_proceeds, currency, status
+        ) VALUES (
+            3101, 1002, 9200000,
+            (SELECT fee_policy_id FROM system_fee_policies WHERE policy_code = 'NEGOTIATION_TEST_V2'),
+            460000, 184000, 9660000, 9016000, 'VND', 'PENDING'
+        )
+    $test$,
+    '23505'
+);
+
+SELECT pg_temp.expect_sqlstate(
+    'offer proposer must participate in the conversation',
+    $test$
+        INSERT INTO offers (
+            conversation_id, proposer_id, offered_item_price,
+            fee_policy_id, buyer_system_fee, seller_system_fee,
+            buyer_subtotal, seller_proceeds, currency, status,
+            responded_by, responded_at
+        ) VALUES (
+            3101, 1003, 9000000,
+            (SELECT fee_policy_id FROM system_fee_policies WHERE policy_code = 'NEGOTIATION_TEST_V2'),
+            450000, 180000, 9450000, 8820000, 'VND', 'WITHDRAWN',
+            1003, CURRENT_TIMESTAMP
+        )
+    $test$,
+    '23503'
+);
+
+UPDATE offers
+SET status = 'COUNTERED',
+    responded_by = 1002,
+    responded_at = CURRENT_TIMESTAMP
+WHERE offer_id = 3301;
+
+INSERT INTO offers (
+    offer_id, conversation_id, proposer_id, parent_offer_id, offered_item_price,
+    fee_policy_id, buyer_system_fee, seller_system_fee,
+    buyer_subtotal, seller_proceeds, currency, status
+) VALUES (
+    3302, 3101, 1002, 3301, 9200000,
+    (SELECT fee_policy_id FROM system_fee_policies WHERE policy_code = 'NEGOTIATION_TEST_V2'),
+    460000, 184000, 9660000, 9016000, 'VND', 'PENDING'
+);
+
+INSERT INTO messages (
+    message_id, conversation_id, sender_id, client_message_id,
+    content, message_type, offer_id
+) VALUES
+    (
+        3152, 3101, 1001, '10000000-0000-0000-0000-000000000003',
+        'Buyer offered 9,000,000 VND', 'OFFER', 3301
+    ),
+    (
+        3153, 3101, 1002, '10000000-0000-0000-0000-000000000004',
+        'Seller countered 9,200,000 VND', 'OFFER', 3302
+    );
+
+UPDATE offers
+SET status = 'ACCEPTED',
+    responded_by = 1001,
+    responded_at = CURRENT_TIMESTAMP
+WHERE offer_id = 3302;
 
 INSERT INTO carts (cart_id, user_id) VALUES (3201, 1001);
 
@@ -121,18 +288,20 @@ SELECT pg_temp.expect_sqlstate(
 );
 
 SELECT pg_temp.expect_sqlstate(
-    'order total must equal subtotal plus shipping',
+    'order total must include buyer system fee and shipping',
     $test$
         INSERT INTO orders (
             checkout_group_id, buyer_id, seller_id, source_address_id,
             shipping_recipient_name, shipping_phone_number, shipping_province,
             shipping_district, shipping_ward, shipping_detail_address,
-            subtotal, shipping_fee, total_amount, payment_due_at
+            subtotal, buyer_system_fee, seller_system_fee, seller_proceeds,
+            shipping_fee, total_amount, payment_due_at
         ) VALUES (
             '00000000-0000-0000-0000-000000000001', 1001, 1002, 2001,
             'Buyer Test', '+84900000001', 'Ho Chi Minh',
             'District 1', 'Ben Nghe', '1 Original Street',
-            10000000, 30000, 10000000, CURRENT_TIMESTAMP + INTERVAL '15 minutes'
+            9200000, 460000, 184000, 9016000,
+            30000, 9200000, CURRENT_TIMESTAMP + INTERVAL '15 minutes'
         )
     $test$,
     '23514'
@@ -142,18 +311,27 @@ INSERT INTO orders (
     order_id, checkout_group_id, buyer_id, seller_id, source_address_id,
     shipping_recipient_name, shipping_phone_number, shipping_province,
     shipping_district, shipping_ward, shipping_detail_address,
-    subtotal, shipping_fee, total_amount, payment_due_at
+    subtotal, buyer_system_fee, seller_system_fee, seller_proceeds,
+    shipping_fee, total_amount, payment_due_at
 ) VALUES (
     4001, '00000000-0000-0000-0000-000000000001', 1001, 1002, 2001,
     'Buyer Test', '+84900000001', 'Ho Chi Minh',
     'District 1', 'Ben Nghe', '1 Original Street',
-    10000000, 30000, 10030000, CURRENT_TIMESTAMP + INTERVAL '15 minutes'
+    9200000, 460000, 184000, 9016000,
+    30000, 9690000, CURRENT_TIMESTAMP + INTERVAL '15 minutes'
 );
 
 INSERT INTO order_items (
-    order_item_id, order_id, product_id, product_title, quantity, unit_price, line_total
+    order_item_id, order_id, product_id, product_title, quantity,
+    listed_price, agreed_price, buyer_system_fee, seller_system_fee,
+    buyer_line_total, seller_line_proceeds, fee_policy_id,
+    accepted_offer_id, pricing_source
 ) VALUES (
-    4101, 4001, 3001, 'Used laptop', 1, 10000000, 10000000
+    4101, 4001, 3001, 'Used laptop', 1,
+    10000000, 9200000, 460000, 184000,
+    9660000, 9016000,
+    (SELECT fee_policy_id FROM system_fee_policies WHERE policy_code = 'NEGOTIATION_TEST_V2'),
+    3302, 'OFFER'
 );
 
 SELECT pg_temp.expect_sqlstate(
@@ -189,12 +367,12 @@ SELECT pg_temp.assert_true(
 INSERT INTO payments (
     payment_id, order_id, amount, payment_method, status
 ) VALUES (
-    5001, 4001, 10030000, 'BANK_TRANSFER_MOCK', 'PENDING'
+    5001, 4001, 9690000, 'BANK_TRANSFER_MOCK', 'PENDING'
 );
 
 SELECT pg_temp.expect_sqlstate(
     'one payment per order',
-    $test$INSERT INTO payments (order_id, amount, payment_method) VALUES (4001, 10030000, 'COD_MOCK')$test$,
+    $test$INSERT INTO payments (order_id, amount, payment_method) VALUES (4001, 9690000, 'COD_MOCK')$test$,
     '23505'
 );
 
@@ -233,6 +411,18 @@ SELECT pg_temp.expect_sqlstate(
     'transaction product cannot be hard-deleted',
     $test$DELETE FROM products WHERE product_id = 3001$test$,
     '23503'
+);
+
+INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, payload)
+VALUES ('CONVERSATION', '3101', 'OFFER_ACCEPTED', '{"offerId":3302}'::jsonb);
+
+SELECT pg_temp.expect_sqlstate(
+    'outbox payload must be a JSON object',
+    $test$
+        INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, payload)
+        VALUES ('CONVERSATION', '3101', 'INVALID', '[]'::jsonb)
+    $test$,
+    '23514'
 );
 
 SELECT pg_temp.assert_true(

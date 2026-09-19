@@ -29,6 +29,8 @@ Ví tiền thật, partial refund và đối soát production.
 - Không đồng thời release và refund.
 - Không release khi Complaint/return đang mở.
 - Không tin total hoặc trạng thái do client gửi.
+- `payments.amount` phải bằng `orders.total_amount`, trong đó total đã bao gồm buyer system fee và shipping fee.
+- Policy/phí đã snapshot trên offer/order item không được tính lại khi payment callback đến.
 
 ## Completed tasks
 

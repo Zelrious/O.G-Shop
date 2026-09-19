@@ -2,7 +2,7 @@
 
 - Project: Old but Gold (O.G Shop)
 - Updated: 2026-09-19
-- Phase: IDENTITY_SECURITY_BASELINE
+- Phase: CORE_FEATURES_FIRST
 - Overall status: READY_FOR_NEXT_TASK
 - Active task: None
 - Published branch: `origin/main`
@@ -27,6 +27,16 @@
   - Đăng ký 7 nguồn tài liệu trong `reference/SOURCE_REGISTER.md`.
   - Tạo Flyway migration `V1__initial_schema.sql` tích hợp 22 bảng, extension `pgvector` và bảng `seller_biometrics`.
   - Kiểm chứng Backend, Frontend và tài liệu của baseline tại thời điểm hoàn thành.
+- Đã hoàn thành [TASK-0010](archive/TASK-0010-database-pricing-and-negotiation-baseline.md):
+  - Flyway V3 tách giá Seller niêm yết, system-fee policy có version và snapshot phí trên offer/order.
+  - Chat có product snapshot, participant read cursor, message idempotency và offer/counter-offer chain.
+  - Accepted offer snapshot sang order item; giá niêm yết công khai không bị ghi đè.
+  - Thêm transactional outbox cho Redis/WebSocket/notification và test runner PostgreSQL clean + legacy migration.
+  - Database development đã migrate thành công đến V3; Backend và eKYC đang health UP.
+- Đã hoàn thành [TASK-0011](archive/TASK-0011-core-features-before-optimization.md):
+  - Chốt thứ tự triển khai nghiệp vụ cốt lõi trên PostgreSQL trước tối ưu hạ tầng.
+  - REST chat/history và offer transaction phải ổn định trước WebSocket/Redis.
+  - Đặt acceptance gate cho concurrency, authorization, idempotency và frontend end-to-end trước giai đoạn tối ưu.
 - Đã hoàn thành [TASK-0003](archive/TASK-0003-ui-batch-01-auth-and-ekyc.md):
   - Cài đặt `react-router-dom` và cấu hình routing URL (`/`, `/login`, `/register`, `/forgot-password`, `/profile`, `/seller-verification`).
   - Thiết lập Design Tokens chuẩn O.G Shop và UI primitives (`Button`, `Input`, `Card`, `Badge`, `Alert`).
@@ -41,15 +51,20 @@
 
 ## Next
 
-1. TASK-0006: Gmail SMTP/Mailpit và OTP reset password.
-2. TASK-0007: Google OAuth2/OIDC.
-3. TASK-0008: Cloudinary avatar.
-4. TASK-0009: Cloudinary product/evidence media.
-5. Hoàn thiện traceability và các phần còn lại của UC-01/UC-02.
+1. Chốt DP-09 (mức phí) và DP-10 (cart hay direct checkout); trong lúc chưa chốt tiếp tục dùng fee policy 0% và không xóa cart.
+2. Hoàn thiện traceability và kiểm thử các phần còn lại của UC-01/UC-02.
+3. Triển khai UC-03/UC-04: product listing, danh sách, tìm kiếm và chi tiết sản phẩm.
+4. Triển khai UC-05/UC-06: REST chat/history trước, sau đó offer/counter-offer transaction.
+5. Triển khai UC-07 đến UC-14: accept offer, checkout, payment mock và vòng đời đơn hàng; bổ sung concurrency test.
+6. Kết nối frontend và xác minh luồng end-to-end Buyer ↔ Seller.
+7. Sau khi core acceptance gate đạt, mới thực hiện external integrations, WebSocket, outbox worker và Redis theo nhu cầu đo được.
 
 
 ## Current risks
 
 - Các chính sách thời hạn kiểm tra hàng, tự giải ngân và hoàn hàng còn cần xác nhận.
-- Các tích hợp ở TASK-0006 đến TASK-0009 chưa được triển khai.
+- Các tích hợp ở TASK-0006 đến TASK-0009 chưa được triển khai nhưng không được chặn việc kiểm thử core flow bằng adapter local/mock.
 - Luồng hiện tại là eKYC mô phỏng kỹ thuật, không phải KYC production.
+- Mức phí hệ thống chưa được chốt; policy active hiện tại là 0% để không thu nhầm.
+- Accept offer/checkout đồng thời chưa có application-level concurrency test; đây là điều kiện bắt buộc trước giai đoạn tối ưu.
+- Outbox worker, WebSocket và Redis được chủ động defer; schema outbox hiện tại chỉ là nền tảng, chưa phải dependency của core flow.

@@ -26,7 +26,7 @@ Microservices chưa phù hợp vì luồng Order–Payment–Complaint cần con
 ```text
 Browser
   -> React Frontend
-  -> Spring Boot REST/WebSocket
+  -> Spring Boot REST
   -> PostgreSQL
 
 Spring Boot
@@ -34,6 +34,8 @@ Spring Boot
   -> Mock/Sandbox Shipping Adapter
   -> Private Media Adapter
 ```
+
+WebSocket được bổ sung sau khi REST chat/offer ổn định. Redis và outbox worker chỉ thuộc giai đoạn scale sau core acceptance gate; chúng không phải dependency của luồng nghiệp vụ cơ bản.
 
 ## Core invariants
 

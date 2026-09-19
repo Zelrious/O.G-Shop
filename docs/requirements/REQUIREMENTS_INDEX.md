@@ -1,5 +1,7 @@
 # Requirements Index
 
+Đây là danh mục requirement sống của dự án và có thể được cập nhật liên tục. Tài liệu trong `reference/requirements/` chỉ là nguồn tham khảo trừ khi `reference/SOURCE_REGISTER.md` đánh dấu rõ là `APPROVED`; thay đổi requirement phải cập nhật traceability, module liên quan và kế hoạch kiểm thử trước khi triển khai.
+
 ## Functional use cases
 
 | ID | Tên | Module chính | Trạng thái |
@@ -24,4 +26,4 @@
 | UC-18 | Dashboard quản trị | Platform | PLANNED |
 | UC-19 | Thông báo và audit | Platform | PLANNED |
 
-Chi tiết BR và NFR sẽ được nhập sau khi chủ dự án đặt tài liệu yêu cầu đã duyệt vào repository.
+Chi tiết BR và NFR được bổ sung dần khi chủ dự án chốt từng luồng. Nội dung từ tài liệu tham khảo không tự động trở thành yêu cầu bắt buộc.
