@@ -23,6 +23,21 @@ Auth response không chứa refresh token. Response session dùng `Cache-Control
 
 `/ekyc/verify` nhận multipart `cardFile` và `liveFrame`. Khi provider lỗi, API trả `503 EKYC_UNAVAILABLE`; không fallback sang mock và không tạo verification. Response không bao gồm face embedding.
 
+## Seller Verification (MVP Bypass)
+
+| Method | Path | Auth | Hành vi |
+|---|---|---|---|
+| POST | `/seller-verification/activate` | Bearer JWT | Kích hoạt quyền `SELLER` cho tài khoản hiện tại qua chế độ `MVP_BYPASS`. Idempotent, không tạo dữ liệu CCCD/sinh trắc học giả. Trả lỗi `400 MVP_ACTIVATION_DISABLED` khi mode bị tắt. |
+
+Response body:
+```json
+{
+  "verificationId": 1,
+  "status": "VERIFIED",
+  "verificationMethod": "MVP_BYPASS"
+}
+```
+
 ## Cookie
 
 Local default:

@@ -52,7 +52,21 @@ async function errorMessage(response: Response): Promise<string> {
   return body.message || body.detail || `Yêu cầu eKYC không thành công (${response.status}).`;
 }
 
+export interface MvpActivationResult {
+  verificationId: number;
+  status: string;
+  verificationMethod: string;
+}
+
 export const verificationApi = {
+  async activateMvpSeller(): Promise<MvpActivationResult> {
+    const response = await authApi.authorizedFetch('/seller-verification/activate', {
+      method: 'POST',
+    });
+    if (!response.ok) throw new Error(await errorMessage(response));
+    return (await response.json()) as MvpActivationResult;
+  },
+
   async processCccdImage(file: File): Promise<OcrApiResult> {
     const formData = new FormData();
     formData.append('file', file);

@@ -47,15 +47,28 @@ public class SellerVerificationEntity {
     }
 
     public SellerVerificationEntity(UserEntity user, Instant now) {
+        this(user, "AI_EKYC", now);
+    }
+
+    public SellerVerificationEntity(UserEntity user, String verificationMethod, Instant now) {
         this.user = user;
-        this.verificationMethod = "AI_EKYC";
+        this.verificationMethod = verificationMethod;
         this.status = "VERIFIED";
         this.documentData = Map.of();
         this.submittedAt = now;
         this.reviewedAt = now;
     }
 
+    public void upgradeToMvpBypass(Instant now) {
+        this.verificationMethod = "MVP_BYPASS";
+        this.status = "VERIFIED";
+        this.reviewedAt = now;
+    }
+
     public Long getId() { return id; }
     public UserEntity getUser() { return user; }
     public String getStatus() { return status; }
+    public String getVerificationMethod() { return verificationMethod; }
+    public Instant getSubmittedAt() { return submittedAt; }
+    public Instant getReviewedAt() { return reviewedAt; }
 }

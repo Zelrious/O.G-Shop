@@ -48,11 +48,11 @@ export const ProfilePage: React.FC = () => {
 
       {/* Quản lý quyền Người bán & eKYC */}
       {isSeller ? (
-        <Card title="Xác minh Người bán">
+        <Card title="Quyền Người bán">
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Badge variant="verified">Đã xác minh</Badge>
+            <Badge variant="seller">Đã kích hoạt Người bán</Badge>
             <span style={{ color: 'var(--og-color-text-secondary)' }}>
-              Quyền SELLER được tải từ backend. Hồ sơ không lưu face embedding hoặc ảnh CCCD.
+              Quyền SELLER đã được cấp từ backend. Bạn có thể tham gia đăng tin bán hàng.
             </span>
           </div>
         </Card>
@@ -60,11 +60,11 @@ export const ProfilePage: React.FC = () => {
         <Card title="Trở thành Người bán trên O.G Shop">
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <p style={{ margin: 0, color: 'var(--og-color-text-secondary)' }}>
-              Để đăng bán sản phẩm và mở gian hàng trên nền tảng O.G Shop, bạn cần hoàn thành quy trình xác thực sinh trắc học eKYC (quét thẻ CCCD và khuôn mặt).
+              Để đăng bán sản phẩm và mở gian hàng trên nền tảng O.G Shop, bạn cần kích hoạt quyền Người bán (chế độ MVP hỗ trợ kích hoạt trực tiếp).
             </p>
             <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
               <Button variant="gold" onClick={() => navigate('/seller-verification')}>
-                Bắt đầu Xác thực eKYC ngay
+                Kích hoạt quyền Người bán
               </Button>
             </div>
           </div>
