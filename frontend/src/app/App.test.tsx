@@ -8,7 +8,7 @@ describe('App Root & Navigation', () => {
 
     expect(screen.getByRole('link', { name: /Old but Gold/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Old but Gold' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Đăng nhập' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Đăng nhập' }).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole('button', { name: 'Đăng ký' })).toBeInTheDocument();
   });
 });

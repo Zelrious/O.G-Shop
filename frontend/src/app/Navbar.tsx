@@ -12,6 +12,8 @@ export const Navbar: React.FC = () => {
     navigate('/login');
   };
 
+  const isSeller = isAuthenticated && user?.roles.includes('SELLER');
+
   return (
     <header className="og-navbar">
       <Link to="/" className="og-navbar-brand">
@@ -26,16 +28,48 @@ export const Navbar: React.FC = () => {
               Trang chủ
             </Link>
           </li>
+          <li>
+            <Link to="/marketplace" className="og-nav-link">
+              Mua sắm
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/showcase"
+              className="og-nav-link"
+              style={{
+                background: 'var(--og-color-accent-gold-light)',
+                color: 'var(--og-color-gold-text)',
+                fontWeight: 700,
+                padding: '4px 12px',
+                borderRadius: 'var(--og-radius-full)',
+                border: '1px solid var(--og-color-accent-gold)'
+              }}
+            >
+              🗺️ 44 Màn Hình Prototype
+            </Link>
+          </li>
 
           {isAuthenticated && user ? (
             <>
-              {user.roles.includes('SELLER') ? (
-                <li>
-                  <Badge variant="seller">Seller Shop</Badge>
-                </li>
+              {isSeller ? (
+                <>
+                  <li>
+                    <Link to="/seller/listings" className="og-nav-link">
+                      Tin đăng của tôi
+                    </Link>
+                  </li>
+                  <li>
+                    <Badge variant="seller">Seller Shop</Badge>
+                  </li>
+                </>
               ) : (
                 <li>
-                  <Link to="/seller-verification" className="og-nav-link" style={{ color: 'var(--og-color-accent-gold-dark)' }}>
+                  <Link
+                    to="/seller-verification"
+                    className="og-nav-link"
+                    style={{ color: 'var(--og-color-accent-gold-dark)' }}
+                  >
                     ✨ Đăng ký Bán hàng
                   </Link>
                 </li>
