@@ -50,7 +50,15 @@ public class SecurityConfig {
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/refresh/logout").permitAll()
-                        .requestMatchers("/api/v1/auth/me", "/api/v1/ekyc/**").authenticated()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/categories",
+                                "/api/v1/products",
+                                "/api/v1/products/**").permitAll()
+                        .requestMatchers(
+                                "/api/v1/auth/me",
+                                "/api/v1/ekyc/**",
+                                "/api/v1/seller-verification/**",
+                                "/api/v1/seller/products/**").authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
@@ -98,7 +106,7 @@ public class SecurityConfig {
     CorsConfigurationSource corsConfigurationSource(AuthProperties properties) {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(properties.frontendOrigin()));
-        configuration.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);

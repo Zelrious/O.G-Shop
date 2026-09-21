@@ -4,3 +4,8 @@ export * from './RegisterPage';
 export * from './ForgotPasswordPage';
 export * from './ProfilePage';
 export * from './SellerVerificationPage';
+export * from './MarketplacePage';
+export * from './ProductDetailPage';
+export * from './SellerListingsPage';
+export * from './CreateListingPage';
+export * from './EditListingPage';
