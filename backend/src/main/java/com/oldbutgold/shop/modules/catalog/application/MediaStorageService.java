@@ -13,10 +13,11 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 public class MediaStorageService {
@@ -27,6 +28,8 @@ public class MediaStorageService {
 
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
     private static final Set<String> ALLOWED_VIDEO_TYPES = Set.of("video/mp4", "video/webm");
+    private static final Pattern LOCAL_MEDIA_FILENAME = Pattern.compile(
+            "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(?:jpg|jpeg|png|webp|mp4|webm)");
 
     private final Path uploadDir;
     private final Cloudinary cloudinary;
@@ -75,7 +78,7 @@ public class MediaStorageService {
             throw new IllegalArgumentException("Tập tin tải lên không được rỗng.");
         }
 
-        String contentType = file.getContentType() != null ? file.getContentType().toLowerCase() : "";
+        String contentType = file.getContentType() != null ? file.getContentType().toLowerCase(Locale.ROOT) : "";
         long size = file.getSize();
 
         if ("IMAGE".equalsIgnoreCase(mediaType)) {
@@ -126,14 +129,22 @@ public class MediaStorageService {
         }
 
         // 2. Local fallback storage
-        String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "media";
-        String extension = getFileExtension(originalFilename);
-        String uniqueFilename = UUID.randomUUID().toString() + (extension.isEmpty() ? "" : "." + extension);
+        // File paths use only a server-generated ID and a fixed suffix, never the client filename.
+        String extension = switch (contentType) {
+            case "image/jpeg" -> "jpg";
+            case "image/png" -> "png";
+            case "image/webp" -> "webp";
+            case "video/mp4" -> "mp4";
+            case "video/webm" -> "webm";
+            default -> throw new IllegalArgumentException("Định dạng media không được hỗ trợ.");
+        };
+        String uniqueFilename = UUID.randomUUID() + "." + extension;
 
         Path targetPath = this.uploadDir.resolve(uniqueFilename);
 
         try (InputStream in = file.getInputStream()) {
-            Files.copy(in, targetPath, StandardCopyOption.REPLACE_EXISTING);
+            // The default CREATE_NEW behavior also refuses existing files and symbolic links.
+            Files.copy(in, targetPath);
         } catch (IOException e) {
             throw new RuntimeException("Lưu trữ tập tin media thất bại: " + e.getMessage(), e);
         }
@@ -145,12 +156,15 @@ public class MediaStorageService {
     }
 
     public Path load(String filename) {
-        return this.uploadDir.resolve(filename).normalize();
-    }
-
-    private static String getFileExtension(String filename) {
-        int idx = filename.lastIndexOf('.');
-        return (idx > 0 && idx < filename.length() - 1) ? filename.substring(idx + 1).toLowerCase() : "";
+        if (filename == null || filename.contains("..") || filename.contains("/")
+                || filename.contains("\\") || !LOCAL_MEDIA_FILENAME.matcher(filename).matches()) {
+            throw new IllegalArgumentException("Tên media không hợp lệ.");
+        }
+        Path resolvedPath = this.uploadDir.resolve(filename).normalize();
+        if (!resolvedPath.startsWith(this.uploadDir) || !this.uploadDir.equals(resolvedPath.getParent())) {
+            throw new IllegalArgumentException("Đường dẫn media không hợp lệ.");
+        }
+        return resolvedPath;
     }
 
     public record StoredMedia(

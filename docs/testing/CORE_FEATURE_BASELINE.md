@@ -22,6 +22,7 @@ Checkout: `GET /api/v1/commerce/checkout/preview`, `POST /api/v1/commerce/checko
 - Orders: Seller đổi tab/trang trong lúc xác nhận đơn, kết quả thao tác về muộn có thể tải query cũ vào view hiện tại. Chưa kiểm chứng query PostgreSQL/tie-break thật hoặc checkout đồng thời/expiry end-to-end.
 - Moderation: API mới kiểm tra đăng nhập, chưa giới hạn ADMIN/KTV. Proof cũ V9→V10, command cũ qua reject/resubmit và bảo toàn reason lịch sử còn lỗi. SQL DELETE/concurrency tests còn khoảng trống; test pass không chứng minh các lỗi này đã được sửa.
 - Media Catalog còn fallback local khi Cloudinary lỗi và có duration giả định cho video thiếu metadata; cần xử lý để khớp hướng Cloudinary và validation thời lượng thực tế. Avatar không fallback local.
+- Path media local đã bổ sung kiểm soát tên UUID/suffix, chặn traversal/absolute path/symlink/directory và bỏ client filename khỏi tên ghi; xem [Catalog API](../api/CATALOG_API.md). Đây là sửa an toàn filesystem, không hoàn tất validation nội dung/media provider.
 - Checkout mới kiểm tra eKYC khi tạo đơn; preview chưa có cùng guard. Idempotency/concurrency, đồng bộ báo giá và các contract phương thức/voucher cần hoàn thiện.
 - Phí sàn hiện theo baseline tạm, ship code 30.000đ chưa là policy cuối cùng. Payment/QR chỉ phục vụ mô phỏng, chưa có provider tiền thật/payout/vận đơn.
 - Schema code đến V11, DB local từng kiểm tra history mới đến V8. Kiểm chứng nâng cấp trên DB riêng/bản sao trước dùng; role KTV hiện diện không chứng minh history đã đồng bộ.

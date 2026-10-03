@@ -496,3 +496,9 @@ Toàn bộ phản hồi lỗi tuân thủ cấu trúc RFC 7807 / O.G Shop API Co
 | 409 Conflict | `PRODUCT_STATE_CONFLICT` | Trạng thái tin đăng không phù hợp với thao tác (ví dụ cố publish DRAFT/REJECTED thay vì submit, hoặc duyệt tin khi đã RESERVED/SOLD). |
 | 409 Conflict | `PRODUCT_VERSION_CONFLICT` | Xung đột cập nhật đồng thời (Optimistic / Moderation Version Mismatch). Cần tải lại dữ liệu mới nhất. |
 | 409 Conflict | `COMMAND_KEY_CONFLICT` | Command key (idempotency key) đã được sử dụng với payload hoặc kết quả khác trước đó. |
+
+## 4. Media local — tên file và đường dẫn
+
+`GET /api/v1/media/{filename}` chỉ đọc file thường trong thư mục media được cấu hình. Tên hợp lệ là UUID chữ thường do server sinh với suffix `jpg`, `jpeg`, `png`, `webp`, `mp4` hoặc `webm`; giữ `jpeg` để đọc upload cũ. Tên không hợp lệ, file không tồn tại, directory hoặc symlink trả 404. Đường dẫn tuyệt đối, dấu phân cách thư mục, `..` và tên khác định dạng này không được chấp nhận.
+
+Khi ghi local, server chọn suffix cố định theo MIME đã được cho phép và tạo UUID mới. `originalFilename` do client gửi không tham gia tên/path lưu; file có sẵn không bị overwrite. Kiểm soát tên/path này không xác thực nội dung ảnh/video hoặc thay thế validation metadata thực tế. Local fallback của Catalog còn tồn tại trong implementation và vẫn cần xử lý theo hướng Cloudinary đã chốt; mục này không phê duyệt fallback thành chính sách.

@@ -5,6 +5,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.MediaTypeFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 
 @RestController
@@ -28,21 +30,19 @@ public class MediaController {
     public ResponseEntity<Resource> getMedia(@PathVariable String filename) {
         try {
             Path filePath = mediaStorageService.load(filename);
-            Resource resource = new UrlResource(filePath.toUri());
-
-            if (!resource.exists() || !resource.isReadable()) {
+            if (!Files.isRegularFile(filePath, LinkOption.NOFOLLOW_LINKS) || !Files.isReadable(filePath)) {
                 return ResponseEntity.notFound().build();
             }
 
-            String contentType = Files.probeContentType(filePath);
-            if (contentType == null) {
-                contentType = "application/octet-stream";
-            }
+            Resource resource = new UrlResource(filePath.toUri());
+            MediaType contentType = MediaTypeFactory.getMediaType(filename).orElse(MediaType.APPLICATION_OCTET_STREAM);
 
             return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(contentType))
+                    .contentType(contentType)
                     .header(HttpHeaders.CACHE_CONTROL, "max-age=86400, public")
                     .body(resource);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
         } catch (IOException e) {
             return ResponseEntity.internalServerError().build();
         }
