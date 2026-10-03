@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Electric Kettle / Cooker -->
+  <defs>
+    <linearGradient id="appGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e2e8f0"/>
+      <stop offset="100%" stop-color="#94a3b8"/>
+    </linearGradient>
+  </defs>
+  <!-- Kettle body -->
+  <path d="M34 32 L66 32 L72 72 L28 72 Z" fill="url(#appGrad)" stroke="#475569" stroke-width="2"/>
+  <!-- Base -->
+  <rect x="24" y="74" width="52" height="6" rx="3" fill="#1e293b"/>
+  <!-- Lid & knob -->
+  <path d="M36 32 C36 24, 64 24, 64 32 Z" fill="#334155"/>
+  <circle cx="50" cy="22" r="3" fill="#cbd5e1"/>
+  <!-- Spout -->
+  <polygon points="34,38 22,46 32,54" fill="#64748b"/>
+  <!-- Handle -->
+  <path d="M66 38 C80 38, 82 66, 68 68" fill="none" stroke="#334155" stroke-width="6" stroke-linecap="round"/>
+  <!-- Water gauge window -->
+  <rect x="46" y="44" width="8" height="20" rx="3" fill="#38bdf8"/>
+</svg>

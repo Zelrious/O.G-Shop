@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Strap -->
+  <rect x="42" y="10" width="16" height="80" rx="4" fill="#334155"/>
+  <!-- Watch body -->
+  <rect x="32" y="28" width="36" height="44" rx="10" fill="#0f172a" stroke="#475569" stroke-width="2"/>
+  <!-- Screen -->
+  <rect x="36" y="32" width="28" height="36" rx="6" fill="#1e293b"/>
+  <!-- Clock hands or UI -->
+  <circle cx="50" cy="50" r="8" fill="none" stroke="#22c55e" stroke-width="2"/>
+  <circle cx="50" cy="50" r="2" fill="#22c55e"/>
+  <!-- Crown button -->
+  <rect x="68" y="38" width="3" height="8" rx="1" fill="#64748b"/>
+</svg>

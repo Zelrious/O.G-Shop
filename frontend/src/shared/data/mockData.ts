@@ -114,14 +114,14 @@ export interface MockDispute {
 }
 
 export const MOCK_CATEGORIES: MockCategory[] = [
-  { id: 'cat-1', slug: 'electronics', name: { vi: 'Máy Ảnh & Ống Kính', en: 'Cameras & Lenses' }, icon: '📷', count: 142 },
-  { id: 'cat-2', slug: 'audio', name: { vi: 'Âm Thanh & Tai Nghe', en: 'Audio & Headphones' }, icon: '🎧', count: 98 },
-  { id: 'cat-3', slug: 'keyboards', name: { vi: 'Bàn Phím Cơ & Gear PC', en: 'Keyboards & PC Gear' }, icon: '⌨️', count: 125 },
-  { id: 'cat-4', slug: 'vintage-watches', name: { vi: 'Đồng Hồ Cổ & Trang Sức', en: 'Vintage Watches' }, icon: '⌚', count: 64 },
-  { id: 'cat-5', slug: 'vintage-fashion', name: { vi: 'Thời Trang Second-hand', en: 'Vintage Apparel' }, icon: '🧥', count: 210 },
-  { id: 'cat-6', slug: 'gaming', name: { vi: 'Máy Chơi Game & Đĩa', en: 'Gaming & Retro Consoles' }, icon: '🎮', count: 83 },
-  { id: 'cat-7', slug: 'smartphones', name: { vi: 'Điện Thoại & Tablet', en: 'Phones & Tablets' }, icon: '📱', count: 176 },
-  { id: 'cat-8', slug: 'collectibles', name: { vi: 'Đồ Sưu Tầm & Nghệ Thuật', en: 'Collectibles & Art' }, icon: '🏺', count: 52 },
+  { id: 'cat-1', slug: 'electronics', name: { vi: 'Điện tử', en: 'Electronics' }, icon: '📱', count: 180 },
+  { id: 'cat-2', slug: 'fashion', name: { vi: 'Thời trang', en: 'Fashion' }, icon: '🧥', count: 210 },
+  { id: 'cat-3', slug: 'home-living', name: { vi: 'Nhà cửa & đời sống', en: 'Home & Living' }, icon: '🏠', count: 95 },
+  { id: 'cat-4', slug: 'books-stationery', name: { vi: 'Sách & văn phòng phẩm', en: 'Books & Stationery' }, icon: '📚', count: 140 },
+  { id: 'cat-5', slug: 'sports-outdoors', name: { vi: 'Thể thao & dã ngoại', en: 'Sports & Outdoors' }, icon: '⚽', count: 75 },
+  { id: 'cat-6', slug: 'collectibles', name: { vi: 'Đồ sưu tầm', en: 'Collectibles' }, icon: '🏺', count: 110 },
+  { id: 'cat-7', slug: 'mother-baby', name: { vi: 'Mẹ & bé', en: 'Mother & Baby' }, icon: '👶', count: 48 },
+  { id: 'cat-8', slug: 'other', name: { vi: 'Khác', en: 'Other' }, icon: '📦', count: 62 },
 ];
 
 export const MOCK_PRODUCTS: MockProduct[] = [

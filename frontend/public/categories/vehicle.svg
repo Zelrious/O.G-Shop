@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Motorbike / Scooter -->
+  <defs>
+    <linearGradient id="vehGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+  </defs>
+  <!-- Back Wheel -->
+  <circle cx="26" cy="66" r="14" fill="#1e293b" stroke="#0f172a" stroke-width="3"/>
+  <circle cx="26" cy="66" r="5" fill="#cbd5e1"/>
+  <!-- Front Wheel -->
+  <circle cx="74" cy="66" r="14" fill="#1e293b" stroke="#0f172a" stroke-width="3"/>
+  <circle cx="74" cy="66" r="5" fill="#cbd5e1"/>
+  <!-- Scooter Body -->
+  <path d="M26 66 L42 66 L52 50 L64 50 L72 32 L64 32 L58 32 L46 44 L32 44 Z" fill="url(#vehGrad)" stroke="#b45309" stroke-width="2"/>
+  <!-- Seat -->
+  <path d="M30 44 C34 40, 50 40, 52 46 Z" fill="#1e293b"/>
+  <!-- Handlebar & Headlight -->
+  <line x1="72" y1="32" x2="66" y2="24" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="74" cy="36" r="3.5" fill="#fef08a"/>
+</svg>

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Acoustic Guitar & Notes -->
+  <defs>
+    <linearGradient id="woodGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+  </defs>
+  <!-- Guitar body lower lobe -->
+  <circle cx="44" cy="62" r="22" fill="url(#woodGrad)" stroke="#78350f" stroke-width="2"/>
+  <!-- Guitar body upper lobe -->
+  <circle cx="54" cy="46" r="15" fill="url(#woodGrad)" stroke="#78350f" stroke-width="2"/>
+  <!-- Sound hole -->
+  <circle cx="48" cy="54" r="7" fill="#1e293b" stroke="#78350f" stroke-width="1.5"/>
+  <!-- Neck -->
+  <line x1="56" y1="42" x2="78" y2="20" stroke="#78350f" stroke-width="6" stroke-linecap="round"/>
+  <!-- Headstock -->
+  <rect x="76" y="16" width="10" height="8" rx="2" fill="#b45309"/>
+  <!-- Strings -->
+  <line x1="42" y1="64" x2="78" y2="20" stroke="#ffffff" stroke-width="1.5" opacity="0.8"/>
+  <!-- Music note floating -->
+  <path d="M24 24 L24 36 A 4 4 0 1 1 20 32 L20 20 L30 18 L30 30 A 4 4 0 1 1 26 26" fill="#38bdf8"/>
+</svg>
