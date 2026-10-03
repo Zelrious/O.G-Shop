@@ -72,6 +72,38 @@ public class SellerProductController {
         return ResponseEntity.ok(sellerProductService.publishProduct(sellerId, productId));
     }
 
+    @PostMapping("/{productId}/submit")
+    public ResponseEntity<CatalogDtos.SellerProductDetailResponse> submitProduct(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable long productId
+    ) {
+        long sellerId = extractUserId(jwt);
+        return ResponseEntity.ok(sellerProductService.submitProduct(sellerId, productId));
+    }
+
+    @PostMapping("/{productId}/media")
+    public ResponseEntity<CatalogDtos.MediaUploadResponse> uploadMedia(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable long productId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam(value = "mediaType", defaultValue = "IMAGE") String mediaType
+    ) {
+        long sellerId = extractUserId(jwt);
+        CatalogDtos.MediaUploadResponse response = sellerProductService.uploadMedia(sellerId, productId, file, mediaType);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/{productId}/media/{mediaId}")
+    public ResponseEntity<Void> deleteMedia(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable long productId,
+            @PathVariable long mediaId
+    ) {
+        long sellerId = extractUserId(jwt);
+        sellerProductService.deleteMedia(sellerId, productId, mediaId);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/{productId}/hide")
     public ResponseEntity<CatalogDtos.SellerProductDetailResponse> hideProduct(
             @AuthenticationPrincipal Jwt jwt,

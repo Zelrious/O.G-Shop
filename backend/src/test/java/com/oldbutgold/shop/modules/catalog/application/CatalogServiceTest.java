@@ -51,6 +51,7 @@ class CatalogServiceTest {
 
         category = new CategoryEntity("Điện tử", "electronics", "Thiết bị điện tử", true, 1, now);
         setField(category, "id", 10L);
+        when(categoryRepository.findForProduct(any())).thenReturn(List.of(category));
 
         product = new ProductEntity(
                 100L, 10L, "iPhone 13 128GB", "Máy đẹp pin 88%",
@@ -58,7 +59,7 @@ class CatalogServiceTest {
                 null, null, "Hộp, sạc", "Hà Nội", now
         );
         setField(product, "id", 500L);
-        product.publish(now);
+        setField(product, "status", ProductEntity.STATUS_ACTIVE);
     }
 
     @Test

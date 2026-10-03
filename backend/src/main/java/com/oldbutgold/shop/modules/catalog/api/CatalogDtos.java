@@ -1,14 +1,18 @@
 package com.oldbutgold.shop.modules.catalog.api;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.oldbutgold.shop.modules.catalog.infrastructure.persistence.CategoryEntity;
 import com.oldbutgold.shop.modules.catalog.infrastructure.persistence.ProductEntity;
 import com.oldbutgold.shop.modules.catalog.infrastructure.persistence.ProductMediaEntity;
 import com.oldbutgold.shop.modules.identity.application.IdentityCatalogFacade;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -73,10 +77,12 @@ public final class CatalogDtos {
             String thumbnailUrl,
             CategoryResponse category,
             SellerSummary seller,
-            Instant createdAt
+            boolean requiresBuyerEkyc,
+            Instant createdAt,
+            List<CategoryResponse> categories
     ) {
         public static ProductSummaryResponse from(ProductEntity product,
-                                                  CategoryEntity category,
+                                                  List<CategoryEntity> categories,
                                                   IdentityCatalogFacade.SellerPublicSummary seller,
                                                   String thumbnailUrl) {
             return new ProductSummaryResponse(
@@ -87,9 +93,11 @@ public final class CatalogDtos {
                     product.getCondition(),
                     product.getLocation(),
                     thumbnailUrl,
-                    CategoryResponse.from(category),
+                    CategoryResponse.from(categories.getFirst()),
                     SellerSummary.from(seller),
-                    product.getCreatedAt()
+                    product.isRequiresBuyerEkyc(),
+                    product.getCreatedAt(),
+                    categories.stream().map(CategoryResponse::from).toList()
             );
         }
     }
@@ -110,10 +118,12 @@ public final class CatalogDtos {
             CategoryResponse category,
             SellerSummary seller,
             List<ProductMediaResponse> media,
-            Instant createdAt
+            boolean requiresBuyerEkyc,
+            Instant createdAt,
+            List<CategoryResponse> categories
     ) {
         public static ProductDetailResponse from(ProductEntity product,
-                                                 CategoryEntity category,
+                                                 List<CategoryEntity> categories,
                                                  IdentityCatalogFacade.SellerPublicSummary seller,
                                                  List<ProductMediaEntity> mediaList) {
             String thumbnail = mediaList.stream()
@@ -135,10 +145,12 @@ public final class CatalogDtos {
                     product.getIncludedAccessories(),
                     product.getLocation(),
                     thumbnail,
-                    CategoryResponse.from(category),
+                    CategoryResponse.from(categories.getFirst()),
                     SellerSummary.from(seller),
                     mediaList.stream().map(ProductMediaResponse::from).toList(),
-                    product.getCreatedAt()
+                    product.isRequiresBuyerEkyc(),
+                    product.getCreatedAt(),
+                    categories.stream().map(CategoryResponse::from).toList()
             );
         }
     }
@@ -153,13 +165,25 @@ public final class CatalogDtos {
             String status,
             String thumbnailUrl,
             CategoryResponse category,
+            boolean requiresBuyerEkyc,
             long version,
             Instant createdAt,
-            Instant updatedAt
+            Instant updatedAt,
+            List<CategoryResponse> categories,
+            String rejectionReason,
+            Instant reviewedAt
     ) {
         public static SellerProductSummaryResponse from(ProductEntity product,
-                                                        CategoryEntity category,
+                                                        List<CategoryEntity> categories,
                                                         String thumbnailUrl) {
+            return from(product, categories, thumbnailUrl, null, null);
+        }
+
+        public static SellerProductSummaryResponse from(ProductEntity product,
+                                                        List<CategoryEntity> categories,
+                                                        String thumbnailUrl,
+                                                        String rejectionReason,
+                                                        Instant reviewedAt) {
             return new SellerProductSummaryResponse(
                     product.getId(),
                     product.getTitle(),
@@ -169,10 +193,14 @@ public final class CatalogDtos {
                     product.getLocation(),
                     product.getStatus(),
                     thumbnailUrl,
-                    CategoryResponse.from(category),
+                    CategoryResponse.from(categories.getFirst()),
+                    product.isRequiresBuyerEkyc(),
                     product.getVersion(),
                     product.getCreatedAt(),
-                    product.getUpdatedAt()
+                    product.getUpdatedAt(),
+                    categories.stream().map(CategoryResponse::from).toList(),
+                    rejectionReason,
+                    reviewedAt
             );
         }
     }
@@ -193,13 +221,25 @@ public final class CatalogDtos {
             String thumbnailUrl,
             CategoryResponse category,
             List<ProductMediaResponse> media,
+            boolean requiresBuyerEkyc,
             long version,
             Instant createdAt,
-            Instant updatedAt
+            Instant updatedAt,
+            List<CategoryResponse> categories,
+            String rejectionReason,
+            Instant reviewedAt
     ) {
         public static SellerProductDetailResponse from(ProductEntity product,
-                                                       CategoryEntity category,
+                                                       List<CategoryEntity> categories,
                                                        List<ProductMediaEntity> mediaList) {
+            return from(product, categories, mediaList, null, null);
+        }
+
+        public static SellerProductDetailResponse from(ProductEntity product,
+                                                       List<CategoryEntity> categories,
+                                                       List<ProductMediaEntity> mediaList,
+                                                       String rejectionReason,
+                                                       Instant reviewedAt) {
             String thumbnail = mediaList.stream()
                     .filter(m -> "IMAGE".equalsIgnoreCase(m.getMediaType()))
                     .map(ProductMediaEntity::getMediaUrl)
@@ -220,18 +260,22 @@ public final class CatalogDtos {
                     product.getLocation(),
                     product.getStatus(),
                     thumbnail,
-                    CategoryResponse.from(category),
+                    CategoryResponse.from(categories.getFirst()),
                     mediaList.stream().map(ProductMediaResponse::from).toList(),
+                    product.isRequiresBuyerEkyc(),
                     product.getVersion(),
                     product.getCreatedAt(),
-                    product.getUpdatedAt()
+                    product.getUpdatedAt(),
+                    categories.stream().map(CategoryResponse::from).toList(),
+                    rejectionReason,
+                    reviewedAt
             );
         }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = false)
     public record CreateOrUpdateProductRequest(
-            @NotNull(message = "Danh mục không được để trống")
+            @Positive(message = "Danh mục phải là ID hợp lệ")
             Long categoryId,
 
             @NotBlank(message = "Tiêu đề không được để trống")
@@ -268,9 +312,114 @@ public final class CatalogDtos {
             @Size(max = 255, message = "Địa điểm không được vượt quá 255 ký tự")
             String location,
 
-            Long version
+            Boolean requiresBuyerEkyc,
+
+            Long version,
+
+            @Size(min = 1, message = "Vui lòng chọn ít nhất một danh mục")
+            List<@NotNull @Positive Long> categoryIds
     ) {
+        public CreateOrUpdateProductRequest(Long categoryId, String title, String description,
+                BigDecimal listedPrice, String condition, String usageDuration, String defects,
+                String repairHistory, String includedAccessories, String location,
+                Boolean requiresBuyerEkyc, Long version) {
+            this(categoryId, title, description, listedPrice, condition, usageDuration, defects,
+                    repairHistory, includedAccessories, location, requiresBuyerEkyc, version, null);
+        }
+
+        @AssertTrue(message = "Vui lòng chọn ít nhất một danh mục")
+        @JsonIgnore
+        public boolean isCategorySelectionValid() {
+            return categoryIds != null ? !categoryIds.isEmpty() : categoryId != null;
+        }
     }
+
+    public record MediaUploadResponse(
+            long mediaId,
+            long productId,
+            String mediaType,
+            String mediaUrl,
+            int displayOrder,
+            String thumbnailUrl,
+            Integer durationSeconds,
+            Long fileSizeBytes
+    ) {
+        public static MediaUploadResponse from(ProductMediaEntity entity) {
+            return new MediaUploadResponse(
+                    entity.getId(),
+                    entity.getProductId(),
+                    entity.getMediaType(),
+                    entity.getMediaUrl(),
+                    entity.getDisplayOrder(),
+                    entity.getThumbnailUrl(),
+                    entity.getDurationSeconds(),
+                    entity.getFileSizeBytes()
+            );
+        }
+    }
+
+    public record ModerationProductResponse(
+            long productId,
+            String title,
+            String description,
+            BigDecimal listedPrice,
+            String condition,
+            String status,
+            Long sellerId,
+            CategoryResponse category,
+            List<ProductMediaResponse> media,
+            boolean requiresBuyerEkyc,
+            Instant createdAt,
+            List<CategoryResponse> categories,
+            long version,
+            Instant updatedAt
+    ) {
+        public ModerationProductResponse(
+                long productId, String title, String description, BigDecimal listedPrice,
+                String condition, String status, Long sellerId, CategoryResponse category,
+                List<ProductMediaResponse> media, boolean requiresBuyerEkyc, Instant createdAt,
+                List<CategoryResponse> categories
+        ) {
+            this(productId, title, description, listedPrice, condition, status, sellerId,
+                    category, media, requiresBuyerEkyc, createdAt, categories, 0L, createdAt);
+        }
+    }
+
+    public record ApproveProductRequest(
+            @NotNull(message = "expectedVersion là bắt buộc")
+            @Min(value = 0, message = "expectedVersion phải >= 0")
+            Long expectedVersion,
+
+            @NotBlank(message = "commandKey là bắt buộc")
+            @Size(max = 100, message = "commandKey tối đa 100 ký tự")
+            String commandKey
+    ) {}
+
+    public record RejectProductRequest(
+            @NotBlank(message = "Lý do từ chối không được để trống")
+            @Size(max = 500, message = "Lý do tối đa 500 ký tự")
+            String reason,
+
+            @NotNull(message = "expectedVersion là bắt buộc")
+            @Min(value = 0, message = "expectedVersion phải >= 0")
+            Long expectedVersion,
+
+            @NotBlank(message = "commandKey là bắt buộc")
+            @Size(max = 100, message = "commandKey tối đa 100 ký tự")
+            String commandKey
+    ) {
+        public RejectProductRequest(String reason, Long expectedVersion, String commandKey) {
+            this.reason = reason;
+            this.expectedVersion = expectedVersion;
+            this.commandKey = commandKey;
+        }
+    }
+
+    public record ActionResponse(
+            long productId,
+            String status,
+            String message
+    ) {}
 
     public record PageResponse<T>(
             List<T> items,

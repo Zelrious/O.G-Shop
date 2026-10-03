@@ -92,7 +92,7 @@ public class CatalogService {
                 predicates.add(cb.like(cb.lower(root.get("title")), "%" + query.trim().toLowerCase() + "%"));
             }
             if (categoryId != null) {
-                predicates.add(cb.equal(root.get("categoryId"), categoryId));
+                predicates.add(cb.isMember(categoryId, root.<Set<Long>>get("categoryIds")));
             }
             if (condition != null && !condition.isBlank()) {
                 predicates.add(cb.equal(root.get("condition"), condition.trim()));
@@ -117,7 +117,7 @@ public class CatalogService {
             );
         }
 
-        Set<Long> categoryIds = products.stream().map(ProductEntity::getCategoryId).collect(Collectors.toSet());
+        Set<Long> categoryIds = products.stream().flatMap(p -> p.getCategoryIds().stream()).collect(Collectors.toSet());
         Map<Long, CategoryEntity> categoryMap = categoryRepository.findAllById(categoryIds).stream()
                 .collect(Collectors.toMap(CategoryEntity::getId, c -> c));
 
@@ -136,13 +136,12 @@ public class CatalogService {
                 ));
 
         List<CatalogDtos.ProductSummaryResponse> items = products.stream().map(p -> {
-            CategoryEntity cat = categoryMap.get(p.getCategoryId());
             IdentityCatalogFacade.SellerPublicSummary seller = sellerMap.getOrDefault(
                     p.getSellerId(),
                     new IdentityCatalogFacade.SellerPublicSummary(p.getSellerId(), "Người bán", "Người bán")
             );
             String thumbnail = thumbnailMap.get(p.getId());
-            return CatalogDtos.ProductSummaryResponse.from(p, cat, seller, thumbnail);
+            return CatalogDtos.ProductSummaryResponse.from(p, CategoryRepository.orderedForProduct(p, categoryMap), seller, thumbnail);
         }).toList();
 
         return new CatalogDtos.PageResponse<>(
@@ -159,8 +158,7 @@ public class CatalogService {
         ProductEntity product = productRepository.findByIdAndStatusAndDeletedAtIsNull(productId, ProductEntity.STATUS_ACTIVE)
                 .orElseThrow(ProductNotFoundException::new);
 
-        CategoryEntity category = categoryRepository.findById(product.getCategoryId())
-                .orElseThrow(() -> new CategoryNotFoundException("Danh mục của sản phẩm không tồn tại."));
+        List<CategoryEntity> categories = categoryRepository.findForProduct(product);
 
         IdentityCatalogFacade.SellerPublicSummary seller = identityCatalogFacade.getSellerSummary(product.getSellerId())
                 .orElse(new IdentityCatalogFacade.SellerPublicSummary(product.getSellerId(), "Người bán", "Người bán"));
@@ -168,6 +166,6 @@ public class CatalogService {
         List<ProductMediaEntity> mediaList =
                 productMediaRepository.findByProductIdOrderByDisplayOrderAscIdAsc(productId);
 
-        return CatalogDtos.ProductDetailResponse.from(product, category, seller, mediaList);
+        return CatalogDtos.ProductDetailResponse.from(product, categories, seller, mediaList);
     }
 }

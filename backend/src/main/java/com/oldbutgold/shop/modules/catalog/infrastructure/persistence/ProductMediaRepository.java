@@ -9,4 +9,10 @@ public interface ProductMediaRepository extends JpaRepository<ProductMediaEntity
     List<ProductMediaEntity> findByProductIdOrderByDisplayOrderAscIdAsc(Long productId);
 
     List<ProductMediaEntity> findByProductIdInOrderByDisplayOrderAscIdAsc(Collection<Long> productIds);
+
+    java.util.Optional<ProductMediaEntity> findByIdAndProductId(Long id, Long productId);
+
+    long countByProductIdAndMediaType(Long productId, String mediaType);
+
+    long countByProductId(Long productId);
 }

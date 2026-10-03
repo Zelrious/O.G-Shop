@@ -2,15 +2,21 @@ package com.oldbutgold.shop.modules.catalog.infrastructure.persistence;
 
 import com.oldbutgold.shop.modules.catalog.application.ProductStateConflictException;
 import jakarta.persistence.Column;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -18,13 +24,14 @@ import java.util.Set;
 public class ProductEntity {
     public static final String CURRENCY_VND = "VND";
     public static final String STATUS_DRAFT = "DRAFT";
+    public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_ACTIVE = "ACTIVE";
     public static final String STATUS_HIDDEN = "HIDDEN";
     public static final String STATUS_RESERVED = "RESERVED";
     public static final String STATUS_SOLD = "SOLD";
     public static final String STATUS_REJECTED = "REJECTED";
 
-    public static final Set<String> EDITABLE_STATUSES = Set.of(STATUS_DRAFT, STATUS_ACTIVE, STATUS_HIDDEN);
+    public static final Set<String> EDITABLE_STATUSES = Set.of(STATUS_DRAFT, STATUS_ACTIVE, STATUS_HIDDEN, STATUS_REJECTED);
     public static final Set<String> ALLOWED_CONDITIONS = Set.of("LIKE_NEW", "GOOD", "FAIR", "POOR", "FOR_PARTS");
 
     @Id
@@ -37,6 +44,12 @@ public class ProductEntity {
 
     @Column(name = "category_id", nullable = false)
     private Long categoryId;
+
+    @ElementCollection
+    @CollectionTable(name = "product_categories", joinColumns = @JoinColumn(name = "product_id"))
+    @Column(name = "category_id", nullable = false)
+    @org.hibernate.annotations.BatchSize(size = 50)
+    private Set<Long> categoryIds = new LinkedHashSet<>();
 
     @Column(nullable = false, length = 200)
     private String title;
@@ -78,6 +91,12 @@ public class ProductEntity {
     @Column(name = "reserved_order_id")
     private Long reservedOrderId;
 
+    @Column(name = "requires_buyer_ekyc", nullable = false)
+    private boolean requiresBuyerEkyc = false;
+
+    @Column(name = "content_revision", nullable = false)
+    private Long contentRevision = 1L;
+
     @Version
     @Column(nullable = false)
     private Long version = 0L;
@@ -98,8 +117,17 @@ public class ProductEntity {
                          BigDecimal listedPrice, String condition, String usageDuration,
                          String defects, String repairHistory, String includedAccessories,
                          String location, Instant now) {
+        this(sellerId, categoryId, title, description, listedPrice, condition, usageDuration,
+                defects, repairHistory, includedAccessories, location, false, now);
+    }
+
+    public ProductEntity(Long sellerId, Long categoryId, String title, String description,
+                         BigDecimal listedPrice, String condition, String usageDuration,
+                         String defects, String repairHistory, String includedAccessories,
+                         String location, boolean requiresBuyerEkyc, Instant now) {
         this.sellerId = sellerId;
         this.categoryId = categoryId;
+        this.categoryIds.add(categoryId);
         this.title = title;
         this.description = description;
         this.listedPrice = listedPrice;
@@ -110,6 +138,7 @@ public class ProductEntity {
         this.repairHistory = repairHistory;
         this.includedAccessories = includedAccessories;
         this.location = location;
+        this.requiresBuyerEkyc = requiresBuyerEkyc;
         this.status = STATUS_DRAFT;
         this.createdAt = now;
         this.updatedAt = now;
@@ -119,6 +148,14 @@ public class ProductEntity {
                               BigDecimal listedPrice, String condition, String usageDuration,
                               String defects, String repairHistory, String includedAccessories,
                               String location, Instant now) {
+        updateDetails(categoryId, title, description, listedPrice, condition, usageDuration,
+                defects, repairHistory, includedAccessories, location, this.requiresBuyerEkyc, now);
+    }
+
+    public void updateDetails(Long categoryId, String title, String description,
+                              BigDecimal listedPrice, String condition, String usageDuration,
+                              String defects, String repairHistory, String includedAccessories,
+                              String location, boolean requiresBuyerEkyc, Instant now) {
         if (!EDITABLE_STATUSES.contains(this.status)) {
             throw new ProductStateConflictException(
                     "Không thể chỉnh sửa sản phẩm khi đang ở trạng thái: " + this.status
@@ -134,6 +171,65 @@ public class ProductEntity {
         this.repairHistory = repairHistory;
         this.includedAccessories = includedAccessories;
         this.location = location;
+        this.requiresBuyerEkyc = requiresBuyerEkyc;
+        this.updatedAt = now;
+        this.contentRevision++;
+    }
+
+    public void submitForReview(Instant now) {
+        if (STATUS_PENDING.equals(this.status)) {
+            return; // idempotent
+        }
+        if (!STATUS_DRAFT.equals(this.status) && !STATUS_REJECTED.equals(this.status)) {
+            throw new ProductStateConflictException(
+                    "Chỉ có thể gửi duyệt tin ở trạng thái DRAFT hoặc REJECTED. Trạng thái hiện tại: " + this.status
+            );
+        }
+        this.status = STATUS_PENDING;
+        this.updatedAt = now;
+    }
+
+    public void replaceCategories(List<Long> selectedIds) {
+        if (selectedIds == null || selectedIds.isEmpty()
+                || selectedIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new IllegalArgumentException("Vui lòng chọn ít nhất một danh mục hợp lệ.");
+        }
+        this.categoryId = selectedIds.getFirst();
+        this.categoryIds.clear();
+        this.categoryIds.addAll(selectedIds);
+        this.contentRevision++;
+    }
+
+    public Set<Long> getCategoryIds() {
+        Set<Long> result = new LinkedHashSet<>();
+        result.add(categoryId);
+        categoryIds.stream().sorted().forEach(result::add);
+        return Collections.unmodifiableSet(result);
+    }
+
+    public void approve(Instant now) {
+        if (STATUS_ACTIVE.equals(this.status)) {
+            return; // idempotent
+        }
+        if (!STATUS_PENDING.equals(this.status)) {
+            throw new ProductStateConflictException(
+                    "Chỉ có thể phê duyệt tin ở trạng thái PENDING. Trạng thái hiện tại: " + this.status
+            );
+        }
+        this.status = STATUS_ACTIVE;
+        this.updatedAt = now;
+    }
+
+    public void reject(Instant now) {
+        if (STATUS_REJECTED.equals(this.status)) {
+            return; // idempotent
+        }
+        if (!STATUS_PENDING.equals(this.status)) {
+            throw new ProductStateConflictException(
+                    "Chỉ có thể từ chối tin ở trạng thái PENDING. Trạng thái hiện tại: " + this.status
+            );
+        }
+        this.status = STATUS_REJECTED;
         this.updatedAt = now;
     }
 
@@ -141,12 +237,17 @@ public class ProductEntity {
         if (STATUS_ACTIVE.equals(this.status)) {
             return; // idempotent
         }
-        if (!STATUS_DRAFT.equals(this.status) && !STATUS_HIDDEN.equals(this.status)) {
+        if (!STATUS_HIDDEN.equals(this.status)) {
             throw new ProductStateConflictException(
-                    "Chỉ có thể đăng bán sản phẩm ở trạng thái DRAFT hoặc HIDDEN. Trạng thái hiện tại: " + this.status
+                    "Chỉ có thể đăng bán lại sản phẩm đang ở trạng thái HIDDEN. Trạng thái hiện tại: " + this.status +
+                    ". Tin ở trạng thái DRAFT hoặc REJECTED cần được gửi duyệt (submit) để KTV kiểm tra trước khi công khai."
             );
         }
         this.status = STATUS_ACTIVE;
+        this.updatedAt = now;
+    }
+
+    public void touch(Instant now) {
         this.updatedAt = now;
     }
 
@@ -160,6 +261,50 @@ public class ProductEntity {
             );
         }
         this.status = STATUS_HIDDEN;
+        this.updatedAt = now;
+    }
+
+    public void reserve(Long orderId, Instant reservedUntil, Instant now) {
+        if (!STATUS_ACTIVE.equals(this.status)) {
+            throw new ProductStateConflictException(
+                    "Chỉ có thể đặt mua sản phẩm ở trạng thái ACTIVE. Trạng thái hiện tại: " + this.status
+            );
+        }
+        this.status = STATUS_RESERVED;
+        this.reservedOrderId = orderId;
+        this.reservedUntil = reservedUntil;
+        this.updatedAt = now;
+    }
+
+    public void releaseReservation(Long orderId, Instant now) {
+        if (!STATUS_RESERVED.equals(this.status)) {
+            return; // idempotent release
+        }
+        if (this.reservedOrderId != null && !this.reservedOrderId.equals(orderId)) {
+            throw new ProductStateConflictException(
+                    "Không thể giải phóng sản phẩm đang được giữ bởi đơn hàng khác: " + this.reservedOrderId
+            );
+        }
+        this.status = STATUS_ACTIVE;
+        this.reservedOrderId = null;
+        this.reservedUntil = null;
+        this.updatedAt = now;
+    }
+
+    public void markSold(Long orderId, Instant now) {
+        if (!STATUS_RESERVED.equals(this.status)) {
+            throw new ProductStateConflictException(
+                    "Chỉ có thể xác nhận bán sản phẩm đang ở trạng thái RESERVED. Trạng thái hiện tại: " + this.status
+            );
+        }
+        if (this.reservedOrderId != null && !this.reservedOrderId.equals(orderId)) {
+            throw new ProductStateConflictException(
+                    "Sản phẩm đang được giữ cho đơn hàng khác: " + this.reservedOrderId
+            );
+        }
+        this.status = STATUS_SOLD;
+        this.reservedOrderId = null;
+        this.reservedUntil = null;
         this.updatedAt = now;
     }
 
@@ -180,7 +325,10 @@ public class ProductEntity {
     public Instant getReservedUntil() { return reservedUntil; }
     public Long getReservedOrderId() { return reservedOrderId; }
     public Long getVersion() { return version; }
+    public Long getContentRevision() { return contentRevision; }
+    public void bumpContentRevision() { this.contentRevision++; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public boolean isRequiresBuyerEkyc() { return requiresBuyerEkyc; }
     public Instant getDeletedAt() { return deletedAt; }
 }

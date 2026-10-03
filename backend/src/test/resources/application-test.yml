@@ -25,3 +25,6 @@ app:
     read-timeout: PT2S
   seller-verification:
     mode: MVP_BYPASS
+  scheduling:
+    order-expiry:
+      enabled: false
