@@ -32,7 +32,7 @@ CREATE TABLE roles (
     role_name       VARCHAR(20) NOT NULL UNIQUE,
     description     VARCHAR(255),
 
-    CONSTRAINT ck_roles_name CHECK (role_name IN ('BUYER', 'SELLER', 'ADMIN'))
+    CONSTRAINT ck_roles_name CHECK (role_name IN ('BUYER', 'SELLER', 'ADMIN', 'KTV'))
 );
 
 CREATE TABLE user_roles (
