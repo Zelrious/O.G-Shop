@@ -17,6 +17,9 @@ vi.mock('./listingApi', () => ({
     createProduct: vi.fn(),
     updateProduct: vi.fn(),
     publishProduct: vi.fn(),
+    submitProduct: vi.fn(),
+    uploadMedia: vi.fn(),
+    deleteMedia: vi.fn(),
     hideProduct: vi.fn(),
   },
 }));
@@ -73,7 +76,7 @@ describe('ListingForm Component', () => {
     fireEvent.click(submitBtn);
 
     expect(await screen.findByText(/Vui lòng nhập tiêu đề tin đăng/i)).toBeInTheDocument();
-    expect(screen.getByText(/Vui lòng chọn danh mục sản phẩm/i)).toBeInTheDocument();
+    expect(screen.getByText(/Vui lòng chọn ít nhất một danh mục sản phẩm/i)).toBeInTheDocument();
     expect(screen.getByText(/Giá niêm yết phải lớn hơn 0/i)).toBeInTheDocument();
     expect(handleSubmit).not.toHaveBeenCalled();
   });
@@ -92,9 +95,7 @@ describe('ListingForm Component', () => {
     fireEvent.change(screen.getByLabelText(/Tiêu đề tin đăng/i), {
       target: { value: 'Sony WH-1000XM4 tai nghe chống ồn' },
     });
-    fireEvent.change(screen.getByLabelText(/Danh mục/i), {
-      target: { value: '1' },
-    });
+    fireEvent.click(screen.getByRole('checkbox', { name: mockCategories[0].categoryName }));
     fireEvent.change(screen.getByLabelText(/Tình trạng máy/i), {
       target: { value: 'LIKE_NEW' },
     });
@@ -111,7 +112,7 @@ describe('ListingForm Component', () => {
     expect(handleSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Sony WH-1000XM4 tai nghe chống ồn',
-        categoryId: 1,
+        categoryIds: [1],
         condition: 'LIKE_NEW',
         listedPrice: 4500000,
         description: 'Tai nghe ít dùng, còn đủ hộp và cáp sạc.',
@@ -132,9 +133,10 @@ describe('ListingForm Component', () => {
 });
 
 describe('SellerListingItem Component', () => {
-  it('renders status badge and actions based on status', () => {
+  it('renders status badge and actions based on status: draft shows submit for review and edit', () => {
     const handlePublish = vi.fn();
     const handleHide = vi.fn();
+    const handleSubmitForReview = vi.fn();
 
     render(
       <MemoryRouter>
@@ -142,13 +144,15 @@ describe('SellerListingItem Component', () => {
           product={mockSellerProduct}
           onPublish={handlePublish}
           onHide={handleHide}
+          onSubmitForReview={handleSubmitForReview}
           isActionLoading={false}
         />
       </MemoryRouter>
     );
 
     expect(screen.getByText('Bản nháp')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Đăng bán/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Gửi duyệt/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Đăng bán/i })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Sửa/i })).toBeInTheDocument();
   });
 });
@@ -212,7 +216,7 @@ describe('SellerListingsPage Component', () => {
     expect(screen.getByRole('button', { name: /Đăng tin đầu tiên/i })).toBeInTheDocument();
   });
 
-  it('renders listing items and allows publishing a draft', async () => {
+  it('enforces manual review: DRAFT has submit for review CTA instead of direct publish', async () => {
     const sellerAuth = createMockAuth({
       userId: 2,
       email: 'seller@ogshop.com',
@@ -231,7 +235,71 @@ describe('SellerListingsPage Component', () => {
         hasNext: false,
       })
       .mockResolvedValueOnce({
-        items: [{ ...mockSellerProduct, status: 'ACTIVE' }],
+        items: [{ ...mockSellerProduct, status: 'PENDING' }],
+        page: 0,
+        size: 50,
+        totalElements: 1,
+        totalPages: 1,
+        hasNext: false,
+      });
+
+    vi.mocked(listingApi.submitProduct).mockResolvedValue({
+      ...mockSellerProduct,
+      status: 'PENDING',
+    } as SellerProductDetail);
+
+    render(
+      <AuthContext.Provider value={sellerAuth}>
+        <MemoryRouter>
+          <SellerListingsPage />
+        </MemoryRouter>
+      </AuthContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Bàn phím cơ Custom Akko')).toBeInTheDocument();
+    });
+
+    // Should NOT have "Đăng bán" or "Đăng lại" button for DRAFT
+    expect(screen.queryByRole('button', { name: /Đăng bán/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Đăng lại/i })).not.toBeInTheDocument();
+
+    // Primary CTA is "Gửi duyệt"
+    const submitBtn = screen.getByRole('button', { name: /Gửi duyệt/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(listingApi.submitProduct).toHaveBeenCalledWith(201);
+    });
+
+    expect(await screen.findByText(/Đã gửi tin đăng cho KTV kiểm duyệt thành công/i)).toBeInTheDocument();
+  });
+
+  it('allows republishing a HIDDEN listing directly to ACTIVE', async () => {
+    const sellerAuth = createMockAuth({
+      userId: 2,
+      email: 'seller@ogshop.com',
+      fullName: 'Valid Seller',
+      roles: ['BUYER', 'SELLER'],
+      createdAt: '2026-09-20T10:00:00Z',
+    });
+
+    const hiddenProduct: SellerProductSummary = {
+      ...mockSellerProduct,
+      status: 'HIDDEN',
+    };
+
+    vi.mocked(listingApi.getSellerProducts)
+      .mockResolvedValueOnce({
+        items: [hiddenProduct],
+        page: 0,
+        size: 50,
+        totalElements: 1,
+        totalPages: 1,
+        hasNext: false,
+      })
+      .mockResolvedValueOnce({
+        items: [{ ...hiddenProduct, status: 'ACTIVE' }],
         page: 0,
         size: 50,
         totalElements: 1,
@@ -240,7 +308,7 @@ describe('SellerListingsPage Component', () => {
       });
 
     vi.mocked(listingApi.publishProduct).mockResolvedValue({
-      ...mockSellerProduct,
+      ...hiddenProduct,
       status: 'ACTIVE',
     } as SellerProductDetail);
 
@@ -256,13 +324,127 @@ describe('SellerListingsPage Component', () => {
       expect(screen.getByText('Bàn phím cơ Custom Akko')).toBeInTheDocument();
     });
 
-    const publishBtn = screen.getByRole('button', { name: /Đăng bán/i });
-    fireEvent.click(publishBtn);
+    const republishBtn = screen.getByRole('button', { name: /Đăng lại/i });
+    fireEvent.click(republishBtn);
 
     await waitFor(() => {
       expect(listingApi.publishProduct).toHaveBeenCalledWith(201);
     });
 
     expect(await screen.findByText(/Đăng bán sản phẩm thành công/i)).toBeInTheDocument();
+  });
+
+  it('displays real rejection reason and reviewedAt for REJECTED listing', () => {
+    const rejectedProduct: SellerProductSummary = {
+      ...mockSellerProduct,
+      status: 'REJECTED',
+      rejectionReason: 'Video không quay cận cảnh góc máy có vết nứt',
+      reviewedAt: '2026-10-03T10:30:00Z',
+    };
+
+    render(
+      <MemoryRouter>
+        <SellerListingItem
+          product={rejectedProduct}
+          onPublish={vi.fn()}
+          onHide={vi.fn()}
+          onSubmitForReview={vi.fn()}
+          isActionLoading={false}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText(/Lý do từ chối kiểm duyệt/i)).toBeInTheDocument();
+    expect(screen.getByText(/Video không quay cận cảnh góc máy có vết nứt/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Gửi duyệt/i })).toBeInTheDocument();
+  });
+
+  it('displays fallback when REJECTED listing has no rejection reason (legacy fixture)', () => {
+    const legacyRejectedProduct: SellerProductSummary = {
+      ...mockSellerProduct,
+      status: 'REJECTED',
+      rejectionReason: null,
+      reviewedAt: null,
+    };
+
+    render(
+      <MemoryRouter>
+        <SellerListingItem
+          product={legacyRejectedProduct}
+          onPublish={vi.fn()}
+          onHide={vi.fn()}
+          onSubmitForReview={vi.fn()}
+          isActionLoading={false}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText(/chưa có chi tiết lý do từ KTV/i)).toBeInTheDocument();
+  });
+
+  it('renders eKYC badge and PENDING state on SellerListingItem', () => {
+    const ekycProduct: SellerProductSummary = {
+      ...mockSellerProduct,
+      status: 'PENDING',
+      requiresBuyerEkyc: true,
+    };
+
+    render(
+      <MemoryRouter>
+        <SellerListingItem
+          product={ekycProduct}
+          onPublish={vi.fn()}
+          onHide={vi.fn()}
+          isActionLoading={false}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Chờ kiểm duyệt')).toBeInTheDocument();
+    expect(screen.getByText('🛡️ Yêu cầu eKYC')).toBeInTheDocument();
+    expect(screen.getByText(/Tin đang được KTV kiểm duyệt nội dung/i)).toBeInTheDocument();
+  });
+
+  it('allows checking requiresBuyerEkyc in ListingForm and submitting', async () => {
+    const handleSubmit = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <ListingForm
+        categories={mockCategories}
+        onSubmit={handleSubmit}
+        isSubmitting={false}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText(/Tiêu đề tin đăng/i), {
+      target: { value: 'iPhone 15 Pro Max 256GB' },
+    });
+    fireEvent.click(screen.getByRole('checkbox', { name: mockCategories[0].categoryName }));
+    fireEvent.change(screen.getByLabelText(/Tình trạng máy/i), {
+      target: { value: 'LIKE_NEW' },
+    });
+    fireEvent.change(screen.getByLabelText(/Giá niêm yết/i), {
+      target: { value: '25000000' },
+    });
+    fireEvent.change(screen.getByLabelText(/Nội dung bài đăng/i), {
+      target: { value: 'Hàng chính hãng VN/A, pin 100%' },
+    });
+
+    const ekycCheckbox = screen.getByLabelText(/Yêu cầu Người mua phải hoàn tất xác thực CCCD/i);
+    expect(ekycCheckbox).not.toBeChecked();
+    fireEvent.click(ekycCheckbox);
+    expect(ekycCheckbox).toBeChecked();
+
+    const submitBtn = screen.getByRole('button', { name: /Lưu tin đăng/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(handleSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'iPhone 15 Pro Max 256GB',
+          requiresBuyerEkyc: true,
+        })
+      );
+    });
   });
 });

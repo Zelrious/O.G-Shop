@@ -41,6 +41,7 @@ const FALLBACK_PRODUCTS: ProductDetail[] = MOCK_PRODUCTS.map((prod, idx) => {
     location: prod.location,
     thumbnailUrl: prod.images[0] || null,
     category: catMatch,
+    categories: [catMatch],
     seller: {
       sellerId: 100 + idx,
       displayName: prod.seller.name,
@@ -108,7 +109,8 @@ export const marketplaceApi = {
     }
 
     if (params.categoryId) {
-      items = items.filter((p) => p.category.categoryId === Number(params.categoryId));
+      items = items.filter((p) => (p.categories?.length ? p.categories : [p.category])
+        .some((category) => category.categoryId === Number(params.categoryId)));
     }
 
     if (params.condition && params.condition !== 'ALL') {

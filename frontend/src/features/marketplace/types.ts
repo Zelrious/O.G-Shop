@@ -28,7 +28,9 @@ export interface ProductSummary {
   location: string | null;
   thumbnailUrl: string | null;
   category: Category;
+  categories?: Category[];
   seller: SellerSummary;
+  requiresBuyerEkyc?: boolean;
   createdAt: string;
 }
 
@@ -46,8 +48,10 @@ export interface ProductDetail {
   location: string | null;
   thumbnailUrl: string | null;
   category: Category;
+  categories?: Category[];
   seller: SellerSummary;
   media: ProductMedia[];
+  requiresBuyerEkyc?: boolean;
   createdAt: string;
 }
 

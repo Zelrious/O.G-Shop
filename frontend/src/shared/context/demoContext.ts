@@ -1,7 +1,7 @@
 import { createContext } from 'react';
 import { MockProduct, MockVoucher } from '../data/mockData';
 
-export type UserRole = 'BUYER' | 'SELLER' | 'ADMIN';
+export type UserRole = 'BUYER' | 'SELLER' | 'ADMIN' | 'KTV';
 export type DeviceMode = 'desktop' | 'mobile';
 
 export interface DemoContextType {
@@ -11,7 +11,7 @@ export interface DemoContextType {
   setDeviceMode: (mode: DeviceMode) => void;
   activeScreenId: string;
   setActiveScreenId: (id: string) => void;
-  
+
   // Cart & Commerce
   cart: MockProduct[];
   addToCart: (product: MockProduct) => void;
@@ -41,7 +41,7 @@ export interface DemoContextType {
   // Dispute & Escrow Verdict State
   disputeVerdict: string | null;
   setDisputeVerdict: (verdict: string | null) => void;
-  
+
   // KYC State for Seller
   isSellerKycApproved: boolean;
   setIsSellerKycApproved: (approved: boolean) => void;

@@ -21,6 +21,13 @@ import {
   SellerListingsPage,
   CreateListingPage,
   EditListingPage,
+  CheckoutPage,
+  PaymentPage,
+  BuyerOrdersPage,
+  BuyerOrderDetailPage,
+  SellerOrdersPage,
+  SellerOrderDetailPage,
+  ModerationPage,
 } from '../pages';
 import { SellerDashboardPage } from '../pages/seller/SellerDashboardPage';
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
@@ -60,6 +67,40 @@ export function App() {
                   <Route path="/" element={<HomePage />} />
                   <Route path="/marketplace" element={<MarketplacePage />} />
                   <Route path="/products/:productId" element={<ProductDetailPage />} />
+                  <Route
+                    path="/checkout"
+                    element={
+                      <ProtectedRoute>
+                        <CheckoutPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/checkout/payment"
+                    element={
+                      <ProtectedRoute>
+                        <PaymentPage />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* Buyer Orders Management (OR-01, OR-02) */}
+                  <Route
+                    path="/orders"
+                    element={
+                      <ProtectedRoute>
+                        <BuyerOrdersPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/orders/:orderId"
+                    element={
+                      <ProtectedRoute>
+                        <BuyerOrderDetailPage />
+                      </ProtectedRoute>
+                    }
+                  />
 
                   {/* Profile & Identity Verification */}
                   <Route
@@ -100,7 +141,8 @@ export function App() {
                   <Route path="/seller/listings/new" element={<CreateListingPage />} />
                   <Route path="/seller/products/:productId/edit" element={<EditListingPage />} />
                   <Route path="/seller/listings/:productId/edit" element={<EditListingPage />} />
-                  <Route path="/seller/orders" element={<SellerDashboardPage />} />
+                  <Route path="/seller/orders" element={<SellerOrdersPage />} />
+                  <Route path="/seller/orders/:orderId" element={<SellerOrderDetailPage />} />
                 </Route>
 
                 {/* 4. Admin Console & Dispute Arbitration Layout Shell */}
@@ -114,7 +156,8 @@ export function App() {
                   <Route path="/admin" element={<AdminDashboardPage />} />
                   <Route path="/admin/users" element={<AdminDashboardPage />} />
                   <Route path="/admin/kyc" element={<AdminDashboardPage />} />
-                  <Route path="/admin/moderation" element={<AdminDashboardPage />} />
+                  <Route path="/admin/moderation" element={<ModerationPage />} />
+                  <Route path="/moderation" element={<ModerationPage />} />
                   <Route path="/admin/transactions" element={<AdminDashboardPage />} />
                   <Route path="/admin/complaints" element={<AdminDashboardPage />} />
                   <Route path="/admin/announcements" element={<AdminDashboardPage />} />

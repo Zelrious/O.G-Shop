@@ -1,4 +1,4 @@
-import React, { useState, useContext, useMemo } from 'react';
+import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CONDITION_LABELS, ProductDetail } from '../types';
 import { AuthContext } from '../../auth/context';
@@ -12,6 +12,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
   const authContext = useContext(AuthContext);
   const isAuthenticated = Boolean(authContext?.isAuthenticated);
   const navigate = useNavigate();
+  const productCategories = product.categories?.length ? product.categories : [product.category];
 
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -20,27 +21,14 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
   const [offerPriceInput, setOfferPriceInput] = useState<string>('');
   const [offerSuccessMsg, setOfferSuccessMsg] = useState<string | null>(null);
   const [cartSuccessMsg, setCartSuccessMsg] = useState<string | null>(null);
-  const [isPhoneRevealed, setIsPhoneRevealed] = useState(false);
-  const [phoneToast, setPhoneToast] = useState<string | null>(null);
   const [isFavorited, setIsFavorited] = useState(false);
-
-  // Generate realistic seller phone based on sellerId
-  const sellerPhone = useMemo(() => {
-    const seed = product.seller.sellerId || 101;
-    const middle = String(520 + (seed % 40)).padStart(3, '0');
-    const last = String(1000 + (seed * 73) % 9000);
-    return `0345 ${middle} ${last}`;
-  }, [product.seller.sellerId]);
-
-  const maskedPhone = '0345 527••••';
 
   const formattedPrice = `${new Intl.NumberFormat('vi-VN').format(product.listedPrice)} đ`;
   const conditionText = CONDITION_LABELS[product.condition] || product.condition;
 
-  const currentMediaUrl =
-    product.media.length > 0
-      ? product.media[activeMediaIndex]?.mediaUrl
-      : product.thumbnailUrl;
+  const currentMedia = product.media.length > 0 ? product.media[activeMediaIndex] : null;
+  const isCurrentVideo = currentMedia?.mediaType === 'VIDEO';
+  const currentMediaUrl = currentMedia ? currentMedia.mediaUrl : product.thumbnailUrl;
 
   const formattedDate = new Date(product.createdAt).toLocaleDateString('vi-VN', {
     year: 'numeric',
@@ -77,19 +65,6 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
     });
   };
 
-  const handleTogglePhone = () => {
-    if (!isPhoneRevealed) {
-      setIsPhoneRevealed(true);
-      setPhoneToast(`Đã hiện số điện thoại người bán: ${sellerPhone}. Bạn có thể gọi hoặc kết nối Zalo.`);
-      setTimeout(() => setPhoneToast(null), 5000);
-    } else {
-      // If already revealed, copy or prompt call
-      navigator.clipboard?.writeText(sellerPhone.replace(/\s/g, ''));
-      setPhoneToast(`Đã sao chép số điện thoại ${sellerPhone} vào bộ nhớ tạm.`);
-      setTimeout(() => setPhoneToast(null), 4000);
-    }
-  };
-
   const handleOpenOffer = () => {
     requireAuth('Gửi đề xuất Trả giá món đồ này', () => {
       setOfferPriceInput(String(Math.round(product.listedPrice * 0.9)));
@@ -112,7 +87,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
         <span className="og-product-detail__breadcrumb-sep">&gt;</span>
         <Link to="/marketplace">Đồ cũ</Link>
         <span className="og-product-detail__breadcrumb-sep">&gt;</span>
-        <Link to={`/marketplace?category=${product.category.slug || product.category.categoryId}`}>
+        <Link to={`/marketplace?categoryId=${product.category.categoryId}`}>
           {product.category.categoryName}
         </Link>
         <span className="og-product-detail__breadcrumb-sep">&gt;</span>
@@ -137,29 +112,9 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
           }}
         >
           <span>🛒 {cartSuccessMsg}</span>
-          <Link to="/cart" style={{ fontWeight: 700, color: '#065f46', textDecoration: 'underline' }}>
-            Xem giỏ hàng →
+          <Link to="/orders" style={{ fontWeight: 700, color: '#065f46', textDecoration: 'none' }}>
+            Xem đơn & giỏ hàng →
           </Link>
-        </div>
-      )}
-
-      {phoneToast && (
-        <div
-          style={{
-            padding: '12px 20px',
-            background: '#ecfdf5',
-            border: '1px solid #6ee7b7',
-            color: '#065f46',
-            borderRadius: '8px',
-            marginBottom: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-          }}
-        >
-          <span style={{ fontSize: '1.2rem' }}>📞</span>
-          <span>{phoneToast}</span>
         </div>
       )}
 
@@ -183,7 +138,14 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
         {/* Left: Gallery & Photos */}
         <section className="og-product-detail__gallery" aria-label="Hình ảnh sản phẩm">
           <div className="og-product-detail__main-image-wrap">
-            {currentMediaUrl ? (
+            {isCurrentVideo && currentMedia ? (
+              <video
+                src={currentMedia.mediaUrl}
+                controls
+                className="og-product-detail__main-video"
+                style={{ width: '100%', height: '100%', maxHeight: '420px', objectFit: 'contain', background: '#000', borderRadius: '8px' }}
+              />
+            ) : currentMediaUrl ? (
               <img
                 src={currentMediaUrl}
                 alt={product.title}
@@ -207,25 +169,32 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
 
             {product.media.length > 0 && (
               <span className="og-product-detail__image-badge">
-                📷 {activeMediaIndex + 1} / {product.media.length} ảnh
+                {isCurrentVideo ? '🎥 1 Video cận cảnh' : `📷 ${activeMediaIndex + 1} / ${product.media.length} media`}
               </span>
             )}
           </div>
 
           {/* Thumbnails Row */}
           {product.media.length > 1 && (
-            <div className="og-product-detail__thumbnails" role="tablist" aria-label="Danh sách ảnh">
+            <div className="og-product-detail__thumbnails" role="tablist" aria-label="Danh sách ảnh & video">
               {product.media.map((media, idx) => (
                 <button
                   key={media.mediaId}
                   type="button"
                   role="tab"
                   aria-selected={idx === activeMediaIndex}
-                  aria-label={`Ảnh ${idx + 1}`}
+                  aria-label={media.mediaType === 'VIDEO' ? 'Video cận cảnh' : `Ảnh ${idx + 1}`}
                   className={`og-product-detail__thumb-btn ${idx === activeMediaIndex ? 'og-product-detail__thumb-btn--active' : ''}`}
                   onClick={() => setActiveMediaIndex(idx)}
+                  style={{ position: 'relative' }}
                 >
-                  <img src={media.mediaUrl} alt={`Ảnh nhỏ ${idx + 1}`} />
+                  {media.mediaType === 'VIDEO' ? (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1e293b', color: '#fff', fontSize: '1.2rem' }}>
+                      🎥
+                    </div>
+                  ) : (
+                    <img src={media.mediaUrl} alt={`Ảnh nhỏ ${idx + 1}`} />
+                  )}
                 </button>
               ))}
             </div>
@@ -275,9 +244,18 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
         {/* Right: Info & Actions */}
         <section className="og-product-detail__info" aria-label="Thông tin sản phẩm">
           {/* Badge row */}
-          <div className="og-product-detail__badge-row">
-            <span className="og-badge og-badge--neutral">{product.category.categoryName}</span>
+          <div className="og-product-detail__badge-row" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {productCategories.map((category) => (
+              <Link key={category.categoryId} className="og-badge og-badge--neutral" to={`/marketplace?categoryId=${category.categoryId}`}>
+                {category.categoryName}
+              </Link>
+            ))}
             <ConditionBadge condition={product.condition} />
+            {product.requiresBuyerEkyc && (
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '3px 10px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.4)' }}>
+                🛡️ Yêu cầu xác thực eKYC
+              </span>
+            )}
           </div>
 
           {/* Title */}
@@ -302,7 +280,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
             <div className="og-product-detail__shipping-row">
               <span className="og-product-detail__shipping-label">Phí ship:</span>
               <span style={{ color: '#059669', fontWeight: 600 }}>
-                Hỗ trợ đồng kiểm tận nơi trước khi thanh toán
+                30.000 ₫ (Hỗ trợ đồng kiểm tận nơi trước khi thanh toán)
               </span>
             </div>
             <div className="og-product-detail__shipping-row">
@@ -319,34 +297,19 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
             </div>
           </div>
 
-          {/* ⚡ THE 2 QUICK CONTACT BUTTONS (GREEN CALL & BLUE CHAT) AS REQUESTED */}
+          {/* Contact Row (Bảo mật thông tin cá nhân & Trao đổi chính thức) */}
           <div className="og-quick-contact-row" aria-label="Liên hệ nhanh với người bán">
-            {/* Green Call Button */}
-            <button
-              type="button"
-              className="og-btn-quick-call"
-              onClick={handleTogglePhone}
-              title={isPhoneRevealed ? 'Bấm để gọi hoặc sao chép số điện thoại' : 'Bấm để hiện số điện thoại người bán'}
-              aria-label="Gọi điện thoại cho người bán"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
-              </svg>
-              <span>{isPhoneRevealed ? sellerPhone : maskedPhone}</span>
-              {!isPhoneRevealed && <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>👆</span>}
-            </button>
-
-            {/* Blue Chat Button */}
             <button
               type="button"
               className="og-btn-quick-chat"
               onClick={handleChat}
-              aria-label="Nhắn tin với người bán"
+              style={{ width: '100%', justifyContent: 'center' }}
+              aria-label="Nhắn tin trao đổi bảo mật với người bán"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
               </svg>
-              <span>Nhắn tin</span>
+              <span>💬 Nhắn tin bảo mật với {product.seller.displayName}</span>
             </button>
           </div>
 
@@ -435,7 +398,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
         <div className="og-specs-table">
           <div className="og-specs-row">
             <span className="og-specs-label">Danh mục</span>
-            <span className="og-specs-value">{product.category.categoryName}</span>
+            <span className="og-specs-value">{productCategories.map((category) => category.categoryName).join(' · ')}</span>
           </div>
           <div className="og-specs-row">
             <span className="og-specs-label">Phí vận chuyển</span>

@@ -57,7 +57,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           {/* Accessible Category Label */}
           {product.category && (
             <span className="og-visually-hidden">
-              {product.category.categoryName}
+              {(product.categories?.length ? product.categories : [product.category]).map((category) => category.categoryName).join(' · ')}
             </span>
           )}
         </div>

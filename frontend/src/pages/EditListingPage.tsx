@@ -67,6 +67,8 @@ export const EditListingPage: React.FC = () => {
     };
   }, [productId, isSeller]);
 
+  const [isMediaLoading, setIsMediaLoading] = useState(false);
+
   const handleUpdate = async (payload: CreateOrUpdateProductPayload) => {
     if (!productId) return;
     setIsSubmitting(true);
@@ -76,6 +78,51 @@ export const EditListingPage: React.FC = () => {
       navigate('/seller/listings');
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Cập nhật tin đăng thất bại.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUploadMedia = async (file: File, mediaType: 'IMAGE' | 'VIDEO') => {
+    if (!productId) return;
+    setIsMediaLoading(true);
+    setErrorMessage(null);
+    try {
+      await listingApi.uploadMedia(productId, file, mediaType);
+      const updated = await listingApi.getSellerProduct(productId);
+      setInitialData(updated);
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Tải media thất bại.');
+      throw err;
+    } finally {
+      setIsMediaLoading(false);
+    }
+  };
+
+  const handleDeleteMedia = async (mediaId: number) => {
+    if (!productId) return;
+    setIsMediaLoading(true);
+    setErrorMessage(null);
+    try {
+      await listingApi.deleteMedia(productId, mediaId);
+      const updated = await listingApi.getSellerProduct(productId);
+      setInitialData(updated);
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Xóa media thất bại.');
+    } finally {
+      setIsMediaLoading(false);
+    }
+  };
+
+  const handleSubmitForReview = async () => {
+    if (!productId) return;
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      await listingApi.submitProduct(productId);
+      navigate('/seller/listings');
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Gửi duyệt tin đăng thất bại.');
     } finally {
       setIsSubmitting(false);
     }
@@ -127,15 +174,19 @@ export const EditListingPage: React.FC = () => {
   return (
     <div className="og-listing-form-page">
       <div className="og-listing-form-page__header">
-        <nav aria-label="Breadcrumb">
-          <Link to="/seller/listings" className="og-link">
-            ← Quay lại danh sách tin đăng
+        <nav aria-label="Breadcrumb" className="og-listing-form-page__breadcrumb">
+          <Link to="/seller/listings" className="og-listing-form-page__breadcrumb-link">
+            <span aria-hidden="true">←</span>
+            <span>Quay lại danh sách tin đăng</span>
           </Link>
         </nav>
         <h1 className="og-listing-form-page__title">Chỉnh sửa tin đăng</h1>
         <p className="og-listing-form-page__subtitle">
           Cập nhật thông tin chi tiết cho món đồ &ldquo;{initialData.title}&rdquo;.
         </p>
+        <div className="og-listing-form-page__required-note">
+          Trường có dấu <span className="og-form-required">*</span> là bắt buộc.
+        </div>
       </div>
 
       <ListingForm
@@ -145,6 +196,11 @@ export const EditListingPage: React.FC = () => {
         isSubmitting={isSubmitting}
         submitButtonLabel="Cập nhật tin đăng"
         errorMessage={errorMessage}
+        mediaList={initialData.media}
+        onUploadMedia={handleUploadMedia}
+        onDeleteMedia={handleDeleteMedia}
+        onSubmitForReview={handleSubmitForReview}
+        isMediaActionLoading={isMediaLoading}
       />
     </div>
   );

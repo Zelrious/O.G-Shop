@@ -24,8 +24,8 @@ export const CreateListingPage: React.FC = () => {
     setIsSubmitting(true);
     setErrorMessage(null);
     try {
-      await listingApi.createProduct(payload);
-      navigate('/seller/listings');
+      const created = await listingApi.createProduct(payload);
+      navigate(`/seller/listings/${created.productId}/edit`);
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Tạo tin đăng thất bại. Vui lòng thử lại.');
     } finally {
@@ -36,12 +36,13 @@ export const CreateListingPage: React.FC = () => {
   if (!isSeller) {
     return (
       <div className="og-seller-upgrade-prompt">
+        <div className="og-seller-upgrade-prompt__icon">🏪</div>
         <h1 className="og-seller-upgrade-prompt__title">Kích hoạt quyền Người bán</h1>
         <p className="og-seller-upgrade-prompt__desc">
           Bạn cần kích hoạt quyền Người bán trước khi đăng tin sản phẩm.
         </p>
         <Link to="/seller-verification" className="og-button og-button--primary">
-          Kích hoạt ngay
+          ✨ Kích hoạt quyền Người bán ngay
         </Link>
       </div>
     );
@@ -50,15 +51,19 @@ export const CreateListingPage: React.FC = () => {
   return (
     <div className="og-listing-form-page">
       <div className="og-listing-form-page__header">
-        <nav aria-label="Breadcrumb">
-          <Link to="/seller/listings" className="og-link">
-            ← Quay lại danh sách tin đăng
+        <nav aria-label="Breadcrumb" className="og-listing-form-page__breadcrumb">
+          <Link to="/seller/listings" className="og-listing-form-page__breadcrumb-link">
+            <span aria-hidden="true">←</span>
+            <span>Quay lại danh sách tin đăng</span>
           </Link>
         </nav>
         <h1 className="og-listing-form-page__title">Đăng tin bán đồ cũ mới</h1>
         <p className="og-listing-form-page__subtitle">
-          Điền thông tin và mô tả trung thực về món đồ của bạn để tạo bản nháp (DRAFT). Bạn có thể đăng bán bất cứ lúc nào.
+          Điền thông tin và mô tả trung thực về món đồ của bạn để tạo tin đăng. Bạn có thể lưu bản nháp và cập nhật bất cứ lúc nào.
         </p>
+        <div className="og-listing-form-page__required-note">
+          Trường có dấu <span className="og-form-required">*</span> là bắt buộc.
+        </div>
       </div>
 
       <ListingForm
