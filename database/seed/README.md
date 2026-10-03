@@ -100,7 +100,7 @@ Sau khi đã thử P09 với Buyer chưa xác minh, chạy [set_test_buyer_verif
 .\database\seed\load_test_data.ps1 -BuyerVerified
 ```
 
-Script thêm fixture `MVP_BYPASS/VERIFIED` cho đúng Buyer của bộ seed; không thêm role SELLER, không chạy AI và không ghi đè hồ sơ đang PENDING. Sau đó test mua P09 thành công; dùng KTV (BUYER chưa VERIFIED) để kiểm tra nhánh bị chặn và quyền sở hữu đơn/địa chỉ của Buyer khác.
+Script thêm fixture `MVP_BYPASS/VERIFIED` cho đúng Buyer của bộ seed; không thêm role SELLER, không chạy AI và không ghi đè hồ sơ đang PENDING. Sau đó test mua P09 thành công; thử nhánh bị chặn trước khi chạy helper, và dùng tài khoản BUYER khác để kiểm tra quyền sở hữu đơn/địa chỉ. KTV có role riêng, không dùng làm tài khoản BUYER chưa VERIFIED.
 
 ### Hết hạn mà không phải đợi một giờ
 

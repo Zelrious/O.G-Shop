@@ -15,7 +15,7 @@ Dùng `-Reset` chỉ khi container test cùng tên còn từ lần chạy trư�
 
 ## Nhiều danh mục V8 — PostgreSQL integration test
 
-Runner baseline phía trên không thay thế kiểm chứng V8. `MultipleCategoriesPostgresTest` chỉ chạy khi có `OGSHOP_CATEGORY_TEST_DB_URL`; cần database PostgreSQL/pgvector riêng vì test tạo fixture và chạy Flyway V1–V8. Không trỏ vào database ứng dụng.
+Runner baseline phía trên không thay thế kiểm chứng V8. `MultipleCategoriesPostgresTest` chạy khi có `OGSHOP_CATEGORY_TEST_DB_URL` hoặc `OGSHOP_TEST_DB_URL`; cần database PostgreSQL/pgvector riêng vì test tạo fixture và chạy toàn bộ Flyway migrations trong checkout (hiện V1–V11). Không trỏ vào database ứng dụng.
 
 Ví dụ từ repository, sau khi tạo database test và PostgreSQL đã sẵn sàng (mật khẩu dưới đây chỉ dành cho container test):
 
