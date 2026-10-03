@@ -3,6 +3,9 @@ package com.oldbutgold.shop.shared.api;
 import com.oldbutgold.shop.modules.identity.application.DuplicateEmailException;
 import com.oldbutgold.shop.modules.identity.application.EkycUnavailableException;
 import com.oldbutgold.shop.modules.identity.application.InvalidRefreshTokenException;
+import com.oldbutgold.shop.modules.identity.application.SellerActivationDisabledException;
+import com.oldbutgold.shop.modules.identity.application.InvalidAvatarException;
+import com.oldbutgold.shop.modules.identity.application.AvatarStorageUnavailableException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -51,10 +54,60 @@ public class ApiExceptionHandler {
         return response(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "Dữ liệu gửi lên không hợp lệ.", request, fields);
     }
 
+    @ExceptionHandler(InvalidAvatarException.class)
+    ResponseEntity<ApiError> invalidAvatar(InvalidAvatarException exception, HttpServletRequest request) {
+        return response(HttpStatus.BAD_REQUEST, "INVALID_AVATAR", exception.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler(AvatarStorageUnavailableException.class)
+    ResponseEntity<ApiError> avatarUnavailable(AvatarStorageUnavailableException exception, HttpServletRequest request) {
+        return response(HttpStatus.SERVICE_UNAVAILABLE, "AVATAR_STORAGE_UNAVAILABLE", exception.getMessage(), request, List.of());
+    }
+
     @ExceptionHandler(EkycUnavailableException.class)
     ResponseEntity<ApiError> ekycUnavailable(EkycUnavailableException exception, HttpServletRequest request) {
         return response(HttpStatus.SERVICE_UNAVAILABLE, "EKYC_UNAVAILABLE",
                 "Dịch vụ xác minh hiện không khả dụng. Hồ sơ chưa được xác minh.", request, List.of());
+    }
+
+    @ExceptionHandler(SellerActivationDisabledException.class)
+    ResponseEntity<ApiError> sellerActivationDisabled(SellerActivationDisabledException exception, HttpServletRequest request) {
+        return response(HttpStatus.BAD_REQUEST, "MVP_ACTIVATION_DISABLED", exception.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler(com.oldbutgold.shop.modules.catalog.application.ProductNotFoundException.class)
+    ResponseEntity<ApiError> productNotFound(com.oldbutgold.shop.modules.catalog.application.ProductNotFoundException exception, HttpServletRequest request) {
+        return response(HttpStatus.NOT_FOUND, "PRODUCT_NOT_FOUND", exception.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler(com.oldbutgold.shop.modules.catalog.application.CategoryNotFoundException.class)
+    ResponseEntity<ApiError> categoryNotFound(com.oldbutgold.shop.modules.catalog.application.CategoryNotFoundException exception, HttpServletRequest request) {
+        return response(HttpStatus.NOT_FOUND, "CATEGORY_NOT_FOUND", exception.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler(com.oldbutgold.shop.modules.catalog.application.SellerRequiredException.class)
+    ResponseEntity<ApiError> sellerRequired(com.oldbutgold.shop.modules.catalog.application.SellerRequiredException exception, HttpServletRequest request) {
+        return response(HttpStatus.FORBIDDEN, "SELLER_REQUIRED", exception.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler(com.oldbutgold.shop.modules.catalog.application.ProductStateConflictException.class)
+    ResponseEntity<ApiError> productStateConflict(com.oldbutgold.shop.modules.catalog.application.ProductStateConflictException exception, HttpServletRequest request) {
+        return response(HttpStatus.CONFLICT, "PRODUCT_STATE_CONFLICT", exception.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler(com.oldbutgold.shop.modules.catalog.application.CommandKeyConflictException.class)
+    ResponseEntity<ApiError> commandKeyConflict(com.oldbutgold.shop.modules.catalog.application.CommandKeyConflictException exception, HttpServletRequest request) {
+        return response(HttpStatus.CONFLICT, "COMMAND_KEY_CONFLICT", exception.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler({
+            com.oldbutgold.shop.modules.catalog.application.ProductVersionConflictException.class,
+            org.springframework.orm.ObjectOptimisticLockingFailureException.class,
+            org.springframework.dao.OptimisticLockingFailureException.class
+    })
+    ResponseEntity<ApiError> productVersionConflict(Exception exception, HttpServletRequest request) {
+        return response(HttpStatus.CONFLICT, "PRODUCT_VERSION_CONFLICT",
+                "Tin đăng đã được cập nhật bởi một phiên làm việc khác. Vui lòng tải lại trang.", request, List.of());
     }
 
     private static ResponseEntity<ApiError> response(HttpStatus status, String code, String message,

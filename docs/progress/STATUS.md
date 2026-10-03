@@ -1,10 +1,11 @@
 # Project Status
 
 - Project: Old but Gold (O.G Shop)
-- Updated: 2026-09-19
-- Phase: CORE_FEATURES_FIRST
-- Overall status: READY_FOR_NEXT_TASK
-- Active task: None
+- Updated: 2026-09-20
+- Phase: UI_UX_DESIGN_FIRST
+- Overall status: IN_PROGRESS
+- Active task: TASK-0018 — Marketplace UI/UX design system & clickable prototype in Figma
+- Paused task: TASK-0014 — Buy Now (paused before implementation; resume after design approval)
 - Published branch: `origin/main`
 
 ## Completed
@@ -16,6 +17,22 @@
 - Hoàn thành monorepo scaffold, module boundaries và tài liệu nền.
 - Backend/Frontend foundation, database tooling và CI đã được khởi tạo.
 - Cấu hình AI/agent cá nhân được giữ local và không còn theo dõi trên Git.
+- Đã hoàn thành [TASK-0013](archive/TASK-0013-catalog-vertical-slice.md):
+  - Flyway V5 seed 8 danh mục MVP chuẩn hóa (`electronics`, `fashion`, `home-living`, `books-stationery`, `sports-outdoors`, `collectibles`, `mother-baby`, `other`) với display order ổn định 1..8.
+  - Entity `ProductEntity` ánh xạ bảng `products` với `@Version` hỗ trợ JPA Optimistic Locking và các phương thức chuyển trạng thái nghiệp vụ an toàn.
+  - Cung cấp `IdentityCatalogFacade` (`DefaultIdentityCatalogFacade`) do Identity sở hữu để Catalog kiểm tra quyền bán từ database và batch lookup public seller summary (`sellerId`, `displayName`, `trustLabel: "Người bán MVP"`).
+  - Backend Public Catalog API (`GET /api/v1/categories`, `GET /api/v1/products`, `GET /api/v1/products/{productId}`) tìm kiếm tiêu đề, lọc danh mục/tình trạng/giá, sort allowlist, phân trang; chỉ trả sản phẩm `ACTIVE` và chưa xóa mềm.
+  - Backend Seller Catalog API (`/api/v1/seller/products/**`) cho phép xem tin của mình, tạo `DRAFT`, sửa tin (`DRAFT`/`ACTIVE`/`HIDDEN`), publish, hide, chặn sửa khi `RESERVED`/`SOLD`, cô lập quyền sở hữu trả 404 chống ID enumeration, và ánh xạ optimistic locking thành HTTP 409 `PRODUCT_VERSION_CONFLICT`.
+  - Frontend Marketplace (`/marketplace`, `/products/:productId`) và Seller Listings (`/seller/listings`, `/seller/listings/new`, `/seller/listings/:productId/edit`) với UI chuẩn O.G Shop tokens, không dùng mock data, responsive trên mobile, đầy đủ loading/empty/error/retry.
+  - Cập nhật Navbar: link "Mua sắm", "Tin đăng của tôi" cho Seller, CTA kích hoạt cho Buyer, không horizontal overflow trên mobile.
+  - Đạt 100% Quality Gate: Backend 39/39 tests pass, Frontend 24/24 tests pass, typecheck 0 lỗi, lint 0 warning, build production pass, Database runner pass 100% (cả clean V1->V5 và legacy V1->V4->V5 backfill).
+- Đã hoàn thành [TASK-0012](archive/TASK-0012-mvp-seller-activation.md):
+  - Flyway V4 mở rộng method `MVP_BYPASS` và điều chỉnh resolution check constraint cho phép kích hoạt nhanh.
+  - Endpoint `POST /api/v1/seller-verification/activate` cấp role `SELLER` idempotent từ Backend authority.
+  - Cấu hình `app.seller-verification.mode=MVP_BYPASS` (env: `SELLER_VERIFICATION_MODE`), từ chối bằng lỗi `MVP_ACTIVATION_DISABLED` khi tắt.
+  - Không tạo dữ liệu CCCD/sinh trắc học hay metric giả, giữ nguyên eKYC FastAPI microservice để bật lại sau.
+  - Frontend `/seller-verification` hiển thị cảnh báo trung thực về chế độ MVP, xử lý đầy đủ các trạng thái và tự động tải lại quyền người dùng.
+  - Đạt 100% Quality Gate: Backend 19/19 tests pass, Database migration/invariant tests pass, Frontend 10/10 tests pass, typecheck 0 lỗi, lint 0 warning, build production thành công.
 - Đã hoàn thành [TASK-0005](archive/TASK-0005-identity-ekyc-security-baseline.md):
   - Backend là authority cho register/login/current-user/refresh/logout và role assignment.
   - Access JWT ngắn hạn kết hợp opaque refresh cookie rotation/reuse detection; database chỉ lưu digest.
@@ -51,13 +68,10 @@
 
 ## Next
 
-1. Chốt DP-09 (mức phí) và DP-10 (cart hay direct checkout); trong lúc chưa chốt tiếp tục dùng fee policy 0% và không xóa cart.
-2. Hoàn thiện traceability và kiểm thử các phần còn lại của UC-01/UC-02.
-3. Triển khai UC-03/UC-04: product listing, danh sách, tìm kiếm và chi tiết sản phẩm.
-4. Triển khai UC-05/UC-06: REST chat/history trước, sau đó offer/counter-offer transaction.
-5. Triển khai UC-07 đến UC-14: accept offer, checkout, payment mock và vòng đời đơn hàng; bổ sung concurrency test.
-6. Kết nối frontend và xác minh luồng end-to-end Buyer ↔ Seller.
-7. Sau khi core acceptance gate đạt, mới thực hiện external integrations, WebSocket, outbox worker và Redis theo nhu cầu đo được.
+1. Hoàn thành TASK-0018: thiết kế Figma responsive desktop/mobile, Light/Dark, VI/EN, sample data và prototype theo role.
+2. Người dùng duyệt trực quan bộ UI/UX và chốt các điều chỉnh trước khi sửa Frontend.
+3. Tiếp tục TASK-0014: Buy Now — UI checkout + Backend reservation/order chống bán trùng theo thiết kế đã duyệt.
+4. Tiếp tục TASK-0015, TASK-0016 và TASK-0017 theo thứ tự core flow đã chốt.
 
 
 ## Current risks

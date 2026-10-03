@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Console standing -->
+  <path d="M26 14 C30 14, 34 20, 34 40 L34 78 C34 82, 30 84, 26 84 C22 84, 20 80, 20 74 L20 24 C20 18, 22 14, 26 14 Z" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <path d="M25 18 L25 80" stroke="#0284c7" stroke-width="2"/>
+  <!-- Controller -->
+  <path d="M46 54 C46 44, 78 44, 78 54 C82 62, 84 76, 78 80 C74 82, 70 74, 68 70 L56 70 C54 74, 50 82, 46 80 C40 76, 42 62, 46 54 Z" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <circle cx="54" cy="58" r="3" fill="#64748b"/>
+  <circle cx="70" cy="56" r="1.5" fill="#3b82f6"/>
+  <circle cx="74" cy="60" r="1.5" fill="#ef4444"/>
+  <circle cx="66" cy="60" r="1.5" fill="#10b981"/>
+  <circle cx="70" cy="64" r="1.5" fill="#f59e0b"/>
+</svg>

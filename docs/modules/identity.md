@@ -40,6 +40,8 @@ Product ownership, moderation decision, order authorization và KYC production.
 - [x] TASK-0005 thay luồng mock bằng Spring Boot Identity authority: BCrypt, access JWT, opaque refresh rotation/revocation và HttpOnly cookie.
 - [x] TASK-0005 đưa eKYC sau Spring Boot gateway; FastAPI dùng internal token, request-local embedding và fail-closed.
 - [x] TASK-0005 dùng Flyway V2 để loại dữ liệu CCCD/face embedding thật khỏi schema runtime, chỉ giữ metric và metadata model.
+- [x] TASK-0012 triển khai MVP Seller Activation: Flyway V4 hỗ trợ method `MVP_BYPASS`; endpoint `POST /api/v1/seller-verification/activate` cấp role `SELLER` idempotent; UI `/seller-verification` minh bạch thông báo bước eKYC thật đang tạm thời được bỏ qua.
+- [x] TASK-0013 cung cấp application facade `IdentityCatalogFacade` (`DefaultIdentityCatalogFacade`) làm hợp đồng liên module cho Catalog kiểm tra seller capability từ database và batch lookup thông tin Người bán công khai (`sellerId`, `displayName`, `trustLabel`) mà không vi phạm ranh giới module.
 
 ## Remaining tasks (Lộ trình Bước 2 & Backend)
 

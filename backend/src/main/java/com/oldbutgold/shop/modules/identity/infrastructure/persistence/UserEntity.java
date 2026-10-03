@@ -47,6 +47,15 @@ public class UserEntity {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
+    @Column(name = "bank_name", length = 100)
+    private String bankName;
+
+    @Column(name = "bank_account_number", length = 50)
+    private String bankAccountNumber;
+
+    @Column(name = "bank_account_holder", length = 120)
+    private String bankAccountHolder;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",
@@ -67,6 +76,34 @@ public class UserEntity {
         this.createdAt = createdAt;
     }
 
+    public void updateProfile(String fullName, String phoneNumber, String avatarUrl, Instant now) {
+        if (fullName != null && !fullName.isBlank()) {
+            this.fullName = fullName.trim();
+        }
+        if (phoneNumber != null) {
+            this.phoneNumber = phoneNumber.trim().isBlank() ? null : phoneNumber.trim();
+        }
+        if (avatarUrl != null) {
+            this.avatarUrl = avatarUrl.trim().isBlank() ? null : avatarUrl.trim();
+        }
+        this.updatedAt = now;
+    }
+
+    public void updatePassword(String passwordHash, Instant now) {
+        if (passwordHash == null || passwordHash.isBlank()) {
+            throw new IllegalArgumentException("Password hash must not be empty");
+        }
+        this.passwordHash = passwordHash;
+        this.updatedAt = now;
+    }
+
+    public void updateBankAccount(String bankName, String bankAccountNumber, String bankAccountHolder, Instant now) {
+        this.bankName = bankName != null && !bankName.isBlank() ? bankName.trim() : null;
+        this.bankAccountNumber = bankAccountNumber != null && !bankAccountNumber.isBlank() ? bankAccountNumber.trim() : null;
+        this.bankAccountHolder = bankAccountHolder != null && !bankAccountHolder.isBlank() ? bankAccountHolder.trim().toUpperCase() : null;
+        this.updatedAt = now;
+    }
+
     public Long getId() { return id; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
@@ -75,5 +112,9 @@ public class UserEntity {
     public String getAvatarUrl() { return avatarUrl; }
     public String getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
+    public String getBankName() { return bankName; }
+    public String getBankAccountNumber() { return bankAccountNumber; }
+    public String getBankAccountHolder() { return bankAccountHolder; }
     public Set<RoleEntity> getRoles() { return roles; }
 }

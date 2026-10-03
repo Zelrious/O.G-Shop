@@ -74,6 +74,8 @@ try {
         (Join-Path $repoRoot 'backend/src/main/resources/db/migration/V1__initial_schema.sql') = '/tmp/V1.sql'
         (Join-Path $repoRoot 'backend/src/main/resources/db/migration/V2__identity_and_ekyc_security_baseline.sql') = '/tmp/V2.sql'
         (Join-Path $repoRoot 'backend/src/main/resources/db/migration/V3__pricing_negotiation_and_chat_baseline.sql') = '/tmp/V3.sql'
+        (Join-Path $repoRoot 'backend/src/main/resources/db/migration/V4__mvp_seller_activation.sql') = '/tmp/V4.sql'
+        (Join-Path $repoRoot 'backend/src/main/resources/db/migration/V5__catalog_mvp_categories.sql') = '/tmp/V5.sql'
         (Join-Path $repoRoot 'database/tests/database_tests.sql') = '/tmp/database_tests.sql'
         (Join-Path $repoRoot 'database/tests/v3_legacy_fixture.sql') = '/tmp/v3_legacy_fixture.sql'
         (Join-Path $repoRoot 'database/tests/v3_legacy_assertions.sql') = '/tmp/v3_legacy_assertions.sql'
@@ -83,21 +85,25 @@ try {
         Invoke-Docker @('cp', $entry.Key, "${containerName}:$($entry.Value)")
     }
 
-    Write-Host 'Running clean V1 -> V2 -> V3 migration and invariant tests...'
+    Write-Host 'Running clean V1 -> V2 -> V3 -> V4 -> V5 migration and invariant tests...'
     Invoke-SqlFile -Database $databaseName -ContainerPath '/tmp/V1.sql'
     Invoke-SqlFile -Database $databaseName -ContainerPath '/tmp/V2.sql'
     Invoke-SqlFile -Database $databaseName -ContainerPath '/tmp/V3.sql'
+    Invoke-SqlFile -Database $databaseName -ContainerPath '/tmp/V4.sql'
+    Invoke-SqlFile -Database $databaseName -ContainerPath '/tmp/V5.sql'
     Invoke-SqlFile -Database $databaseName -ContainerPath '/tmp/database_tests.sql'
 
-    Write-Host 'Running V1/V2 legacy-data -> V3 backfill test...'
+    Write-Host 'Running V1/V2 legacy-data -> V3 -> V4 -> V5 backfill test...'
     Invoke-Docker @('exec', $containerName, 'createdb', '-U', $databaseUser, 'ogshop_legacy')
     Invoke-SqlFile -Database 'ogshop_legacy' -ContainerPath '/tmp/V1.sql'
     Invoke-SqlFile -Database 'ogshop_legacy' -ContainerPath '/tmp/V2.sql'
     Invoke-SqlFile -Database 'ogshop_legacy' -ContainerPath '/tmp/v3_legacy_fixture.sql'
     Invoke-SqlFile -Database 'ogshop_legacy' -ContainerPath '/tmp/V3.sql'
     Invoke-SqlFile -Database 'ogshop_legacy' -ContainerPath '/tmp/v3_legacy_assertions.sql'
+    Invoke-SqlFile -Database 'ogshop_legacy' -ContainerPath '/tmp/V4.sql'
+    Invoke-SqlFile -Database 'ogshop_legacy' -ContainerPath '/tmp/V5.sql'
 
-    Write-Host 'PASS: clean migration, database invariants and legacy V3 backfill completed.'
+    Write-Host 'PASS: clean migration, database invariants and legacy V3/V4/V5 backfill completed.'
 }
 finally {
     if (-not $KeepContainer) {

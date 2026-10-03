@@ -23,3 +23,8 @@ app:
     internal-token: test-internal-token-with-sufficient-entropy
     connect-timeout: PT1S
     read-timeout: PT2S
+  seller-verification:
+    mode: MVP_BYPASS
+  scheduling:
+    order-expiry:
+      enabled: false
