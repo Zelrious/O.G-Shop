@@ -50,7 +50,12 @@ public class SecurityConfig {
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/refresh/logout").permitAll()
-                        .requestMatchers("/api/v1/auth/me", "/api/v1/ekyc/**").authenticated()
+                                .requestMatchers(HttpMethod.GET, "/api/v1/payments/vnpay-ipn").permitAll()
+                        // (Tùy chọn: Nếu muốn test tạo URL thanh toán nhanh trên Postman mà chưa cần login, bạn có thể thêm:
+                        // .requestMatchers(HttpMethod.POST, "/api/v1/payments/vnpay-url").permitAll()
+                        // )
+                        // 2. Các API cần đăng nhập tài khoản
+                        .requestMatchers("/api/v1/auth/me", "/api/v1/ekyc/**", "/api/v1/payments/**").authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
