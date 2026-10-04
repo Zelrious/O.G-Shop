@@ -70,7 +70,7 @@ INSERT INTO seller_verifications (
 );
 
 INSERT INTO categories (category_id, category_name, slug)
-VALUES (2201, 'Electronics', 'electronics');
+VALUES (2201, 'Test Electronics', 'test-electronics');
 
 INSERT INTO products (
     product_id, seller_id, category_id, title, description, listed_price,
@@ -428,6 +428,42 @@ SELECT pg_temp.expect_sqlstate(
 SELECT pg_temp.assert_true(
     'all three seed roles exist',
     (SELECT count(*) = 3 FROM roles WHERE role_name IN ('BUYER', 'SELLER', 'ADMIN'))
+);
+
+INSERT INTO seller_verifications (
+    verification_id, user_id, verification_method, status, document_data, reviewed_at
+) VALUES (
+    2102, 1001, 'MVP_BYPASS', 'VERIFIED', '{}'::jsonb, CURRENT_TIMESTAMP
+);
+
+SELECT pg_temp.assert_true(
+    'MVP_BYPASS seller verification is recorded and verified',
+    (SELECT count(*) = 1 FROM seller_verifications WHERE verification_id = 2102 AND verification_method = 'MVP_BYPASS' AND status = 'VERIFIED')
+);
+
+SELECT pg_temp.expect_sqlstate(
+    'rejects unknown verification method',
+    $test$
+        INSERT INTO seller_verifications (
+            user_id, verification_method, status, document_data, reviewed_at
+        ) VALUES (
+            1003, 'UNKNOWN_METHOD', 'VERIFIED', '{}'::jsonb, CURRENT_TIMESTAMP
+        )
+    $test$,
+    '23514'
+);
+
+SELECT pg_temp.assert_true(
+    'all 8 MVP categories exist and active',
+    (SELECT count(*) = 8 FROM categories WHERE is_active = TRUE AND slug IN (
+        'electronics', 'fashion', 'home-living', 'books-stationery',
+        'sports-outdoors', 'collectibles', 'mother-baby', 'other'
+    ))
+);
+
+SELECT pg_temp.assert_true(
+    'MVP categories have distinct display orders 1 to 8',
+    (SELECT count(DISTINCT display_order) = 8 FROM categories WHERE display_order BETWEEN 1 AND 8)
 );
 
 ROLLBACK;

@@ -50,12 +50,22 @@ public class SecurityConfig {
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/refresh/logout").permitAll()
-                                .requestMatchers(HttpMethod.GET, "/api/v1/payments/vnpay-ipn").permitAll()
-                        // (Tùy chọn: Nếu muốn test tạo URL thanh toán nhanh trên Postman mà chưa cần login, bạn có thể thêm:
-                        // .requestMatchers(HttpMethod.POST, "/api/v1/payments/vnpay-url").permitAll()
-                        // )
-                        // 2. Các API cần đăng nhập tài khoản
-                        .requestMatchers("/api/v1/auth/me", "/api/v1/ekyc/**", "/api/v1/payments/**").authenticated()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/categories",
+                                "/api/v1/products",
+                                "/api/v1/products/**",
+                                "/api/v1/media/**",
+                                "/api/v1/payments/vnpay-ipn").permitAll()
+                        .requestMatchers(
+                                "/api/v1/auth/me",
+                                "/api/v1/profile/**",
+                                "/api/v1/ekyc/**",
+                                "/api/v1/seller-verification/**",
+                                "/api/v1/seller/products/**",
+                                "/api/v1/moderation/**",
+                                "/api/v1/commerce/**",
+                                "/api/v1/payments/**").authenticated()
+
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
@@ -103,7 +113,7 @@ public class SecurityConfig {
     CorsConfigurationSource corsConfigurationSource(AuthProperties properties) {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(properties.frontendOrigin()));
-        configuration.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);

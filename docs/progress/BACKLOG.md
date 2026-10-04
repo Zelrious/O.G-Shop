@@ -18,28 +18,28 @@
 - [ ] Hoàn thiện `TRACEABILITY_MATRIX.md` theo UC, BR và NFR.
 - [x] Chốt authentication và session strategy (DP-01): access JWT + opaque refresh cookie rotation.
 
-## P1 — Core flow (bắt buộc trước tối ưu hạ tầng)
+## P1 — Core flow (các vertical slice Backend + Frontend, bắt buộc trước tối ưu hạ tầng)
 
 - [x] TASK-0010: Database pricing, negotiation, chat cursor và outbox baseline.
 - [x] TASK-0011: Khóa thứ tự core-feature-first và acceptance gate trước Redis.
-- [ ] UC-01 Quản lý tài khoản và phiên.
-- [ ] UC-02 Xác minh Seller.
-- [ ] UC-03 Quản lý tin đăng.
-- [ ] UC-04 Tìm kiếm và xem chi tiết.
-- [ ] UC-05 Chat.
-- [ ] UC-06 Trả giá.
-- [ ] UC-07 Checkout và chống bán trùng.
-- [ ] UC-08 Thanh toán giữ tiền mô phỏng.
-- [ ] UC-09 đến UC-14: xử lý đơn, giao hàng, khiếu nại và hoàn tiền.
+- [x] TASK-0012: MVP Seller Activation — bỏ qua eKYC thật, kích hoạt Seller trực tiếp và an toàn cả Backend và Frontend.
+- [x] TASK-0013: Catalog — Seller quản lý tin đăng + Buyer duyệt/tìm kiếm/xem chi tiết.
+- [ ] TASK-0018: Marketplace UI/UX — Figma design system, responsive desktop/mobile, Light/Dark, VI/EN, sample data và prototype theo role. **IN PROGRESS**.
+- [ ] TASK-0014: Buy Now — UI checkout + Backend reservation/order chống bán trùng. **PAUSED BEFORE IMPLEMENTATION** đến khi TASK-0018 được duyệt.
+- [ ] TASK-0015: Mock Payment — Thanh toán giữ tiền mô phỏng + màn hình đơn hàng Buyer/Seller.
+- [ ] TASK-0016: Fulfillment cơ bản — Quản lý vận chuyển + UI trạng thái đơn end-to-end.
+- [ ] TASK-0017: Communication REST & Offer — Chat hội thoại, cursor lịch sử và giao dịch trả giá (thực hiện sau luồng mua trực tiếp).
 
 Thứ tự triển khai trong P1:
 
-1. Hoàn thiện và kiểm thử UC-01/UC-02 hiện có.
-2. Catalog: tạo/sửa/đăng tin, danh sách, tìm kiếm và chi tiết sản phẩm bằng PostgreSQL.
-3. Communication: tạo conversation, ghim snapshot sản phẩm, tải lịch sử có cursor, gửi/đọc message bằng REST; sau đó mới hoàn thiện offer/counter-offer.
-4. Commerce/Payment: accept offer nguyên tử, giữ hàng, checkout, order và thanh toán mô phỏng.
-5. Fulfillment: đưa đơn hàng đến trạng thái hoàn tất, hủy hoặc khiếu nại/hoàn tiền cơ bản.
-6. Kết nối frontend và chạy ít nhất một luồng end-to-end Buyer ↔ Seller.
+1. TASK-0012 — Seller activation MVP.
+2. TASK-0013 — Catalog: Seller quản lý tin đăng + Buyer duyệt/tìm kiếm/xem chi tiết.
+3. TASK-0018 — Thiết kế UI/UX Figma và duyệt trực quan trước khi tiếp tục code chức năng.
+4. TASK-0014 — Buy Now: UI checkout + Backend reservation/order chống bán trùng.
+5. TASK-0015 — Mock payment + màn hình đơn hàng Buyer/Seller.
+6. TASK-0016 — Fulfillment cơ bản + UI trạng thái đơn end-to-end.
+7. Chat/Offer thực hiện sau luồng mua trực tiếp.
+8. Redis, WebSocket, outbox worker và external integrations tiếp tục deferred.
 
 ## P2 — Tích hợp dịch vụ bên ngoài
 

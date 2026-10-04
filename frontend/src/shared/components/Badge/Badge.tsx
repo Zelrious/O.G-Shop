@@ -1,6 +1,17 @@
 import React, { HTMLAttributes } from 'react';
 
-export type BadgeVariant = 'pending' | 'verified' | 'rejected' | 'seller' | 'buyer' | 'neutral';
+export type BadgeVariant =
+  | 'pending'
+  | 'verified'
+  | 'rejected'
+  | 'seller'
+  | 'buyer'
+  | 'neutral'
+  | 'draft'
+  | 'active'
+  | 'hidden'
+  | 'reserved'
+  | 'sold';
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   variant?: BadgeVariant;
