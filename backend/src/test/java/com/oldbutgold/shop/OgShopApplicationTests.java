@@ -1,10 +1,13 @@
 package com.oldbutgold.shop;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+
+import com.oldbutgold.shop.shared.config.VnPayProperties;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -29,6 +32,9 @@ class OgShopApplicationTests {
 
     @Autowired
     private MockMvc mockMvc;
+    
+    @Autowired
+    private VnPayProperties vnPayProperties;
 
     @MockitoBean
     private CatalogService catalogService;
@@ -73,6 +79,13 @@ class OgShopApplicationTests {
     }
 
     @Test
+    void vnPayPropertiesShouldBeLoaded() {
+        Assertions.assertNotNull(vnPayProperties);
+        System.out.println("VNPAY TMN CODE: " + vnPayProperties.tmnCode());
+        System.out.println("VNPAY PAY URL: " + vnPayProperties.payUrl());
+    }
+
+    @Test
     void sellerActivationEndpointRequiresBearerToken() throws Exception {
         mockMvc.perform(post("/api/v1/seller-verification/activate"))
                 .andExpect(status().isUnauthorized());
@@ -107,3 +120,4 @@ class OgShopApplicationTests {
                 .andExpect(status().isUnauthorized());
     }
 }
+ 

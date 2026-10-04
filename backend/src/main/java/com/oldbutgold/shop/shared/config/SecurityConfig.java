@@ -54,7 +54,8 @@ public class SecurityConfig {
                                 "/api/v1/categories",
                                 "/api/v1/products",
                                 "/api/v1/products/**",
-                                "/api/v1/media/**").permitAll()
+                                "/api/v1/media/**",
+                                "/api/v1/payments/vnpay-ipn").permitAll()
                         .requestMatchers(
                                 "/api/v1/auth/me",
                                 "/api/v1/profile/**",
@@ -64,6 +65,7 @@ public class SecurityConfig {
                                 "/api/v1/moderation/**",
                                 "/api/v1/commerce/**",
                                 "/api/v1/payments/**").authenticated()
+
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))

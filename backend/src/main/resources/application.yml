@@ -40,6 +40,12 @@ app:
     url: ${CLOUDINARY_URL:}
   seller-verification:
     mode: ${SELLER_VERIFICATION_MODE:MVP_BYPASS}
+  vnpay:
+    pay-url: ${VNPAY_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+    tmn-code: ${VNPAY_TMN_CODE}
+    hash-secret: ${VNPAY_HASH_SECRET}
+    ipn-url: ${VNPAY_IPN_URL:http://localhost:8080/api/v1/payments/vnpay-ipn}
+    return-url: ${VNPAY_RETURN_URL:http://localhost:5173/payment/vnpay-return}
 
 server:
   port: ${BACKEND_PORT:8080}
