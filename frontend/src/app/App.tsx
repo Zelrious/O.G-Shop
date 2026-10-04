@@ -8,6 +8,7 @@ import {
   GuestLayout,
   SellerLayoutShell,
   AdminLayoutShell,
+  KtvLayoutShell,
 } from '../shared/layout';
 import {
   HomePage,
@@ -28,9 +29,21 @@ import {
   SellerOrdersPage,
   SellerOrderDetailPage,
   ModerationPage,
+  KtvEscrowPage,
+  KtvUsersPage,
+  KtvDisputesPage,
+  KtvKycPage,
+  KtvComplaintsPage,
+  KtvVouchersPage,
+  AdminDashboardPage,
+  AdminKtvAccountsPage,
+  AdminEmergencyAlertsPage,
+  AdminAuditLogsPage,
+  AdminSystemFeesPage,
+  AdminVouchersPage,
+  AdminBroadcastsPage,
 } from '../pages';
 import { SellerDashboardPage } from '../pages/seller/SellerDashboardPage';
-import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
 import './styles.css';
 
 function NotFoundPage() {
@@ -70,7 +83,7 @@ export function App() {
                   <Route
                     path="/checkout"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute allowedRoles={['BUYER', 'SELLER']}>
                         <CheckoutPage />
                       </ProtectedRoute>
                     }
@@ -78,17 +91,17 @@ export function App() {
                   <Route
                     path="/checkout/payment"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute allowedRoles={['BUYER', 'SELLER']}>
                         <PaymentPage />
                       </ProtectedRoute>
                     }
                   />
 
-                  {/* Buyer Orders Management (OR-01, OR-02) */}
+                  {/* Buyer Orders Management */}
                   <Route
                     path="/orders"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute allowedRoles={['BUYER', 'SELLER']}>
                         <BuyerOrdersPage />
                       </ProtectedRoute>
                     }
@@ -96,7 +109,7 @@ export function App() {
                   <Route
                     path="/orders/:orderId"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute allowedRoles={['BUYER', 'SELLER']}>
                         <BuyerOrderDetailPage />
                       </ProtectedRoute>
                     }
@@ -128,7 +141,7 @@ export function App() {
                 {/* 3. Seller Center Layout Shell */}
                 <Route
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={['SELLER', 'BUYER']}>
                       <SellerLayoutShell />
                     </ProtectedRoute>
                   }
@@ -145,22 +158,41 @@ export function App() {
                   <Route path="/seller/orders/:orderId" element={<SellerOrderDetailPage />} />
                 </Route>
 
-                {/* 4. Admin Console & Dispute Arbitration Layout Shell */}
+                {/* 4. KTV (Kiểm Tra Viên) Console Layout Shell */}
                 <Route
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={['KTV', 'ADMIN']}>
+                      <KtvLayoutShell />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route path="/ktv" element={<ModerationPage />} />
+                  <Route path="/ktv/moderation" element={<ModerationPage />} />
+                  <Route path="/moderation" element={<ModerationPage />} />
+                  <Route path="/ktv/escrow" element={<KtvEscrowPage />} />
+                  <Route path="/ktv/users" element={<KtvUsersPage />} />
+                  <Route path="/ktv/disputes" element={<KtvDisputesPage />} />
+                  <Route path="/ktv/kyc" element={<KtvKycPage />} />
+                  <Route path="/ktv/complaints" element={<KtvComplaintsPage />} />
+                  <Route path="/ktv/vouchers" element={<KtvVouchersPage />} />
+                </Route>
+
+                {/* 5. Admin (Quản Trị Viên) Console Layout Shell */}
+                <Route
+                  element={
+                    <ProtectedRoute allowedRoles={['ADMIN']}>
                       <AdminLayoutShell />
                     </ProtectedRoute>
                   }
                 >
                   <Route path="/admin" element={<AdminDashboardPage />} />
-                  <Route path="/admin/users" element={<AdminDashboardPage />} />
-                  <Route path="/admin/kyc" element={<AdminDashboardPage />} />
-                  <Route path="/admin/moderation" element={<ModerationPage />} />
-                  <Route path="/moderation" element={<ModerationPage />} />
-                  <Route path="/admin/transactions" element={<AdminDashboardPage />} />
-                  <Route path="/admin/complaints" element={<AdminDashboardPage />} />
-                  <Route path="/admin/announcements" element={<AdminDashboardPage />} />
+                  <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+                  <Route path="/admin/ktv-accounts" element={<AdminKtvAccountsPage />} />
+                  <Route path="/admin/emergency-alerts" element={<AdminEmergencyAlertsPage />} />
+                  <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
+                  <Route path="/admin/system-fees" element={<AdminSystemFeesPage />} />
+                  <Route path="/admin/vouchers" element={<AdminVouchersPage />} />
+                  <Route path="/admin/broadcasts" element={<AdminBroadcastsPage />} />
                 </Route>
 
                 {/* 404 Fallback */}

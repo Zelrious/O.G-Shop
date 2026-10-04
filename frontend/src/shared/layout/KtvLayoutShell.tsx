@@ -5,24 +5,28 @@ import { ConsoleIcons } from './ConsoleIcons';
 import { ConfirmDialog } from '../components';
 import { useManagementStore } from '../../features/management/useManagementStore';
 
-export const AdminLayoutShell: React.FC = () => {
+export const KtvLayoutShell: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const { unreadAlertsCount } = useManagementStore();
+  const { complaints, kycList, disputes } = useManagementStore();
   const [isHovered, setIsHovered] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
 
   const isExpanded = isPinned || isHovered;
 
+  const pendingComplaintsCount = complaints.filter((c) => c.status === 'PENDING').length;
+  const pendingKycCount = kycList.filter((k) => k.status === 'PENDING').length;
+  const openDisputesCount = disputes.filter((d) => d.status === 'OPEN').length;
+
   return (
     <div className="og-admin-shell">
-      {/* Admin Sidebar */}
+      {/* KTV Sidebar */}
       <aside
         className={`og-admin-sidebar og-admin-sidebar--collapsible ${
           isExpanded ? 'og-admin-sidebar--expanded' : 'og-admin-sidebar--collapsed'
         }`}
-        aria-label="Bảng điều hành quản trị hệ thống O.G Admin"
+        aria-label="Bảng điều khiển kiểm duyệt & vận hành KTV"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -50,7 +54,7 @@ export const AdminLayoutShell: React.FC = () => {
               transition: 'opacity 0.2s ease',
             }}
           >
-            Quản trị viên
+            Kỹ thuật viên
           </span>
           {isExpanded && (
             <button
@@ -96,14 +100,14 @@ export const AdminLayoutShell: React.FC = () => {
             justifyContent: isExpanded ? 'flex-start' : 'center',
             transition: 'all 0.2s ease',
           }}
-          title={user?.fullName || user?.email || 'Quản trị viên'}
+          title={user?.fullName || user?.email || 'Kỹ thuật viên'}
         >
           <div
             style={{
               width: '36px',
               height: '36px',
               borderRadius: '50%',
-              background: '#059669',
+              background: '#047857',
               color: '#ffffff',
               display: 'flex',
               alignItems: 'center',
@@ -117,7 +121,7 @@ export const AdminLayoutShell: React.FC = () => {
             {user?.avatarUrl ? (
               <img src={user.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
-              (user?.fullName || user?.email || 'A').charAt(0).toUpperCase()
+              (user?.fullName || user?.email || 'K').charAt(0).toUpperCase()
             )}
           </div>
           <div className="og-admin-sidebar__user-text" style={{ minWidth: 0, flex: 1 }}>
@@ -130,9 +134,9 @@ export const AdminLayoutShell: React.FC = () => {
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
               }}
-              title={user?.fullName || user?.email || 'Quản trị viên'}
+              title={user?.fullName || user?.email || 'Kỹ thuật viên'}
             >
-              {user?.fullName || 'Quản trị viên'}
+              {user?.fullName || 'Kỹ thuật viên'}
             </div>
             <div
               style={{
@@ -143,49 +147,61 @@ export const AdminLayoutShell: React.FC = () => {
                 textOverflow: 'ellipsis',
               }}
             >
-              {user?.email || 'admin@ogshop.vn'}
+              {user?.email || 'ktv@ogshop.vn'}
             </div>
           </div>
         </div>
 
         {/* Navigation Menu */}
         <nav className="og-admin-sidebar__nav" style={{ marginTop: '8px' }}>
-          {/* 1. Dashboard doanh thu & các biểu đồ báo cáo */}
+          {/* 1. Kiểm duyệt tin */}
           <NavLink
-            to="/admin"
+            to="/ktv"
             end
-            title="Tổng quan doanh thu"
+            title="Kiểm duyệt tin"
             className={({ isActive }) =>
               `og-admin-sidebar__item ${isActive ? 'og-admin-sidebar__item--active' : ''}`
             }
           >
-            <ConsoleIcons.BarChart size={19} />
-            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Tổng quan doanh thu</span>
+            <ConsoleIcons.FileCheck size={19} />
+            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Kiểm duyệt tin</span>
           </NavLink>
 
-          {/* 2. Quản lý tài khoản KTV */}
+          {/* 2. Quản lý dòng tiền escrow */}
           <NavLink
-            to="/admin/ktv-accounts"
-            title="Quản lý tài khoản KTV"
+            to="/ktv/escrow"
+            title="Dòng tiền Escrow"
             className={({ isActive }) =>
               `og-admin-sidebar__item ${isActive ? 'og-admin-sidebar__item--active' : ''}`
             }
           >
-            <ConsoleIcons.UserCog size={19} />
-            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Quản lý tài khoản KTV</span>
+            <ConsoleIcons.CreditCard size={19} />
+            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Dòng tiền Escrow</span>
           </NavLink>
 
-          {/* 3. Nhận thông báo (sửa lại từ "Thông báo khẩn từ KTV") */}
+          {/* 3. Quản lý tài khoản user bình thường */}
           <NavLink
-            to="/admin/emergency-alerts"
-            title="Thông báo"
+            to="/ktv/users"
+            title="Quản lý người dùng"
             className={({ isActive }) =>
               `og-admin-sidebar__item ${isActive ? 'og-admin-sidebar__item--active' : ''}`
             }
           >
-            <ConsoleIcons.BellRing size={19} />
-            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Thông báo</span>
-            {unreadAlertsCount > 0 && (
+            <ConsoleIcons.Users size={19} />
+            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Quản lý người dùng</span>
+          </NavLink>
+
+          {/* 4. Phân xử tranh chấp */}
+          <NavLink
+            to="/ktv/disputes"
+            title="Phân xử tranh chấp"
+            className={({ isActive }) =>
+              `og-admin-sidebar__item ${isActive ? 'og-admin-sidebar__item--active' : ''}`
+            }
+          >
+            <ConsoleIcons.Scale size={19} />
+            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Phân xử tranh chấp</span>
+            {openDisputesCount > 0 && (
               <span
                 className="og-admin-sidebar__badge"
                 style={{
@@ -193,62 +209,82 @@ export const AdminLayoutShell: React.FC = () => {
                   color: '#dc2626',
                   border: '1px solid #fca5a5',
                   fontSize: '0.72rem',
-                  padding: '1px 7px',
+                  padding: '1px 6px',
                   borderRadius: '10px',
                   fontWeight: 700,
                 }}
               >
-                {unreadAlertsCount}
+                {openDisputesCount}
               </span>
             )}
           </NavLink>
 
-          {/* 4. Xem lịch sử thao tác hệ thống (Audit log) */}
+          {/* 5. Kiểm duyệt eKYC */}
           <NavLink
-            to="/admin/audit-logs"
-            title="Lịch sử thao tác hệ thống"
+            to="/ktv/kyc"
+            title="Kiểm duyệt eKYC"
             className={({ isActive }) =>
               `og-admin-sidebar__item ${isActive ? 'og-admin-sidebar__item--active' : ''}`
             }
           >
-            <ConsoleIcons.FileText size={19} />
-            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Lịch sử thao tác hệ thống</span>
+            <ConsoleIcons.IdCard size={19} />
+            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Kiểm duyệt eKYC</span>
+            {pendingKycCount > 0 && (
+              <span
+                className="og-admin-sidebar__badge"
+                style={{
+                  background: '#fef3c7',
+                  color: '#d97706',
+                  border: '1px solid #fcd34d',
+                  fontSize: '0.72rem',
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                }}
+              >
+                {pendingKycCount}
+              </span>
+            )}
           </NavLink>
 
-          {/* 5. Quản lý phí hệ thống */}
+          {/* 6. Nhận thông báo khiếu nại, xử lý, đẩy lên admin */}
           <NavLink
-            to="/admin/system-fees"
-            title="Quản lý phí hệ thống"
+            to="/ktv/complaints"
+            title="Xử lý khiếu nại"
             className={({ isActive }) =>
               `og-admin-sidebar__item ${isActive ? 'og-admin-sidebar__item--active' : ''}`
             }
           >
-            <ConsoleIcons.Sliders size={19} />
-            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Quản lý phí hệ thống</span>
+            <ConsoleIcons.MessageAlert size={19} />
+            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Xử lý khiếu nại</span>
+            {pendingComplaintsCount > 0 && (
+              <span
+                className="og-admin-sidebar__badge"
+                style={{
+                  background: '#fee2e2',
+                  color: '#dc2626',
+                  border: '1px solid #fca5a5',
+                  fontSize: '0.72rem',
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                }}
+              >
+                {pendingComplaintsCount}
+              </span>
+            )}
           </NavLink>
 
-          {/* 6. Tạo và quản lý voucher */}
+          {/* 7. Tặng/thu hồi voucher cho user */}
           <NavLink
-            to="/admin/vouchers"
-            title="Tạo & Quản lý Voucher"
+            to="/ktv/vouchers"
+            title="Tặng & Thu hồi Voucher"
             className={({ isActive }) =>
               `og-admin-sidebar__item ${isActive ? 'og-admin-sidebar__item--active' : ''}`
             }
           >
-            <ConsoleIcons.Ticket size={19} />
-            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Tạo & Quản lý Voucher</span>
-          </NavLink>
-
-          {/* 7. Nhận thông báo và điều hướng thông báo */}
-          <NavLink
-            to="/admin/broadcasts"
-            title="Điều hướng thông báo"
-            className={({ isActive }) =>
-              `og-admin-sidebar__item ${isActive ? 'og-admin-sidebar__item--active' : ''}`
-            }
-          >
-            <ConsoleIcons.Megaphone size={19} />
-            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Điều hướng thông báo</span>
+            <ConsoleIcons.Gift size={19} />
+            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Tặng & Thu hồi Voucher</span>
           </NavLink>
         </nav>
 
@@ -291,7 +327,7 @@ export const AdminLayoutShell: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Admin Content */}
+      {/* Main KTV Content */}
       <main className="og-admin-content">
         <Outlet />
       </main>
@@ -299,8 +335,8 @@ export const AdminLayoutShell: React.FC = () => {
       {/* Logout Confirmation */}
       <ConfirmDialog
         isOpen={showLogoutConfirm}
-        title="Xác nhận đăng xuất Quản Trị Viên"
-        message="Bạn có chắc chắn muốn đăng xuất khỏi bảng điều khiển Quản Trị Viên?"
+        title="Xác nhận đăng xuất KTV"
+        message="Bạn có chắc chắn muốn đăng xuất khỏi phiên làm việc Kỹ Thuật Viên?"
         confirmText="Đăng xuất"
         cancelText="Ở lại"
         variant="danger"
