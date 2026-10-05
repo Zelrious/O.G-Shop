@@ -142,6 +142,9 @@ public class PaymentService {
 
         PaymentEntity payment = paymentRepository.findByOrderIdForUpdate(order.getId())
                 .orElseGet(() -> new PaymentEntity(order.getId(), order.getTotalAmount(), method, now));
+        if (PaymentEntity.METHOD_VNPAY.equals(payment.getPaymentMethod())) {
+            throw new IllegalStateException("Giao dịch VNPAY phải được xác nhận bởi nhà cung cấp.");
+        }
         payment.setPaymentMethod(method);
 
         if (request.simulateSuccess()) {
@@ -170,7 +173,7 @@ public class PaymentService {
                     order.getStatus(),
                     payment.getStatus(),
                     null,
-                    "Giao dịch thanh toán thất bại (Mô phỏng). Bạn có thể thử lại trước khi hết thời gian giữ đơn 15 phút."
+                    "Giao dịch thanh toán thất bại (Mô phỏng). Bạn có thể thử lại trước hạn thanh toán của đơn."
             );
         }
     }

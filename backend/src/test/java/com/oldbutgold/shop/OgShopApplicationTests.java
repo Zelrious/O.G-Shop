@@ -32,7 +32,7 @@ class OgShopApplicationTests {
 
     @Autowired
     private MockMvc mockMvc;
-    
+
     @Autowired
     private VnPayProperties vnPayProperties;
 
@@ -81,8 +81,7 @@ class OgShopApplicationTests {
     @Test
     void vnPayPropertiesShouldBeLoaded() {
         Assertions.assertNotNull(vnPayProperties);
-        System.out.println("VNPAY TMN CODE: " + vnPayProperties.tmnCode());
-        System.out.println("VNPAY PAY URL: " + vnPayProperties.payUrl());
+        Assertions.assertTrue(vnPayProperties.payUrl().startsWith("https://"));
     }
 
     @Test
@@ -120,4 +119,3 @@ class OgShopApplicationTests {
                 .andExpect(status().isUnauthorized());
     }
 }
- 

@@ -4,7 +4,7 @@ import com.oldbutgold.shop.modules.payment.application.PaymentDtos.PaymentInfoRe
 import com.oldbutgold.shop.modules.payment.application.PaymentDtos.PaymentProcessResultResponse;
 import com.oldbutgold.shop.modules.payment.application.PaymentDtos.ProcessMockPaymentRequest;
 import com.oldbutgold.shop.modules.payment.application.PaymentService;
-import com.oldbutgold.shop.modules.payment.application.VnPayService;
+import com.oldbutgold.shop.modules.payment.application.VnPayPaymentService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -26,9 +26,9 @@ import java.util.Map;
 public class PaymentController {
 
     private final PaymentService paymentService;
-    private final VnPayService vnPayService;
+    private final VnPayPaymentService vnPayService;
 
-    public PaymentController(PaymentService paymentService, VnPayService vnPayService) {
+    public PaymentController(PaymentService paymentService, VnPayPaymentService vnPayService) {
         this.paymentService = paymentService;
         this.vnPayService = vnPayService;
     }
@@ -53,34 +53,24 @@ public class PaymentController {
 
     @PostMapping("/vnpay-url")
     public PaymentDtos.PaymentUrlResponse createPaymentUrlResponse(
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody PaymentDtos.CreateVnPaymentRequest request,
             HttpServletRequest servletRequest
     ) {
         String clientIp = servletRequest.getRemoteAddr();
 
-        String paymentUrl = vnPayService.createPaymentUrl(
-                request.orderRef(),
-                request.amountVnd(),
-                request.orderInfo(),
-                clientIp
-        );
+        String paymentUrl = vnPayService.createUrl(extractUserId(jwt), request.orderId(), clientIp);
 
         return new PaymentDtos.PaymentUrlResponse(paymentUrl);
     }
 
     @GetMapping("/vnpay-ipn")
     public PaymentDtos.VnPayIpnResponse handleVnPayIpn(@RequestParam Map<String, String> allParams) {
-        boolean isValidChecksum = vnPayService.verifyCallback(allParams);
-        if (!isValidChecksum) {
-            return PaymentDtos.VnPayIpnResponse.invalidChecksum();
+        try {
+            return vnPayService.handleIpn(allParams);
+        } catch (org.springframework.dao.DataAccessException | org.springframework.transaction.TransactionException error) {
+            return new PaymentDtos.VnPayIpnResponse("99", "Persistence failed; retry notification");
         }
-
-        String responseCode = allParams.get("vnp_ResponseCode");
-        if ("00".equals(responseCode)) {
-            return PaymentDtos.VnPayIpnResponse.success();
-        }
-
-        return PaymentDtos.VnPayIpnResponse.orderNotFound();
     }
 
     private static long extractUserId(Jwt jwt) {

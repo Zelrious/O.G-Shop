@@ -11,9 +11,9 @@ import java.util.Optional;
 public interface ProductModerationDecisionRepository extends JpaRepository<ProductModerationDecisionEntity, Long> {
     Optional<ProductModerationDecisionEntity> findByCommandKey(String commandKey);
 
-    Optional<ProductModerationDecisionEntity> findFirstByProductIdOrderByCreatedAtDesc(Long productId);
+    Optional<ProductModerationDecisionEntity> findFirstByProductIdOrderByCreatedAtDescIdDesc(Long productId);
 
-    List<ProductModerationDecisionEntity> findByProductIdInOrderByCreatedAtDesc(Collection<Long> productIds);
+    List<ProductModerationDecisionEntity> findByProductIdInOrderByCreatedAtDescIdDesc(Collection<Long> productIds);
 
-    List<ProductModerationDecisionEntity> findByProductIdOrderByCreatedAtDesc(Long productId);
+    List<ProductModerationDecisionEntity> findByProductIdOrderByCreatedAtDescIdDesc(Long productId);
 }

@@ -36,6 +36,15 @@ public class DefaultIdentityCatalogFacade implements IdentityCatalogFacade {
     }
 
     @Override
+    public boolean isModeratorActive(long userId) {
+        return userRepository.findById(userId)
+                .filter(user -> "ACTIVE".equals(user.getStatus()))
+                .map(user -> user.getRoles().stream().anyMatch(role ->
+                        "ADMIN".equals(role.getRoleName()) || "KTV".equals(role.getRoleName())))
+                .orElse(false);
+    }
+
+    @Override
     public Optional<SellerPublicSummary> getSellerSummary(long userId) {
         Optional<UserEntity> userOpt = userRepository.findById(userId);
         if (userOpt.isEmpty()) {

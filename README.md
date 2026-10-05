@@ -42,7 +42,11 @@ Copy-Item .env.example .env
 docker compose up -d postgres
 ```
 
+Image PostgreSQL có `pgvector` vì migration V1 tạo extension `vector`. Với database có dữ liệu, sao lưu và thử nâng cấp V9–V13 trên bản sao trước khi chạy backend; Flyway tự áp dụng migration còn thiếu khi ứng dụng khởi động. Không xóa volume hoặc sửa migration đã chia sẻ để bỏ qua lỗi.
+
 ### 2. Chạy Backend
+
+Dùng Java 21. Cấu hình secret và VNPAY theo [hướng dẫn backend](backend/README.md): `.env` dùng cho Docker Compose, Spring Boot không tự nạp file này.
 
 ```powershell
 cd backend
@@ -55,9 +59,11 @@ Health check: `http://localhost:8080/actuator/health`.
 
 ```powershell
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
+
+Dùng Node.js 24 trở lên và npm 11 trở lên, cùng phiên bản với quality gate. Console Admin/KTV đã có giao diện sơ bộ; nhiều chức năng vẫn dùng dữ liệu demo. Xem phạm vi bản tích hợp và việc còn mở trong [hướng dẫn backend](backend/README.md#bản-tích-hợp-sơ-bộ).
 
 Frontend mặc định: `http://localhost:5173`.
 

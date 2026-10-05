@@ -16,6 +16,7 @@ export const BuyerOrdersView: React.FC = () => {
   const [showCancelModal, setShowCancelModal] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState<string>('Tôi đổi ý, không muốn mua nữa');
   const reqSeqRef = useRef<number>(0);
+  const [reloadVersion, setReloadVersion] = useState(0);
 
   const PAGE_SIZE = 10;
 
@@ -60,7 +61,7 @@ export const BuyerOrdersView: React.FC = () => {
 
   useEffect(() => {
     loadOrders(activeTab, page);
-  }, [activeTab, page]);
+  }, [activeTab, page, reloadVersion]);
 
   const handleTabChange = (newTab: string) => {
     if (newTab === activeTab) return;
@@ -74,7 +75,7 @@ export const BuyerOrdersView: React.FC = () => {
     try {
       await ordersApi.cancelBuyerOrder(showCancelModal, cancelReason);
       setShowCancelModal(null);
-      loadOrders(activeTab, page);
+      setReloadVersion(version => version + 1);
     } catch (err: unknown) {
       const error = err as Error;
       alert(error.message || 'Không thể hủy đơn hàng.');

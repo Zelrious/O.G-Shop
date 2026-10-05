@@ -78,7 +78,7 @@ class MultipleCategoriesPostgresTest {
 
         reviewerId = jdbc.queryForObject("INSERT INTO users(email,password_hash,full_name) VALUES (?,?,?) RETURNING user_id",
                 Long.class, "category-rev-" + UUID.randomUUID() + "@example.test", "unused", "Category test reviewer");
-        jdbc.update("INSERT INTO user_roles(user_id,role_id) SELECT ?,role_id FROM roles WHERE role_name='BUYER'", reviewerId);
+        jdbc.update("INSERT INTO user_roles(user_id,role_id) SELECT ?,role_id FROM roles WHERE role_name='KTV'", reviewerId);
 
         electronics = category("electronics"); books = category("books-stationery"); other = category("other");
     }
@@ -95,7 +95,7 @@ class MultipleCategoriesPostgresTest {
     private void activate(long productId) {
         jdbc.update("INSERT INTO product_media(product_id,media_type,media_url,display_order) VALUES (?,'IMAGE','https://example.test/image.jpg',0),(?,'VIDEO','https://example.test/video.mp4',1)", productId, productId);
         sellerProducts.submitProduct(sellerId, productId);
-        long version = jdbc.queryForObject("SELECT content_revision FROM products WHERE product_id=?", Long.class, productId);
+        long version = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, productId);
         sellerProducts.approveProduct(reviewerId, productId, version, "ck-cat-" + productId + "-" + UUID.randomUUID());
     }
 

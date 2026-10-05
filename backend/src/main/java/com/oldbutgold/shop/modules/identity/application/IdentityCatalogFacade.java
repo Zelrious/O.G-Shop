@@ -6,6 +6,7 @@ import java.util.Optional;
 
 public interface IdentityCatalogFacade {
     boolean isSellerActive(long userId);
+    boolean isModeratorActive(long userId);
 
     Optional<SellerPublicSummary> getSellerSummary(long userId);
 

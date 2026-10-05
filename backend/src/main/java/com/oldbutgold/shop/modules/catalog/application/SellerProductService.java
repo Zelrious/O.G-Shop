@@ -92,7 +92,7 @@ public class SellerProductService {
                 ));
 
         Map<Long, ProductModerationDecisionEntity> latestDecisionMap = productModerationDecisionRepository
-                .findByProductIdInOrderByCreatedAtDesc(productIds)
+                .findByProductIdInOrderByCreatedAtDescIdDesc(productIds)
                 .stream()
                 .collect(Collectors.toMap(
                         ProductModerationDecisionEntity::getProductId,
@@ -131,7 +131,7 @@ public class SellerProductService {
 
         List<ProductMediaEntity> mediaList = productMediaRepository.findByProductIdOrderByDisplayOrderAscIdAsc(productId);
 
-        Optional<ProductModerationDecisionEntity> latestDecision = productModerationDecisionRepository.findFirstByProductIdOrderByCreatedAtDesc(productId);
+        Optional<ProductModerationDecisionEntity> latestDecision = productModerationDecisionRepository.findFirstByProductIdOrderByCreatedAtDescIdDesc(productId);
         String rejectionReason = latestDecision.filter(d -> ProductModerationDecisionEntity.DECISION_REJECTED.equals(d.getDecision()))
                 .map(ProductModerationDecisionEntity::getReason)
                 .orElse(null);
@@ -306,7 +306,7 @@ public class SellerProductService {
         }
 
         ProductModerationDecisionEntity latestDecision = productModerationDecisionRepository
-                .findFirstByProductIdOrderByCreatedAtDesc(productId)
+                .findFirstByProductIdOrderByCreatedAtDescIdDesc(productId)
                 .orElseThrow(() -> new ProductStateConflictException(
                         "Tin đăng chưa có quyết định kiểm duyệt hợp lệ từ KTV. Vui lòng gửi duyệt lại trước khi đăng bán."
                 ));
@@ -317,10 +317,13 @@ public class SellerProductService {
             );
         }
 
-        if (!latestDecision.getProductVersion().equals(product.getContentRevision())) {
+        if (latestDecision.getDecisionContentRevision() == null) {
+            throw new ProductStateConflictException("Quyết định cũ chưa có bằng chứng phiên bản nội dung. Vui lòng gửi duyệt lại.");
+        }
+        if (!latestDecision.getDecisionContentRevision().equals(product.getContentRevision())) {
             throw new ProductStateConflictException(
                     "Nội dung hoặc media của tin đăng đã thay đổi so với phiên bản được KTV phê duyệt (phiên bản hiện tại: v" +
-                    product.getContentRevision() + ", phiên bản duyệt: v" + latestDecision.getProductVersion() +
+                    product.getContentRevision() + ", phiên bản duyệt: v" + latestDecision.getDecisionContentRevision() +
                     "). Vui lòng gửi duyệt lại để KTV kiểm tra nội dung mới."
             );
         }
@@ -385,7 +388,7 @@ public class SellerProductService {
                     p.isRequiresBuyerEkyc(),
                     p.getCreatedAt(),
                     CategoryRepository.orderedForProduct(p, categoryMap).stream().map(CatalogDtos.CategoryResponse::from).toList(),
-                    p.getContentRevision(),
+                    p.getVersion(),
                     p.getUpdatedAt()
             );
         }).toList();
@@ -423,7 +426,7 @@ public class SellerProductService {
                 product.isRequiresBuyerEkyc(),
                 product.getCreatedAt(),
                 categories.stream().map(CatalogDtos.CategoryResponse::from).toList(),
-                product.getContentRevision(),
+                product.getVersion(),
                 product.getUpdatedAt()
         );
     }
@@ -439,6 +442,7 @@ public class SellerProductService {
             throw new IllegalArgumentException("commandKey là bắt buộc và tối đa 100 ký tự");
         }
         String trimmedKey = commandKey.trim();
+        ensureModeratorActive(reviewerId);
 
         Optional<ProductModerationDecisionEntity> existingDecision = productModerationDecisionRepository.findByCommandKey(trimmedKey);
         if (existingDecision.isPresent()) {
@@ -466,9 +470,9 @@ public class SellerProductService {
             );
         }
 
-        if (!expectedVersion.equals(product.getContentRevision())) {
+        if (!expectedVersion.equals(product.getVersion())) {
             throw new ProductVersionConflictException(
-                    "Phiên bản nội dung tin đăng đã thay đổi (hiện tại: v" + product.getContentRevision() + ", kỳ vọng: v" + expectedVersion + "). Vui lòng tải lại trang để xem nội dung mới nhất."
+                    "Phiên bản tin đăng đã thay đổi (hiện tại: v" + product.getVersion() + ", kỳ vọng: v" + expectedVersion + "). Vui lòng tải lại trang để xem nội dung mới nhất."
             );
         }
 
@@ -481,16 +485,18 @@ public class SellerProductService {
         long oldVersion = product.getVersion();
         product.approve(clock.instant());
         ProductEntity saved = productRepository.save(product);
+        // Acquire the row write lock before decision INSERT takes a foreign-key share lock.
+        productRepository.flush();
 
         ProductModerationDecisionEntity decision = new ProductModerationDecisionEntity(
                 productId, reviewerId, ProductModerationDecisionEntity.DECISION_APPROVED,
-                null, expectedVersion, trimmedKey, clock.instant()
+                null, expectedVersion, trimmedKey, clock.instant(), product.getContentRevision()
         );
         productModerationDecisionRepository.save(decision);
 
         platformAuditFacade.recordAudit(
                 reviewerId, "APPROVE_PRODUCT", "PRODUCT", productId,
-                Map.of("status", ProductEntity.STATUS_PENDING, "version", oldVersion, "contentRevision", expectedVersion),
+                Map.of("status", ProductEntity.STATUS_PENDING, "version", oldVersion, "contentRevision", product.getContentRevision()),
                 Map.of("status", saved.getStatus(), "version", saved.getVersion(), "contentRevision", saved.getContentRevision()),
                 null, null
         );
@@ -516,6 +522,7 @@ public class SellerProductService {
             throw new IllegalArgumentException("commandKey là bắt buộc và tối đa 100 ký tự");
         }
         String trimmedKey = commandKey.trim();
+        ensureModeratorActive(reviewerId);
 
         Optional<ProductModerationDecisionEntity> existingDecision = productModerationDecisionRepository.findByCommandKey(trimmedKey);
         if (existingDecision.isPresent()) {
@@ -543,25 +550,26 @@ public class SellerProductService {
             );
         }
 
-        if (!expectedVersion.equals(product.getContentRevision())) {
+        if (!expectedVersion.equals(product.getVersion())) {
             throw new ProductVersionConflictException(
-                    "Phiên bản nội dung tin đăng đã thay đổi (hiện tại: v" + product.getContentRevision() + ", kỳ vọng: v" + expectedVersion + "). Vui lòng tải lại trang để xem nội dung mới nhất."
+                    "Phiên bản tin đăng đã thay đổi (hiện tại: v" + product.getVersion() + ", kỳ vọng: v" + expectedVersion + "). Vui lòng tải lại trang để xem nội dung mới nhất."
             );
         }
 
         long oldVersion = product.getVersion();
         product.reject(clock.instant());
         ProductEntity saved = productRepository.save(product);
+        productRepository.flush();
 
         ProductModerationDecisionEntity decision = new ProductModerationDecisionEntity(
                 productId, reviewerId, ProductModerationDecisionEntity.DECISION_REJECTED,
-                trimmedReason, expectedVersion, trimmedKey, clock.instant()
+                trimmedReason, expectedVersion, trimmedKey, clock.instant(), product.getContentRevision()
         );
         productModerationDecisionRepository.save(decision);
 
         platformAuditFacade.recordAudit(
                 reviewerId, "REJECT_PRODUCT", "PRODUCT", productId,
-                Map.of("status", ProductEntity.STATUS_PENDING, "version", oldVersion, "contentRevision", expectedVersion),
+                Map.of("status", ProductEntity.STATUS_PENDING, "version", oldVersion, "contentRevision", product.getContentRevision()),
                 Map.of("status", saved.getStatus(), "reason", trimmedReason, "version", saved.getVersion(), "contentRevision", saved.getContentRevision()),
                 null, null
         );
@@ -572,6 +580,12 @@ public class SellerProductService {
     private void ensureSellerActive(long sellerId) {
         if (!identityCatalogFacade.isSellerActive(sellerId)) {
             throw new SellerRequiredException("Bạn cần kích hoạt quyền Người bán để quản lý tin đăng.");
+        }
+    }
+
+    public void ensureModeratorActive(long reviewerId) {
+        if (!identityCatalogFacade.isModeratorActive(reviewerId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Chỉ Admin/KTV đang hoạt động được kiểm duyệt tin.");
         }
     }
 

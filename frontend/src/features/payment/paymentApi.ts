@@ -24,6 +24,17 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export const paymentApi = {
+  async createVnPayUrl(orderId: number): Promise<string> {
+    const res = await authApi.authorizedFetch('/payments/vnpay-url', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId }),
+    });
+    const result = await handleResponse<{ paymentUrl: string }>(res);
+    const url = new URL(result.paymentUrl);
+    if (url.protocol !== 'https:' || !['sandbox.vnpayment.vn', 'pay.vnpay.vn'].includes(url.hostname)) {
+      throw new Error('Địa chỉ thanh toán VNPAY không hợp lệ.');
+    }
+    return result.paymentUrl;
+  },
   async getPaymentInfo(orderId: number): Promise<PaymentInfo> {
     const res = await authApi.authorizedFetch(`/payments/orders/${orderId}`);
     return handleResponse<PaymentInfo>(res);

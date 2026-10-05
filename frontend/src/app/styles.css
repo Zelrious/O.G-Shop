@@ -2413,35 +2413,124 @@ textarea {
   }
 }
 
-/* --- Admin Layout Shell --- */
+/* --- Admin & KTV Layout Shell (White / Light Mode) --- */
 .og-admin-shell {
   display: flex;
   min-height: 100vh;
-  background: #0f1914; /* Dark refined slate for dense admin console */
-  color: #e3ece7;
+  background: #f8fafc; /* Crisp clean modern white/slate neutral */
+  color: #0f172a; /* Slate 900 */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 .og-admin-sidebar {
-  width: 270px;
-  background: #14231c;
-  border-right: 1px solid #233c30;
-  padding: var(--og-space-5) var(--og-space-3);
+  width: 260px;
+  background: #ffffff;
+  border-right: 1px solid #e2e8f0;
+  padding: 20px 16px;
   display: flex;
   flex-direction: column;
-  gap: var(--og-space-4);
+  gap: 16px;
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  z-index: 100;
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), padding 0.22s ease;
+}
+
+/* Collapsible styles for Admin Sidebar */
+.og-admin-sidebar--collapsible.og-admin-sidebar--collapsed {
+  width: 72px;
+  padding: 20px 10px;
+}
+
+.og-admin-sidebar--collapsible.og-admin-sidebar--collapsed .og-admin-sidebar__brand-text {
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.og-admin-sidebar--collapsible.og-admin-sidebar--collapsed .og-admin-sidebar__user-text {
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.og-admin-sidebar--collapsible.og-admin-sidebar--collapsed .og-admin-sidebar__label {
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.og-admin-sidebar--collapsible.og-admin-sidebar--collapsed .og-admin-sidebar__item {
+  justify-content: center;
+  padding: 10px 0;
+  position: relative;
+}
+
+.og-admin-sidebar--collapsible.og-admin-sidebar--collapsed .og-admin-sidebar__badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 0.68rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.og-admin-sidebar--collapsible.og-admin-sidebar--collapsed .og-admin-sidebar__logout-text {
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  display: none;
+}
+
+.og-admin-sidebar--collapsible.og-admin-sidebar--expanded {
+  width: 260px;
+  padding: 20px 16px;
+}
+
+.og-admin-sidebar--collapsible.og-admin-sidebar--expanded .og-admin-sidebar__brand-text,
+.og-admin-sidebar--collapsible.og-admin-sidebar--expanded .og-admin-sidebar__user-text,
+.og-admin-sidebar--collapsible.og-admin-sidebar--expanded .og-admin-sidebar__label {
+  opacity: 1;
+  max-width: 200px;
+  transition: opacity 0.18s ease 0.05s;
 }
 
 .og-admin-sidebar__brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 var(--og-space-3);
-  font-family: var(--og-font-serif);
+  padding: 4px 6px;
+  font-family: inherit;
   font-size: 1.25rem;
-  font-weight: 700;
-  color: #e5b357;
+  font-weight: 800;
+  color: #0f172a;
   text-decoration: none;
+  cursor: default;
+  transition: none;
+  letter-spacing: -0.02em;
+}
+
+.og-admin-sidebar__brand:hover {
+  text-decoration: none;
+  color: #0f172a;
+  opacity: 1;
+  background: transparent;
+  transform: none;
 }
 
 .og-admin-sidebar__nav {
@@ -2455,28 +2544,48 @@ textarea {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: var(--og-radius-md);
-  color: #9cb8a9;
+  border-radius: 8px;
+  color: #475569;
   font-size: 0.88rem;
   font-weight: 600;
   text-decoration: none;
-  transition: all var(--og-transition-fast);
+  border: 1px solid transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .og-admin-sidebar__item:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #ffffff;
+  background: #f1f5f9;
+  color: #0f172a;
 }
 
 .og-admin-sidebar__item--active {
-  background: #1d4d38;
-  color: #ffffff;
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+  font-weight: 700;
 }
 
 .og-admin-content {
   flex: 1;
-  padding: var(--og-space-6);
+  padding: 32px;
+  background: #f8fafc;
   overflow-y: auto;
+  min-width: 0;
+  transition: padding 0.22s ease;
+}
+
+/* Admin System Fees 2-Column Dashboard Grid */
+.og-admin-fees-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+@media (max-width: 1200px) {
+  .og-admin-fees-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* --- Standardized Condition Badges (LIKE_NEW, GOOD, FAIR, POOR, FOR_PARTS) --- */

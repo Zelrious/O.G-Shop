@@ -40,8 +40,6 @@ class VnPayServiceTest {
         assertThat(paymentUrl).contains("vnp_Amount=10000000"); // 100.000 x 100 = 10.000.000
         assertThat(paymentUrl).contains("vnp_TxnRef=ORDER_123");
         assertThat(paymentUrl).contains("vnp_SecureHash=");
-
-        System.out.println(">>> Generated Payment URL: " + paymentUrl);
     }
 
     @Test
