@@ -5,7 +5,7 @@ spring:
     password:
   jpa:
     hibernate:
-      ddl-auto: none
+      ddl-auto: update
   flyway:
     enabled: false
 
@@ -26,7 +26,7 @@ app:
   vnpay:
     pay-url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
     tmn-code: OHS7QVO0
-    hash-secret: DQDOLAPXJMYBHGFVAXENPIZYXBBCCIWO
+    hash-secret: local-test-only-hmac-key-please-do-not-use-live
     ipn-url: http://localhost:8080/api/v1/payments/vnpay-ipn
     return-url: http://localhost:5173/payment/vnpay-return
   seller-verification:

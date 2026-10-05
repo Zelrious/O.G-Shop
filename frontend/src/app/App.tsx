@@ -3,7 +3,6 @@ import { AuthProvider } from '../features/auth';
 import { ThemeProvider, I18nProvider, DemoProvider } from '../shared/context';
 import { ShowcaseApp } from '../features/showcase/ShowcaseApp';
 import { ProtectedRoute } from './ProtectedRoute';
-import { VnPayReturnPage } from '../pages/VnPayReturnPage';
 import {
   AppLayout,
   GuestLayout,
@@ -25,6 +24,7 @@ import {
   EditListingPage,
   CheckoutPage,
   PaymentPage,
+  VnPayReturnPage,
   BuyerOrdersPage,
   BuyerOrderDetailPage,
   SellerOrdersPage,
@@ -94,6 +94,14 @@ export function App() {
                     element={
                       <ProtectedRoute allowedRoles={['BUYER', 'SELLER']}>
                         <PaymentPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/payment/vnpay-return"
+                    element={
+                      <ProtectedRoute>
+                        <VnPayReturnPage />
                       </ProtectedRoute>
                     }
                   />

@@ -15,6 +15,9 @@ Flyway trong thư mục này là nguồn DDL chuẩn của ứng dụng. Không 
 | `V9__product_moderation_decisions.sql` | Lịch sử quyết định kiểm duyệt thủ công |
 | `V10__product_moderation_enforcement.sql` | Content revision, command/replay và triggers kiểm duyệt |
 | `V11__add_ktv_role.sql` | Role KTV và chuyển fixture KTV khỏi BUYER |
+| `V12__explicit_moderation_proof_and_legacy_history.sql` | Bổ sung proof kiểm duyệt và lưu lịch sử cũ |
+| `V13__vnpay_payment_attempts.sql` | VNPAY attempt và trạng thái hoàn tiền |
+| `V14__add_vnpay_ipn_receipts.sql` | IPN receipt, event, đối soát và audit |
 
 V3 seed `DEFAULT_ZERO_V1` là policy tương thích 0%, không phải mức phí kinh doanh. Khi chốt mức phí, retire policy cũ và tạo version mới; không update policy đã được offer/order tham chiếu.
 

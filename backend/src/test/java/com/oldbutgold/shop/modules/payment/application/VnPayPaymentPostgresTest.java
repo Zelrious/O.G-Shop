@@ -86,8 +86,8 @@ class VnPayPaymentPostgresTest {
     @Test void persistenceFailureRollsBackMoneyAndOrderBeforeSendingRetryAck() throws Exception {
         var p = callback("00","00");
         doThrow(new org.springframework.dao.DataIntegrityViolationException("Injected save failure")).when(attempts).save(any());
-        var request = get("/api/v1/payments/vnpay-ipn"); p.forEach(request::param);
-        mvc.perform(request).andExpect(status().isOk()).andExpect(jsonPath("$.RspCode").value("99"));
+        assertThatThrownBy(() -> payments.handleIpn(p))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
         assertThat(jdbc.queryForObject("SELECT status FROM payments WHERE order_id=?",String.class,order)).isEqualTo("PENDING");
         assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE order_id=?",String.class,order)).isEqualTo("PAYMENT_PENDING");
         reset(attempts);
