@@ -24,6 +24,7 @@ public class OrderEntity {
     public static final String STATUS_CANCELLED = "CANCELLED";
     public static final String STATUS_DISPUTED = "DISPUTED";
     public static final String STATUS_REFUNDED = "REFUNDED";
+    public static final String STATUS_UNDER_REVIEW = "UNDER_REVIEW";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -204,6 +205,32 @@ public class OrderEntity {
         }
         this.status = STATUS_CANCELLED;
         this.cancellationReason = (reason != null && !reason.isBlank()) ? reason : "Đã hủy đơn hàng";
+        this.cancelledAt = now;
+        this.updatedAt = now;
+    }
+
+    public void markUnderReview(Instant now) {
+        if (!STATUS_PAYMENT_PENDING.equals(this.status)) {
+            throw new IllegalStateException("Chỉ có thể chuyển sang UNDER_REVIEW từ trạng thái PAYMENT_PENDING. Trạng thái hiện tại: " + this.status);
+        }
+        this.status = STATUS_UNDER_REVIEW;
+        this.updatedAt = now;
+    }
+
+    public void approveFromReview(Instant now) {
+        if (!STATUS_UNDER_REVIEW.equals(this.status)) {
+            throw new IllegalStateException("Chỉ có thể duyệt hoàn tất ký quỹ khi đơn hàng đang ở trạng thái UNDER_REVIEW. Trạng thái hiện tại: " + this.status);
+        }
+        this.status = STATUS_PAID_HELD;
+        this.updatedAt = now;
+    }
+
+    public void cancelFromReview(String reason, Instant now) {
+        if (!STATUS_UNDER_REVIEW.equals(this.status)) {
+            throw new IllegalStateException("Chỉ có thể hủy đơn hàng từ trạng thái UNDER_REVIEW. Trạng thái hiện tại: " + this.status);
+        }
+        this.status = STATUS_CANCELLED;
+        this.cancellationReason = (reason != null && !reason.isBlank()) ? reason : "Đã hủy do rà soát gian lận";
         this.cancelledAt = now;
         this.updatedAt = now;
     }

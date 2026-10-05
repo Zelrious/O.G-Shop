@@ -3,25 +3,36 @@ package com.oldbutgold.shop.modules.payment.application;
 import com.oldbutgold.shop.shared.config.VnPayProperties;
 import org.springframework.stereotype.Service;
 
-
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
 
 @Service
 public class VnPayService {
-    private final VnPayProperties properties;
 
-    public VnPayService(VnPayProperties properties){
-        this.properties = properties;
-    }
+    public static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
-        public boolean verifyCallback(Map<String, String> queryParams) {
+    private final VnPayProperties properties;
+    private final Clock clock;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public VnPayService(VnPayProperties properties, Clock clock) {
+        this.properties = properties;
+        this.clock = clock;
+    }
+
+    public VnPayService(VnPayProperties properties) {
+        this(properties, Clock.system(VIETNAM_ZONE));
+    }
+
+    public boolean verifyCallback(Map<String, String> queryParams) {
         // 1. Lấy chữ ký do VNPAY gửi về
         String receivedHash = queryParams.get("vnp_SecureHash");
         if (receivedHash == null || receivedHash.isBlank()) {
@@ -56,11 +67,8 @@ public class VnPayService {
         return calculatedHash.equalsIgnoreCase(receivedHash);
     }
 
-
-    public String createPaymentUrl(String orderRef, long amountVND, String orderInfo, String ipAddress)
-    {
-        if(amountVND <= 0)
-        {
+    public String createPaymentUrl(String orderRef, long amountVND, String orderInfo, String ipAddress) {
+        if (amountVND <= 0) {
             throw new IllegalArgumentException("Amount must be greater than zero");
         }
         Map<String, String> params = new HashMap<>();
@@ -75,8 +83,8 @@ public class VnPayService {
         params.put("vnp_Locale", "vn");
         params.put("vnp_ReturnUrl", properties.returnUrl());
         params.put("vnp_IpAddr", ipAddress != null && !ipAddress.isBlank() ? ipAddress : "127.0.0.1");
-        
-        LocalDateTime now = LocalDateTime.now();
+
+        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), VIETNAM_ZONE);
         params.put("vnp_CreateDate", now.format(DATE_FORMAT));
         params.put("vnp_ExpireDate", now.plusMinutes(15).format(DATE_FORMAT));
 
@@ -86,17 +94,14 @@ public class VnPayService {
         StringBuilder hashData = new StringBuilder();
         StringBuilder query = new StringBuilder();
 
-        for(Iterator<String> itr = fieldNames.iterator(); itr.hasNext();)
-        {
+        for (Iterator<String> itr = fieldNames.iterator(); itr.hasNext(); ) {
             String fieldName = itr.next();
             String fieldValue = params.get(fieldName);
-            if(fieldValue != null && !fieldValue.isBlank())
-            {
+            if (fieldValue != null && !fieldValue.isBlank()) {
                 hashData.append(fieldName).append("=").append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII));
                 query.append(URLEncoder.encode(fieldName, StandardCharsets.US_ASCII)).append("=").append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII));
-                
-                if(itr.hasNext())
-                {
+
+                if (itr.hasNext()) {
                     hashData.append("&");
                     query.append("&");
                 }
@@ -110,8 +115,7 @@ public class VnPayService {
         return properties.payUrl() + "?" + query;
     }
 
-    private String hashData(String key, String data)
-    {
+    private String hashData(String key, String data) {
         try {
             Mac hmac512 = Mac.getInstance("HmacSHA512");
 
@@ -122,12 +126,11 @@ public class VnPayService {
 
             StringBuilder sb = new StringBuilder(2 * bytes.length);
 
-            for(byte b : bytes)
-            {
+            for (byte b : bytes) {
                 sb.append(String.format("%02x", b & 0xff));
             }
             return sb.toString();
-        } catch(Exception ex) {
+        } catch (Exception ex) {
             throw new IllegalStateException("Failed to calculate HMAC-SHA512 for VNPAY", ex);
         }
     }

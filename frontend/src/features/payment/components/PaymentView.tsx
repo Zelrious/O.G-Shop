@@ -16,9 +16,9 @@ export const PaymentView: React.FC<PaymentViewProps> = ({ orderId }) => {
   const [processing, setProcessing] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<string>(
-    methodParam && ['BANK_TRANSFER_MOCK', 'E_WALLET_MOCK', 'COD_MOCK'].includes(methodParam)
+    methodParam && ['VNPAY', 'BANK_TRANSFER_MOCK', 'E_WALLET_MOCK', 'COD_MOCK'].includes(methodParam)
       ? methodParam
-      : 'BANK_TRANSFER_MOCK'
+      : 'VNPAY'
   );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successResult, setSuccessResult] = useState<PaymentProcessResult | null>(null);
@@ -34,10 +34,10 @@ export const PaymentView: React.FC<PaymentViewProps> = ({ orderId }) => {
         if (!mounted) return;
         setPaymentInfo(info);
         setSecondsRemaining(info.remainingSeconds > 0 ? info.remainingSeconds : 3600);
-        if (methodParam && ['BANK_TRANSFER_MOCK', 'E_WALLET_MOCK', 'COD_MOCK'].includes(methodParam)) {
+        if (methodParam && ['VNPAY', 'BANK_TRANSFER_MOCK', 'E_WALLET_MOCK', 'COD_MOCK'].includes(methodParam)) {
           setSelectedMethod(methodParam);
         } else {
-          setSelectedMethod(info.paymentMethod || 'BANK_TRANSFER_MOCK');
+          setSelectedMethod(info.paymentMethod === 'VNPAY' ? 'VNPAY' : (info.paymentMethod || 'VNPAY'));
         }
         if (info.orderStatus === 'PAID_HELD') {
           setSuccessResult({
@@ -99,6 +99,23 @@ export const PaymentView: React.FC<PaymentViewProps> = ({ orderId }) => {
       const error = err as Error;
       setErrorMsg(error.message || 'Có lỗi xảy ra khi xử lý giao dịch.');
     } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleVnPayPayment = async () => {
+    setProcessing(true);
+    setErrorMsg(null);
+    try {
+      const res = await paymentApi.createVnPayUrl(orderId);
+      if (res && res.paymentUrl) {
+        window.location.href = res.paymentUrl;
+      } else {
+        throw new Error('Không nhận được liên kết thanh toán từ máy chủ.');
+      }
+    } catch (err: unknown) {
+      const error = err as Error;
+      setErrorMsg(error.message || 'Không thể tạo liên kết thanh toán VNPay.');
       setProcessing(false);
     }
   };
@@ -401,10 +418,50 @@ export const PaymentView: React.FC<PaymentViewProps> = ({ orderId }) => {
           padding: 24,
         }}>
           <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: '0 0 16px', color: 'var(--og-color-text-primary)' }}>
-            Chọn Phương thức Thanh toán Mô phỏng
+            Chọn Phương thức Thanh toán
           </h2>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+            {/* Option 0: VNPAY Gateway */}
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '14px 16px',
+                border: `2px solid ${selectedMethod === 'VNPAY' ? 'var(--og-color-primary)' : 'var(--og-color-border)'}`,
+                borderRadius: 10,
+                cursor: 'pointer',
+                background: selectedMethod === 'VNPAY' ? 'rgba(226, 91, 41, 0.04)' : 'transparent',
+              }}
+            >
+              <input
+                type="radio"
+                name="paymentMethod"
+                value="VNPAY"
+                checked={selectedMethod === 'VNPAY'}
+                onChange={() => setSelectedMethod('VNPAY')}
+              />
+              <span style={{ fontSize: 24 }}>💳</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, color: 'var(--og-color-text-primary)', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>Cổng VNPAY (QR Code / Thẻ ATM / Visa)</span>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--og-color-text-secondary)' }}>
+                  Hỗ trợ quét mã VNPAY-QR, thẻ ATM nội địa và thẻ quốc tế Visa / MasterCard
+                </div>
+              </div>
+              <span style={{
+                background: '#dbeafe',
+                color: '#1e40af',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: 4,
+              }}>
+                Khuyên Dùng
+              </span>
+            </label>
             {/* Option 1: VietQR Bank Transfer */}
             <label
               style={{
@@ -510,6 +567,28 @@ export const PaymentView: React.FC<PaymentViewProps> = ({ orderId }) => {
           </div>
 
           {/* Conditional Method Body */}
+          {selectedMethod === 'VNPAY' && (
+            <div style={{
+              background: 'var(--og-color-bg-subtle)',
+              border: '1px solid var(--og-color-border)',
+              borderRadius: 12,
+              padding: 20,
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>🛡️</div>
+              <h3 style={{ margin: '0 0 6px', fontSize: '1rem', color: 'var(--og-color-text-primary)' }}>
+                Cổng thanh toán điện tử VNPay Sandbox
+              </h3>
+              <p style={{ color: 'var(--og-color-text-secondary)', fontSize: '0.85rem', margin: '0 0 16px' }}>
+                Sau khi bấm <strong>"Thanh toán qua Cổng VNPAY"</strong>, bạn sẽ được chuyển tiếp an toàn sang giao diện VNPay để hoàn tất thanh toán.
+              </p>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '8px 16px', color: '#166534', fontSize: '0.85rem' }}>
+                <span>🔒</span>
+                <span>Bảo vệ quyền lợi Escrow 100% — Tiền giữ an toàn tại Old but Gold cho đến khi bạn đồng kiểm và nhận hàng</span>
+              </div>
+            </div>
+          )}
+
           {selectedMethod === 'BANK_TRANSFER_MOCK' && (
             <div style={{
               background: 'var(--og-color-bg-subtle)',
@@ -628,42 +707,67 @@ export const PaymentView: React.FC<PaymentViewProps> = ({ orderId }) => {
             </div>
           )}
 
-          {/* Action Simulation Buttons */}
+          {/* Main Action Buttons */}
           <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <button
-              type="button"
-              disabled={processing || isExpired}
-              className="og-button og-button--primary"
-              style={{
-                padding: '14px 20px',
-                fontSize: '1rem',
-                fontWeight: 700,
-                width: '100%',
-                cursor: isExpired ? 'not-allowed' : 'pointer',
-              }}
-              onClick={() => handleProcessPayment(true)}
-            >
-              {processing ? 'Đang xác thực giao dịch...' : '⚡ Xác nhận đã thanh toán (Giữ tiền Ký quỹ)'}
-            </button>
+            {selectedMethod === 'VNPAY' ? (
+              <button
+                type="button"
+                disabled={processing || isExpired}
+                className="og-button og-button--primary"
+                style={{
+                  padding: '14px 20px',
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  width: '100%',
+                  cursor: isExpired ? 'not-allowed' : 'pointer',
+                  background: 'linear-gradient(135deg, #005baa 0%, #e11b22 100%)',
+                  border: 'none',
+                  color: '#fff',
+                }}
+                onClick={handleVnPayPayment}
+              >
+                {processing ? 'Đang chuyển hướng sang VNPay...' : '💳 Thanh toán qua Cổng VNPAY'}
+              </button>
+            ) : (
+              (import.meta.env.DEV || import.meta.env.VITE_ENABLE_MOCK_PAYMENT === 'true') && (
+                <>
+                  <button
+                    type="button"
+                    disabled={processing || isExpired}
+                    className="og-button og-button--primary"
+                    style={{
+                      padding: '14px 20px',
+                      fontSize: '1rem',
+                      fontWeight: 700,
+                      width: '100%',
+                      cursor: isExpired ? 'not-allowed' : 'pointer',
+                    }}
+                    onClick={() => handleProcessPayment(true)}
+                  >
+                    {processing ? 'Đang xác thực giao dịch...' : '⚡ Xác nhận đã thanh toán (Giữ tiền Ký quỹ - Mock)'}
+                  </button>
 
-            <button
-              type="button"
-              disabled={processing || isExpired}
-              style={{
-                padding: '10px 16px',
-                fontSize: '0.88rem',
-                fontWeight: 600,
-                width: '100%',
-                background: 'transparent',
-                border: '1px dashed #fca5a5',
-                color: '#dc2626',
-                borderRadius: 8,
-                cursor: isExpired ? 'not-allowed' : 'pointer',
-              }}
-              onClick={() => handleProcessPayment(false)}
-            >
-              ❌ Giả lập lỗi thanh toán (Thử nghiệm)
-            </button>
+                  <button
+                    type="button"
+                    disabled={processing || isExpired}
+                    style={{
+                      padding: '10px 16px',
+                      fontSize: '0.88rem',
+                      fontWeight: 600,
+                      width: '100%',
+                      background: 'transparent',
+                      border: '1px dashed #fca5a5',
+                      color: '#dc2626',
+                      borderRadius: 8,
+                      cursor: isExpired ? 'not-allowed' : 'pointer',
+                    }}
+                    onClick={() => handleProcessPayment(false)}
+                  >
+                    ❌ Giả lập lỗi thanh toán (Thử nghiệm)
+                  </button>
+                </>
+              )
+            )}
           </div>
         </div>
 

@@ -56,6 +56,7 @@ public class SecurityConfig {
                                 "/api/v1/products/**",
                                 "/api/v1/media/**",
                                 "/api/v1/payments/vnpay-ipn").permitAll()
+                        .requestMatchers("/api/v1/admin/payments/**").hasAnyRole("ADMIN", "KTV")
                         .requestMatchers(
                                 "/api/v1/auth/me",
                                 "/api/v1/profile/**",

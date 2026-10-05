@@ -23,6 +23,7 @@ import {
   EditListingPage,
   CheckoutPage,
   PaymentPage,
+  VnPayReturnPage,
   BuyerOrdersPage,
   BuyerOrderDetailPage,
   SellerOrdersPage,
@@ -80,6 +81,14 @@ export function App() {
                     element={
                       <ProtectedRoute>
                         <PaymentPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/payment/vnpay-return"
+                    element={
+                      <ProtectedRoute>
+                        <VnPayReturnPage />
                       </ProtectedRoute>
                     }
                   />

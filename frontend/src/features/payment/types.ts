@@ -39,3 +39,23 @@ export interface PaymentProcessResult {
   transactionCode: string | null;
   message: string;
 }
+
+export interface VnPayUrlResponse {
+  paymentUrl: string;
+}
+
+export type VnPayVerifyStatus =
+  | 'SUCCESS'
+  | 'PENDING_CONFIRMATION'
+  | 'UNDER_REVIEW'
+  | 'FAILED'
+  | 'INVALID_SIGNATURE'
+  | 'NOT_FOUND'
+  | 'AMOUNT_MISMATCH';
+
+export interface VnPayVerifyResponse {
+  status: VnPayVerifyStatus;
+  orderId: number | null;
+  txnRef: string | null;
+  message: string;
+}

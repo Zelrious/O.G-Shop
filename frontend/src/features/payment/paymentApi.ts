@@ -1,5 +1,11 @@
 import { authApi } from '../auth/authApi';
-import { PaymentInfo, ProcessMockPaymentPayload, PaymentProcessResult } from './types';
+import {
+  PaymentInfo,
+  ProcessMockPaymentPayload,
+  PaymentProcessResult,
+  VnPayUrlResponse,
+  VnPayVerifyResponse,
+} from './types';
 
 interface ApiErrorBody {
   message?: string;
@@ -36,5 +42,20 @@ export const paymentApi = {
       body: JSON.stringify(payload),
     });
     return handleResponse<PaymentProcessResult>(res);
+  },
+
+  async createVnPayUrl(orderId: number): Promise<VnPayUrlResponse> {
+    const res = await authApi.authorizedFetch('/payments/vnpay-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId }),
+    });
+    return handleResponse<VnPayUrlResponse>(res);
+  },
+
+  async verifyVnPayReturn(queryString: string): Promise<VnPayVerifyResponse> {
+    const formattedQuery = queryString.startsWith('?') ? queryString : `?${queryString}`;
+    const res = await authApi.authorizedFetch(`/payments/vnpay-verify${formattedQuery}`);
+    return handleResponse<VnPayVerifyResponse>(res);
   },
 };

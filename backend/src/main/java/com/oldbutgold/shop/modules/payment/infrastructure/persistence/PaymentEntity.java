@@ -17,6 +17,7 @@ public class PaymentEntity {
     public static final String METHOD_BANK_TRANSFER = "BANK_TRANSFER_MOCK";
     public static final String METHOD_E_WALLET = "E_WALLET_MOCK";
     public static final String METHOD_COD = "COD_MOCK";
+    public static final String METHOD_VNPAY = "VNPAY";
 
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_PAID = "PAID";
@@ -25,6 +26,7 @@ public class PaymentEntity {
     public static final String STATUS_REFUND_PENDING = "REFUND_PENDING";
     public static final String STATUS_REFUNDED = "REFUNDED";
     public static final String STATUS_FAILED = "FAILED";
+    public static final String STATUS_UNDER_REVIEW = "UNDER_REVIEW";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -122,6 +124,39 @@ public class PaymentEntity {
         this.refundAmount = refundAmount != null ? refundAmount : this.amount;
         this.refundReason = (reason != null && !reason.isBlank()) ? reason : "Hoàn tiền do hủy đơn";
         this.refundedAt = now;
+        this.updatedAt = now;
+    }
+
+    public void markUnderReview(String transactionCode, Instant now) {
+        if (!STATUS_PENDING.equals(this.status)) {
+            throw new IllegalStateException("Chỉ có thể chuyển sang UNDER_REVIEW từ trạng thái PENDING. Trạng thái hiện tại: " + this.status);
+        }
+        this.status = STATUS_UNDER_REVIEW;
+        this.transactionCode = transactionCode;
+        this.paidAt = now;
+        this.heldAt = null;
+        this.releasedAt = null;
+        this.refundedAt = null;
+        this.failureReason = null;
+        this.updatedAt = now;
+    }
+
+    public void approveFromReview(Instant now) {
+        if (!STATUS_UNDER_REVIEW.equals(this.status)) {
+            throw new IllegalStateException("Chỉ có thể duyệt hoàn tất ký quỹ khi giao dịch đang ở trạng thái UNDER_REVIEW. Trạng thái hiện tại: " + this.status);
+        }
+        this.status = STATUS_HELD;
+        this.heldAt = now;
+        this.updatedAt = now;
+    }
+
+    public void markRefundPending(BigDecimal refundAmount, String reason, Instant now) {
+        if (!STATUS_HELD.equals(this.status) && !STATUS_UNDER_REVIEW.equals(this.status)) {
+            throw new IllegalStateException("Chỉ có thể chuyển sang REFUND_PENDING từ trạng thái HELD hoặc UNDER_REVIEW. Trạng thái hiện tại: " + this.status);
+        }
+        this.status = STATUS_REFUND_PENDING;
+        this.refundAmount = refundAmount != null ? refundAmount : this.amount;
+        this.refundReason = (reason != null && !reason.isBlank()) ? reason : "Chờ hoàn tiền do từ chối giao dịch rà soát gian lận";
         this.updatedAt = now;
     }
 
