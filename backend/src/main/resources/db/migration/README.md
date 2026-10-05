@@ -15,9 +15,18 @@ Flyway trong thư mục này là nguồn DDL chuẩn của ứng dụng. Không 
 | `V9__product_moderation_decisions.sql` | Lịch sử quyết định kiểm duyệt thủ công |
 | `V10__product_moderation_enforcement.sql` | Content revision, command/replay và triggers kiểm duyệt |
 | `V11__add_ktv_role.sql` | Role KTV và chuyển fixture KTV khỏi BUYER |
+| `V12__explicit_moderation_proof_and_legacy_history.sql` | Bổ sung proof kiểm duyệt và lưu lịch sử cũ |
+| `V13__vnpay_payment_attempts.sql` | VNPAY attempt và trạng thái hoàn tiền |
+| `V14__add_vnpay_ipn_receipts.sql` | IPN receipt, event, đối soát và audit |
 
 V3 seed `DEFAULT_ZERO_V1` là policy tương thích 0%, không phải mức phí kinh doanh. Khi chốt mức phí, retire policy cũ và tạo version mới; không update policy đã được offer/order tham chiếu.
 
 V8 giữ `products.category_id` làm projection tương thích của danh mục đầu tiên. FK `(product_id, category_id)` tới `product_categories` được deferred để Hibernate thêm/thay collection trong cùng transaction. Dữ liệu cũ được backfill trước khi thêm FK; không sửa V1–V7. Không rollback bằng cách xóa liên kết mới; dùng migration tiếp theo để forward-fix. Xem [kiểm chứng PostgreSQL](../../../../../../database/tests/README.md).
 
 Database local vừa kiểm tra có KTV nhưng Flyway history chỉ đến V8. Trước khi chạy backend trên database hiện có, kiểm chứng tuyến nâng cấp V9–V11 trên bản sao/DB test riêng; không tự repair/reset history. V10 còn vấn đề tương thích proof kiểm duyệt cũ và thay reason lịch sử; các vấn đề này chưa được khép. Việc commit SQL không áp dụng migration vào database.
+
+## Forward fixes TASK-0059
+
+V1–V11 giữ nguyên checksum. V12 thêm decision_content_revision nullable cho proof rõ ràng và archive append-only; callback LegacyModerationHistoryCallback bảo toàn original_record trước khi V10 normalize reason. Legacy proof NULL phải gửi duyệt lại. Dữ liệu đã mất ở installation chạy V10 trước đây cần backup.
+
+V13 thêm vnpay_payment_attempts, method VNPAY và ràng buộc refund cho tiền đến sau hủy/hết hạn. Giao dịch mock vẫn yêu cầu escrow trước hoàn tiền. Đã kiểm chứng 25 PostgreSQL tests, gồm V9→V13, trên container riêng; không áp dụng SQL vào DB ứng dụng. Snapshot rủi ro V10 phía trên được thay bằng forward fix này; chưa nghiệm thu provider E2E.

@@ -57,7 +57,7 @@ export const ListingForm: React.FC<ListingFormProps> = ({
   const videos = mediaList.filter((m) => m.mediaType === 'VIDEO');
 
   const hasMinMedia = images.length >= 1 && videos.length >= 1;
-  const canSubmitForReview = Boolean(initialData?.productId) && ['DRAFT', 'REJECTED'].includes(initialData?.status || '') && hasMinMedia;
+  const canSubmitForReview = Boolean(initialData?.productId) && ['DRAFT', 'HIDDEN', 'REJECTED'].includes(initialData?.status || '') && hasMinMedia;
 
   const validate = (): boolean => {
     const errors: Record<string, string> = {};

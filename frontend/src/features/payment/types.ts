@@ -48,6 +48,7 @@ export type VnPayVerifyStatus =
   | 'SUCCESS'
   | 'PENDING_CONFIRMATION'
   | 'UNDER_REVIEW'
+  | 'RECONCILIATION_PENDING'
   | 'FAILED'
   | 'INVALID_SIGNATURE'
   | 'NOT_FOUND'

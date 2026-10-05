@@ -9,6 +9,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let active = true;
+    // Retire the old demo cache. Browser storage never establishes a session.
+    try { localStorage.removeItem('og_dev_user'); } catch { /* Storage may be unavailable. */ }
     authApi.refresh()
       .then((session) => {
         if (active) setUser(session.user);
@@ -25,10 +27,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const login = async (credentials: LoginCredentials) => {
+  const login = async (credentials: LoginCredentials): Promise<UserPrincipal> => {
     setIsLoading(true);
     try {
-      setUser((await authApi.login(credentials)).user);
+      const resp = await authApi.login(credentials);
+      setUser(resp.user);
+      return resp.user;
+    } catch (error) {
+      authApi.clearAccessToken();
+      setUser(null);
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -44,7 +52,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    await authApi.logout();
+    try {
+      await authApi.logout();
+    } catch {
+      // Local logout still completes when the server is unavailable.
+    }
+    authApi.clearAccessToken();
+    try { localStorage.removeItem('og_dev_user'); } catch { /* Storage may be unavailable. */ }
     setUser(null);
   };
 

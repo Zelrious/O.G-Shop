@@ -55,8 +55,64 @@ const mockModerationProduct: ModerationProduct = {
 };
 
 describe('ModerationPage Component (UC70)', () => {
+  it('submits a selected row once during a pending bulk request and reloads totals', async () => {
+    let finish!: (value: { productId: number; status: string; message: string }) => void;
+    const pending = new Promise<{ productId: number; status: string; message: string }>(resolve => { finish = resolve; });
+    const another = { ...mockModerationProduct, productId: 102, title: 'Another product' };
+    vi.mocked(listingApi.getPendingProducts).mockResolvedValueOnce({ items: [mockModerationProduct, another], page: 0, size: 20, totalElements: 3, totalPages: 1, hasNext: false })
+      .mockResolvedValue({ items: [another], page: 0, size: 20, totalElements: 2, totalPages: 1, hasNext: false });
+    vi.mocked(listingApi.approveProduct).mockReturnValue(pending);
+    render(<ModerationPage />);
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn tin #101' }));
+    const button = screen.getByRole('button', { name: /Duyệt nhanh các tin đã chọn/ });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(button).toBeDisabled();
+    expect(listingApi.approveProduct).toHaveBeenCalledTimes(1);
+    finish({ productId: 101, status: 'ACTIVE', message: 'Success' });
+    await screen.findByText(/Đã duyệt 1\/1 tin/);
+    expect(screen.getByText(/Tổng/)).toHaveTextContent('Tổng 2 tin chờ duyệt');
+    expect(listingApi.getPendingProducts).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(mockModerationProduct.title)).not.toBeInTheDocument();
+    expect(listingApi.approveProduct).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a partial bulk outcome and preserves failed rows', async () => {
+    const another = { ...mockModerationProduct, productId: 102, title: 'Another product' };
+    vi.mocked(listingApi.getPendingProducts).mockResolvedValueOnce({ items: [mockModerationProduct, another], page: 0, size: 20, totalElements: 2, totalPages: 1, hasNext: false })
+      .mockResolvedValue({ items: [another], page: 0, size: 20, totalElements: 1, totalPages: 1, hasNext: false });
+    vi.mocked(listingApi.approveProduct).mockResolvedValueOnce({ productId: 101, status: 'ACTIVE', message: 'Success' })
+      .mockRejectedValueOnce(new Error('Network failure'));
+    render(<ModerationPage />);
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn tất cả tin' }));
+    fireEvent.click(screen.getByRole('button', { name: /Duyệt nhanh các tin đã chọn/ }));
+    await screen.findByText(/Đã duyệt 1\/2 tin/);
+    expect(screen.getByText('Another product')).toBeInTheDocument();
+    expect(listingApi.approveProduct).toHaveBeenCalledTimes(2);
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('returns to a valid page after bulk approval empties the last page', async () => {
+    const last = { ...mockModerationProduct, productId:103, title:'Last page product' };
+    const response = (items: ModerationProduct[], page:number, totalElements:number, totalPages:number) =>
+      ({items,page,size:20,totalElements,totalPages,hasNext:page < totalPages-1});
+    vi.mocked(listingApi.getPendingProducts).mockResolvedValueOnce(response([mockModerationProduct],0,21,2))
+      .mockResolvedValueOnce(response([last],1,21,2))
+      .mockResolvedValueOnce(response([],1,20,1))
+      .mockResolvedValue(response([mockModerationProduct],0,20,1));
+    vi.mocked(listingApi.approveProduct).mockResolvedValue({productId:103,status:'ACTIVE',message:'Success'});
+    render(<ModerationPage />);
+    await screen.findByText(mockModerationProduct.title);
+    fireEvent.click(screen.getByRole('button',{name:/Trang sau/}));
+    await screen.findByText(last.title);
+    fireEvent.click(screen.getByRole('checkbox',{name:'Chọn tin #103'}));
+    fireEvent.click(screen.getByRole('button',{name:/Duyệt nhanh các tin đã chọn/}));
+    await screen.findByText(mockModerationProduct.title);
+    expect(listingApi.getPendingProducts).toHaveBeenLastCalledWith(0,20);
+    expect(screen.getByText(/Tổng/)).toHaveTextContent('Tổng 20 tin chờ duyệt');
   });
 
   it('renders empty state when there are no pending listings', async () => {

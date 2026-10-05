@@ -17,3 +17,5 @@ export * from './seller/SellerOrdersPage';
 export * from './seller/SellerOrderDetailPage';
 export * from './ModerationPage';
 export * from './VnPayReturnPage';
+export * from './ktv';
+export * from './admin';

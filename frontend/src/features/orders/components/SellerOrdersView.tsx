@@ -13,6 +13,7 @@ export const SellerOrdersView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
+  const [reloadVersion, setReloadVersion] = useState(0);
   const reqSeqRef = useRef<number>(0);
 
   const PAGE_SIZE = 10;
@@ -58,7 +59,7 @@ export const SellerOrdersView: React.FC = () => {
 
   useEffect(() => {
     loadOrders(activeTab, page);
-  }, [activeTab, page]);
+  }, [activeTab, page, reloadVersion]);
 
   const handleTabChange = (newTab: string) => {
     if (newTab === activeTab) return;
@@ -75,7 +76,7 @@ export const SellerOrdersView: React.FC = () => {
     try {
       const res = await ordersApi.confirmSellerOrder(orderId);
       alert(res.message || 'Đã xác nhận đơn hàng thành công.');
-      loadOrders(activeTab, page);
+      setReloadVersion(version => version + 1);
     } catch (err: unknown) {
       const error = err as Error;
       alert(error.message || 'Không thể xác nhận đơn hàng.');

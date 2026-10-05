@@ -30,7 +30,6 @@ export const VnPayReturnView: React.FC = () => {
       if (res.status === 'PENDING_CONFIRMATION' && currentPoll < 5) {
         pollTimerRef.current = setTimeout(() => {
           setPollCount(currentPoll + 1);
-          performVerification(currentPoll + 1);
         }, 2000);
       }
     } catch (err: unknown) {
@@ -51,6 +50,12 @@ export const VnPayReturnView: React.FC = () => {
       }
     };
   }, [performVerification]);
+
+  useEffect(() => {
+    if (pollCount > 0) {
+      performVerification(pollCount);
+    }
+  }, [pollCount, performVerification]);
 
   const handleManualRetry = () => {
     if (pollTimerRef.current) {
@@ -123,6 +128,18 @@ export const VnPayReturnView: React.FC = () => {
   }
 
   if (!result) return null;
+
+  if (result.status === 'RECONCILIATION_PENDING') {
+    return (
+      <div role="status" style={{ maxWidth: 680, margin: '40px auto', padding: '40px 32px', background: '#fff', borderRadius: 16, border: '1px solid #fde68a', textAlign: 'center' }}>
+        <h1>Giao dịch cần đối soát hoàn tiền</h1>
+        <p>{result.message}</p>
+        <button type="button" className="og-button og-button--primary" onClick={() => navigate('/orders')}>
+          Xem danh sách Đơn mua
+        </button>
+      </div>
+    );
+  }
 
   // Status: SUCCESS
   if (result.status === 'SUCCESS') {

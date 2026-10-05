@@ -2,7 +2,7 @@ name: og-shop
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-og_shop}
       POSTGRES_USER: ${POSTGRES_USER:-og_shop}

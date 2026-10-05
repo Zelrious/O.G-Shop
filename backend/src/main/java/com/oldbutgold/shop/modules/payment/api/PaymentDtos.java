@@ -41,7 +41,7 @@ public final class PaymentDtos {
     }
 
     public record VnPayVerifyResponse(
-        String status, // SUCCESS, PENDING_CONFIRMATION, UNDER_REVIEW, FAILED, INVALID_SIGNATURE, NOT_FOUND, AMOUNT_MISMATCH
+        String status, // SUCCESS, PENDING_CONFIRMATION, UNDER_REVIEW, RECONCILIATION_PENDING, FAILED, INVALID_SIGNATURE, NOT_FOUND, AMOUNT_MISMATCH
         Long orderId,
         String txnRef,
         String message

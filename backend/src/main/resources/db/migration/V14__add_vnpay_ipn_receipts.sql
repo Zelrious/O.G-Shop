@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration V12: Add VNPay Attempts, Raw Receipts, Events, Cases and Alerts
+-- Migration V14: Add VNPay IPN Attempts, Raw Receipts, Events, Cases and Alerts
 -- ============================================================================
 
 -- 1. Mở rộng check constraint cho payment_method
@@ -33,11 +33,11 @@ ALTER TABLE payments ADD CONSTRAINT ck_payments_state_fields CHECK (
     OR
     (status = 'RELEASED' AND paid_at IS NOT NULL AND held_at IS NOT NULL AND held_at >= paid_at AND released_at IS NOT NULL AND released_at >= held_at AND refunded_at IS NULL AND failure_reason IS NULL)
     OR
-    (status = 'UNDER_REVIEW' AND paid_at IS NOT NULL AND held_at IS NULL AND released_at IS NULL AND refunded_at IS NULL AND failure_reason IS NULL)
+    (status = 'UNDER_REVIEW' AND payment_method = 'VNPAY' AND paid_at IS NOT NULL AND held_at IS NULL AND released_at IS NULL AND refunded_at IS NULL AND failure_reason IS NULL)
     OR
-    (status = 'REFUND_PENDING' AND paid_at IS NOT NULL AND (held_at IS NULL OR held_at >= paid_at) AND released_at IS NULL AND refunded_at IS NULL AND refund_amount IS NOT NULL AND refund_reason IS NOT NULL AND failure_reason IS NULL)
+    (status = 'REFUND_PENDING' AND paid_at IS NOT NULL AND ((payment_method = 'VNPAY' AND held_at IS NULL) OR (held_at IS NOT NULL AND held_at >= paid_at)) AND released_at IS NULL AND refunded_at IS NULL AND refund_amount IS NOT NULL AND refund_reason IS NOT NULL AND failure_reason IS NULL)
     OR
-    (status = 'REFUNDED' AND paid_at IS NOT NULL AND (held_at IS NULL OR held_at >= paid_at) AND released_at IS NULL AND refunded_at IS NOT NULL AND (held_at IS NULL OR refunded_at >= held_at) AND refund_amount IS NOT NULL AND refund_reason IS NOT NULL AND failure_reason IS NULL)
+    (status = 'REFUNDED' AND paid_at IS NOT NULL AND ((payment_method = 'VNPAY' AND held_at IS NULL) OR (held_at IS NOT NULL AND held_at >= paid_at)) AND released_at IS NULL AND refunded_at IS NOT NULL AND (held_at IS NULL OR refunded_at >= held_at) AND refund_amount IS NOT NULL AND refund_reason IS NOT NULL AND failure_reason IS NULL)
     OR
     (status = 'FAILED' AND paid_at IS NULL AND held_at IS NULL AND released_at IS NULL AND refunded_at IS NULL AND failure_reason IS NOT NULL)
 );

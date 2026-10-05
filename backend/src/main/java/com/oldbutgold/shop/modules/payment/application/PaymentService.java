@@ -183,6 +183,9 @@ public class PaymentService {
 
         PaymentEntity payment = paymentRepository.findByOrderIdForUpdate(order.getId())
                 .orElseGet(() -> new PaymentEntity(order.getId(), order.getTotalAmount(), method, now));
+        if (PaymentEntity.METHOD_VNPAY.equals(payment.getPaymentMethod())) {
+            throw new IllegalStateException("Giao dịch VNPAY phải được xác nhận bởi nhà cung cấp.");
+        }
         payment.setPaymentMethod(method);
 
         if (request.simulateSuccess()) {
@@ -211,7 +214,7 @@ public class PaymentService {
                     order.getStatus(),
                     payment.getStatus(),
                     null,
-                    "Giao dịch thanh toán thất bại (Mô phỏng). Bạn có thể thử lại trước khi hết thời gian giữ đơn 15 phút."
+                    "Giao dịch thanh toán thất bại (Mô phỏng). Bạn có thể thử lại trước hạn thanh toán của đơn."
             );
         }
     }
@@ -767,7 +770,14 @@ public class PaymentService {
             return new PaymentDtos.VnPayVerifyResponse("AMOUNT_MISMATCH", orderId, txnRef, "Số tiền hoặc loại tiền tệ không khớp.");
         }
 
-        if (OrderEntity.STATUS_PAID_HELD.equals(order.getStatus()) || PaymentAttemptEntity.STATUS_SUCCESS.equals(attempt.getStatus())) {
+        PaymentEntity payment = paymentRepository.findByOrderId(orderId).orElse(null);
+        if ((payment != null && PaymentEntity.STATUS_REFUND_PENDING.equals(payment.getStatus()))
+                || PaymentAttemptEntity.STATUS_SUCCESS_ON_EXPIRED_ORDER.equals(attempt.getStatus())
+                || PaymentAttemptEntity.STATUS_SUCCESS_DUPLICATE_CHARGE.equals(attempt.getStatus())) {
+            return new PaymentDtos.VnPayVerifyResponse("RECONCILIATION_PENDING", orderId, txnRef, "Giao dịch đã ghi nhận tiền nhưng đơn hàng cần đối soát hoàn tiền.");
+        }
+
+        if (PaymentAttemptEntity.STATUS_SUCCESS.equals(attempt.getStatus()) && OrderEntity.STATUS_PAID_HELD.equals(order.getStatus())) {
             return new PaymentDtos.VnPayVerifyResponse("SUCCESS", orderId, txnRef, "Thanh toán thành công! Tiền đã được giữ an toàn trong Escrow.");
         }
 

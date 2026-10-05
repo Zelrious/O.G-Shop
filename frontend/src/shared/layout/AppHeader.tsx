@@ -202,6 +202,7 @@ export const AppHeader: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isTabsExpanded, setIsTabsExpanded] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -311,8 +312,6 @@ export const AppHeader: React.FC = () => {
   };
 
   const isSeller = isAuthenticated && user?.roles.includes('SELLER');
-  const isAdmin = isAuthenticated && user?.roles.includes('ADMIN');
-  const isKtv = isAuthenticated && (user?.roles.includes('KTV') || user?.roles.includes('ADMIN'));
   const displayCategories = categories.length > 0 ? categories : DEFAULT_CATEGORIES;
 
   return (
@@ -397,21 +396,18 @@ export const AppHeader: React.FC = () => {
                     aria-label={`Menu người dùng: ${user?.fullName || 'Tài khoản'}`}
                   >
                     <span className="og-header__user-avatar" aria-hidden="true">
-                      {user?.avatarUrl ? (
+                      {user?.avatarUrl && user.avatarUrl !== failedAvatarUrl ? (
                         <img
+                          key={user.avatarUrl}
                           src={user.avatarUrl}
                           alt={user?.fullName || 'Avatar'}
                           style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
-                          onError={(e) => {
-                            (e.currentTarget as HTMLElement).style.display = 'none';
-                            const fallback = (e.currentTarget.parentElement as HTMLElement)?.querySelector('.og-header__user-avatar-fallback') as HTMLElement;
-                            if (fallback) fallback.style.display = 'inline';
-                          }}
+                          onError={() => setFailedAvatarUrl(user.avatarUrl || null)}
                         />
                       ) : null}
                       <span
                         className="og-header__user-avatar-fallback"
-                        style={{ display: user?.avatarUrl ? 'none' : 'inline' }}
+                        style={{ display: user?.avatarUrl && user.avatarUrl !== failedAvatarUrl ? 'none' : 'inline' }}
                       >
                         {user?.fullName?.charAt(0).toUpperCase() || 'U'}
                       </span>
@@ -470,20 +466,6 @@ export const AppHeader: React.FC = () => {
                             <OutlineIcons.Store />
                           </span>
                           <span>Kênh Người Bán</span>
-                        </Link>
-                      )}
-
-                      {isAdmin && (
-                        <Link
-                          to="/admin"
-                          className="og-header__dropdown-item"
-                          role="menuitem"
-                          onClick={() => setIsUserMenuOpen(false)}
-                        >
-                          <span className="og-header__dropdown-icon">
-                            <OutlineIcons.Shield />
-                          </span>
-                          <span>Trang Quản trị</span>
                         </Link>
                       )}
 
@@ -658,37 +640,6 @@ export const AppHeader: React.FC = () => {
                     </span>
                     <span>Đơn mua</span>
                   </Link>
-
-                  {/* Tab Quản trị (if admin) */}
-                  {isAdmin && (
-                    <Link
-                      to="/admin"
-                      className={`og-header__tab ${
-                        location.pathname.startsWith('/admin') ? 'og-header__tab--active' : ''
-                      }`}
-                    >
-                      <span className="og-header__tab-icon" aria-hidden="true">
-                        <OutlineIcons.Shield />
-                      </span>
-                      <span>Quản trị</span>
-                    </Link>
-                  )}
-
-                  {/* Tab Kiểm duyệt (if KTV and not admin) */}
-                  {isKtv && !isAdmin && (
-                    <Link
-                      to="/moderation"
-                      className={`og-header__tab ${
-                        location.pathname.startsWith('/moderation') ? 'og-header__tab--active' : ''
-                      }`}
-                      title="Kiểm duyệt tin đăng"
-                    >
-                      <span className="og-header__tab-icon" aria-hidden="true">
-                        <OutlineIcons.Shield />
-                      </span>
-                      <span>Kiểm duyệt</span>
-                    </Link>
-                  )}
                 </>
               ) : (
                 <Link

@@ -35,6 +35,9 @@ public class ProductModerationDecisionEntity {
     @Column(name = "product_version", nullable = false)
     private Long productVersion;
 
+    @Column(name = "decision_content_revision")
+    private Long decisionContentRevision;
+
     @Column(name = "command_key", length = 100)
     private String commandKey;
 
@@ -56,12 +59,20 @@ public class ProductModerationDecisionEntity {
         this.createdAt = createdAt;
     }
 
+    public ProductModerationDecisionEntity(Long productId, Long reviewerId, String decision,
+                                           String reason, Long productVersion, String commandKey,
+                                           Instant createdAt, Long decisionContentRevision) {
+        this(productId, reviewerId, decision, reason, productVersion, commandKey, createdAt);
+        this.decisionContentRevision = decisionContentRevision;
+    }
+
     public Long getId() { return id; }
     public Long getProductId() { return productId; }
     public Long getReviewerId() { return reviewerId; }
     public String getDecision() { return decision; }
     public String getReason() { return reason; }
     public Long getProductVersion() { return productVersion; }
+    public Long getDecisionContentRevision() { return decisionContentRevision; }
     public String getCommandKey() { return commandKey; }
     public Instant getCreatedAt() { return createdAt; }
 }

@@ -15,6 +15,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 @RestController
+@org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'KTV')")
 @RequestMapping("/api/v1/moderation/products")
 public class ModerationController {
     private final SellerProductService sellerProductService;
@@ -25,16 +26,20 @@ public class ModerationController {
 
     @GetMapping
     public ResponseEntity<CatalogDtos.PageResponse<CatalogDtos.ModerationProductResponse>> getPendingProducts(
+            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
+        sellerProductService.ensureModeratorActive(extractUserId(jwt));
         return ResponseEntity.ok(sellerProductService.getPendingProducts(page, size));
     }
 
     @GetMapping("/{productId}")
     public ResponseEntity<CatalogDtos.ModerationProductResponse> getModerationDetail(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable long productId
     ) {
+        sellerProductService.ensureModeratorActive(extractUserId(jwt));
         return ResponseEntity.ok(sellerProductService.getModerationDetail(productId));
     }
 

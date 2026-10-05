@@ -70,6 +70,15 @@ class SellerProductServiceTest {
 
         when(identityCatalogFacade.isSellerActive(100L)).thenReturn(true);
         when(identityCatalogFacade.isSellerActive(200L)).thenReturn(false);
+        when(identityCatalogFacade.isModeratorActive(999L)).thenReturn(true);
+    }
+
+    @Test
+    void moderationRejectsInactiveOrNonModeratorBeforeLoadingProduct() {
+        assertThatThrownBy(() -> sellerProductService.approveProduct(123L, 1L, 0L, "unauthorized"))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(productRepository, never()).findById(any());
+        verify(productModerationDecisionRepository, never()).findByCommandKey(any());
     }
 
     @Test
@@ -191,9 +200,9 @@ class SellerProductServiceTest {
 
         ProductModerationDecisionEntity approvedDecision = new ProductModerationDecisionEntity(
                 700L, 200L, ProductModerationDecisionEntity.DECISION_APPROVED,
-                null, hidden.getContentRevision(), "ck-app-700", fixedInstant
+                null, hidden.getContentRevision(), "ck-app-700", fixedInstant, hidden.getContentRevision()
         );
-        when(productModerationDecisionRepository.findFirstByProductIdOrderByCreatedAtDesc(700L))
+        when(productModerationDecisionRepository.findFirstByProductIdOrderByCreatedAtDescIdDesc(700L))
                 .thenReturn(Optional.of(approvedDecision));
 
         when(productRepository.findByIdAndSellerIdAndDeletedAtIsNull(700L, 100L))
@@ -372,7 +381,7 @@ class SellerProductServiceTest {
         setField(hidden, "id", 700L);
         setField(hidden, "status", ProductEntity.STATUS_HIDDEN);
         when(productRepository.findByIdAndSellerIdAndDeletedAtIsNull(700L, 100L)).thenReturn(Optional.of(hidden));
-        when(productModerationDecisionRepository.findFirstByProductIdOrderByCreatedAtDesc(700L))
+        when(productModerationDecisionRepository.findFirstByProductIdOrderByCreatedAtDescIdDesc(700L))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> sellerProductService.publishProduct(100L, 700L))
@@ -393,7 +402,7 @@ class SellerProductServiceTest {
         ProductModerationDecisionEntity rejectedDecision = new ProductModerationDecisionEntity(
                 700L, 999L, "REJECTED", "Không đạt chuẩn", 1L, "key-rej", fixedInstant
         );
-        when(productModerationDecisionRepository.findFirstByProductIdOrderByCreatedAtDesc(700L))
+        when(productModerationDecisionRepository.findFirstByProductIdOrderByCreatedAtDescIdDesc(700L))
                 .thenReturn(Optional.of(rejectedDecision));
 
         assertThatThrownBy(() -> sellerProductService.publishProduct(100L, 700L))
@@ -413,9 +422,9 @@ class SellerProductServiceTest {
         when(productRepository.findByIdAndSellerIdAndDeletedAtIsNull(700L, 100L)).thenReturn(Optional.of(hidden));
 
         ProductModerationDecisionEntity approvedDecision = new ProductModerationDecisionEntity(
-                700L, 999L, "APPROVED", null, 1L, "key-app", fixedInstant // approved at v1
+                700L, 999L, "APPROVED", null, 1L, "key-app", fixedInstant, 1L // approved at v1
         );
-        when(productModerationDecisionRepository.findFirstByProductIdOrderByCreatedAtDesc(700L))
+        when(productModerationDecisionRepository.findFirstByProductIdOrderByCreatedAtDescIdDesc(700L))
                 .thenReturn(Optional.of(approvedDecision));
 
         assertThatThrownBy(() -> sellerProductService.publishProduct(100L, 700L))
@@ -437,9 +446,9 @@ class SellerProductServiceTest {
         when(productRepository.save(any())).thenReturn(hidden);
 
         ProductModerationDecisionEntity approvedDecision = new ProductModerationDecisionEntity(
-                700L, 999L, "APPROVED", null, 2L, "key-app", fixedInstant // matches v2
+                700L, 999L, "APPROVED", null, 2L, "key-app", fixedInstant, 2L // matches v2
         );
-        when(productModerationDecisionRepository.findFirstByProductIdOrderByCreatedAtDesc(700L))
+        when(productModerationDecisionRepository.findFirstByProductIdOrderByCreatedAtDescIdDesc(700L))
                 .thenReturn(Optional.of(approvedDecision));
 
         CatalogDtos.SellerProductDetailResponse res = sellerProductService.publishProduct(100L, 700L);
@@ -455,6 +464,7 @@ class SellerProductServiceTest {
         setField(pending, "id", 700L);
         setField(pending, "status", ProductEntity.STATUS_PENDING);
         setField(pending, "contentRevision", 2L);
+        setField(pending, "version", 2L);
 
         when(productRepository.findById(700L)).thenReturn(Optional.of(pending));
         when(productMediaRepository.countByProductIdAndMediaType(700L, "IMAGE")).thenReturn(2L);
@@ -468,7 +478,7 @@ class SellerProductServiceTest {
         verify(productModerationDecisionRepository).save(any(ProductModerationDecisionEntity.class));
         verify(platformAuditFacade).recordAudit(
                 eq(999L), eq("APPROVE_PRODUCT"), eq("PRODUCT"), eq(700L),
-                eq(Map.of("status", "PENDING", "version", 0L, "contentRevision", 2L)),
+                eq(Map.of("status", "PENDING", "version", 2L, "contentRevision", 2L)),
                 any(), eq(null), eq(null)
         );
     }
@@ -482,6 +492,7 @@ class SellerProductServiceTest {
         setField(pending, "id", 700L);
         setField(pending, "status", ProductEntity.STATUS_PENDING);
         setField(pending, "contentRevision", 1L);
+        setField(pending, "version", 1L);
 
         when(productRepository.findById(700L)).thenReturn(Optional.of(pending));
         when(productMediaRepository.countByProductIdAndMediaType(700L, "IMAGE")).thenReturn(1L);
@@ -502,6 +513,7 @@ class SellerProductServiceTest {
         setField(draft, "id", 700L);
         setField(draft, "status", ProductEntity.STATUS_DRAFT);
         setField(draft, "contentRevision", 1L);
+        setField(draft, "version", 1L);
 
         when(productRepository.findById(700L)).thenReturn(Optional.of(draft));
 
@@ -519,6 +531,7 @@ class SellerProductServiceTest {
         setField(reserved, "id", 700L);
         setField(reserved, "status", ProductEntity.STATUS_RESERVED);
         setField(reserved, "contentRevision", 1L);
+        setField(reserved, "version", 1L);
         when(productRepository.findById(700L)).thenReturn(Optional.of(reserved));
 
         assertThatThrownBy(() -> sellerProductService.approveProduct(999L, 700L, 1L, "cmd-approve-1"))
@@ -532,6 +545,7 @@ class SellerProductServiceTest {
         setField(sold, "id", 701L);
         setField(sold, "status", ProductEntity.STATUS_SOLD);
         setField(sold, "contentRevision", 1L);
+        setField(sold, "version", 1L);
         when(productRepository.findById(701L)).thenReturn(Optional.of(sold));
 
         assertThatThrownBy(() -> sellerProductService.approveProduct(999L, 701L, 1L, "cmd-approve-1"))
@@ -548,6 +562,7 @@ class SellerProductServiceTest {
         setField(pending, "id", 700L);
         setField(pending, "status", ProductEntity.STATUS_PENDING);
         setField(pending, "contentRevision", 1L);
+        setField(pending, "version", 1L);
 
         when(productRepository.findById(700L)).thenReturn(Optional.of(pending));
         when(productRepository.save(any())).thenReturn(pending);
@@ -572,12 +587,13 @@ class SellerProductServiceTest {
         setField(pending, "id", 700L);
         setField(pending, "status", ProductEntity.STATUS_PENDING);
         setField(pending, "contentRevision", 3L);
+        setField(pending, "version", 3L);
 
         when(productRepository.findById(700L)).thenReturn(Optional.of(pending));
 
         assertThatThrownBy(() -> sellerProductService.approveProduct(999L, 700L, 2L, "cmd-approve-1"))
                 .isInstanceOf(ProductVersionConflictException.class)
-                .hasMessageContaining("Phiên bản nội dung tin đăng đã thay đổi");
+                .hasMessageContaining("Phiên bản tin đăng đã thay đổi");
     }
 
     @Test
@@ -623,6 +639,7 @@ class SellerProductServiceTest {
         setField(pending, "id", 701L);
         setField(pending, "status", ProductEntity.STATUS_PENDING);
         setField(pending, "contentRevision", 1L);
+        setField(pending, "version", 1L);
 
         when(productRepository.findById(701L)).thenReturn(Optional.of(pending));
         when(productRepository.save(any())).thenReturn(pending);
@@ -636,8 +653,8 @@ class SellerProductServiceTest {
         verify(productModerationDecisionRepository).save(any(ProductModerationDecisionEntity.class));
         verify(platformAuditFacade).recordAudit(
                 eq(999L), eq("REJECT_PRODUCT"), eq("PRODUCT"), eq(701L),
-                eq(Map.of("status", "PENDING", "version", 0L, "contentRevision", 1L)),
-                eq(Map.of("status", "REJECTED", "reason", "Video bị rung mờ không rõ số seri", "version", 0L, "contentRevision", 1L)),
+                eq(Map.of("status", "PENDING", "version", 1L, "contentRevision", 1L)),
+                eq(Map.of("status", "REJECTED", "reason", "Video bị rung mờ không rõ số seri", "version", 1L, "contentRevision", 1L)),
                 eq(null), eq(null)
         );
     }
@@ -663,6 +680,7 @@ class SellerProductServiceTest {
         setField(reserved, "id", 700L);
         setField(reserved, "status", ProductEntity.STATUS_RESERVED);
         setField(reserved, "contentRevision", 1L);
+        setField(reserved, "version", 1L);
         when(productRepository.findById(700L)).thenReturn(Optional.of(reserved));
 
         assertThatThrownBy(() -> sellerProductService.rejectProduct(999L, 700L, "Lý do từ chối", 1L, "key-1"))
@@ -676,6 +694,7 @@ class SellerProductServiceTest {
         setField(sold, "id", 701L);
         setField(sold, "status", ProductEntity.STATUS_SOLD);
         setField(sold, "contentRevision", 1L);
+        setField(sold, "version", 1L);
         when(productRepository.findById(701L)).thenReturn(Optional.of(sold));
 
         assertThatThrownBy(() -> sellerProductService.rejectProduct(999L, 701L, "Lý do từ chối", 1L, "key-1"))
@@ -692,6 +711,7 @@ class SellerProductServiceTest {
         setField(pending, "id", 701L);
         setField(pending, "status", ProductEntity.STATUS_PENDING);
         setField(pending, "contentRevision", 1L);
+        setField(pending, "version", 1L);
 
         when(productRepository.findById(701L)).thenReturn(Optional.of(pending));
         when(productRepository.save(any())).thenReturn(pending);
@@ -737,7 +757,7 @@ class SellerProductServiceTest {
         ProductModerationDecisionEntity decision = new ProductModerationDecisionEntity(
                 702L, 999L, "REJECTED", "Hình ảnh không khớp với mô tả", 1L, null, fixedInstant
         );
-        when(productModerationDecisionRepository.findFirstByProductIdOrderByCreatedAtDesc(702L))
+        when(productModerationDecisionRepository.findFirstByProductIdOrderByCreatedAtDescIdDesc(702L))
                 .thenReturn(Optional.of(decision));
 
         CatalogDtos.SellerProductDetailResponse detail = sellerProductService.getSellerProduct(100L, 702L);

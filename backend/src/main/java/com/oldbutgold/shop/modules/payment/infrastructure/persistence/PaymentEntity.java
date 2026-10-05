@@ -116,6 +116,16 @@ public class PaymentEntity {
         this.updatedAt = now;
     }
 
+    public void markProviderRefundPending(String transactionCode, Instant now) {
+        this.status = STATUS_REFUND_PENDING;
+        this.transactionCode = transactionCode;
+        this.paidAt = now;
+        this.refundAmount = this.amount;
+        this.refundReason = "Provider payment after order cancellation/deadline; reconciliation required";
+        this.failureReason = null;
+        this.updatedAt = now;
+    }
+
     public void markRefunded(BigDecimal refundAmount, String reason, Instant now) {
         if (!STATUS_HELD.equals(this.status) && !STATUS_REFUND_PENDING.equals(this.status)) {
             throw new IllegalStateException("Chỉ có thể hoàn tiền cho giao dịch đang HELD hoặc REFUND_PENDING.");

@@ -9,6 +9,7 @@ interface ProfileInfoTabProps {
 }
 
 export const ProfileInfoTab: React.FC<ProfileInfoTabProps> = ({ profile, onProfileUpdated }) => {
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const { reloadCurrentUser } = useAuth();
   const [fullName, setFullName] = useState(profile.fullName || '');
   const [phoneNumber, setPhoneNumber] = useState(profile.phoneNumber || '');
@@ -139,20 +140,21 @@ export const ProfileInfoTab: React.FC<ProfileInfoTabProps> = ({ profile, onProfi
               flexShrink: 0,
             }}
           >
-            {previewUrl ? (
+            {previewUrl && previewUrl !== failedAvatarUrl ? (
               <img
+                key={previewUrl}
                 src={previewUrl}
                 alt="Xem trước ảnh đại diện"
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={() => setFailedAvatarUrl(previewUrl)}
               />
-            ) : profile.avatarUrl ? (
+            ) : !previewUrl && profile.avatarUrl && profile.avatarUrl !== failedAvatarUrl ? (
               <img
+                key={profile.avatarUrl}
                 src={profile.avatarUrl}
                 alt="Ảnh đại diện"
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = 'none';
-                }}
+                onError={() => setFailedAvatarUrl(profile.avatarUrl ?? null)}
               />
             ) : (
               profile.fullName ? profile.fullName.charAt(0).toUpperCase() : '👤'

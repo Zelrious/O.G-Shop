@@ -43,6 +43,23 @@ class ModerationControllerTest {
     private SellerProductService sellerProductService;
 
     @Test
+    void buyerCannotReadOrDecideModerationQueue() throws Exception {
+        var buyer = jwt().jwt(token -> token.subject("888"))
+                .authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
+        mockMvc.perform(get("/api/v1/moderation/products").with(buyer))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/moderation/products/100/approve").with(buyer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedVersion\":1,\"commandKey\":\"buyer-command\"}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/moderation/products/100/reject").with(buyer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedVersion\":1,\"commandKey\":\"buyer-command\",\"reason\":\"invalid\"}"))
+                .andExpect(status().isForbidden());
+        org.mockito.Mockito.verifyNoInteractions(sellerProductService);
+    }
+
+    @Test
     void unauthenticatedRequest_isRejected() throws Exception {
         mockMvc.perform(get("/api/v1/moderation/products"))
                 .andExpect(status().isUnauthorized());
@@ -57,12 +74,22 @@ class ModerationControllerTest {
     }
 
     @Test
+    void lockedModeratorCannotReadQueueWithAnExistingRoleToken() throws Exception {
+        org.mockito.Mockito.doThrow(new org.springframework.security.access.AccessDeniedException("Inactive moderator"))
+                .when(sellerProductService).ensureModeratorActive(888L);
+        mockMvc.perform(get("/api/v1/moderation/products")
+                        .with(jwt().jwt(token -> token.subject("888")).authorities(new SimpleGrantedAuthority("ROLE_KTV"))))
+                .andExpect(status().isForbidden());
+        verify(sellerProductService, never()).getPendingProducts(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
     void approveProduct_extractsReviewerFromJwtPrincipal() throws Exception {
         when(sellerProductService.approveProduct(888L, 100L, 2L, "key-1"))
                 .thenReturn(new CatalogDtos.ActionResponse(100L, "ACTIVE", "Phê duyệt tin đăng thành công."));
 
         var auth = jwt().jwt(token -> token.subject("888"))
-                .authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
+                .authorities(new SimpleGrantedAuthority("ROLE_KTV"));
 
         var body = Map.of("expectedVersion", 2, "commandKey", "key-1");
 
@@ -80,7 +107,7 @@ class ModerationControllerTest {
     @Test
     void rejectProduct_rejectsMissingBodyOrBlankReason() throws Exception {
         var auth = jwt().jwt(token -> token.subject("888"))
-                .authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
+                .authorities(new SimpleGrantedAuthority("ROLE_KTV"));
 
         // Missing body
         mockMvc.perform(post("/api/v1/moderation/products/100/reject")
@@ -124,7 +151,7 @@ class ModerationControllerTest {
                 .thenReturn(new CatalogDtos.ActionResponse(100L, "REJECTED", "Đã từ chối tin đăng: Video không rõ chi tiết"));
 
         var auth = jwt().jwt(token -> token.subject("888"))
-                .authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
+                .authorities(new SimpleGrantedAuthority("ROLE_KTV"));
 
         var body = Map.of("reason", "Video không rõ chi tiết", "expectedVersion", 3, "commandKey", "key-rej");
 
@@ -142,7 +169,7 @@ class ModerationControllerTest {
     @Test
     void approveProduct_rejectsMissingBodyOrInvalidFields() throws Exception {
         var auth = jwt().jwt(token -> token.subject("888"))
-                .authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
+                .authorities(new SimpleGrantedAuthority("ROLE_KTV"));
 
         // Missing body
         mockMvc.perform(post("/api/v1/moderation/products/100/approve")
@@ -190,7 +217,7 @@ class ModerationControllerTest {
     @Test
     void stateOrVersionConflict_returnsHttp409() throws Exception {
         var auth = jwt().jwt(token -> token.subject("888"))
-                .authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
+                .authorities(new SimpleGrantedAuthority("ROLE_KTV"));
 
         var validBody = Map.of("expectedVersion", 1, "commandKey", "key-valid");
 

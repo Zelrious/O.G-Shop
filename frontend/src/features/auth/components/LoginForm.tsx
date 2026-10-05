@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useAuth } from '../useAuth';
+import { UserPrincipal } from '../types';
 import { Input, Button, Alert } from '../../../shared/components';
 
 interface LoginFormProps {
-  onSuccess?: () => void;
+  onSuccess?: (user: UserPrincipal) => void;
   onNavigateToRegister?: () => void;
   onNavigateToForgot?: () => void;
 }
@@ -31,8 +32,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
     setIsSubmitting(true);
     try {
-      await login({ email: email.trim(), password, rememberMe });
-      onSuccess?.();
+      const loggedUser = await login({ email: email.trim(), password, rememberMe });
+      onSuccess?.(loggedUser);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Đăng nhập không thành công. Vui lòng thử lại.');
     } finally {

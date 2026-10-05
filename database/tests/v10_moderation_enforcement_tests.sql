@@ -71,29 +71,35 @@ END $$;
 INSERT INTO product_moderation_decisions (decision_id, product_id, reviewer_id, decision, reason, product_version, command_key)
 VALUES (99991, 99991, 99992, 'APPROVED', NULL, 1, 'ck-v10-valid-app');
 
--- Test 6: UPDATE on product_moderation_decisions must fail (Append-only Trigger)
+-- Test 6/7: Catch only the trigger failure; sentinels live outside the handler.
 DO $$
+DECLARE blocked BOOLEAN := FALSE;
 BEGIN
-    UPDATE product_moderation_decisions
-    SET reason = 'Tampered reason'
-    WHERE decision_id = 99991;
-    RAISE EXCEPTION 'TEST 6 FAILED: UPDATE was unexpectedly allowed on append-only table!';
-EXCEPTION
-    WHEN raise_exception THEN
-        RAISE NOTICE 'TEST 6 PASSED: UPDATE was blocked by append-only trigger.';
+    BEGIN
+        UPDATE product_moderation_decisions SET command_key = 'tampered' WHERE decision_id = 99991;
+    EXCEPTION WHEN raise_exception THEN
+        IF SQLERRM NOT LIKE 'Table product_moderation_decisions is append-only.%' THEN RAISE; END IF;
+        blocked := TRUE;
+    END;
+    IF NOT blocked THEN RAISE EXCEPTION 'TEST 6 FAILED: UPDATE was allowed'; END IF;
+    IF (SELECT command_key FROM product_moderation_decisions WHERE decision_id = 99991) <> 'ck-v10-valid-app' THEN
+        RAISE EXCEPTION 'TEST 6 FAILED: original key changed';
+    END IF;
 END $$;
-
--- Test 7: DELETE on product_moderation_decisions must fail (Append-only Trigger)
 DO $$
+DECLARE blocked BOOLEAN := FALSE;
 BEGIN
-    DELETE FROM product_moderation_decisions
-    WHERE decision_id = 99991;
-    RAISE EXCEPTION 'TEST 7 FAILED: DELETE was unexpectedly allowed on append-only table!';
-EXCEPTION
-    WHEN raise_exception THEN
-        RAISE NOTICE 'TEST 7 PASSED: DELETE was blocked by append-only trigger.';
+    BEGIN
+        DELETE FROM product_moderation_decisions WHERE decision_id = 99991;
+    EXCEPTION WHEN raise_exception THEN
+        IF SQLERRM NOT LIKE 'Table product_moderation_decisions is append-only.%' THEN RAISE; END IF;
+        blocked := TRUE;
+    END;
+    IF NOT blocked THEN RAISE EXCEPTION 'TEST 7 FAILED: DELETE was allowed'; END IF;
+    IF NOT EXISTS (SELECT 1 FROM product_moderation_decisions WHERE decision_id = 99991) THEN
+        RAISE EXCEPTION 'TEST 7 FAILED: original row missing';
+    END IF;
 END $$;
-
 -- Test 8: products.content_revision < 1 must fail
 DO $$
 BEGIN

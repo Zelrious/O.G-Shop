@@ -180,9 +180,9 @@ public class ProductEntity {
         if (STATUS_PENDING.equals(this.status)) {
             return; // idempotent
         }
-        if (!STATUS_DRAFT.equals(this.status) && !STATUS_REJECTED.equals(this.status)) {
+        if (!STATUS_DRAFT.equals(this.status) && !STATUS_REJECTED.equals(this.status) && !STATUS_HIDDEN.equals(this.status)) {
             throw new ProductStateConflictException(
-                    "Chỉ có thể gửi duyệt tin ở trạng thái DRAFT hoặc REJECTED. Trạng thái hiện tại: " + this.status
+                    "Chỉ có thể gửi duyệt tin ở trạng thái DRAFT, HIDDEN hoặc REJECTED. Trạng thái hiện tại: " + this.status
             );
         }
         this.status = STATUS_PENDING;

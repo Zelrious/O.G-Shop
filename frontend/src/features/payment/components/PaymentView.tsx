@@ -33,7 +33,7 @@ export const PaymentView: React.FC<PaymentViewProps> = ({ orderId }) => {
       .then((info) => {
         if (!mounted) return;
         setPaymentInfo(info);
-        setSecondsRemaining(info.remainingSeconds > 0 ? info.remainingSeconds : 3600);
+        setSecondsRemaining(Math.max(0, info.remainingSeconds));
         if (methodParam && ['VNPAY', 'BANK_TRANSFER_MOCK', 'E_WALLET_MOCK', 'COD_MOCK'].includes(methodParam)) {
           setSelectedMethod(methodParam);
         } else {
@@ -104,15 +104,11 @@ export const PaymentView: React.FC<PaymentViewProps> = ({ orderId }) => {
   };
 
   const handleVnPayPayment = async () => {
+    if (processing) return;
     setProcessing(true);
     setErrorMsg(null);
     try {
-      const res = await paymentApi.createVnPayUrl(orderId);
-      if (res && res.paymentUrl) {
-        window.location.href = res.paymentUrl;
-      } else {
-        throw new Error('Không nhận được liên kết thanh toán từ máy chủ.');
-      }
+      window.location.assign(await paymentApi.createVnPayUrl(orderId));
     } catch (err: unknown) {
       const error = err as Error;
       setErrorMsg(error.message || 'Không thể tạo liên kết thanh toán VNPay.');

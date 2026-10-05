@@ -494,6 +494,7 @@ class PaymentServiceTest {
     void verifyVnPayReturn_successWhenHeld() {
         payment.markHeld("14000001", now);
         order.markPaidHeld(now);
+        attempt.markSuccess(now);
 
         String queryString = "vnp_TxnRef=OG_1_1000&vnp_Amount=53000000";
         var parseResult = VnPayQueryParser.parse(queryString);
@@ -507,6 +508,19 @@ class PaymentServiceTest {
         assertThat(response.status()).isEqualTo("SUCCESS");
         assertThat(response.orderId()).isEqualTo(1L);
         assertThat(response.txnRef()).isEqualTo("OG_1_1000");
+    }
+
+    @Test
+    void verifyVnPayReturn_doesNotReportLateChargeAsSuccess() {
+        attempt.markSuccessOnExpiredOrder(now);
+        var parseResult = VnPayQueryParser.parse("vnp_TxnRef=OG_1_1000&vnp_Amount=53000000");
+        when(vnPayService.verifyCallback(any())).thenReturn(true);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(paymentAttemptRepository.findByTxnRef("OG_1_1000")).thenReturn(Optional.of(attempt));
+
+        var response = paymentService.verifyVnPayReturn(100L, parseResult);
+
+        assertThat(response.status()).isEqualTo("RECONCILIATION_PENDING");
     }
 
     private static void setId(Object target, Long id) throws Exception {
