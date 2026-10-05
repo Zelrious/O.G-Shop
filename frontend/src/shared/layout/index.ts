@@ -4,3 +4,5 @@ export * from './AppLayout';
 export * from './GuestLayout';
 export * from './SellerLayoutShell';
 export * from './AdminLayoutShell';
+export * from './KtvLayoutShell';
+export * from './ConsoleIcons';

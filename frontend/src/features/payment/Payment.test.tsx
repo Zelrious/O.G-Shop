@@ -48,6 +48,7 @@ describe('PaymentView Component', () => {
     expect(screen.getByText('Máy ảnh cơ Canon QL17 GIII')).toBeInTheDocument();
     expect(screen.getByText(/0388654321/i)).toBeInTheDocument();
     expect(screen.getByText(/OGSHOP 101/i)).toBeInTheDocument();
-    expect(screen.getByText(/Xác nhận đã thanh toán/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mô phỏng thanh toán thành công/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Thanh toán qua VNPAY' })).toBeInTheDocument();
   });
 });

@@ -33,7 +33,7 @@ export const PaymentView: React.FC<PaymentViewProps> = ({ orderId }) => {
       .then((info) => {
         if (!mounted) return;
         setPaymentInfo(info);
-        setSecondsRemaining(info.remainingSeconds > 0 ? info.remainingSeconds : 3600);
+        setSecondsRemaining(Math.max(0, info.remainingSeconds));
         if (methodParam && ['BANK_TRANSFER_MOCK', 'E_WALLET_MOCK', 'COD_MOCK'].includes(methodParam)) {
           setSelectedMethod(methodParam);
         } else {
@@ -99,6 +99,18 @@ export const PaymentView: React.FC<PaymentViewProps> = ({ orderId }) => {
       const error = err as Error;
       setErrorMsg(error.message || 'Có lỗi xảy ra khi xử lý giao dịch.');
     } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleVnPay = async () => {
+    if (processing) return;
+    setProcessing(true);
+    setErrorMsg(null);
+    try {
+      window.location.assign(await paymentApi.createVnPayUrl(orderId));
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Không thể mở VNPAY.');
       setProcessing(false);
     }
   };
@@ -632,7 +644,7 @@ export const PaymentView: React.FC<PaymentViewProps> = ({ orderId }) => {
           <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <button
               type="button"
-              disabled={processing || isExpired}
+              disabled={processing || isExpired || paymentInfo.paymentMethod === 'VNPAY'}
               className="og-button og-button--primary"
               style={{
                 padding: '14px 20px',
@@ -643,12 +655,15 @@ export const PaymentView: React.FC<PaymentViewProps> = ({ orderId }) => {
               }}
               onClick={() => handleProcessPayment(true)}
             >
-              {processing ? 'Đang xác thực giao dịch...' : '⚡ Xác nhận đã thanh toán (Giữ tiền Ký quỹ)'}
+              {processing ? 'Đang xác thực giao dịch...' : 'Mô phỏng thanh toán thành công (Thử nghiệm)'}
             </button>
+
+            <button type="button" className="og-button og-button--primary" disabled={processing || isExpired}
+              onClick={handleVnPay}>Thanh toán qua VNPAY</button>
 
             <button
               type="button"
-              disabled={processing || isExpired}
+              disabled={processing || isExpired || paymentInfo.paymentMethod === 'VNPAY'}
               style={{
                 padding: '10px 16px',
                 fontSize: '0.88rem',

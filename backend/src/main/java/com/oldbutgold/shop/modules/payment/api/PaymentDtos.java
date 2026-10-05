@@ -11,15 +11,7 @@ public final class PaymentDtos {
     }
 
     public record CreateVnPaymentRequest(
-        @NotBlank(message = "Mã đơn hàng không được để trống.")
-        String orderRef,
-
-        @NotNull(message = "Số tiền không được để trống.")
-        @Min(value = 1000, message = "Số tiền phải tối thiếu là 1.000VNĐ")
-        Long amountVnd,
-
-        @NotBlank(message = "Nội dung thanh toán không được để trống.")
-        String orderInfo
+        @NotNull @Min(1) Long orderId
     ) {
     }
 

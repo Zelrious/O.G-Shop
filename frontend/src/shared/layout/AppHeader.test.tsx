@@ -177,6 +177,7 @@ describe('AppHeader Component', () => {
 
     // Simulate image error
     fireEvent.error(avatarImg);
-    expect(avatarImg).toHaveStyle({ display: 'none' });
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByText('T')).toBeVisible();
   });
 });

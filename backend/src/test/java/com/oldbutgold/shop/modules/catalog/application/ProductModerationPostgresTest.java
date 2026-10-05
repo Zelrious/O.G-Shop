@@ -113,7 +113,7 @@ class ProductModerationPostgresTest {
                 "INSERT INTO users(email, password_hash, full_name) VALUES (?, ?, ?) RETURNING user_id",
                 Long.class, "reviewer-" + randomSuffix + "@example.com", "hash", "Reviewer " + randomSuffix
         );
-        jdbc.update("INSERT INTO user_roles(user_id, role_id) SELECT ?, role_id FROM roles WHERE role_name='BUYER'", reviewerId);
+        jdbc.update("INSERT INTO user_roles(user_id, role_id) SELECT ?, role_id FROM roles WHERE role_name='KTV'", reviewerId);
 
         categoryId = jdbc.queryForObject("SELECT category_id FROM categories LIMIT 1", Long.class);
     }
@@ -232,7 +232,7 @@ class ProductModerationPostgresTest {
         assertThat(jdbc.queryForObject("SELECT status FROM products WHERE product_id=?", String.class, draftId)).isEqualTo("PENDING");
 
         // 3. REJECTED cannot publish
-        long rev = jdbc.queryForObject("SELECT content_revision FROM products WHERE product_id=?", Long.class, draftId);
+        long rev = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, draftId);
         sellerProductService.rejectProduct(reviewerId, draftId, "Ảnh mờ", rev, "ck-rej-pub-" + draftId);
         assertThatThrownBy(() -> sellerProductService.publishProduct(sellerId, draftId))
                 .isInstanceOf(ProductStateConflictException.class)
@@ -260,7 +260,7 @@ class ProductModerationPostgresTest {
         long rev1 = jdbc.queryForObject("SELECT content_revision FROM products WHERE product_id=?", Long.class, productId);
 
         // 1. Approve product -> ACTIVE
-        sellerProductService.approveProduct(reviewerId, productId, rev1, "ck-app-pub-" + productId);
+        sellerProductService.approveProduct(reviewerId, productId, jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, productId), "ck-app-pub-" + productId);
         assertThat(jdbc.queryForObject("SELECT status FROM products WHERE product_id=?", String.class, productId)).isEqualTo("ACTIVE");
 
         // 2. Seller hides product -> HIDDEN
@@ -294,10 +294,10 @@ class ProductModerationPostgresTest {
     @Test
     void moderation_fullApprovalFlow_persistsDecisionAndAuditAtomically() throws Exception {
         long productId = createPendingProduct();
-        long rev = jdbc.queryForObject("SELECT content_revision FROM products WHERE product_id=?", Long.class, productId);
+        long rev = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, productId);
 
         var auth = jwt().jwt(token -> token.subject(String.valueOf(reviewerId)))
-                .authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
+                .authorities(new SimpleGrantedAuthority("ROLE_KTV"));
 
         String cmdKey = "cmd-approve-" + productId;
         var body = Map.of("expectedVersion", rev, "commandKey", cmdKey);
@@ -331,10 +331,10 @@ class ProductModerationPostgresTest {
     @Test
     void moderation_rejectionFlow_persistsReasonAndSellerCanQueryIt() throws Exception {
         long productId = createPendingProduct();
-        long rev = jdbc.queryForObject("SELECT content_revision FROM products WHERE product_id=?", Long.class, productId);
+        long rev = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, productId);
 
         var auth = jwt().jwt(token -> token.subject(String.valueOf(reviewerId)))
-                .authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
+                .authorities(new SimpleGrantedAuthority("ROLE_KTV"));
 
         String reason = "Video quay cận cảnh bị mờ nhòe, không nhìn rõ vết xước màn hình.";
         var body = Map.of("reason", reason, "expectedVersion", rev, "commandKey", "cmd-reject-" + productId);
@@ -361,10 +361,10 @@ class ProductModerationPostgresTest {
     @Test
     void moderation_validation_missingNullOrInvalidInputs_returns400AndNoDataWritten() throws Exception {
         long productId = createPendingProduct();
-        long rev = jdbc.queryForObject("SELECT content_revision FROM products WHERE product_id=?", Long.class, productId);
+        long rev = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, productId);
 
         var auth = jwt().jwt(token -> token.subject(String.valueOf(reviewerId)))
-                .authorities(new SimpleGrantedAuthority("ROLE_BUYER"));
+                .authorities(new SimpleGrantedAuthority("ROLE_KTV"));
 
         // 1. Missing body -> 400
         mockMvc.perform(post("/api/v1/moderation/products/" + productId + "/approve")
@@ -430,7 +430,7 @@ class ProductModerationPostgresTest {
     @Test
     void moderation_sameKeyReplay_andConflictScenarios() {
         long productId = createPendingProduct();
-        long rev = jdbc.queryForObject("SELECT content_revision FROM products WHERE product_id=?", Long.class, productId);
+        long rev = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, productId);
         String key = "shared-cmd-key-" + UUID.randomUUID();
 
         // 1. First call: approves with key
@@ -446,6 +446,7 @@ class ProductModerationPostgresTest {
                 "INSERT INTO users(email, password_hash, full_name) VALUES (?, ?, ?) RETURNING user_id",
                 Long.class, "other-rev-" + UUID.randomUUID() + "@example.com", "hash", "Other Reviewer"
         );
+        jdbc.update("INSERT INTO user_roles(user_id,role_id) SELECT ?,role_id FROM roles WHERE role_name='KTV'", otherReviewerId);
         assertThatThrownBy(() -> sellerProductService.approveProduct(otherReviewerId, productId, rev, key))
                 .isInstanceOf(CommandKeyConflictException.class);
 
@@ -465,7 +466,7 @@ class ProductModerationPostgresTest {
     @Test
     void moderation_sameKeyReplay_rejectReturnsOriginalRejectedStatusAfterResubmit() {
         long productId = createPendingProduct();
-        long rev = jdbc.queryForObject("SELECT content_revision FROM products WHERE product_id=?", Long.class, productId);
+        long rev = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, productId);
         String rejKey = "cmd-rej-replay-" + productId;
         String reason = "Cần bổ sung thêm phụ kiện đi kèm";
 
@@ -512,7 +513,7 @@ class ProductModerationPostgresTest {
         // 2. Stale expectedVersion rev1 fails with ProductVersionConflictException
         assertThatThrownBy(() -> sellerProductService.approveProduct(reviewerId, productId, rev1, "stale-key-" + UUID.randomUUID()))
                 .isInstanceOf(ProductVersionConflictException.class)
-                .hasMessageContaining("Phiên bản nội dung tin đăng đã thay đổi");
+                .hasMessageContaining("Phiên bản tin đăng đã thay đổi");
         assertThat(jdbc.queryForObject("SELECT status FROM products WHERE product_id=?", String.class, productId)).isEqualTo("PENDING");
 
         // 3. Product in SOLD or RESERVED status rejects moderation
@@ -545,15 +546,44 @@ class ProductModerationPostgresTest {
     }
 
     @Test
+    void delayedCommandCannotApproveResubmittedStateWithUnchangedContent() {
+        long id = createPendingProduct();
+        long oldVersion = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, id);
+        long content = jdbc.queryForObject("SELECT content_revision FROM products WHERE product_id=?", Long.class, id);
+        sellerProductService.rejectProduct(reviewerId, id, "Review again", oldVersion, "reject-cycle-" + id);
+        sellerProductService.submitProduct(sellerId, id);
+        assertThat(jdbc.queryForObject("SELECT content_revision FROM products WHERE product_id=?", Long.class, id)).isEqualTo(content);
+        assertThatThrownBy(() -> sellerProductService.approveProduct(reviewerId, id, oldVersion, "delayed-old-" + id))
+                .isInstanceOf(ProductVersionConflictException.class);
+        long currentVersion = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, id);
+        sellerProductService.approveProduct(reviewerId, id, currentVersion, "current-cycle-" + id);
+        assertThat(jdbc.queryForObject("SELECT decision_content_revision FROM product_moderation_decisions WHERE command_key=?", Long.class, "current-cycle-" + id)).isEqualTo(content);
+    }
+
+    @Test
+    void legacyDecisionWithCoincidentallyMatchingNumberDoesNotAuthorizePublishing() {
+        long id = createPendingProduct();
+        jdbc.update("UPDATE products SET status='HIDDEN',content_revision=1 WHERE product_id=?", id);
+        jdbc.update("INSERT INTO product_moderation_decisions(product_id,reviewer_id,decision,product_version,command_key) VALUES(?,?,'APPROVED',1,?)", id, reviewerId, "legacy-unsafe-" + id);
+        assertThatThrownBy(() -> sellerProductService.publishProduct(sellerId, id)).isInstanceOf(ProductStateConflictException.class);
+        assertThat(jdbc.queryForObject("SELECT status FROM products WHERE product_id=?", String.class, id)).isEqualTo("HIDDEN");
+        sellerProductService.submitProduct(sellerId, id);
+        long version = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, id);
+        sellerProductService.approveProduct(reviewerId, id, version, "renewed-proof-" + id);
+        assertThat(jdbc.queryForObject("SELECT status FROM products WHERE product_id=?", String.class, id)).isEqualTo("ACTIVE");
+    }
+
+    @Test
     void concurrency_twoCompetingDecisions_onlyOneWins() throws Exception {
         long productId = createPendingProduct();
-        long rev = jdbc.queryForObject("SELECT content_revision FROM products WHERE product_id=?", Long.class, productId);
+        long rev = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, productId);
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch endLatch = new CountDownLatch(2);
 
         AtomicInteger successCount = new AtomicInteger(0);
+        var unexpected = new java.util.concurrent.ConcurrentLinkedQueue<Throwable>();
         AtomicInteger conflictCount = new AtomicInteger(0);
 
         String key1 = "concurrency-key-1-" + UUID.randomUUID();
@@ -565,7 +595,7 @@ class ProductModerationPostgresTest {
                 sellerProductService.approveProduct(reviewerId, productId, rev, key1);
                 successCount.incrementAndGet();
             } catch (Exception e) {
-                conflictCount.incrementAndGet();
+                if (isExpectedModerationConflict(e)) conflictCount.incrementAndGet(); else unexpected.add(e);
             } finally {
                 endLatch.countDown();
             }
@@ -577,7 +607,7 @@ class ProductModerationPostgresTest {
                 sellerProductService.rejectProduct(reviewerId, productId, "Lý do cạnh tranh", rev, key2);
                 successCount.incrementAndGet();
             } catch (Exception e) {
-                conflictCount.incrementAndGet();
+                if (isExpectedModerationConflict(e)) conflictCount.incrementAndGet(); else unexpected.add(e);
             } finally {
                 endLatch.countDown();
             }
@@ -588,6 +618,7 @@ class ProductModerationPostgresTest {
         executor.shutdownNow();
 
         assertThat(finished).isTrue();
+        assertThat(unexpected).isEmpty();
         assertThat(successCount.get()).isEqualTo(1);
         assertThat(conflictCount.get()).isEqualTo(1);
 
@@ -601,13 +632,14 @@ class ProductModerationPostgresTest {
     @Test
     void concurrency_sameKeyConcurrentRequests_exactOneDecisionPersisted() throws Exception {
         long productId = createPendingProduct();
-        long rev = jdbc.queryForObject("SELECT content_revision FROM products WHERE product_id=?", Long.class, productId);
+        long rev = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, productId);
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch endLatch = new CountDownLatch(2);
 
         AtomicInteger successCount = new AtomicInteger(0);
+        var unexpected = new java.util.concurrent.ConcurrentLinkedQueue<Throwable>();
         String sharedKey = "concurrent-same-key-" + UUID.randomUUID();
 
         for (int i = 0; i < 2; i++) {
@@ -616,7 +648,8 @@ class ProductModerationPostgresTest {
                     startLatch.await();
                     sellerProductService.approveProduct(reviewerId, productId, rev, sharedKey);
                     successCount.incrementAndGet();
-                } catch (Exception ignored) {
+                } catch (Exception error) {
+                    if (!isExpectedModerationConflict(error)) unexpected.add(error);
                 } finally {
                     endLatch.countDown();
                 }
@@ -628,6 +661,7 @@ class ProductModerationPostgresTest {
         executor.shutdownNow();
 
         assertThat(finished).isTrue();
+        assertThat(unexpected).isEmpty();
         assertThat(successCount.get()).isGreaterThanOrEqualTo(1);
 
         var decisionCount = jdbc.queryForObject(
@@ -640,7 +674,7 @@ class ProductModerationPostgresTest {
     @Test
     void moderation_atomicRollback_whenDecisionPersistenceFails() {
         long productId = createPendingProduct();
-        long rev = jdbc.queryForObject("SELECT content_revision FROM products WHERE product_id=?", Long.class, productId);
+        long rev = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, productId);
         String key = "fail-dec-key-" + UUID.randomUUID();
 
         // Inject persistence error during decision save
@@ -672,7 +706,7 @@ class ProductModerationPostgresTest {
     @Test
     void moderation_atomicRollback_whenPlatformAuditFails() {
         long productId = createPendingProduct();
-        long rev = jdbc.queryForObject("SELECT content_revision FROM products WHERE product_id=?", Long.class, productId);
+        long rev = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, productId);
         String key = "fail-audit-key-" + UUID.randomUUID();
 
         // Inject persistence error during platform audit persistence
@@ -700,4 +734,9 @@ class ProductModerationPostgresTest {
         );
         assertThat(auditCount).isEqualTo(0);
     }
-}
+    private static boolean isExpectedModerationConflict(Exception error) {
+        return error instanceof ProductStateConflictException || error instanceof ProductVersionConflictException
+                || error instanceof org.springframework.dao.OptimisticLockingFailureException
+                || (error instanceof org.springframework.dao.DataIntegrityViolationException
+                    && error.getMessage() != null && error.getMessage().contains("uq_moderation_decisions_command_key"));
+    }}

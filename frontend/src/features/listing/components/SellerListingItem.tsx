@@ -48,7 +48,7 @@ export const SellerListingItem: React.FC<SellerListingItemProps> = ({
   const canEdit = ['DRAFT', 'ACTIVE', 'HIDDEN', 'REJECTED'].includes(product.status);
   const canPublish = product.status === 'HIDDEN';
   const canHide = product.status === 'ACTIVE';
-  const canSubmit = ['DRAFT', 'REJECTED'].includes(product.status);
+  const canSubmit = ['DRAFT', 'HIDDEN', 'REJECTED'].includes(product.status);
 
   const handleHideClick = () => {
     setIsMenuOpen(false);

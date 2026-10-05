@@ -17,6 +17,7 @@ public class PaymentEntity {
     public static final String METHOD_BANK_TRANSFER = "BANK_TRANSFER_MOCK";
     public static final String METHOD_E_WALLET = "E_WALLET_MOCK";
     public static final String METHOD_COD = "COD_MOCK";
+    public static final String METHOD_VNPAY = "VNPAY";
 
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_PAID = "PAID";
@@ -111,6 +112,16 @@ public class PaymentEntity {
         this.releasedAt = null;
         this.refundedAt = null;
         this.failureReason = (reason != null && !reason.isBlank()) ? reason : "Giao dịch thanh toán thất bại";
+        this.updatedAt = now;
+    }
+
+    public void markProviderRefundPending(String transactionCode, Instant now) {
+        this.status = STATUS_REFUND_PENDING;
+        this.transactionCode = transactionCode;
+        this.paidAt = now;
+        this.refundAmount = this.amount;
+        this.refundReason = "Provider payment after order cancellation/deadline; reconciliation required";
+        this.failureReason = null;
         this.updatedAt = now;
     }
 

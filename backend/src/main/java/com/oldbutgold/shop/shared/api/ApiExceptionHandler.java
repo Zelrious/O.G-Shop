@@ -110,6 +110,11 @@ public class ApiExceptionHandler {
                 "Tin đăng đã được cập nhật bởi một phiên làm việc khác. Vui lòng tải lại trang.", request, List.of());
     }
 
+    @ExceptionHandler(com.oldbutgold.shop.modules.payment.application.PaymentStateConflictException.class)
+    ResponseEntity<ApiError> paymentStateConflict(Exception exception, HttpServletRequest request) {
+        return response(HttpStatus.CONFLICT, "PAYMENT_STATE_CONFLICT", exception.getMessage(), request, List.of());
+    }
+
     private static ResponseEntity<ApiError> response(HttpStatus status, String code, String message,
                                                       HttpServletRequest request, List<FieldError> fields) {
         String requestId = request.getHeader("X-Request-ID");
