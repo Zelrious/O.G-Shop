@@ -19,19 +19,34 @@ export const MarketplacePage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Parse filters from URL search params
-  const currentFilters = useMemo<ProductFilterParams>(
-    () => ({
+  const currentFilters = useMemo<ProductFilterParams>(() => {
+    const rawCat = searchParams.get('categoryIds') || searchParams.get('categoryId');
+    let parsedCatIds: number[] | undefined;
+    if (rawCat) {
+      const parts = rawCat.split(',').map((s) => Number(s.trim())).filter((n) => !isNaN(n) && n > 0);
+      if (parts.length > 0) parsedCatIds = parts;
+    }
+
+    const rawCond = searchParams.get('conditions') || searchParams.get('condition');
+    let parsedConds: string[] | undefined;
+    if (rawCond) {
+      const parts = rawCond.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+      if (parts.length > 0) parsedConds = parts;
+    }
+
+    return {
       query: searchParams.get('query') || undefined,
-      categoryId: searchParams.get('categoryId') ? Number(searchParams.get('categoryId')) : undefined,
-      condition: searchParams.get('condition') || undefined,
+      categoryId: parsedCatIds && parsedCatIds.length === 1 ? parsedCatIds[0] : undefined,
+      categoryIds: parsedCatIds,
+      condition: parsedConds && parsedConds.length === 1 ? parsedConds[0] : undefined,
+      conditions: parsedConds,
       minPrice: searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : undefined,
       maxPrice: searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : undefined,
       page: searchParams.get('page') ? Number(searchParams.get('page')) : 0,
       size: 12,
       sort: searchParams.get('sort') || 'newest',
-    }),
-    [searchParams]
-  );
+    };
+  }, [searchParams]);
 
   // Fetch categories on mount
   useEffect(() => {
@@ -66,10 +81,33 @@ export const MarketplacePage: React.FC = () => {
     setIsLoading(true);
     const params: Record<string, string> = {};
     if (newFilters.query) params.query = newFilters.query;
-    if (newFilters.categoryId) params.categoryId = String(newFilters.categoryId);
-    if (newFilters.condition) params.condition = newFilters.condition;
-    if (newFilters.minPrice !== undefined && newFilters.minPrice !== null) params.minPrice = String(newFilters.minPrice);
-    if (newFilters.maxPrice !== undefined && newFilters.maxPrice !== null) params.maxPrice = String(newFilters.maxPrice);
+
+    const catIds = newFilters.categoryIds && newFilters.categoryIds.length > 0
+      ? newFilters.categoryIds
+      : newFilters.categoryId ? [newFilters.categoryId] : [];
+    if (catIds.length > 0) {
+      params.categoryIds = catIds.join(',');
+      if (catIds.length === 1) {
+        params.categoryId = String(catIds[0]);
+      }
+    }
+
+    const conds = newFilters.conditions && newFilters.conditions.length > 0
+      ? newFilters.conditions
+      : newFilters.condition ? [newFilters.condition] : [];
+    if (conds.length > 0) {
+      params.conditions = conds.join(',');
+      if (conds.length === 1) {
+        params.condition = conds[0];
+      }
+    }
+
+    if (newFilters.minPrice !== undefined && newFilters.minPrice !== null && !isNaN(newFilters.minPrice)) {
+      params.minPrice = String(newFilters.minPrice);
+    }
+    if (newFilters.maxPrice !== undefined && newFilters.maxPrice !== null && !isNaN(newFilters.maxPrice)) {
+      params.maxPrice = String(newFilters.maxPrice);
+    }
     if (newFilters.sort) params.sort = newFilters.sort;
     params.page = '0';
     setSearchParams(params);
@@ -106,7 +144,9 @@ export const MarketplacePage: React.FC = () => {
 
   const isFiltered = Boolean(
     currentFilters.query ||
+    (currentFilters.categoryIds && currentFilters.categoryIds.length > 0) ||
     currentFilters.categoryId ||
+    (currentFilters.conditions && currentFilters.conditions.length > 0) ||
     currentFilters.condition ||
     currentFilters.minPrice !== undefined ||
     currentFilters.maxPrice !== undefined ||

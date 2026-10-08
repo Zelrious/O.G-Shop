@@ -113,6 +113,181 @@ describe('MarketplaceFilters Component', () => {
 
     expect(handleReset).toHaveBeenCalled();
   });
+
+  it('toggles filter drawer and supports multi-category selection', () => {
+    const handleApply = vi.fn();
+    const handleReset = vi.fn();
+
+    render(
+      <MarketplaceFilters
+        categories={mockCategories}
+        filters={{}}
+        onApplyFilters={handleApply}
+        onResetFilters={handleReset}
+      />
+    );
+
+    // Filter drawer is initially collapsed
+    expect(screen.queryByText(/Tùy chọn lọc chi tiết/i)).not.toBeInTheDocument();
+
+    // Click "Bộ lọc" toggle
+    const toggleButton = screen.getByRole('button', { name: /Bộ lọc/i });
+    fireEvent.click(toggleButton);
+
+    // Filter drawer is now open
+    expect(screen.getByText(/Tùy chọn lọc chi tiết/i)).toBeInTheDocument();
+
+    // Click multiple categories: "Điện tử" and "Thời trang"
+    const cat1 = screen.getByRole('button', { name: /Điện tử/i });
+    const cat2 = screen.getByRole('button', { name: /Thời trang/i });
+    fireEvent.click(cat1);
+    fireEvent.click(cat2);
+
+    // Click "Áp dụng bộ lọc" inside the drawer
+    const applyDrawerBtn = screen.getByRole('button', { name: /Áp dụng bộ lọc/i });
+    fireEvent.click(applyDrawerBtn);
+
+    expect(handleApply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        categoryIds: [1, 2],
+        page: 0,
+      })
+    );
+  });
+
+  it('renders active filter tags with x button and removes criteria on click', () => {
+    const handleApply = vi.fn();
+    const handleReset = vi.fn();
+
+    render(
+      <MarketplaceFilters
+        categories={mockCategories}
+        filters={{
+          categoryIds: [1, 2],
+          conditions: ['LIKE_NEW'],
+        }}
+        onApplyFilters={handleApply}
+        onResetFilters={handleReset}
+      />
+    );
+
+    // Active tags list should display each criteria
+    expect(screen.getByText('Danh mục: Điện tử')).toBeInTheDocument();
+    expect(screen.getByText('Danh mục: Thời trang')).toBeInTheDocument();
+    expect(screen.getByText(/Tình trạng: Như mới/i)).toBeInTheDocument();
+
+    // Click 'x' button on "Danh mục: Điện tử" tag
+    const removeCat1Btn = screen.getByRole('button', { name: /Xóa tiêu chí Danh mục: Điện tử/i });
+    fireEvent.click(removeCat1Btn);
+
+    expect(handleApply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        categoryIds: [2],
+        conditions: ['LIKE_NEW'],
+      })
+    );
+  });
+
+  it('clears all filters when Xóa tất cả button is clicked in active tags', () => {
+    const handleApply = vi.fn();
+    const handleReset = vi.fn();
+
+    render(
+      <MarketplaceFilters
+        categories={mockCategories}
+        filters={{
+          query: 'ThinkPad',
+          categoryIds: [1],
+        }}
+        onApplyFilters={handleApply}
+        onResetFilters={handleReset}
+      />
+    );
+
+    const clearAllBtn = screen.getByRole('button', { name: /Xóa tất cả/i });
+    fireEvent.click(clearAllBtn);
+
+    expect(handleReset).toHaveBeenCalled();
+  });
+
+  it('renders filter chips without checkmark icon ✓ and in scrollable containers', () => {
+    render(
+      <MarketplaceFilters
+        categories={mockCategories}
+        filters={{ categoryIds: [1] }}
+        onApplyFilters={vi.fn()}
+        onResetFilters={vi.fn()}
+      />
+    );
+
+    // Open drawer
+    fireEvent.click(screen.getByRole('button', { name: /^Bộ lọc/i }));
+
+    // Verify category chip is selected and does NOT have a checkmark icon '✓'
+    const cat1Btn = screen.getByRole('button', { name: /^Điện tử$/i });
+    expect(cat1Btn).toHaveClass('og-filter-chip--active');
+    expect(cat1Btn.textContent).toBe('Điện tử');
+    expect(screen.queryByText('✓')).not.toBeInTheDocument();
+
+    // Verify horizontal scroll container exists
+    const scrollContainers = document.querySelectorAll('.og-filter-chips-scroll');
+    expect(scrollContainers.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('supports dual range slider and manual price inputs with quick presets', () => {
+    const handleApply = vi.fn();
+
+    render(
+      <MarketplaceFilters
+        categories={mockCategories}
+        filters={{}}
+        onApplyFilters={handleApply}
+        onResetFilters={vi.fn()}
+      />
+    );
+
+    // Open drawer
+    fireEvent.click(screen.getByRole('button', { name: /Bộ lọc/i }));
+
+    // Verify min and max price inputs
+    const minInput = screen.getByLabelText(/Giá từ/i) as HTMLInputElement;
+    const maxInput = screen.getByLabelText(/Đến giá/i) as HTMLInputElement;
+    expect(minInput).toBeInTheDocument();
+    expect(maxInput).toBeInTheDocument();
+
+    // Drag dual slider min thumb
+    const minSlider = screen.getByLabelText(/Thanh kéo giá tối thiểu/i);
+    fireEvent.change(minSlider, { target: { value: '2000000' } });
+    expect(minInput.value).toBe('2000000');
+
+    // Drag dual slider max thumb
+    const maxSlider = screen.getByLabelText(/Thanh kéo giá tối đa/i);
+    fireEvent.change(maxSlider, { target: { value: '10000000' } });
+    expect(maxInput.value).toBe('10000000');
+
+    // Click quick preset "1 - 5 triệu"
+    const presetBtn = screen.getByRole('button', { name: /1 - 5 triệu/i });
+    fireEvent.click(presetBtn);
+    expect(minInput.value).toBe('1000000');
+    expect(maxInput.value).toBe('5000000');
+
+    // Apply filters
+    const applyDrawerBtn = screen.getByRole('button', { name: /Áp dụng bộ lọc/i });
+    fireEvent.click(applyDrawerBtn);
+
+    expect(handleApply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        minPrice: 1000000,
+        maxPrice: 5000000,
+      })
+    );
+
+    // Click "Xóa giá"
+    const clearPriceBtn = screen.getByRole('button', { name: /Xóa giá/i });
+    fireEvent.click(clearPriceBtn);
+    expect(minInput.value).toBe('');
+    expect(maxInput.value).toBe('');
+  });
 });
 
 describe('MarketplacePage Component', () => {

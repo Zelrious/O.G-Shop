@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 /* ==========================================================================
    O.G Shop Design System — Tokens & Global Styles
    Identity: Old but Gold (Trust-oriented Second-hand Marketplace)
@@ -82,9 +84,9 @@
   --og-radius-lg: 16px;
   --og-radius-full: 9999px;
 
-  /* Typography */
-  --og-font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --og-font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
+  /* Typography — Unified with Inter for flawless Vietnamese diacritics */
+  --og-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --og-font-serif: var(--og-font-sans);
 
   /* Transitions */
   --og-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -2822,6 +2824,835 @@ textarea {
   font-size: 0.9rem;
   color: var(--og-color-text-muted);
   margin-bottom: var(--og-space-2);
+}
+
+/* ==========================================================================
+   MARKETPLACE COMPACT FILTER BAR & EXPANDABLE DRAWER
+   ========================================================================== */
+
+.og-marketplace-filters-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--og-space-3);
+  width: 100%;
+}
+
+/* Compact Main Bar */
+.og-filterbar {
+  display: flex;
+  align-items: center;
+  gap: var(--og-space-3);
+  background: var(--og-color-surface);
+  border: 1px solid var(--og-color-border);
+  border-radius: var(--og-radius-lg);
+  padding: 12px 16px;
+  box-shadow: 0 2px 8px rgba(20, 35, 28, 0.04);
+  transition: box-shadow var(--og-transition-base), border-color var(--og-transition-base);
+}
+
+.og-filterbar:focus-within {
+  border-color: var(--og-color-primary);
+  box-shadow: 0 4px 14px rgba(29, 77, 56, 0.08);
+}
+
+/* Search input with integrated icon */
+.og-filterbar__search-group {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  align-items: center;
+}
+
+.og-filterbar__search-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 15px;
+  color: var(--og-color-text-muted);
+  pointer-events: none;
+  user-select: none;
+}
+
+.og-filterbar__search-input {
+  width: 100%;
+  padding-left: 38px;
+  padding-right: 32px;
+  height: 42px;
+  font-size: 0.93rem;
+  background-color: var(--og-color-bg);
+  border: 1px solid var(--og-color-border);
+  border-radius: var(--og-radius-md);
+  transition: all var(--og-transition-fast);
+}
+
+.og-filterbar__search-input:focus {
+  background-color: #ffffff;
+  border-color: var(--og-color-primary);
+  box-shadow: 0 0 0 2px rgba(29, 77, 56, 0.15);
+}
+
+.og-filterbar__search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--og-color-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.og-filterbar__search-clear:hover {
+  color: var(--og-color-text-primary);
+  background-color: var(--og-color-border);
+}
+
+/* Toggle Filter Button */
+.og-filterbar__toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  border-radius: var(--og-radius-md);
+  background-color: var(--og-color-surface-subtle);
+  border: 1px solid var(--og-color-border);
+  color: var(--og-color-text-primary);
+  cursor: pointer;
+  transition: all var(--og-transition-fast);
+  white-space: nowrap;
+}
+
+.og-filterbar__toggle-btn:hover {
+  background-color: #ede5d5;
+  border-color: var(--og-color-border-strong);
+}
+
+.og-filterbar__toggle-btn--active {
+  background-color: var(--og-color-primary-light);
+  border-color: var(--og-color-primary);
+  color: var(--og-color-primary);
+}
+
+.og-filter-icon {
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.og-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--og-radius-full);
+  background-color: var(--og-color-primary);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.og-filter-chevron {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Sort dropdown group */
+.og-filterbar__sort-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.og-filterbar__sort-label {
+  font-size: 0.88rem;
+  color: var(--og-color-text-secondary);
+  font-weight: 500;
+}
+
+.og-filterbar__sort-select {
+  height: 42px;
+  padding: 0 32px 0 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: var(--og-radius-md);
+  border: 1px solid var(--og-color-border);
+  background-color: var(--og-color-surface);
+  color: var(--og-color-text-primary);
+  cursor: pointer;
+}
+
+.og-filterbar__sort-select:focus {
+  border-color: var(--og-color-primary);
+}
+
+/* Action Buttons */
+.og-filterbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.og-filterbar__submit-btn {
+  height: 42px;
+  padding: 0 18px;
+  font-size: 0.92rem;
+}
+
+.og-filterbar__reset-btn {
+  height: 42px;
+  padding: 0 12px;
+  font-size: 0.9rem;
+  color: var(--og-color-text-muted);
+}
+
+.og-filterbar__reset-btn:hover {
+  color: var(--og-color-danger);
+}
+
+/* 2. Expandable Filter Drawer / Panel */
+.og-filter-drawer {
+  background: var(--og-color-surface);
+  border: 1px solid var(--og-color-border);
+  border-radius: var(--og-radius-lg);
+  padding: 20px 24px;
+  box-shadow: 0 6px 20px rgba(20, 35, 28, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: og-slide-down 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  container-type: inline-size;
+}
+
+@keyframes og-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.og-filter-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--og-color-border);
+  padding-bottom: 12px;
+}
+
+.og-filter-drawer__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--og-color-text-primary);
+  font-family: var(--og-font-sans);
+  letter-spacing: normal;
+}
+
+.og-filter-drawer__close-btn {
+  background: none;
+  border: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--og-color-text-secondary);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--og-radius-sm);
+  transition: all var(--og-transition-fast);
+}
+
+.og-filter-drawer__close-btn:hover {
+  color: var(--og-color-primary);
+  background-color: var(--og-color-surface-subtle);
+}
+
+/* Vertical Stacked Layout for Filter Drawer */
+.og-filter-drawer__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.og-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.og-filter-group__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.og-filter-group__title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--og-color-text-primary);
+}
+
+.og-filter-group__sub {
+  font-size: 0.82rem;
+  color: var(--og-color-text-muted);
+  font-weight: 500;
+}
+
+/* Horizontal Scrollable Chips Row — each category scrolls independently */
+.og-filter-chips-scroll {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 4px 10px 4px;
+  margin: -4px -4px 0 -4px;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(29, 77, 56, 0.3) rgba(226, 216, 199, 0.35);
+}
+
+.og-filter-chips-scroll:hover {
+  scrollbar-color: var(--og-color-primary) rgba(226, 216, 199, 0.65);
+}
+
+/* Custom scrollbar: vừa phải, nổi to lên một chút khi hover để dễ kéo */
+.og-filter-chips-scroll::-webkit-scrollbar {
+  height: 6px;
+  transition: height 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.og-filter-chips-scroll:hover::-webkit-scrollbar {
+  height: 9px;
+}
+
+.og-filter-chips-scroll::-webkit-scrollbar-track {
+  background: rgba(226, 216, 199, 0.35);
+  border-radius: 9999px;
+}
+
+.og-filter-chips-scroll:hover::-webkit-scrollbar-track {
+  background: rgba(226, 216, 199, 0.65);
+}
+
+.og-filter-chips-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(29, 77, 56, 0.3);
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+
+.og-filter-chips-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(29, 77, 56, 0.55);
+}
+
+.og-filter-chips-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--og-color-primary);
+}
+
+/* Fallback class for chips */
+.og-filter-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Filter Chip Pill — Non-shifting illuminated border and hover lift */
+.og-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 15px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--og-color-text-secondary);
+  background-color: var(--og-color-surface);
+  border: 1px solid var(--og-color-border);
+  border-radius: var(--og-radius-full);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
+  transition: transform 0.16s ease,
+              box-shadow 0.16s ease,
+              border-color 0.16s ease,
+              background-color 0.16s ease,
+              color 0.16s ease;
+}
+
+/* Hover: nổi nhẹ lên */
+.og-filter-chip:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(20, 35, 28, 0.08);
+  border-color: var(--og-color-border-strong);
+  color: var(--og-color-text-primary);
+  background-color: var(--og-color-surface-hover);
+}
+
+/* Selected: Làm nhẹ màu viền giống nút "Bộ lọc" phía trên, nền pastel dịu mát */
+.og-filter-chip--active {
+  border: 1px solid rgba(29, 77, 56, 0.45);
+  background-color: var(--og-color-primary-light);
+  color: var(--og-color-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(29, 77, 56, 0.08);
+}
+
+.og-filter-chip--active:hover {
+  transform: translateY(-2px);
+  border-color: var(--og-color-primary);
+  background-color: #dbebe2;
+  box-shadow: 0 3px 8px rgba(29, 77, 56, 0.14);
+}
+
+/* Preset Chips */
+.og-filter-chip--preset {
+  font-size: 0.82rem;
+  padding: 5px 13px;
+}
+
+/* Price Range Section (Tầm giá) Styling — Side-by-side Layout */
+.og-filter-price-card {
+  background: var(--og-color-bg);
+  border: 1px solid var(--og-color-border);
+  border-radius: var(--og-radius-md);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+/* Top Row: Left side inputs + Right side slider */
+.og-filter-price-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+}
+
+.og-filter-price-inputs-col {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.og-filter-price-inputs-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.og-filter-price-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 145px;
+}
+
+.og-filter-price-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--og-color-text-muted);
+}
+
+.og-filter-price-input {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--og-color-text-primary);
+  background: var(--og-color-surface);
+  border: 1.5px solid var(--og-color-border);
+  border-radius: var(--og-radius-sm);
+  transition: all var(--og-transition-fast);
+}
+
+.og-filter-price-input:focus {
+  outline: none;
+  border-color: var(--og-color-border-focus);
+  box-shadow: var(--og-focus-ring);
+}
+
+.og-filter-price-hint {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--og-color-primary);
+  min-height: 18px;
+  margin-top: 1px;
+}
+
+.og-filter-price-hint--placeholder {
+  color: var(--og-color-text-muted);
+  font-weight: 400;
+}
+
+.og-filter-price-dash {
+  align-self: center;
+  margin-top: 13px;
+  font-size: 1.1rem;
+  color: var(--og-color-text-muted);
+  user-select: none;
+}
+
+.og-filter-price-clear-btn {
+  align-self: center;
+  margin-top: 13px;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  padding: 5px 10px;
+}
+
+/* Right Column: Dual Range Slider */
+.og-filter-price-slider-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 220px;
+  max-width: 480px;
+  padding-left: 10px;
+}
+
+.og-filter-slider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.og-filter-slider-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--og-color-text-muted);
+}
+
+/* Dual Range Slider Component */
+.og-dual-slider-box {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 0;
+}
+
+.og-dual-slider {
+  position: relative;
+  width: 100%;
+  height: 28px;
+  display: flex;
+  align-items: center;
+}
+
+.og-dual-slider__track {
+  position: absolute;
+  width: 100%;
+  height: 5px;
+  background-color: var(--og-color-border);
+  border-radius: 9999px;
+  z-index: 1;
+}
+
+.og-dual-slider__range {
+  position: absolute;
+  height: 5px;
+  background: linear-gradient(90deg, var(--og-color-primary), #2d6b4f);
+  border-radius: 9999px;
+  z-index: 2;
+}
+
+.og-dual-slider__input {
+  position: absolute;
+  width: 100%;
+  height: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+  z-index: 3;
+}
+
+.og-dual-slider__input::-webkit-slider-thumb {
+  pointer-events: auto;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--og-color-primary);
+  box-shadow: 0 1px 4px rgba(20, 35, 28, 0.22);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.og-dual-slider__input::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 7px rgba(29, 77, 56, 0.35);
+  border-color: var(--og-color-primary-hover);
+}
+
+.og-dual-slider__input::-webkit-slider-thumb:active {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 3px rgba(29, 77, 56, 0.2);
+}
+
+.og-dual-slider__input::-moz-range-thumb {
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--og-color-primary);
+  box-shadow: 0 1px 4px rgba(20, 35, 28, 0.22);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.og-dual-slider__input::-moz-range-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 7px rgba(29, 77, 56, 0.35);
+}
+
+.og-dual-slider-markers {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  color: var(--og-color-text-muted);
+  font-weight: 500;
+  padding: 0 2px;
+}
+
+/* Quick Presets Row */
+.og-filter-presets-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px dashed var(--og-color-border);
+}
+
+.og-filter-presets-title {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--og-color-text-secondary);
+  white-space: nowrap;
+}
+
+.og-filter-chips-scroll--presets {
+  padding-bottom: 4px;
+}
+
+/* Responsive / Container Query: Proactively hide slider when narrow */
+@media (max-width: 860px) {
+  .og-filter-price-slider-col {
+    display: none !important;
+  }
+}
+
+@container (max-width: 660px) {
+  .og-filter-price-slider-col {
+    display: none !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .og-filter-price-inputs-group {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .og-filter-price-field {
+    width: 100%;
+    max-width: none;
+  }
+  .og-filter-price-dash {
+    display: none;
+  }
+  .og-filter-price-clear-btn {
+    align-self: flex-start;
+    margin-top: 0;
+  }
+}
+
+/* Drawer Footer */
+.og-filter-drawer__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--og-color-border);
+  padding-top: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.og-filter-drawer__status {
+  font-size: 0.88rem;
+  color: var(--og-color-text-muted);
+  font-style: italic;
+}
+
+.og-filter-drawer__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 3. Active Filter Chips Bar (Tags list with remove 'x' buttons) */
+.og-marketplace-active-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background-color: rgba(29, 77, 56, 0.04);
+  border: 1px dashed var(--og-color-border-strong);
+  border-radius: var(--og-radius-md);
+  flex-wrap: wrap;
+  animation: og-fade-in 180ms ease-out;
+}
+
+.og-marketplace-active-filters__lead {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--og-color-primary);
+  white-space: nowrap;
+}
+
+.og-marketplace-active-filters__tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.og-active-filter-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background-color: #ffffff;
+  border: 1px solid var(--og-color-border);
+  border-radius: var(--og-radius-full);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--og-color-text-primary);
+  box-shadow: 0 1px 2px rgba(20, 35, 28, 0.04);
+  transition: all var(--og-transition-fast);
+}
+
+.og-active-filter-tag:hover {
+  border-color: var(--og-color-primary);
+  box-shadow: 0 2px 5px rgba(29, 77, 56, 0.1);
+}
+
+.og-active-filter-tag__remove {
+  background: none;
+  border: none;
+  color: var(--og-color-text-muted);
+  cursor: pointer;
+  padding: 0;
+  margin-left: 2px;
+  font-size: 11px;
+  line-height: 1;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--og-transition-fast);
+}
+
+.og-active-filter-tag__remove:hover {
+  color: #ffffff;
+  background-color: var(--og-color-danger);
+}
+
+.og-active-filters-clear-all {
+  background: none;
+  border: none;
+  color: var(--og-color-danger);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--og-radius-sm);
+  text-decoration: underline;
+  transition: opacity var(--og-transition-fast);
+}
+
+.og-active-filters-clear-all:hover {
+  opacity: 0.8;
+  text-decoration: underline !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+  .og-filterbar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .og-filterbar__search-group {
+    flex: 1 1 100%;
+  }
+  .og-filterbar__toggle-btn {
+    flex: 1;
+  }
+  .og-filterbar__sort-group {
+    flex: 1;
+  }
+  .og-filterbar__sort-select {
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .og-filterbar__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .og-filter-drawer {
+    padding: 16px;
+  }
+  .og-filter-drawer__grid {
+    gap: 16px;
+  }
+  .og-filter-price-inputs-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .og-filter-price-field {
+    max-width: 100%;
+  }
+  .og-filter-price-dash {
+    display: none;
+  }
+  .og-filter-price-clear-btn {
+    align-self: flex-start;
+    margin-top: 0;
+  }
 }
 
 /* ==========================================================================
