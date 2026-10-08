@@ -114,6 +114,16 @@ describe('AppHeader Component', () => {
     // Clicking again collapses
     fireEvent.click(toggleBtn);
     expect(toggleBtn).toHaveAttribute('aria-expanded', 'false');
+
+    // Hysteresis deadzone: scrolling back up to 50px (between 20px and 80px) keeps isScrolled = true
+    Object.defineProperty(window, 'scrollY', { value: 50, writable: true });
+    fireEvent.scroll(window);
+    expect(screen.getByRole('button', { name: /menu tab/i })).toBeInTheDocument();
+
+    // Only when scrolling all the way back up to <= 20px does isScrolled reset to false
+    Object.defineProperty(window, 'scrollY', { value: 10, writable: true });
+    fireEvent.scroll(window);
+    expect(screen.queryByRole('button', { name: /menu tab/i })).toBeNull();
   });
 
   it('renders "Trang chủ" tab and category dropdown with auto-hover behavior', () => {

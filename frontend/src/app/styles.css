@@ -583,7 +583,10 @@ textarea {
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--og-color-border);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-  transition: all var(--og-transition-base);
+  overflow-anchor: none;
+  transition: background-color var(--og-transition-base),
+              border-color var(--og-transition-base),
+              box-shadow var(--og-transition-base);
 }
 
 /* Tier 1: Top Bar */
@@ -950,6 +953,7 @@ textarea {
   background: rgba(254, 253, 250, 0.94);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  overflow-anchor: none;
   transition: max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1),
               opacity 0.22s ease,
               transform 0.22s ease,
