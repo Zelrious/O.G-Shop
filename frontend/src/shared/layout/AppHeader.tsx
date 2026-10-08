@@ -229,15 +229,26 @@ export const AppHeader: React.FC = () => {
     };
   }, []);
 
-  // Scroll listener for compact sticky header & tab-bar collapsing (Hình 2 & Hình 3)
+  // Anti-jitter hysteresis scroll listener for compact sticky header & tab-bar collapsing
+  // Hysteresis deadzone: collapse at > 80px, only restore at <= 20px (deadzone 20px - 80px)
+  // Prevents the infinite oscillation loop: expand -> push layout -> scroll increases -> collapse -> repeat
   useEffect(() => {
+    const SCROLL_DOWN_THRESHOLD = 80;
+    const SCROLL_UP_THRESHOLD = 20;
+
     const handleScroll = () => {
-      const scrolled = window.scrollY > 40;
-      setIsScrolled(scrolled);
-      // Auto-collapse expanded tabs when scrolling back to the top
-      if (!scrolled) {
-        setIsTabsExpanded(false);
-      }
+      const currentScroll = window.scrollY || document.documentElement.scrollTop || 0;
+
+      setIsScrolled((prevScrolled) => {
+        if (!prevScrolled && currentScroll > SCROLL_DOWN_THRESHOLD) {
+          return true;
+        }
+        if (prevScrolled && currentScroll <= SCROLL_UP_THRESHOLD) {
+          setIsTabsExpanded(false);
+          return false;
+        }
+        return prevScrolled;
+      });
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
