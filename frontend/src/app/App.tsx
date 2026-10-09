@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { AuthProvider } from '../features/auth';
-import { ThemeProvider, I18nProvider, DemoProvider } from '../shared/context';
+import { ThemeProvider, I18nProvider, DemoProvider, CartProvider } from '../shared/context';
 import { ShowcaseApp } from '../features/showcase/ShowcaseApp';
 import { ProtectedRoute } from './ProtectedRoute';
 import {
@@ -19,6 +19,7 @@ import {
   SellerVerificationPage,
   MarketplacePage,
   ProductDetailPage,
+  CartPage,
   SellerListingsPage,
   CreateListingPage,
   EditListingPage,
@@ -67,20 +68,22 @@ export function App() {
       <ThemeProvider>
         <I18nProvider>
           <DemoProvider>
-            <AuthProvider>
-              <Routes>
-                {/* 1. Guest / Auth Layout Shell */}
-                <Route element={<GuestLayout />}>
-                  <Route path="/login" element={<LoginPage />} />
-                  <Route path="/register" element={<RegisterPage />} />
-                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                </Route>
+            <CartProvider>
+              <AuthProvider>
+                <Routes>
+                  {/* 1. Guest / Auth Layout Shell */}
+                  <Route element={<GuestLayout />}>
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/register" element={<RegisterPage />} />
+                    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                  </Route>
 
-                {/* 2. Main Public & Buyer Marketplace Layout Shell */}
-                <Route element={<AppLayout />}>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/marketplace" element={<MarketplacePage />} />
-                  <Route path="/products/:productId" element={<ProductDetailPage />} />
+                  {/* 2. Main Public & Buyer Marketplace Layout Shell */}
+                  <Route element={<AppLayout />}>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/marketplace" element={<MarketplacePage />} />
+                    <Route path="/products/:productId" element={<ProductDetailPage />} />
+                    <Route path="/cart" element={<CartPage />} />
                   <Route
                     path="/checkout"
                     element={
@@ -212,9 +215,10 @@ export function App() {
                 <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </AuthProvider>
-          </DemoProvider>
-        </I18nProvider>
-      </ThemeProvider>
+          </CartProvider>
+        </DemoProvider>
+      </I18nProvider>
+    </ThemeProvider>
     </BrowserRouter>
   );
 }

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { CONDITION_LABELS, ProductDetail } from '../types';
 import { AuthContext } from '../../auth/context';
 import { ConditionBadge, VerificationBadge } from '../../../shared/components';
+import { useCart } from '../../../shared/context';
 
 interface ProductDetailViewProps {
   product: ProductDetail;
@@ -12,6 +13,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
   const authContext = useContext(AuthContext);
   const isAuthenticated = Boolean(authContext?.isAuthenticated);
   const navigate = useNavigate();
+  const { addToCart } = useCart();
   const productCategories = product.categories?.length ? product.categories : [product.category];
 
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
@@ -54,7 +56,17 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
 
   const handleAddToCart = () => {
     requireAuth('Thêm sản phẩm vào giỏ hàng', () => {
-      setCartSuccessMsg('Đã thêm sản phẩm vào giỏ hàng thành công!');
+      const result = addToCart({
+        productId: product.productId,
+        title: product.title,
+        price: product.listedPrice,
+        thumbnailUrl: product.thumbnailUrl || (product.media[0]?.mediaUrl ?? null),
+        condition: product.condition,
+        sellerId: product.seller.sellerId,
+        sellerName: product.seller.displayName,
+        location: product.location,
+      });
+      setCartSuccessMsg(result.message);
       setTimeout(() => setCartSuccessMsg(null), 4000);
     });
   };
@@ -112,8 +124,8 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
           }}
         >
           <span>🛒 {cartSuccessMsg}</span>
-          <Link to="/orders" style={{ fontWeight: 700, color: '#065f46', textDecoration: 'none' }}>
-            Xem đơn & giỏ hàng →
+          <Link to="/cart" style={{ fontWeight: 700, color: '#065f46', textDecoration: 'none' }}>
+            Xem giỏ hàng →
           </Link>
         </div>
       )}

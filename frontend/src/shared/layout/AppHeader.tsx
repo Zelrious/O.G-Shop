@@ -1,9 +1,261 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../features/auth';
 import { marketplaceApi, Category } from '../../features/marketplace';
 import { Button } from '../components/Button/Button';
 import { ConfirmDialog } from '../components/Dialog/ConfirmDialog';
+import { useCart } from '../context';
+
+interface QuickFilterPanelProps {
+  categories: Category[];
+  currentSearch: string;
+  onApply: (params: { categoryId?: number; condition?: string; minPrice?: number; maxPrice?: number }) => void;
+  onReset: () => void;
+  onClose: () => void;
+}
+
+const MAX_QUICK_PRICE = 50000000;
+const STEP_QUICK_PRICE = 500000;
+
+const QuickFilterPanel: React.FC<QuickFilterPanelProps> = ({
+  categories,
+  currentSearch,
+  onApply,
+  onReset,
+  onClose,
+}) => {
+  const searchParams = useMemo(() => new URLSearchParams(currentSearch), [currentSearch]);
+
+  const initialCatId = useMemo(() => {
+    const raw = searchParams.get('categoryId') || searchParams.get('categoryIds');
+    if (!raw) return undefined;
+    const num = Number(raw.split(',')[0]);
+    return !isNaN(num) && num > 0 ? num : undefined;
+  }, [searchParams]);
+
+  const initialCondition = useMemo(() => {
+    const raw = searchParams.get('condition') || searchParams.get('conditions');
+    return raw ? raw.split(',')[0].toUpperCase() : undefined;
+  }, [searchParams]);
+
+  const initialMin = useMemo(() => {
+    const raw = searchParams.get('minPrice');
+    return raw && !isNaN(Number(raw)) ? Number(raw) : 0;
+  }, [searchParams]);
+
+  const initialMax = useMemo(() => {
+    const raw = searchParams.get('maxPrice');
+    return raw && !isNaN(Number(raw)) ? Number(raw) : MAX_QUICK_PRICE;
+  }, [searchParams]);
+
+  // Local draft state: does NOT mutate URL or trigger queries while interacting
+  const [draftCatId, setDraftCatId] = useState<number | undefined>(initialCatId);
+  const [draftCondition, setDraftCondition] = useState<string | undefined>(initialCondition);
+  const [draftMinPrice, setDraftMinPrice] = useState<number>(initialMin);
+  const [draftMaxPrice, setDraftMaxPrice] = useState<number>(initialMax);
+
+  useEffect(() => {
+    setDraftCatId(initialCatId);
+    setDraftCondition(initialCondition);
+    setDraftMinPrice(initialMin);
+    setDraftMaxPrice(initialMax);
+  }, [initialCatId, initialCondition, initialMin, initialMax]);
+
+  const formatVnd = (n: number) => {
+    return new Intl.NumberFormat('vi-VN').format(n) + ' ₫';
+  };
+
+  const minPercent = Math.min(100, Math.max(0, (draftMinPrice / MAX_QUICK_PRICE) * 100));
+  const maxPercent = Math.min(100, Math.max(0, (draftMaxPrice / MAX_QUICK_PRICE) * 100));
+
+  const handleApply = () => {
+    onApply({
+      categoryId: draftCatId,
+      condition: draftCondition,
+      minPrice: draftMinPrice > 0 ? draftMinPrice : undefined,
+      maxPrice: draftMaxPrice < MAX_QUICK_PRICE ? draftMaxPrice : undefined,
+    });
+  };
+
+  const handleReset = () => {
+    setDraftCatId(undefined);
+    setDraftCondition(undefined);
+    setDraftMinPrice(0);
+    setDraftMaxPrice(MAX_QUICK_PRICE);
+    onReset();
+  };
+
+  return (
+    <div className="og-header__filter-dropdown" role="region" aria-label="Bộ lọc nhanh">
+      <div className="og-header__filter-dropdown-inner">
+        {/* Header */}
+        <div className="og-header__filter-dropdown-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <OutlineIcons.Filter />
+            <span style={{ fontWeight: 700, fontSize: '0.96rem', color: 'var(--og-color-text-primary)' }}>
+              Bộ lọc nhanh sản phẩm
+            </span>
+            <span style={{ fontSize: '0.78rem', color: 'var(--og-color-text-muted)' }}>
+              (Chọn các tiêu chí bên dưới rồi bấm Áp dụng)
+            </span>
+          </div>
+          <button
+            type="button"
+            className="og-button og-button--ghost og-button--sm"
+            onClick={onClose}
+            aria-label="Đóng bảng lọc nhanh"
+          >
+            ✕ Đóng
+          </button>
+        </div>
+
+        {/* 1. Category Selection (Local draft) */}
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--og-color-text-primary)' }}>
+              🏷️ Ngành hàng / Danh mục:
+            </span>
+            {draftCatId && (
+              <span style={{ fontSize: '0.78rem', color: 'var(--og-color-primary)', fontWeight: 600 }}>
+                Đang chọn: {categories.find((c) => c.categoryId === draftCatId)?.categoryName}
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', maxHeight: '110px', overflowY: 'auto' }}>
+            <button
+              type="button"
+              className={`og-filter-chip ${draftCatId === undefined ? 'og-filter-chip--active' : ''}`}
+              onClick={() => setDraftCatId(undefined)}
+            >
+              Tất cả danh mục
+            </button>
+            {categories.map((cat) => {
+              const isSelected = draftCatId === cat.categoryId;
+              return (
+                <button
+                  key={cat.categoryId}
+                  type="button"
+                  className={`og-filter-chip ${isSelected ? 'og-filter-chip--active' : ''}`}
+                  onClick={() => setDraftCatId(isSelected ? undefined : cat.categoryId)}
+                >
+                  {cat.categoryName}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 2. Condition Selection (Local draft) */}
+        <div style={{ marginBottom: '14px' }}>
+          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--og-color-text-primary)', display: 'block', marginBottom: '6px' }}>
+            ⭐ Tình trạng sản phẩm:
+          </span>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {[
+              { key: '', label: 'Tất cả tình trạng' },
+              { key: 'LIKE_NEW', label: 'Như mới' },
+              { key: 'GOOD', label: 'Khá tốt' },
+              { key: 'FAIR', label: 'Chấp nhận được' },
+              { key: 'VINTAGE', label: 'Đồ cổ' },
+            ].map((cond) => {
+              const isSelected = (!cond.key && !draftCondition) || draftCondition === cond.key;
+              return (
+                <button
+                  key={cond.key}
+                  type="button"
+                  className={`og-filter-chip ${isSelected ? 'og-filter-chip--active' : ''}`}
+                  onClick={() => setDraftCondition(cond.key ? cond.key : undefined)}
+                >
+                  {cond.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 3. Compact Price Slider (Thanh kéo giá tiền tinh giản) */}
+        <div className="og-quick-filter-slider-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--og-color-text-primary)' }}>
+              💰 Khoảng giá:
+            </span>
+            <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--og-color-primary)' }}>
+              {draftMinPrice === 0 && draftMaxPrice >= MAX_QUICK_PRICE
+                ? 'Tất cả mức giá'
+                : draftMinPrice === 0
+                ? `Tối đa ${formatVnd(draftMaxPrice)}`
+                : draftMaxPrice >= MAX_QUICK_PRICE
+                ? `Từ ${formatVnd(draftMinPrice)} trở lên`
+                : `${formatVnd(draftMinPrice)} — ${formatVnd(draftMaxPrice)}`}
+            </span>
+          </div>
+
+          <div className="og-quick-slider-track-wrap">
+            <div className="og-quick-slider-track" />
+            <div
+              className="og-quick-slider-progress"
+              style={{
+                left: `${minPercent}%`,
+                width: `${Math.max(0, maxPercent - minPercent)}%`,
+              }}
+            />
+            <input
+              type="range"
+              min={0}
+              max={MAX_QUICK_PRICE}
+              step={STEP_QUICK_PRICE}
+              value={draftMinPrice}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                if (val <= draftMaxPrice) setDraftMinPrice(val);
+              }}
+              className="og-quick-range-thumb og-quick-range-thumb--min"
+              aria-label="Giá tối thiểu"
+            />
+            <input
+              type="range"
+              min={0}
+              max={MAX_QUICK_PRICE}
+              step={STEP_QUICK_PRICE}
+              value={draftMaxPrice}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                if (val >= draftMinPrice) setDraftMaxPrice(val);
+              }}
+              className="og-quick-range-thumb og-quick-range-thumb--max"
+              aria-label="Giá tối đa"
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.72rem', color: 'var(--og-color-text-muted)' }}>
+            <span>0 ₫</span>
+            <span>25.000.000 ₫</span>
+            <span>50.000.000+ ₫</span>
+          </div>
+        </div>
+
+        {/* Footer Actions */}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'flex-end', borderTop: '1px solid var(--og-color-border)', paddingTop: '10px', marginTop: '12px' }}>
+          <button
+            type="button"
+            className="og-button og-button--ghost og-button--sm"
+            onClick={handleReset}
+          >
+            Đặt lại bộ lọc
+          </button>
+          <button
+            type="button"
+            className="og-button og-button--primary og-button--sm"
+            onClick={handleApply}
+            style={{ fontWeight: 700, padding: '7px 20px' }}
+          >
+            Áp dụng bộ lọc
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const DEFAULT_CATEGORIES: Category[] = [
   { categoryId: 1, categoryName: 'Điện tử', slug: 'electronics', description: 'Thiết bị điện tử, điện thoại, máy tính, linh kiện và phụ kiện', displayOrder: 1 },
@@ -115,6 +367,11 @@ const OutlineIcons = {
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   ),
+  Filter: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  ),
 };
 
 const renderCategoryOutlineIcon = (slug?: string, name?: string) => {
@@ -197,14 +454,17 @@ const renderCategoryOutlineIcon = (slug?: string, name?: string) => {
 
 export const AppHeader: React.FC = () => {
   const { user, isAuthenticated, logout } = useAuth();
+  const { totalCount: cartCount } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
+  const isMarketplace = location.pathname === '/marketplace';
   const [searchQuery, setSearchQuery] = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isTabsExpanded, setIsTabsExpanded] = useState(false);
+  const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isCatMenuOpen, setIsCatMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -383,9 +643,29 @@ export const AppHeader: React.FC = () => {
                 </button>
               )}
 
-              {/* Quick Cart / Orders shortcut button (Hình 2 & 3) */}
+              {/* Sticky Quick Filter Button on Marketplace page (Requirement 4) */}
+              {isScrolled && isMarketplace && (
+                <button
+                  type="button"
+                  className={`og-header__toggle-tabs-btn og-header__toggle-filter-btn ${isFilterExpanded ? 'og-header__toggle-tabs-btn--active' : ''}`}
+                  onClick={() => {
+                    setIsFilterExpanded(!isFilterExpanded);
+                    if (isTabsExpanded) setIsTabsExpanded(false);
+                  }}
+                  aria-expanded={isFilterExpanded}
+                  aria-label={isFilterExpanded ? 'Đóng bộ lọc nhanh' : 'Mở bộ lọc nhanh'}
+                  title="Bộ lọc nhanh sản phẩm"
+                >
+                  <span className="og-header__toggle-tabs-icon" aria-hidden="true">
+                    {isFilterExpanded ? <OutlineIcons.Close /> : <OutlineIcons.Filter />}
+                  </span>
+                  <span className="og-header__toggle-tabs-text">Lọc</span>
+                </button>
+              )}
+
+              {/* Quick Cart shortcut button pointing to /cart (Requirement 5) */}
               <Link
-                to="/orders"
+                to="/cart"
                 className="og-header__quick-btn"
                 title="Giỏ hàng"
                 aria-label="Giỏ hàng"
@@ -393,6 +673,11 @@ export const AppHeader: React.FC = () => {
                 <span className="og-header__quick-icon" aria-hidden="true">
                   <OutlineIcons.Cart />
                 </span>
+                {cartCount > 0 && (
+                  <span className="og-header__quick-badge" aria-label={`${cartCount} sản phẩm trong giỏ`}>
+                    {cartCount}
+                  </span>
+                )}
               </Link>
 
               {isAuthenticated ? (
@@ -452,6 +737,18 @@ export const AppHeader: React.FC = () => {
                           <OutlineIcons.User />
                         </span>
                         <span>Hồ sơ & Sổ địa chỉ</span>
+                      </Link>
+
+                      <Link
+                        to="/cart"
+                        className="og-header__dropdown-item"
+                        role="menuitem"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
+                        <span className="og-header__dropdown-icon">
+                          <OutlineIcons.Cart />
+                        </span>
+                        <span>Giỏ hàng của tôi {cartCount > 0 ? `(${cartCount})` : ''}</span>
                       </Link>
 
                       <Link
@@ -668,6 +965,53 @@ export const AppHeader: React.FC = () => {
             </nav>
           </div>
         </div>
+
+        {/* Quick Filter Dropdown when scrolled on Marketplace (Requirement 4) */}
+        {isScrolled && isMarketplace && isFilterExpanded && (
+          <QuickFilterPanel
+            categories={displayCategories}
+            currentSearch={location.search}
+            onApply={(params) => {
+              const sp = new URLSearchParams(location.search);
+              if (params.categoryId) {
+                sp.set('categoryId', String(params.categoryId));
+                sp.delete('categoryIds');
+              } else {
+                sp.delete('categoryId');
+                sp.delete('categoryIds');
+              }
+
+              if (params.condition) {
+                sp.set('condition', params.condition);
+                sp.delete('conditions');
+              } else {
+                sp.delete('condition');
+                sp.delete('conditions');
+              }
+
+              if (params.minPrice) {
+                sp.set('minPrice', String(params.minPrice));
+              } else {
+                sp.delete('minPrice');
+              }
+
+              if (params.maxPrice) {
+                sp.set('maxPrice', String(params.maxPrice));
+              } else {
+                sp.delete('maxPrice');
+              }
+
+              sp.delete('page');
+              navigate(`/marketplace?${sp.toString()}`);
+              setIsFilterExpanded(false);
+            }}
+            onReset={() => {
+              navigate('/marketplace');
+              setIsFilterExpanded(false);
+            }}
+            onClose={() => setIsFilterExpanded(false)}
+          />
+        )}
       </header>
 
       {/* Confirmation Dialog for Logout (SY-02) */}

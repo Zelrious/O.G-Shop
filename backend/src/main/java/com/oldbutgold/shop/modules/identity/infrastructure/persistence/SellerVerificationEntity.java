@@ -16,7 +16,7 @@ import java.time.Instant;
 import java.util.Map;
 
 @Entity
-@Table(name = "seller_verifications")
+@Table(name = "seller_verifications", schema = "og_compat")
 public class SellerVerificationEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

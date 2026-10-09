@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Set;
 
 @Entity
-@Table(name = "products")
+@Table(name = "products", schema = "og_compat")
 public class ProductEntity {
     public static final String CURRENCY_VND = "VND";
     public static final String STATUS_DRAFT = "DRAFT";
@@ -82,7 +82,7 @@ public class ProductEntity {
     @Column(length = 255)
     private String location;
 
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 40)
     private String status = STATUS_DRAFT;
 
     @Column(name = "reserved_until")

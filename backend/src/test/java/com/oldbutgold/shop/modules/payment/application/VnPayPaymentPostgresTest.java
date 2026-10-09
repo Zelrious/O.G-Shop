@@ -29,6 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @EnabledIfEnvironmentVariable(named = "OGSHOP_TEST_DB_URL", matches = ".+")
 class VnPayPaymentPostgresTest {
     @DynamicPropertySource static void properties(DynamicPropertyRegistry p) {
+        p.add("spring.datasource.hikari.connection-init-sql", () -> "SET search_path TO og_compat,public");
         p.add("spring.datasource.url", () -> System.getenv("OGSHOP_TEST_DB_URL"));
         p.add("spring.datasource.username", () -> System.getenv("OGSHOP_TEST_DB_USER"));
         p.add("spring.datasource.password", () -> System.getenv("OGSHOP_TEST_DB_PASSWORD"));

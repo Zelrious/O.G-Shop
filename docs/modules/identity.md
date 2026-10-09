@@ -1,5 +1,26 @@
 # Identity Module
 
+## Public policies — TASK-0071 / 2026-10-09
+
+[TASK-0071](../progress/archive/TASK-0071-public-use-case-policies-and-coins.md) sửa UC01–UC11/UC66–UC68: đăng ký xác thực email bằng OTP một lần; Google liên kết đúng tài khoản, không tạo trùng; lớp hai tùy chọn riêng khi đăng nhập. Uy tín bắt đầu/tối đa 100, các hạn chế do KTV quyết định, giữ nghĩa vụ đơn cũ. Báo cáo đã đọc lại native; chưa thay code/database V23 theo các chính sách mới.
+
+## Database consolidation — TASK-0070 / V23
+
+11 bảng: users/roles/user_roles/addresses/refresh_sessions, auth_challenges, ekyc_profiles, ekyc_private_assets, identity_document_registry, verification_attempts, seller_profiles. Security/points/external identities/restrictions/cart header lưu trên users; eKYC/Seller decisions lưu trên hồ sơ. Không cấp SELLER từ identity decision.
+
+Local og_shop đã migrate/validate V23: 48 bảng nghiệp vụ, 49 gồm Flyway history; 104 nguồn khớp fingerprint trước/sau. Backend entity/join-table dùng schema og_compat. 252 tests: 251 pass, 1 Windows symlink skip; 33 expansion PostgreSQL pass. [Bàn giao V22](../architecture/DATABASE_CONSOLIDATION_V22_20261009.md), [dictionary 48 bảng](../../database/docs/DATABASE_TABLE_DICTIONARY_V22.md). API/UI/worker canonical còn cần nối; checkpoint V21/baseline dưới đây là lịch sử.
+
+V22 tạo cấu trúc 48 bảng; V23 đã căn bộ đếm ID qua mọi loại dòng, kiểm thử tạo mới profile/legacy verification/voucher/payment sau populated upgrade đạt. Trạng thái runtime hiện hành là V23.
+
+## Database expansion — TASK-0069 / V21
+
+V15: OTP/security settings, eKYC revisions/private assets/registry/attempts/KTV decisions, quick auth và seller approval riêng. Canonical role grant cần approval; AI/eKYC không tự cấp SELLER. [Bàn giao và ma trận 83 UC](../architecture/DATABASE_EXPANSION_V21_20261009.md). Local og_shop V1–V21 đã migrate/validate; 249 tests, 0 failures/errors, 1 Windows symlink skip; 30 expansion PostgreSQL tests đạt. Đây là nền database và mapping tương thích, chưa nghiệm thu các API/UI mới. Phần Database review và trạng thái baseline cũ bên dưới ghi tình trạng trước TASK-0069.
+
+
+## Database review — 2026-10-09
+
+Theo [bản rà soát 83 UC](../architecture/DATABASE_COVERAGE_83_USE_CASES_20261009.md), UC01–UC11/UC66–UC68 cần G01/G02/G10: email OTP/lớp hai, eKYC phiên bản do KTV quyết cuối, reference riêng tư có hạn, seller profile và quyền nghĩa vụ cũ. Schema/code còn AI/MVP tự VERIFIED/SELLER. Chưa triển khai các thay đổi này; trạng thái bên dưới là baseline trước rà soát.
+
 - Status: IMPLEMENTED
 - Requirements: UC-01, UC-02
 - Completion: 0/2 use cases verified
@@ -35,8 +56,8 @@ Product ownership, moderation decision, order authorization và KYC production.
 ## Completed tasks
 
 - [x] Tạo package boundary và tài liệu module.
-- [x] Triển khai giao diện React và Typed Mock Adapter cho Auth (UC-01) và eKYC Seller Verification (UC-02) theo Batch 1 ([TASK-0003](file:///d:/Khanh/Đồ án 1/Source Code/O.G Shop/docs/progress/archive/TASK-0003-ui-batch-01-auth-and-ekyc.md)).
-- [x] Đóng gói Microservice AI eKYC độc lập ([services/ekyc-service/](file:///d:/Khanh/Đồ án 1/Source Code/O.G Shop/services/ekyc-service/)) với FastAPI, tích hợp YOLOv11n + VietOCR Transformer (144.8MB) + Gemini Flash + RetinaFace + DeepFace ArcFace 512-d (Cosine Distance <= 0.50) ([TASK-0004](file:///d:/Khanh/Đồ án 1/Source Code/O.G Shop/docs/progress/archive/TASK-0004-integrate-ekyc-ai-algorithm-microservice.md)).
+- [x] Triển khai giao diện React và Typed Mock Adapter cho Auth (UC-01) và eKYC Seller Verification (UC-02) theo Batch 1 ([TASK-0003](../progress/archive/TASK-0003-ui-batch-01-auth-and-ekyc.md)).
+- [x] Đóng gói Microservice AI eKYC độc lập ([services/ekyc-service/](../../services/ekyc-service/)) với FastAPI, tích hợp YOLOv11n + VietOCR Transformer (144.8MB) + Gemini Flash + RetinaFace + DeepFace ArcFace 512-d (Cosine Distance <= 0.50) ([TASK-0004](../progress/archive/TASK-0004-integrate-ekyc-ai-algorithm-microservice.md)).
 - [x] TASK-0005 thay luồng mock bằng Spring Boot Identity authority: BCrypt, access JWT, opaque refresh rotation/revocation và HttpOnly cookie.
 - [x] TASK-0005 đưa eKYC sau Spring Boot gateway; FastAPI dùng internal token, request-local embedding và fail-closed.
 - [x] TASK-0005 dùng Flyway V2 để loại dữ liệu CCCD/face embedding thật khỏi schema runtime, chỉ giữ metric và metadata model.

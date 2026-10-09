@@ -12,7 +12,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "refresh_sessions")
+@Table(name = "refresh_sessions", schema = "og_compat")
 public class RefreshSessionEntity {
     @Id
     @Column(name = "session_id", nullable = false)

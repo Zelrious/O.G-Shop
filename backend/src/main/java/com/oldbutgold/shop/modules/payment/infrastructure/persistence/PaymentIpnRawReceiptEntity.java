@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "payment_ipn_raw_receipts")
+@Table(name = "payment_ipn_raw_receipts", schema = "og_compat")
 public class PaymentIpnRawReceiptEntity {
 
     public static final String VERIFICATION_UNVERIFIED = "UNVERIFIED";

@@ -151,8 +151,16 @@ export const marketplaceApi = {
       items.sort((a, b) => b.listedPrice - a.listedPrice);
     }
 
+    const page = params.page || 0;
+    const size = params.size || 12;
+    const totalElements = items.length;
+    const totalPages = Math.ceil(totalElements / size);
+    const startIdx = page * size;
+    const pagedItems = items.slice(startIdx, startIdx + size);
+    const hasNext = (page + 1) * size < totalElements;
+
     return {
-      items: items.map((p) => ({
+      items: pagedItems.map((p) => ({
         productId: p.productId,
         title: p.title,
         listedPrice: p.listedPrice,
@@ -164,11 +172,11 @@ export const marketplaceApi = {
         seller: p.seller,
         createdAt: p.createdAt,
       })),
-      page: params.page || 0,
-      size: params.size || 12,
-      totalElements: items.length,
-      totalPages: Math.ceil(items.length / (params.size || 12)),
-      hasNext: false,
+      page,
+      size,
+      totalElements,
+      totalPages,
+      hasNext,
     };
   },
 

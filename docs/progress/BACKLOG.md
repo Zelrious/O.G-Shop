@@ -1,5 +1,38 @@
 # Project Backlog
 
+## Public use-case policies — TASK-0071
+
+- [x] [TASK-0071](archive/TASK-0071-public-use-case-policies-and-coins.md): sửa đủ 83 đặc tả theo cách dùng/chính sách, điểm uy tín và xu; sao lưu native, đồng bộ tên/tổng quan, đọc lại cấu trúc và nội dung.
+- [ ] Kiểm tra trang PDF khi tải tệp xuất hoạt động trở lại; chưa xác nhận bố cục toàn báo cáo.
+- [ ] Khi được yêu cầu triển khai: đồng bộ OTP/Google, uy tín 100, mức trừ và hạn chế do KTV quyết định, thưởng xu theo mốc/đánh giá, xu dùng cho phí giao đến 0 đồng và hoàn xu riêng voucher; rà code/V23/diagram theo chính sách mới.
+
+## Database consolidation — TASK-0070 / V23
+
+- [x] Gộp 104 nguồn thành 48 bảng nghiệp vụ; preserve count/hash, backend mappings/guards, backup/restore và migrate/validate local og_shop.
+- [x] Regression/Hibernate/runtime và ERD DDL verification; xuất dictionary 48 bảng và schema V22.
+- [ ] Đưa ERD và nội dung dictionary V22 vào chương database của báo cáo khi được yêu cầu.
+- [ ] Nối API/UI/worker canonical theo 83 UC; chuyển service khỏi lớp og_compat theo từng module trước khi loại view. Không double-write money/history.
+
+Các mục expansion V21 bên dưới ghi phần nền và công việc ứng dụng tiếp nối; tên nguồn hiện hành đối chiếu theo [V22](../architecture/DATABASE_CONSOLIDATION_V22_20261009.md).
+
+V22 tạo cấu trúc 48 bảng; V23 đã căn bộ đếm ID qua mọi loại dòng, kiểm thử tạo mới profile/legacy verification/voucher/payment sau populated upgrade đạt. Trạng thái runtime hiện hành là V23.
+
+## Database expansion — TASK-0069
+
+- [x] V15–V21/G01–G12: schema, invariants/transaction primitives và mapping tương thích; backup/restore, PostgreSQL regression, áp dụng/validate local và handoff 83 UC.
+- [ ] Nối API Identity/eKYC/KTV/Seller vào V15, kiểm soát legacy bypass theo migration mode.
+- [ ] Nối revision/AI/duyệt/fee và public catalog; checkout group/quantity/voucher/points/zero payment.
+- [ ] Nối payment IPN/group allocation, component refund/release, delivery/case deadlines/cleanup, notification/report workers và E2E sandbox. Theo [hợp đồng transaction](../architecture/DATABASE_EXPANSION_V21_20261009.md), không double-write legacy money.
+
+
+## Report priority — checkpoint 2026-10-09
+
+- [x] [TASK-0065](archive/TASK-0065-report-policy-checkpoint-20261009.md): đồng bộ chính sách báo cáo 83 UC và lưu công việc cuối ngày; đối chiếu native nội dung/định dạng, giữ tab gốc.
+- [x] [TASK-0066](archive/TASK-0066-use-case-simplification-plan.md): đọc lại nguồn, tạo và kiểm tra tab sao lưu native; chuẩn bị kế hoạch tinh giản 83 đặc tả.
+- [x] [TASK-0067](archive/TASK-0067-simplify-83-use-case-specifications.md): rút gọn đủ 83 đặc tả, giảm 17,3% ký tự, giữ 10 trường/mã BR/tab sao lưu; đọc lại native và kiểm bố cục PDF mẫu.
+- [x] [TASK-0068](archive/TASK-0068-database-coverage-83-use-cases.md): rà cấu trúc live V1–V14 và code theo đủ 83 UC; [ma trận/thiết kế mở rộng](../architecture/DATABASE_COVERAGE_83_USE_CASES_20261009.md), 12 nhóm dùng chung và thứ tự migration/kiểm chứng. Chỉ phân tích, chưa triển khai schema.
+- [ ] Đồng bộ bản báo cáo rút gọn với diagram/database/code khi được yêu cầu; không gộp vào công việc rút gọn câu chữ.
+
 ## Completed foundation
 
 - [x] Tạo monorepo Backend, Frontend, Database, Reference, Docs và Infra.

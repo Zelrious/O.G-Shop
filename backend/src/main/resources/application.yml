@@ -11,9 +11,12 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate.hbm2ddl.extra_physical_table_types: VIEW
     open-in-view: false
   flyway:
     enabled: true
+    default-schema: public
   servlet:
     multipart:
       max-file-size: ${MAX_FILE_SIZE:50MB}

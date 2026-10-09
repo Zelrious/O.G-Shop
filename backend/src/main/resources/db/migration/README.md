@@ -1,6 +1,35 @@
 # Flyway migrations
 
+## Current consolidation — V23 / TASK-0070
+
+V22 đã migrate/validate local og_shop: 48 bảng nghiệp vụ, 49 public tables gồm Flyway history. Migration chuyển dữ liệu nguyên tử và đối chiếu đủ 104 nguồn trước khi bỏ bảng cũ. Entity/join table dùng view og_compat; schema public giữ 48 physical aggregates và report views. [Handoff](../../../../../../docs/architecture/DATABASE_CONSOLIDATION_V22_20261009.md), [dictionary](../../../../../../database/docs/DATABASE_TABLE_DICTIONARY_V22.md).
+
+V1–V23 immutable; thay đổi tiếp theo dùng V24+. Hai generator và metadata V21 chỉ hỗ trợ tái tạo/đối chiếu artifact, không chỉnh migration đã áp dụng. Checkpoint V21 phía dưới là lịch sử.
+
+V22 tạo cấu trúc 48 bảng; V23 đã căn bộ đếm ID qua mọi loại dòng, kiểm thử tạo mới profile/legacy verification/voucher/payment sau populated upgrade đạt. Trạng thái runtime hiện hành là V23.
+
+## Current expansion — V21 / TASK-0069
+
+Đã áp dụng và validate local og_shop V15–V21: 105 public tables gồm history, 7 view. [Handoff/ma trận 83 UC](../../../../../../docs/architecture/DATABASE_EXPANSION_V21_20261009.md), [test guide](../../../../../../database/tests/README.md), [migration runner](../../../../../../database/scripts/migrate-schema.ps1). V1–V14 giữ checksum; V15–V20 đã rollout, V21 forward-fix checkout 0đ; thay đổi tiếp theo phải dùng V22+.
+
+| Version | Phạm vi mới |
+|---|---|
+| V15 | OTP/lớp hai, eKYC/private reference/registry, quick-auth, KTV identity và seller approval |
+| V16 | Product/media/checklist/AI revisions, quantity, fee policy/assessment/charge/receipt |
+| V17 | Checkout/reservations/snapshots, voucher grants/revocations/allocations và reward ledger |
+| V18 | Payment intent purpose, confirmed source/allocation, money components/holds/settlement |
+| V19 | Shipment legs/handover, case rounds/decisions/evidence, money blockers/cleanup eligibility |
+| V20 | Restrictions/penalties/review/audit history, notifications, metrics/export/views |
+| V21 | Checkout zero total confirmation riêng, không tạo provider receipt giả |
+
+Dữ liệu legacy mặc định LEGACY_V14; snapshots migration không tự thành KTV/payment proof. API/service mới phải đặt UC83, xác thực caller/provider và commit các aggregate trong một transaction. DDL không tự hoàn thiện 83 API/worker. Runtime notes bên dưới là lịch sử trước rollout này.
+
+
 Flyway trong thư mục này là nguồn DDL chuẩn của ứng dụng. Không sửa migration đã được chia sẻ hoặc đã chạy; mọi forward-fix phải có version mới.
+
+## Runtime review — 2026-10-09
+
+TASK-0068 đã đọc metadata/schema của DB local og_shop trên PostgreSQL 17.11: Flyway V1–V14 success, 44 bảng public gồm history. [Bản rà soát 83 UC](../../../../../../docs/architecture/DATABASE_COVERAGE_83_USE_CASES_20261009.md) ghi các phần đủ/thiếu, thiết kế mở rộng và giới hạn kiểm chứng. Không chạy migration hoặc Flyway validate trong lần rà soát này. Các ghi chú runtime chỉ tới V8/V13 phía dưới là lịch sử tại thời điểm task cũ, không phải trạng thái local hiện tại.
 
 | Version | Phạm vi |
 |---|---|

@@ -1,5 +1,29 @@
 # Project Status
 
+## Public use-case policies — 2026-10-09 / TASK-0071
+
+- Completed: [TASK-0071](archive/TASK-0071-public-use-case-policies-and-coins.md) cập nhật trực tiếp 83 đặc tả, 420 ô; giảm 17,9% ký tự, giữ mẫu 10 trường và sao lưu native đầy đủ. Đồng bộ tổng quan/dẫn chiếu, uy tín 100 và các mức phạt do KTV quyết định, năm nguồn xu, voucher trước rồi xu đến 0 đồng kể cả phí giao, hoàn xu không cấp lại voucher.
+- Verified: đọc lại native đủ 83 bảng; danh sách và BR đúng định dạng, nhánh/tham chiếu hợp lệ; hai tab ngoài phạm vi nguyên vẹn, nội dung bản sao khớp trước sửa.
+- Incomplete/blocked: xuất PDF thành công nhưng tải tệp lỗi hostname/transport, chưa kiểm tra bố cục trang. Task chỉ sửa báo cáo; code/database/diagram chưa được đồng bộ chính sách mới trong đợt này.
+- Next: chính sách hiện hành theo báo cáo và TASK-0071; triển khai bằng thay đổi tiếp nối khi được yêu cầu. Checkpoint runtime V23 bên dưới không chứng minh các quy tắc mới đã được triển khai.
+
+## Current database checkpoint — 2026-10-09 / TASK-0070
+
+- Completed: [TASK-0070](archive/TASK-0070-consolidate-database-48-tables.md), [bàn giao V22](../architecture/DATABASE_CONSOLIDATION_V22_20261009.md): local og_shop V21→V23, 48 business tables/49 public tables gồm history, 23 success/0 failed; 7 public report views, 104 adapter views ở og_compat, không còn schema chuyển đổi cũ.
+- Verified: private backup + restore trong container local, fingerprints 104/104 nguồn khớp trên restored clone và live; 252 backend tests (251 pass, 1 Windows symlink skip), 33 expansion Pg pass; Hibernate validate và HTTP health/categories/products đều 200. ERD DDL nhập database trống thành công với đúng 48 bảng.
+- Incomplete: API/UI/worker canonical còn cần nối theo use case; Google Docs report chưa tự thay chương database. Dictionary/DDL hiện hành đã chuẩn bị tại database/docs và database/schema.
+- Blocked: none. Next: dùng schema public/48 bảng cho ERD và dictionary V22 cho báo cáo; giữ og_compat cho code đang chuyển tiếp, forward-fix bằng V24+. Các task UI/design và checkpoint V21 bên dưới giữ lịch sử.
+
+V22 tạo cấu trúc 48 bảng; V23 đã căn bộ đếm ID qua mọi loại dòng, kiểm thử tạo mới profile/legacy verification/voucher/payment sau populated upgrade đạt. Trạng thái runtime hiện hành là V23.
+
+## Database checkpoint — 2026-10-09 / TASK-0069
+
+- Completed: [TASK-0069](archive/TASK-0069-expand-database-83-use-cases.md) và [bàn giao V21/ma trận 83 UC](../architecture/DATABASE_EXPANSION_V21_20261009.md). V15–V21 cho 12 nhóm dữ liệu đã migrate vào local og_shop; 21 success/0 failed, 105 public tables/7 views, tăng 61 bảng nghiệp vụ.
+- Verified: clean/upgrade/backup restore, giữ dữ liệu legacy, Hibernate validate; 249 tests, 0 failures/errors, 1 Windows symlink skip; 30 expansion Pg tests pass. Có backup riêng bị Git ignore, không có reset hay fake approval/payment.
+- Incomplete: API/UI/worker chưa nối đầy đủ workflow canonical. Next: Identity/Seller → Catalog/fee → checkout/voucher/points → payment/component settlement → shipping/cases → notifications/reports. Không đánh dấu 83 UC hoàn thành từ số bảng.
+- Blocked: none. Active/paused design tasks và các trạng thái baseline phía dưới thuộc luồng công việc khác, được giữ nguyên.
+
+
 - Project: Old but Gold (O.G Shop)
 - Updated: 2026-09-20
 - Phase: UI_UX_DESIGN_FIRST
@@ -7,6 +31,15 @@
 - Active task: TASK-0018 — Marketplace UI/UX design system & clickable prototype in Figma
 - Paused task: TASK-0014 — Buy Now (paused before implementation; resume after design approval)
 - Published branch: `origin/main`
+
+## Report checkpoint — 2026-10-09
+
+- [TASK-0068](archive/TASK-0068-database-coverage-83-use-cases.md): hoàn thành [rà database theo từng UC trong báo cáo 83 UC](../architecture/DATABASE_COVERAGE_83_USE_CASES_20261009.md). Live PostgreSQL 17.11/og_shop có V1–V14 success và 43 bảng ngoài Flyway history; kết quả 53 một phần, 18 mâu thuẫn, 10 thiếu, 2 đủ nền. Đã đề xuất 12 nhóm mở rộng, quan hệ/ràng buộc, chuyển đổi và acceptance plan; không triển khai schema/code.
+- [TASK-0067](archive/TASK-0067-simplify-83-use-case-specifications.md): đã rút gọn đủ 83 đặc tả, giảm từ 212.140 xuống 175.369 ký tự (17,3%); giữ 10 trường, mã BR và tab sao lưu; đọc lại native và xem PDF mẫu.
+- [TASK-0066](archive/TASK-0066-use-case-simplification-plan.md): đã tạo tab “Sao lưu trước tinh giản — 09-10-2026” và chuẩn bị kế hoạch; bản sao tiếp tục được bảo toàn.
+- [TASK-0065](archive/TASK-0065-report-policy-checkpoint-20261009.md): đã chỉnh và đọc lại tab “Bản sao của Thẻ 1” trong báo cáo 83 UC; chốt phí tin cộng dồn, gom thanh toán, trả/hoàn và phạm vi sandbox; giữ bảng/kiểu chữ và tab gốc.
+- Hướng tiếp tục: dùng TASK-0068 làm cơ sở thiết kế schema/migration theo từng đợt khi phạm vi triển khai được yêu cầu; không dùng mức “Đủ nền” hoặc số UC làm bằng chứng nghiệm thu phần mềm.
+- Nguồn hiện hành cho công việc báo cáo là Google Docs được dẫn trong task. Các baseline 78/80 UC và trạng thái triển khai bên dưới chưa được đồng bộ theo toàn bộ quyết định mới; không dùng chúng để mở lại câu hỏi đã chốt.
 
 ## Completed
 
