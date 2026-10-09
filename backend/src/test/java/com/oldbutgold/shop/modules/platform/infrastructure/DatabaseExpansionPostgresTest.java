@@ -315,13 +315,13 @@ class DatabaseExpansionPostgresTest {
             long policy=id("INSERT INTO reward_policies(policy_code,point_value,policy_snapshot,created_by) VALUES(?,1,'{}',?) RETURNING policy_id",key(),admin);
             j.update("INSERT INTO reward_accounts(user_id) VALUES(?)",buyer);
             j.update("INSERT INTO reward_ledger(entry_id,user_id,policy_id,entry_type,points_delta,actor_id,reason,command_key) VALUES(?,?,?,'CORRECTION',10,?,'Fake test seed',?)",uuid(),buyer,policy,admin,key());
-            var names=j.queryForList("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history' ORDER BY tablename",String.class);
+            var names=j.queryForList("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('flyway_schema_history','refresh_sessions') ORDER BY tablename",String.class);
             var before=new java.util.LinkedHashMap<String,java.util.Map<String,Object>>();
             for(String table:names) before.put(table,j.queryForMap("SELECT count(*) AS rows,md5(coalesce(string_agg(md5(to_jsonb(t)::text),'' ORDER BY md5(to_jsonb(t)::text)),'')) AS fingerprint FROM public."+table+" t"));
             var checksums=j.queryForList("SELECT version,checksum FROM public.flyway_schema_history ORDER BY installed_rank");
             flyway(ds,null).migrate();flyway(ds,null).validate();
             var properties=new java.util.Properties();properties.setProperty("currentSchema","og_compat,public");ds.setConnectionProperties(properties);
-            assertThat(names).hasSize(104);
+            assertThat(names).hasSize(103); // V24 intentionally retires refresh credentials.
             for(String table:names) assertThat(j.queryForMap("SELECT count(*) AS rows,md5(coalesce(string_agg(md5(to_jsonb(t)::text),'' ORDER BY md5(to_jsonb(t)::text)),'')) AS fingerprint FROM og_compat."+table+" t")).as(table).isEqualTo(before.get(table));
             assertThat(j.queryForList("SELECT version,checksum FROM public.flyway_schema_history WHERE version::int<=21 ORDER BY installed_rank")).isEqualTo(checksums);
             assertThat(id("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history'")).isEqualTo(47);

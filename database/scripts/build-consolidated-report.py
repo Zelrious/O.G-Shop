@@ -1,4 +1,4 @@
-"""Generate a data-free table dictionary and standalone 48-table ERD DDL.
+"""Generate a data-free table dictionary and standalone current-schema ERD DDL.
 
 Input must be structural catalog JSON from export-consolidated-metadata.sql.
 It never opens private backups or credential files.
@@ -11,8 +11,12 @@ ROOT = Path(__file__).resolve().parents[2]
 catalog = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8-sig"))
 layout = json.loads((ROOT / "output/database-consolidation-2026-10-09/consolidation-layout.json").read_text(encoding="utf-8"))
 tables = catalog["tables"]
-assert len(tables) == 48
-assert set(tables) == set(layout["plan"])
+retired = {"refresh_sessions"} if int(catalog["version"]) >= 24 else set()
+assert len(tables) == 48 - len(retired)
+assert set(tables) == set(layout["plan"]) - retired
+table_count = len(tables)
+source_count = len(layout["sources"]) - len(retired)
+snapshot_version = 24 if retired else 22
 GROUPS = {
     "Tài khoản, xác minh": "users roles user_roles addresses refresh_sessions auth_challenges ekyc_profiles ekyc_private_assets identity_document_registry verification_attempts seller_profiles",
     "Tin đăng, chính sách": "categories products product_categories product_revisions product_media listing_fee_charges business_policies",
@@ -23,6 +27,7 @@ GROUPS = {
     "Khiếu nại, tranh chấp": "cases case_actions case_evidence",
     "Quản trị, thông báo": "reviews seller_buyer_blocks penalty_ledger notifications audit_logs outbox_events interaction_events",
 }
+GROUPS = {group: " ".join(name for name in names.split() if name in tables) for group, names in GROUPS.items()}
 DESCRIPTIONS = {
     "users": "Tài khoản; gộp cấu hình bảo mật, liên kết đăng nhập, điểm hiện tại, hạn chế tài khoản và đầu giỏ hàng.",
     "roles": "Danh mục vai trò.", "user_roles": "Vai trò được cấp cho tài khoản.",
@@ -72,9 +77,9 @@ DESCRIPTIONS = {
 def cell(value):
     return str(value or "—").replace("|", "\\|").replace("\n", " ")
 
-lines = [f"# Danh mục 48 bảng nghiệp vụ — PostgreSQL V{catalog['version']}", "",
-    "Cấu trúc gộp được tạo ở V22; V23 căn lại bộ đếm ID của bảng dùng chung. Xuất từ catalog PostgreSQL hiện hành, không có dữ liệu người dùng.", "",
-    "`public` có 48 bảng nghiệp vụ; `flyway_schema_history` là bảng kỹ thuật riêng. 7 view báo cáo và 104 view tương thích trong `og_compat` không được đếm là bảng hay thêm vào ERD nghiệp vụ.", "",
+lines = [f"# Danh mục {table_count} bảng nghiệp vụ — PostgreSQL V{catalog['version']}", "",
+    "Cấu trúc gộp được tạo ở V22; V23 căn bộ đếm ID. V24 bỏ lưu phiên làm mới theo yêu cầu dùng đăng nhập có thời hạn cố định. Xuất từ catalog PostgreSQL hiện hành, không có dữ liệu người dùng." if retired else "Cấu trúc gộp được tạo ở V22; V23 căn lại bộ đếm ID của bảng dùng chung. Xuất từ catalog PostgreSQL hiện hành, không có dữ liệu người dùng.", "",
+    f"`public` có {table_count} bảng nghiệp vụ; `flyway_schema_history` là bảng kỹ thuật riêng. 7 view báo cáo và {catalog['compatibility_views']} view tương thích trong `og_compat` không được đếm là bảng hay thêm vào ERD nghiệp vụ.", "",
     "Các bảng dùng chung có `record_type`. NULL ở cột vật lý có thể chỉ là cột không áp dụng cho loại dòng đó; yêu cầu NOT NULL/CHECK/FK theo từng loại vẫn được trigger và view nghiệp vụ bảo vệ. `source_*` giữ định danh cũ, không phải bản sao dữ liệu. Các mảng JSONB giữ metadata/lịch sử gắn với một chủ thể, có ràng buộc và quy trình ghi.", "",
     "`users.reward_balance` và `users.email_2fa_enabled` là cột generated, đọc trực tiếp nhưng cập nhật qua nghiệp vụ điểm/bảo mật. Không sửa JSON lịch sử trực tiếp.", "",
     "## Danh sách để đưa vào báo cáo", "", "| Nhóm | Số bảng | Tên bảng |", "|---|---:|---|"]
@@ -102,17 +107,19 @@ for group, names in GROUPS.items():
             default = ("GENERATED: " if c["generated"] else "") + (c["default"] or "")
             lines.append("| " + " | ".join([f"`{c['name']}`",cell(c["type"]),cell("; ".join(relation)),"Có" if c["notnull"] else "Theo loại dòng",cell(default)]) + " |")
         lines.append("")
-lines += ["## Ánh xạ 104 nguồn cũ → 48 bảng", "", "| Nguồn V21 | Bảng V22 | Cách lưu |", "|---|---|---|"]
+lines += [f"## Ánh xạ {source_count} nguồn được giữ → {table_count} bảng", "", "| Nguồn V21 | Bảng hiện hành | Cách lưu |", "|---|---|---|"]
 for s,e in sorted(layout["sources"].items()):
+    if e["target"] in retired:
+        continue
     mode = f"Dòng có `record_type={s}`" if e["mode"]=="ROWS" else f"JSONB `{e['column']}` trên chủ thể"
     lines.append(f"| `{s}` | `{e['target']}` | {mode} |")
 lines += ["", "## Dùng cho ERD", "",
-    "Chọn schema `public`, chọn 48 bảng ở danh sách trên, bỏ `flyway_schema_history`. Khóa ngoại tới `source_*` là quan hệ tới định danh của một loại dòng trong bảng dùng chung; không tạo thêm bảng cho mỗi loại. Quan hệ metadata JSONB được mô tả trong ánh xạ nguồn, không tự hiện thành FK trên ERD.", "",
+    f"Chọn schema `public`, chọn {table_count} bảng ở danh sách trên, bỏ `flyway_schema_history`. Khóa ngoại tới `source_*` là quan hệ tới định danh của một loại dòng trong bảng dùng chung; không tạo thêm bảng cho mỗi loại. Quan hệ metadata JSONB được mô tả trong ánh xạ nguồn, không tự hiện thành FK trên ERD.", "",
     f"Catalog có {sum(c['kind']=='f' for t in tables.values() for c in t['constraints'])} ràng buộc FK vật lý. Một cặp bảng có thể có nhiều FK theo loại dòng hoặc khóa ghép; chỉ hiển thị quan hệ cần đọc trên sơ đồ tổng quan, giữ đầy đủ trong phụ lục cấu trúc.", "",
-    "[DDL chỉ gồm 48 bảng và quan hệ](../schema/og_shop_v22_tables_for_erd.sql). DDL này để dựng ERD trong database trống; runtime dùng Flyway V1–V22 cùng view/trigger, không chạy snapshot đè database đang dùng.", ""]
-(ROOT / "database/docs/DATABASE_TABLE_DICTIONARY_V22.md").write_text("\n".join(lines),encoding="utf-8")
+    f"[DDL chỉ gồm {table_count} bảng và quan hệ](../schema/og_shop_v{snapshot_version}_tables_for_erd.sql). DDL này để dựng ERD trong database trống; runtime dùng Flyway V1–V{catalog['version']} cùng view/trigger, không chạy snapshot đè database đang dùng.", ""]
+(ROOT / f"database/docs/DATABASE_TABLE_DICTIONARY_V{snapshot_version}.md").write_text("\n".join(lines),encoding="utf-8")
 
-ddl = ["-- Structure-only ERD snapshot. Exactly 48 business tables; no data/views/workflow triggers.",
+ddl = [f"-- Structure-only ERD snapshot. Exactly {table_count} business tables; no data/views/workflow triggers.",
        "-- Import only into an empty disposable database for diagramming. Runtime uses Flyway.", "CREATE SCHEMA IF NOT EXISTS public;"]
 for seq,s in sorted(catalog["sequences"].items()):
     ddl.append(f"CREATE SEQUENCE public.{seq} AS {s['type']} INCREMENT BY {s['increment']} MINVALUE {s['min']} MAXVALUE {s['max']} START WITH {s['start']} CACHE {s['cache']} " + ("CYCLE" if s["cycle"] else "NO CYCLE") + ";")
@@ -131,7 +138,7 @@ for kind in ["p","u","c","f"]:
             if c["kind"] == kind: ddl.append(f"ALTER TABLE public.{table} ADD CONSTRAINT {c['name']} {c['definition']};")
 for table,e in sorted(tables.items()):
     ddl.extend(index + ";" for index in e["indexes"])
-out = ROOT / "database/schema/og_shop_v22_tables_for_erd.sql"
+out = ROOT / f"database/schema/og_shop_v{snapshot_version}_tables_for_erd.sql"
 out.parent.mkdir(parents=True,exist_ok=True)
 out.write_text("\n\n".join(ddl)+"\n",encoding="utf-8")
 print(f"Exported dictionary and ERD DDL: {len(tables)} tables, {sum(len(t['columns']) for t in tables.values())} physical attributes.")

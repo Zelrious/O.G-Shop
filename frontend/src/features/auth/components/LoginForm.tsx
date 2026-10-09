@@ -17,7 +17,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -32,7 +31,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
     setIsSubmitting(true);
     try {
-      const loggedUser = await login({ email: email.trim(), password, rememberMe });
+      const loggedUser = await login({ email: email.trim(), password });
       onSuccess?.(loggedUser);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Đăng nhập không thành công. Vui lòng thử lại.');
@@ -65,15 +64,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         autoComplete="current-password"
       />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.88rem' }}>
-          <input
-            type="checkbox"
-            checked={rememberMe}
-            onChange={(e) => setRememberMe(e.target.checked)}
-          />
-          Ghi nhớ đăng nhập
-        </label>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '20px' }}>
         {onNavigateToForgot && (
           <button
             type="button"
