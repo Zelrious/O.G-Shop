@@ -1,5 +1,12 @@
 # Project Status
 
+## Current database and authentication — V24 / TASK-0073
+
+- Completed: [TASK-0073](archive/TASK-0073-remove-refresh-session-table.md) bỏ refresh sessions khỏi code, local PostgreSQL và báo cáo. Còn 47 bảng nghiệp vụ/895 trường, 48 public tables gồm Flyway history; 103 compatibility views và 7 report views. Đăng nhập có thời hạn cố định, mặc định 15 phút, restore giữ deadline. `auth_challenges` và các bảng eKYC được giữ. [Bàn giao V24](../architecture/DATABASE_AUTH_SIMPLIFICATION_V24_20261009.md).
+- Verified: private backup/restore trước live, 47/47 fingerprints khớp, V1–V24 validate; backend 263 tests (237 pass/26 skip, 0 failures/errors), 34 PostgreSQL tests đạt, runtime health/catalog 200. Frontend 104 tests đạt và nhóm auth chạy lại cuối 40 tests đạt; scoped lint/build đạt. Báo cáo có 47 bảng chi tiết, một tổng hợp, 48 headers ghim và 4.854 ô đúng định dạng native; native backup riêng được giữ.
+- Incomplete: global lint còn warning có sẵn ở CartContext ngoài phạm vi; chưa kiểm trang PDF vì export 403. OTP/Google và canonical API/worker theo 83 UC vẫn còn công việc tiếp nối; không coi schema đủ là đã nghiệm thu use case.
+- Blocked: none đối với việc bỏ refresh sessions. Next: dùng [DDL ERD V24](../../database/schema/og_shop_v24_tables_for_erd.sql)/[dictionary V24](../../database/docs/DATABASE_TABLE_DICTIONARY_V24.md), forward-fix bằng V25+. Kiểm trang khi PDF export khả dụng. Các checkpoint V23 bên dưới là lịch sử; trạng thái task thiết kế khác giữ nguyên.
+
 ## Database design report — 2026-10-09 / TASK-0072
 
 - Completed: [TASK-0072](archive/TASK-0072-database-design-report.md) điền trực tiếp bảng tổng hợp 48 bảng và 48 bảng chi tiết/907 trường theo PostgreSQL V23; native backup đầy đủ, không có bảng Flyway.
@@ -14,7 +21,7 @@
 - Incomplete/blocked: xuất PDF thành công nhưng tải tệp lỗi hostname/transport, chưa kiểm tra bố cục trang. Task chỉ sửa báo cáo; code/database/diagram chưa được đồng bộ chính sách mới trong đợt này.
 - Next: chính sách hiện hành theo báo cáo và TASK-0071; triển khai bằng thay đổi tiếp nối khi được yêu cầu. Checkpoint runtime V23 bên dưới không chứng minh các quy tắc mới đã được triển khai.
 
-## Current database checkpoint — 2026-10-09 / TASK-0070
+## Historical database checkpoint — 2026-10-09 / TASK-0070
 
 - Completed: [TASK-0070](archive/TASK-0070-consolidate-database-48-tables.md), [bàn giao V22](../architecture/DATABASE_CONSOLIDATION_V22_20261009.md): local og_shop V21→V23, 48 business tables/49 public tables gồm history, 23 success/0 failed; 7 public report views, 104 adapter views ở og_compat, không còn schema chuyển đổi cũ.
 - Verified: private backup + restore trong container local, fingerprints 104/104 nguồn khớp trên restored clone và live; 252 backend tests (251 pass, 1 Windows symlink skip), 33 expansion Pg pass; Hibernate validate và HTTP health/categories/products đều 200. ERD DDL nhập database trống thành công với đúng 48 bảng.

@@ -1,5 +1,11 @@
 # Module Index
 
+## Current database and authentication — V24 / TASK-0073
+
+[TASK-0073](../progress/archive/TASK-0073-remove-refresh-session-table.md) đã bỏ refresh sessions khỏi backend/frontend/PostgreSQL và báo cáo. Local og_shop còn **47 bảng nghiệp vụ/895 trường**, 48 public tables gồm Flyway history, 103 compatibility views, 7 report views. Đăng nhập có thời hạn cố định 15 phút mặc định, khôi phục không gia hạn; `auth_challenges`/eKYC giữ nguyên. [Dictionary V24](../../database/docs/DATABASE_TABLE_DICTIONARY_V24.md), [DDL ERD](../../database/schema/og_shop_v24_tables_for_erd.sql), [bàn giao](../architecture/DATABASE_AUTH_SIMPLIFICATION_V24_20261009.md).
+
+47 fingerprints, backup/restore, V1–V24 validate và runtime smoke đạt; backend 263 tests (237 pass/26 skip), 34 Pg tests đạt, frontend 104 tests và nhóm auth cuối 40 tests đạt. Native báo cáo có một bảng tổng hợp và 47 bảng chi tiết, 48 headers ghim và 4.854 ô đúng căn lề. Global lint còn warning CartContext ngoài phạm vi; PDF export 403 nên chưa kiểm trang. Các checkpoint dưới đây là lịch sử, không thay trạng thái nghiệm thu 83 UC.
+
 ## Database report — TASK-0072 / 2026-10-09
 
 [TASK-0072](../progress/archive/TASK-0072-database-design-report.md): đã viết danh sách 48 bảng nghiệp vụ và 48 bảng chi tiết/907 trường trong báo cáo native, bỏ Flyway; xác minh 4.922 ô và định dạng 49 bảng, tiêu đề đúng tên schema. Chỉ cập nhật báo cáo, không đổi trạng thái nghiệm thu module. Xuất PDF/HTML gặp 403; bố cục trang chưa được xem.
@@ -8,7 +14,7 @@
 
 [TASK-0071](../progress/archive/TASK-0071-public-use-case-policies-and-coins.md) đã sửa 83 đặc tả trong báo cáo, giữ cấu trúc và sao lưu: OTP/Google dễ hiểu, uy tín bắt đầu/tối đa 100 và xử phạt do KTV quyết định, xu riêng uy tín với năm nguồn thưởng, voucher trước rồi xu trừ cả tiền hàng/phí giao đến 0 đồng, hoàn xu nhưng không cấp lại voucher. Đây là chính sách báo cáo hiện hành; không thay code/database V23 hoặc nâng trạng thái nghiệm thu module. Native readback đạt; tải PDF lỗi nên chưa kiểm bố cục trang.
 
-## Current database — V23 / TASK-0070 / 2026-10-09
+## Historical database — V23 / TASK-0070 / 2026-10-09
 
 [Gộp 104 → 48 bảng nghiệp vụ](../architecture/DATABASE_CONSOLIDATION_V22_20261009.md) đã áp dụng/validate local og_shop V23; 49 public tables gồm Flyway history, 7 report views và 104 compatibility views trong og_compat. Count/hash cả 104 nguồn khớp sau restore và live migration. Backend 252 tests (251 pass, 1 Windows symlink skip), 33 expansion Pg pass; runtime Hibernate/health/catalog đạt. [Dictionary/PK/FK](../../database/docs/DATABASE_TABLE_DICTIONARY_V22.md) dùng cho ERD/báo cáo. Không đổi trạng thái nghiệm thu 83 UC từ việc gộp bảng; các checkpoint V21 bên dưới là lịch sử.
 

@@ -1,5 +1,13 @@
 # Identity Module
 
+## Current authentication — V24 / TASK-0073
+
+[TASK-0073](../progress/archive/TASK-0073-remove-refresh-session-table.md) bỏ `refresh_sessions` và luồng gia hạn. Đăng nhập mặc định 15 phút; HttpOnly cookie khôi phục trong thời hạn gốc, `/auth/session` tải lại quyền mà không gia hạn, `/auth/logout` xóa cookie. API nghiệp vụ tiếp tục dùng Bearer JWT. Frontend tự xóa trạng thái khi hết hạn/401, không còn tùy chọn ghi nhớ đăng nhập. [API hiện hành](../api/IDENTITY_API.md).
+
+Identity còn 10 bảng: users, roles, user_roles, addresses, auth_challenges, ekyc_profiles, ekyc_private_assets, identity_document_registry, verification_attempts, seller_profiles. `auth_challenges` lưu OTP/xác thực nhanh; Gmail chỉ gửi mã, không thay việc giữ hạn dùng và trạng thái đã sử dụng. Chưa gộp ba bảng eKYC được đề xuất trước đó và chưa triển khai OTP/Google theo chính sách báo cáo.
+
+Local database V24 có 47 bảng nghiệp vụ; 47 fingerprints giữ nguyên, backup/restore và Flyway validate đạt. Backend 263 tests, 237 pass/26 skip, 0 failures/errors; 34 PostgreSQL expansion/upgrade tests đạt. Frontend full suite 104 tests, nhóm auth chạy lại cuối cùng 40 tests đạt; scoped lint và build đạt. Báo cáo đã cập nhật 47 bảng/895 trường theo mẫu; native content/style readback đạt, PDF export 403 nên chưa kiểm trang. [Bàn giao V24](../architecture/DATABASE_AUTH_SIMPLIFICATION_V24_20261009.md). Các checkpoint dưới đây là lịch sử.
+
 ## Database report — TASK-0072 / 2026-10-09
 
 [TASK-0072](../progress/archive/TASK-0072-database-design-report.md) đã điền chương bảng database trong báo cáo Google Docs theo schema V23: danh sách 48 bảng và 48 bảng chi tiết/907 trường, giữ mẫu native và kiểm tra căn lề, ghim tiêu đề, căn giữa chiều dọc. Đây là cập nhật tài liệu; trạng thái triển khai module vẫn theo code/kiểm thử. PDF/HTML export bị từ chối 403, chưa kiểm bố cục trang.
@@ -53,7 +61,7 @@ Product ownership, moderation decision, order authorization và KYC production.
 
 - Không cấp ADMIN qua public API.
 - Seller capability chỉ có hiệu lực sau verification hợp lệ.
-- Password và refresh token không xuất hiện trong log hoặc response body.
+- Password và credential không xuất hiện trong log; API chỉ trả access token cho browser theo hợp đồng đăng nhập, không có refresh token.
 - Browser không nhận face embedding và không gọi FastAPI trực tiếp.
 - Khóa tài khoản không xóa lịch sử giao dịch.
 
@@ -62,7 +70,7 @@ Product ownership, moderation decision, order authorization và KYC production.
 - [x] Tạo package boundary và tài liệu module.
 - [x] Triển khai giao diện React và Typed Mock Adapter cho Auth (UC-01) và eKYC Seller Verification (UC-02) theo Batch 1 ([TASK-0003](../progress/archive/TASK-0003-ui-batch-01-auth-and-ekyc.md)).
 - [x] Đóng gói Microservice AI eKYC độc lập ([services/ekyc-service/](../../services/ekyc-service/)) với FastAPI, tích hợp YOLOv11n + VietOCR Transformer (144.8MB) + Gemini Flash + RetinaFace + DeepFace ArcFace 512-d (Cosine Distance <= 0.50) ([TASK-0004](../progress/archive/TASK-0004-integrate-ekyc-ai-algorithm-microservice.md)).
-- [x] TASK-0005 thay luồng mock bằng Spring Boot Identity authority: BCrypt, access JWT, opaque refresh rotation/revocation và HttpOnly cookie.
+- [x] TASK-0005 thay luồng mock bằng Spring Boot Identity authority; TASK-0073 thay refresh rotation bằng access JWT và cookie có cùng thời hạn cố định.
 - [x] TASK-0005 đưa eKYC sau Spring Boot gateway; FastAPI dùng internal token, request-local embedding và fail-closed.
 - [x] TASK-0005 dùng Flyway V2 để loại dữ liệu CCCD/face embedding thật khỏi schema runtime, chỉ giữ metric và metadata model.
 - [x] TASK-0012 triển khai MVP Seller Activation: Flyway V4 hỗ trợ method `MVP_BYPASS`; endpoint `POST /api/v1/seller-verification/activate` cấp role `SELLER` idempotent; UI `/seller-verification` minh bạch thông báo bước eKYC thật đang tạm thời được bỏ qua.

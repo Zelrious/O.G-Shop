@@ -6,13 +6,15 @@ Base path: `/api/v1`.
 
 | Method | Path | Auth | Hành vi |
 |---|---|---|---|
-| POST | `/auth/register` | Public + trusted Origin | Tạo user với role `BUYER`, trả access token và set refresh cookie |
-| POST | `/auth/login` | Public + trusted Origin | Xác minh BCrypt, trả access token và set refresh cookie |
-| POST | `/auth/refresh` | Refresh cookie + trusted Origin | Rotate refresh token single-use và trả access token mới |
-| POST | `/auth/refresh/logout` | Refresh cookie + trusted Origin | Revoke token family và xóa cookie |
+| POST | `/auth/register` | Public + trusted Origin | Tạo user với role `BUYER`, trả access token và cookie có cùng thời hạn |
+| POST | `/auth/login` | Public + trusted Origin | Xác minh BCrypt, bắt đầu đăng nhập có thời hạn cố định |
+| POST | `/auth/session` | Access cookie + trusted Origin | Khôi phục đăng nhập và tải quyền hiện tại, giữ nguyên thời điểm hết hạn |
+| POST | `/auth/logout` | Trusted Origin | Xóa cookie đăng nhập; gọi lại được khi cookie đã hết hạn |
 | GET | `/auth/me` | Bearer JWT | Trả principal/role hiện tại từ backend |
 
-Auth response không chứa refresh token. Response session dùng `Cache-Control: no-store`.
+Không còn refresh token, endpoint gia hạn hoặc bảng `refresh_sessions` từ V24. Response session dùng `Cache-Control: no-store`. Thời hạn mặc định 15 phút theo `AUTH_ACCESS_TTL`; hết hạn phải đăng nhập lại. Khôi phục không gửi lại cookie và không kéo dài thời hạn. Frontend giữ access token trong bộ nhớ, xóa trạng thái đăng nhập khi hết hạn hoặc nhận 401. API nghiệp vụ chỉ chấp nhận Bearer JWT, không dùng cookie để cấp quyền.
+
+Đăng xuất xóa cookie và trạng thái trên trình duyệt. Access token đã sao chép vẫn có hiệu lực tới thời điểm hết hạn ban đầu; không còn thu hồi theo từng phiên. Đăng ký hiện chưa thực hiện OTP/Google theo chính sách báo cáo; đây vẫn là công việc tiếp nối TASK-0006/0007. `auth_challenges` giữ dữ liệu OTP và xác thực nhanh, không bị xóa trong TASK-0073.
 
 ## eKYC gateway
 
@@ -60,7 +62,7 @@ Response là ProfileResponse giống GET Profile (id/email/fullName/phoneNumber/
 Local default:
 
 ```http
-og_refresh=<opaque>; HttpOnly; SameSite=Lax; Path=/api/v1/auth/refresh
+og_access=<access-jwt>; HttpOnly; SameSite=Lax; Path=/api/v1/auth; Max-Age=900
 ```
 
-Production phải dùng HTTPS, `Secure=true`; nếu dùng prefix `__Host-` thì cookie path phải là `/` và không có Domain.
+Tên/path/Secure cấu hình bằng `AUTH_SESSION_COOKIE_NAME`, `AUTH_SESSION_COOKIE_PATH`, `AUTH_SESSION_COOKIE_SECURE`. Production dùng HTTPS và `Secure=true`. Cookie `og_refresh` với path cũ mặc định được xóa khi đăng nhập/đăng xuất. Nếu dùng prefix `__Host-`, cookie path phải là `/` và không có Domain.

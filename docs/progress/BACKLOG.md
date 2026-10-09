@@ -1,5 +1,15 @@
 # Project Backlog
 
+## Authentication simplification — TASK-0073 / V24
+
+- [x] Bỏ refresh sessions khỏi code/database/report, chuyển login sang thời hạn cố định, restore không gia hạn; giữ OTP/quick-auth và mọi bảng còn lại.
+- [x] Backup/restore trước rollout; giữ 47 fingerprints/checksums, PostgreSQL negative/upgrade tests, runtime và frontend regression; xuất dictionary/ERD V24.
+- [x] Cập nhật báo cáo còn một tổng hợp + 47 bảng chi tiết/895 trường; 48 headers ghim, native content/styles khớp, giữ bản sao đầy đủ.
+- [ ] Kiểm trang khi PDF export khả dụng; hiện 403.
+- [ ] Quyết định thay nơi lưu OTP/quick-auth trước khi bỏ `auth_challenges`; Gmail gửi mã không thay dữ liệu trạng thái. Đề xuất gộp eKYC trước đây chưa triển khai.
+
+Nguồn hiện hành là [V24](../architecture/DATABASE_AUTH_SIMPLIFICATION_V24_20261009.md). Các số liệu V23 dưới đây giữ lịch sử.
+
 ## Database design report — TASK-0072
 
 - [x] Viết danh sách 48 bảng và 48 bảng chi tiết theo mẫu Google Docs, loại Flyway; native backup, kiểm đủ nội dung và căn lề/ghim tiêu đề.
@@ -55,7 +65,7 @@ V22 tạo cấu trúc 48 bảng; V23 đã căn bộ đếm ID qua mọi loại d
 - [x] Triển khai UI Batch 1: Auth (Login, Register, Forgot Password, Profile) và eKYC Seller Verification.
 - [x] Tích hợp AI Microservice eKYC độc lập (services/ekyc-service: YOLOv11n + VietOCR Transformer + Gemini Flash + ArcFace 512-d).
 - [ ] Hoàn thiện `TRACEABILITY_MATRIX.md` theo UC, BR và NFR.
-- [x] Chốt authentication và session strategy (DP-01): access JWT + opaque refresh cookie rotation.
+- [x] Chốt authentication: DP-01 từng dùng refresh rotation; TASK-0073 thay bằng access JWT/cookie có cùng thời hạn cố định, không gia hạn.
 
 ## P1 — Core flow (các vertical slice Backend + Frontend, bắt buộc trước tối ưu hạ tầng)
 

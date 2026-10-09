@@ -1,6 +1,16 @@
 # Database tests
 
-## Current verification — V23 / TASK-0070
+## Current verification — V24 / TASK-0073
+
+Backend: 263 tests, 0 failures/errors, 26 skipped (237 pass); trong đó 33 `DatabaseExpansionPostgresTest` và 1 `RefreshSessionRemovalPostgresTest` chạy trên PostgreSQL riêng, đều đạt. Các Pg suite không bật URL và Windows symlink test được skip, không được tính đã nghiệm thu. Kiểm tra mới chứng minh cookie không tự cấp quyền nghiệp vụ, expiry không có clock grace, restore giữ deadline, Origin sai bị từ chối và refresh endpoint đã bị bỏ.
+
+Nâng synthetic V23 có refresh row giữ fingerprints 47 bảng và checksum V1–V23; OTP vẫn ghi được sau V24. Private backup og_shop được restore và nâng V24 trước live; 47/47 fingerprints clone/live khớp trước nâng cấp. Flyway V1–V24 validate, Hibernate và HTTP health/categories/products đạt 200; cookie giả bị 401. ERD DDL V24 đã nhập database trống đúng 47 bảng.
+
+Frontend: full suite 23 files/104 tests đạt; sau sửa LoginForm cuối cùng, nhóm auth và các màn phụ thuộc đạt 7 files/40 tests. TypeScript/Vite build và lint phạm vi sửa đạt. Global lint còn cảnh báo có sẵn tại `CartContext.tsx:100` (`react-refresh/only-export-components`), ngoài phạm vi auth.
+
+Logs/proofs riêng tại `output/auth-simplification-2026-10-09/`, bị Git ignore. [Bàn giao V24](../../docs/architecture/DATABASE_AUTH_SIMPLIFICATION_V24_20261009.md). Các checkpoint dưới đây là lịch sử.
+
+## Historical verification — V23 / TASK-0070
 
 252 backend tests: 251 pass, 1 Windows symlink skip; 33 DatabaseExpansionPostgresTest pass. Test thêm populated V21→V23: fake decisions/media/fees/checkout/voucher/payment/holds/shipping/case/evidence/points, fingerprints đủ 104 nguồn, checksums V1–V21 giữ nguyên và case tiếp tục hoạt động. Có negative test JSON history authority, FK sai Buyer và competing moderation optimistic lock. Các Pg Spring context xác minh Hibernate views.
 

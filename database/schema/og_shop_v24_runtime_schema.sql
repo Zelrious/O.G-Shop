@@ -3307,7 +3307,7 @@ DECLARE
  NEW og_compat.account_restrictions; OLD og_compat.account_restrictions;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='account_restrictions';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.account_restrictions,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.account_restrictions,coalesce(p_old,'{}'::jsonb));
@@ -3340,7 +3340,7 @@ DECLARE
  NEW og_compat.account_status_events; OLD og_compat.account_status_events;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='account_status_events';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.account_status_events,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.account_status_events,coalesce(p_old,'{}'::jsonb));
@@ -3361,7 +3361,7 @@ DECLARE
  NEW og_compat.audit_logs; OLD og_compat.audit_logs;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='audit_logs';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.audit_logs,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.audit_logs,coalesce(p_old,'{}'::jsonb));
@@ -3382,7 +3382,7 @@ DECLARE
  NEW og_compat.auth_challenges; OLD og_compat.auth_challenges;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='auth_challenges';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.auth_challenges,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.auth_challenges,coalesce(p_old,'{}'::jsonb));
@@ -3482,7 +3482,7 @@ DECLARE
  NEW og_compat.case_decisions; OLD og_compat.case_decisions;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='case_decisions';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.case_decisions,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.case_decisions,coalesce(p_old,'{}'::jsonb));
@@ -3506,7 +3506,7 @@ DECLARE
  NEW og_compat.case_decisions; OLD og_compat.case_decisions;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='case_decisions';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.case_decisions,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.case_decisions,coalesce(p_old,'{}'::jsonb));
@@ -3565,7 +3565,7 @@ DECLARE
  NEW og_compat.case_events; OLD og_compat.case_events;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='case_events';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.case_events,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.case_events,coalesce(p_old,'{}'::jsonb));
@@ -3629,7 +3629,7 @@ DECLARE
  NEW og_compat.case_evidence; OLD og_compat.case_evidence;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='case_evidence';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.case_evidence,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.case_evidence,coalesce(p_old,'{}'::jsonb));
@@ -3709,7 +3709,7 @@ DECLARE
  NEW og_compat.cases; OLD og_compat.cases;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='cases';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.cases,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.cases,coalesce(p_old,'{}'::jsonb));
@@ -3766,7 +3766,7 @@ DECLARE
  NEW og_compat.checklist_policies; OLD og_compat.checklist_policies;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='checklist_policies';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.checklist_policies,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.checklist_policies,coalesce(p_old,'{}'::jsonb));
@@ -3787,7 +3787,7 @@ DECLARE
  NEW og_compat.checkout_groups; OLD og_compat.checkout_groups;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='checkout_groups';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.checkout_groups,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.checkout_groups,coalesce(p_old,'{}'::jsonb));
@@ -3953,7 +3953,7 @@ DECLARE
  NEW og_compat.checkout_redemptions; OLD og_compat.checkout_redemptions;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='checkout_redemptions';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.checkout_redemptions,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.checkout_redemptions,coalesce(p_old,'{}'::jsonb));
@@ -4017,7 +4017,7 @@ DECLARE
  NEW og_compat.complaints; OLD og_compat.complaints;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='complaints';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.complaints,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.complaints,coalesce(p_old,'{}'::jsonb));
@@ -4073,7 +4073,7 @@ DECLARE
  NEW og_compat.discount_allocations; OLD og_compat.discount_allocations;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='discount_allocations';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.discount_allocations,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.discount_allocations,coalesce(p_old,'{}'::jsonb));
@@ -4177,7 +4177,7 @@ DECLARE
  NEW og_compat.ekyc_decisions; OLD og_compat.ekyc_decisions;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='ekyc_decisions';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.ekyc_decisions,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.ekyc_decisions,coalesce(p_old,'{}'::jsonb));
@@ -4198,7 +4198,7 @@ DECLARE
  NEW og_compat.ekyc_private_assets; OLD og_compat.ekyc_private_assets;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='ekyc_private_assets';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.ekyc_private_assets,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.ekyc_private_assets,coalesce(p_old,'{}'::jsonb));
@@ -4228,7 +4228,7 @@ DECLARE
  NEW og_compat.ekyc_profiles; OLD og_compat.ekyc_profiles;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='ekyc_profiles';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.ekyc_profiles,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.ekyc_profiles,coalesce(p_old,'{}'::jsonb));
@@ -4259,7 +4259,7 @@ DECLARE
  NEW og_compat.ekyc_profiles; OLD og_compat.ekyc_profiles;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='ekyc_profiles';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.ekyc_profiles,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.ekyc_profiles,coalesce(p_old,'{}'::jsonb));
@@ -4331,7 +4331,7 @@ DECLARE
  NEW og_compat.ekyc_verification_attempts; OLD og_compat.ekyc_verification_attempts;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='ekyc_verification_attempts';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.ekyc_verification_attempts,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.ekyc_verification_attempts,coalesce(p_old,'{}'::jsonb));
@@ -4352,7 +4352,7 @@ DECLARE
  NEW og_compat.handover_confirmations; OLD og_compat.handover_confirmations;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='handover_confirmations';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.handover_confirmations,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.handover_confirmations,coalesce(p_old,'{}'::jsonb));
@@ -4379,7 +4379,7 @@ DECLARE
  NEW og_compat.handover_confirmations; OLD og_compat.handover_confirmations;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='handover_confirmations';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.handover_confirmations,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.handover_confirmations,coalesce(p_old,'{}'::jsonb));
@@ -4400,7 +4400,7 @@ DECLARE
  NEW og_compat.identity_document_registry; OLD og_compat.identity_document_registry;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='identity_document_registry';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.identity_document_registry,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.identity_document_registry,coalesce(p_old,'{}'::jsonb));
@@ -4562,7 +4562,7 @@ DECLARE
  NEW og_compat.listing_fee_assessments; OLD og_compat.listing_fee_assessments;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='listing_fee_assessments';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.listing_fee_assessments,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.listing_fee_assessments,coalesce(p_old,'{}'::jsonb));
@@ -4583,7 +4583,7 @@ DECLARE
  NEW og_compat.listing_fee_charges; OLD og_compat.listing_fee_charges;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='listing_fee_charges';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.listing_fee_charges,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.listing_fee_charges,coalesce(p_old,'{}'::jsonb));
@@ -4612,7 +4612,7 @@ DECLARE
  NEW og_compat.listing_fee_charges; OLD og_compat.listing_fee_charges;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='listing_fee_charges';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.listing_fee_charges,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.listing_fee_charges,coalesce(p_old,'{}'::jsonb));
@@ -4633,7 +4633,7 @@ DECLARE
  NEW og_compat.listing_fee_charges; OLD og_compat.listing_fee_charges;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='listing_fee_charges';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.listing_fee_charges,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.listing_fee_charges,coalesce(p_old,'{}'::jsonb));
@@ -4658,7 +4658,7 @@ DECLARE
  NEW og_compat.listing_fee_policies; OLD og_compat.listing_fee_policies;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='listing_fee_policies';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.listing_fee_policies,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.listing_fee_policies,coalesce(p_old,'{}'::jsonb));
@@ -4716,7 +4716,7 @@ DECLARE
  NEW og_compat.listing_fee_receipts; OLD og_compat.listing_fee_receipts;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='listing_fee_receipts';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.listing_fee_receipts,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.listing_fee_receipts,coalesce(p_old,'{}'::jsonb));
@@ -4737,7 +4737,7 @@ DECLARE
  NEW og_compat.money_holds; OLD og_compat.money_holds;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='money_holds';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.money_holds,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.money_holds,coalesce(p_old,'{}'::jsonb));
@@ -4762,7 +4762,7 @@ DECLARE
  NEW og_compat.money_holds; OLD og_compat.money_holds;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='money_holds';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.money_holds,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.money_holds,coalesce(p_old,'{}'::jsonb));
@@ -4783,7 +4783,7 @@ DECLARE
  NEW og_compat.notification_dispatches; OLD og_compat.notification_dispatches;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='notification_dispatches';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.notification_dispatches,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.notification_dispatches,coalesce(p_old,'{}'::jsonb));
@@ -4807,7 +4807,7 @@ DECLARE
  NEW og_compat.notification_dispatches; OLD og_compat.notification_dispatches;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='notification_dispatches';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.notification_dispatches,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.notification_dispatches,coalesce(p_old,'{}'::jsonb));
@@ -4858,7 +4858,7 @@ DECLARE
  NEW og_compat.order_events; OLD og_compat.order_events;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='order_events';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.order_events,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.order_events,coalesce(p_old,'{}'::jsonb));
@@ -4928,7 +4928,7 @@ DECLARE
  NEW og_compat.order_fund_components; OLD og_compat.order_fund_components;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='order_fund_components';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.order_fund_components,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.order_fund_components,coalesce(p_old,'{}'::jsonb));
@@ -5089,7 +5089,7 @@ DECLARE
  NEW og_compat.orders; OLD og_compat.orders;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='orders';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.orders,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.orders,coalesce(p_old,'{}'::jsonb));
@@ -5250,7 +5250,7 @@ DECLARE
  NEW og_compat.outbox_consumer_checkpoints; OLD og_compat.outbox_consumer_checkpoints;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='outbox_consumer_checkpoints';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.outbox_consumer_checkpoints,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.outbox_consumer_checkpoints,coalesce(p_old,'{}'::jsonb));
@@ -5271,7 +5271,7 @@ DECLARE
  NEW og_compat.payment_allocations; OLD og_compat.payment_allocations;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='payment_allocations';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.payment_allocations,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.payment_allocations,coalesce(p_old,'{}'::jsonb));
@@ -5299,7 +5299,7 @@ DECLARE
  NEW og_compat.payment_allocations; OLD og_compat.payment_allocations;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='payment_allocations';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.payment_allocations,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.payment_allocations,coalesce(p_old,'{}'::jsonb));
@@ -5351,7 +5351,7 @@ DECLARE
  NEW og_compat.payment_attempts; OLD og_compat.payment_attempts;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='payment_attempts';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.payment_attempts,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.payment_attempts,coalesce(p_old,'{}'::jsonb));
@@ -5422,7 +5422,7 @@ DECLARE
  NEW og_compat.payment_confirmations; OLD og_compat.payment_confirmations;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='payment_confirmations';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.payment_confirmations,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.payment_confirmations,coalesce(p_old,'{}'::jsonb));
@@ -5474,7 +5474,7 @@ DECLARE
  NEW og_compat.payment_intents; OLD og_compat.payment_intents;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='payment_intents';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.payment_intents,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.payment_intents,coalesce(p_old,'{}'::jsonb));
@@ -5510,7 +5510,7 @@ DECLARE
  NEW og_compat.payment_intents; OLD og_compat.payment_intents;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='payment_intents';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.payment_intents,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.payment_intents,coalesce(p_old,'{}'::jsonb));
@@ -5566,7 +5566,7 @@ DECLARE
  NEW og_compat.penalty_ledger; OLD og_compat.penalty_ledger;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='penalty_ledger';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.penalty_ledger,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.penalty_ledger,coalesce(p_old,'{}'::jsonb));
@@ -5587,7 +5587,7 @@ DECLARE
  NEW og_compat.penalty_policies; OLD og_compat.penalty_policies;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='penalty_policies';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.penalty_policies,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.penalty_policies,coalesce(p_old,'{}'::jsonb));
@@ -5638,7 +5638,7 @@ DECLARE
  NEW og_compat.pickup_attempts; OLD og_compat.pickup_attempts;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='pickup_attempts';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.pickup_attempts,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.pickup_attempts,coalesce(p_old,'{}'::jsonb));
@@ -5690,7 +5690,7 @@ DECLARE
  NEW og_compat.product_moderation_decisions; OLD og_compat.product_moderation_decisions;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='product_moderation_decisions';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.product_moderation_decisions,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.product_moderation_decisions,coalesce(p_old,'{}'::jsonb));
@@ -5718,7 +5718,7 @@ DECLARE
  NEW og_compat.product_moderation_decisions; OLD og_compat.product_moderation_decisions;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='product_moderation_decisions';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.product_moderation_decisions,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.product_moderation_decisions,coalesce(p_old,'{}'::jsonb));
@@ -5743,7 +5743,7 @@ DECLARE
  NEW og_compat.product_moderation_decisions; OLD og_compat.product_moderation_decisions;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='product_moderation_decisions';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.product_moderation_decisions,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.product_moderation_decisions,coalesce(p_old,'{}'::jsonb));
@@ -5764,7 +5764,7 @@ DECLARE
  NEW og_compat.product_moderation_legacy_history; OLD og_compat.product_moderation_legacy_history;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='product_moderation_legacy_history';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.product_moderation_legacy_history,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.product_moderation_legacy_history,coalesce(p_old,'{}'::jsonb));
@@ -5785,7 +5785,7 @@ DECLARE
  NEW og_compat.product_revisions; OLD og_compat.product_revisions;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='product_revisions';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.product_revisions,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.product_revisions,coalesce(p_old,'{}'::jsonb));
@@ -5820,7 +5820,7 @@ DECLARE
  NEW og_compat.products; OLD og_compat.products;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='products';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
     v_image_count INTEGER;
     v_video_count INTEGER;
 
@@ -5859,7 +5859,7 @@ DECLARE
  NEW og_compat.products; OLD og_compat.products;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='products';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.products,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.products,coalesce(p_old,'{}'::jsonb));
@@ -5936,7 +5936,7 @@ DECLARE
  NEW og_compat.quick_auth_attempts; OLD og_compat.quick_auth_attempts;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='quick_auth_attempts';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.quick_auth_attempts,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.quick_auth_attempts,coalesce(p_old,'{}'::jsonb));
@@ -5957,7 +5957,7 @@ DECLARE
  NEW og_compat.quick_auth_results; OLD og_compat.quick_auth_results;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='quick_auth_results';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.quick_auth_results,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.quick_auth_results,coalesce(p_old,'{}'::jsonb));
@@ -5987,7 +5987,7 @@ DECLARE
  NEW og_compat.quick_auth_results; OLD og_compat.quick_auth_results;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='quick_auth_results';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.quick_auth_results,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.quick_auth_results,coalesce(p_old,'{}'::jsonb));
@@ -6008,7 +6008,7 @@ DECLARE
  NEW og_compat.quick_auth_results; OLD og_compat.quick_auth_results;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='quick_auth_results';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.quick_auth_results,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.quick_auth_results,coalesce(p_old,'{}'::jsonb));
@@ -6033,7 +6033,7 @@ DECLARE
  NEW og_compat.report_export_runs; OLD og_compat.report_export_runs;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='report_export_runs';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.report_export_runs,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.report_export_runs,coalesce(p_old,'{}'::jsonb));
@@ -6055,7 +6055,7 @@ DECLARE
  NEW og_compat.review_revisions; OLD og_compat.review_revisions;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='review_revisions';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.review_revisions,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.review_revisions,coalesce(p_old,'{}'::jsonb));
@@ -6153,7 +6153,7 @@ DECLARE
  NEW og_compat.reward_accounts; OLD og_compat.reward_accounts;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='reward_accounts';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.reward_accounts,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.reward_accounts,coalesce(p_old,'{}'::jsonb));
@@ -6208,7 +6208,7 @@ DECLARE
  NEW og_compat.reward_ledger; OLD og_compat.reward_ledger;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='reward_ledger';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.reward_ledger,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.reward_ledger,coalesce(p_old,'{}'::jsonb));
@@ -6272,7 +6272,7 @@ DECLARE
  NEW og_compat.reward_policies; OLD og_compat.reward_policies;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='reward_policies';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.reward_policies,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.reward_policies,coalesce(p_old,'{}'::jsonb));
@@ -6333,7 +6333,7 @@ DECLARE
  NEW og_compat.seller_profile_decisions; OLD og_compat.seller_profile_decisions;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='seller_profile_decisions';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.seller_profile_decisions,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.seller_profile_decisions,coalesce(p_old,'{}'::jsonb));
@@ -6354,7 +6354,7 @@ DECLARE
  NEW og_compat.seller_profiles; OLD og_compat.seller_profiles;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='seller_profiles';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.seller_profiles,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.seller_profiles,coalesce(p_old,'{}'::jsonb));
@@ -6381,7 +6381,7 @@ DECLARE
  NEW og_compat.seller_profiles; OLD og_compat.seller_profiles;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='seller_profiles';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.seller_profiles,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.seller_profiles,coalesce(p_old,'{}'::jsonb));
@@ -6493,7 +6493,7 @@ DECLARE
  NEW og_compat.shipment_events; OLD og_compat.shipment_events;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='shipment_events';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.shipment_events,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.shipment_events,coalesce(p_old,'{}'::jsonb));
@@ -6577,7 +6577,7 @@ DECLARE
  NEW og_compat.users; OLD og_compat.users;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='users';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.users,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.users,coalesce(p_old,'{}'::jsonb));
@@ -6602,7 +6602,7 @@ DECLARE
  NEW og_compat.voucher_grant_events; OLD og_compat.voucher_grant_events;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='voucher_grant_events';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.voucher_grant_events,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.voucher_grant_events,coalesce(p_old,'{}'::jsonb));
@@ -6623,7 +6623,7 @@ DECLARE
  NEW og_compat.voucher_grants; OLD og_compat.voucher_grants;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='voucher_grants';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.voucher_grants,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.voucher_grants,coalesce(p_old,'{}'::jsonb));
@@ -6683,7 +6683,7 @@ DECLARE
  NEW og_compat.voucher_revision_revocations; OLD og_compat.voucher_revision_revocations;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='voucher_revision_revocations';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.voucher_revision_revocations,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.voucher_revision_revocations,coalesce(p_old,'{}'::jsonb));
@@ -6706,7 +6706,7 @@ DECLARE
  NEW og_compat.voucher_revision_revocations; OLD og_compat.voucher_revision_revocations;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='voucher_revision_revocations';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.voucher_revision_revocations,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.voucher_revision_revocations,coalesce(p_old,'{}'::jsonb));
@@ -6757,7 +6757,7 @@ DECLARE
  NEW og_compat.voucher_revisions; OLD og_compat.voucher_revisions;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='voucher_revisions';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.voucher_revisions,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.voucher_revisions,coalesce(p_old,'{}'::jsonb));
@@ -6813,7 +6813,7 @@ DECLARE
  NEW og_compat.zero_checkout_confirmations; OLD og_compat.zero_checkout_confirmations;
  TG_OP text:=p_op; TG_WHEN text:=p_phase; TG_TABLE_NAME text:='zero_checkout_confirmations';
  TG_TABLE_SCHEMA text:='og_compat'; TG_ARGV text[]:=p_args; TG_NARGS integer:=cardinality(p_args);
- 
+
 BEGIN
  NEW:=jsonb_populate_record(NULL::og_compat.zero_checkout_confirmations,coalesce(p_new,'{}'::jsonb));
  OLD:=jsonb_populate_record(NULL::og_compat.zero_checkout_confirmations,coalesce(p_old,'{}'::jsonb));
@@ -21791,4 +21791,3 @@ ALTER TABLE ONLY public.order_items
 --
 
 \unrestrict qRFu7QCi5uN8PNqohhhSUxctVv7Qe2lJaGoEVFPF8wbBwzO4xJ8OtjFsssbKqWP
-

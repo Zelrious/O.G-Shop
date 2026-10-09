@@ -1,6 +1,12 @@
 # Flyway migrations
 
-## Current consolidation — V23 / TASK-0070
+## Current schema — V24 / TASK-0073
+
+V24 đã áp dụng/validate local og_shop: bỏ view và bảng `refresh_sessions`, còn 47 bảng nghiệp vụ (48 gồm Flyway history), 103 compatibility views và 7 report views. Migration loại đúng nhánh refresh trong graph validator trước DROP, không dùng CASCADE và giữ các kiểm tra còn lại. Backend/frontend chuyển sang đăng nhập có thời hạn cố định, restore không gia hạn. `auth_challenges` và dữ liệu eKYC giữ nguyên.
+
+V1–V24 immutable sau rollout; thay đổi tiếp theo dùng V25+. Backup/restore, upgrade, 47 fingerprints, PostgreSQL tests và runtime smoke được ghi trong [bàn giao V24](../../../../../../docs/architecture/DATABASE_AUTH_SIMPLIFICATION_V24_20261009.md). Không chỉnh V22 để giảm số bảng.
+
+## Historical consolidation — V23 / TASK-0070
 
 V22 đã migrate/validate local og_shop: 48 bảng nghiệp vụ, 49 public tables gồm Flyway history. Migration chuyển dữ liệu nguyên tử và đối chiếu đủ 104 nguồn trước khi bỏ bảng cũ. Entity/join table dùng view og_compat; schema public giữ 48 physical aggregates và report views. [Handoff](../../../../../../docs/architecture/DATABASE_CONSOLIDATION_V22_20261009.md), [dictionary](../../../../../../database/docs/DATABASE_TABLE_DICTIONARY_V22.md).
 
@@ -8,7 +14,7 @@ V1–V23 immutable; thay đổi tiếp theo dùng V24+. Hai generator và metada
 
 V22 tạo cấu trúc 48 bảng; V23 đã căn bộ đếm ID qua mọi loại dòng, kiểm thử tạo mới profile/legacy verification/voucher/payment sau populated upgrade đạt. Trạng thái runtime hiện hành là V23.
 
-## Current expansion — V21 / TASK-0069
+## Historical expansion — V21 / TASK-0069
 
 Đã áp dụng và validate local og_shop V15–V21: 105 public tables gồm history, 7 view. [Handoff/ma trận 83 UC](../../../../../../docs/architecture/DATABASE_EXPANSION_V21_20261009.md), [test guide](../../../../../../database/tests/README.md), [migration runner](../../../../../../database/scripts/migrate-schema.ps1). V1–V14 giữ checksum; V15–V20 đã rollout, V21 forward-fix checkout 0đ; thay đổi tiếp theo phải dùng V22+.
 

@@ -1,8 +1,12 @@
 # Database design documents
 
-## Current database — V23 / 48 business tables
+## Current database — V24 / 47 business tables
 
-[Dictionary V22](DATABASE_TABLE_DICTIONARY_V22.md) liệt kê đủ 48 bảng, thuộc tính, kiểu, PK/FK, loại dòng và mapping 104 nguồn. [Bàn giao V22](../../docs/architecture/DATABASE_CONSOLIDATION_V22_20261009.md) mô tả việc gộp, kiểm chứng, backup và giới hạn lớp chuyển tiếp. Đây là cấu trúc hiện hành cho ERD/báo cáo; tài liệu V21 và các baseline phía dưới giữ lịch sử.
+[Dictionary V24](DATABASE_TABLE_DICTIONARY_V24.md) là nguồn hiện hành cho 47 bảng/895 trường, PK/FK và mapping 103 nguồn còn giữ. [Bàn giao V24](../../docs/architecture/DATABASE_AUTH_SIMPLIFICATION_V24_20261009.md) ghi việc bỏ refresh sessions, kiểm chứng dữ liệu và cập nhật báo cáo. `auth_challenges` chưa bị bỏ; các đề xuất gộp eKYC chưa triển khai trong đợt này.
+
+## Historical database — V23 / 48 business tables
+
+[Dictionary V22](DATABASE_TABLE_DICTIONARY_V22.md) liệt kê đủ 48 bảng, thuộc tính, kiểu, PK/FK, loại dòng và mapping 104 nguồn. [Bàn giao V22](../../docs/architecture/DATABASE_CONSOLIDATION_V22_20261009.md) mô tả việc gộp, kiểm chứng, backup và giới hạn lớp chuyển tiếp tại checkpoint V23. Tài liệu V21 và các baseline phía dưới giữ lịch sử.
 
 V22 tạo cấu trúc 48 bảng; V23 đã căn bộ đếm ID qua mọi loại dòng, kiểm thử tạo mới profile/legacy verification/voucher/payment sau populated upgrade đạt. Trạng thái runtime hiện hành là V23.
 

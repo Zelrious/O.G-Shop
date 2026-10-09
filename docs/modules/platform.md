@@ -1,5 +1,9 @@
 # Platform Module
 
+## Current database — V24 / TASK-0073
+
+[Bàn giao V24](../architecture/DATABASE_AUTH_SIMPLIFICATION_V24_20261009.md): bỏ riêng refresh sessions, giữ mọi bảng Platform và lịch sử; local og_shop còn 47 bảng nghiệp vụ, 103 compatibility views, 7 report views. Graph validator bỏ nhánh refresh, giữ các ràng buộc khác. Fingerprints cả 47 bảng, clean/upgrade PostgreSQL, Flyway/Hibernate và runtime smoke đạt. Báo cáo được cập nhật 47 bảng/895 trường và đối chiếu định dạng native; chưa kiểm trang PDF do export 403. Không nâng trạng thái nghiệm thu worker/API từ thay đổi này; các checkpoint V23 bên dưới là lịch sử.
+
 ## Database report — TASK-0072 / 2026-10-09
 
 [TASK-0072](../progress/archive/TASK-0072-database-design-report.md) đã điền chương bảng database trong báo cáo Google Docs theo schema V23: danh sách 48 bảng và 48 bảng chi tiết/907 trường, giữ mẫu native và kiểm tra căn lề, ghim tiêu đề, căn giữa chiều dọc. Đây là cập nhật tài liệu; trạng thái triển khai module vẫn theo code/kiểm thử. PDF/HTML export bị từ chối 403, chưa kiểm bố cục trang.
