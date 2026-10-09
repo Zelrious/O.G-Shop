@@ -1,5 +1,9 @@
 # Module Index
 
+## Database report — TASK-0072 / 2026-10-09
+
+[TASK-0072](../progress/archive/TASK-0072-database-design-report.md): đã viết danh sách 48 bảng nghiệp vụ và 48 bảng chi tiết/907 trường trong báo cáo native, bỏ Flyway; xác minh 4.922 ô và định dạng 49 bảng, tiêu đề đúng tên schema. Chỉ cập nhật báo cáo, không đổi trạng thái nghiệm thu module. Xuất PDF/HTML gặp 403; bố cục trang chưa được xem.
+
 ## Public policies — TASK-0071 / 2026-10-09
 
 [TASK-0071](../progress/archive/TASK-0071-public-use-case-policies-and-coins.md) đã sửa 83 đặc tả trong báo cáo, giữ cấu trúc và sao lưu: OTP/Google dễ hiểu, uy tín bắt đầu/tối đa 100 và xử phạt do KTV quyết định, xu riêng uy tín với năm nguồn thưởng, voucher trước rồi xu trừ cả tiền hàng/phí giao đến 0 đồng, hoàn xu nhưng không cấp lại voucher. Đây là chính sách báo cáo hiện hành; không thay code/database V23 hoặc nâng trạng thái nghiệm thu module. Native readback đạt; tải PDF lỗi nên chưa kiểm bố cục trang.

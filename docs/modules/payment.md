@@ -1,5 +1,9 @@
 # Payment Module
 
+## Database report — TASK-0072 / 2026-10-09
+
+[TASK-0072](../progress/archive/TASK-0072-database-design-report.md) đã điền chương bảng database trong báo cáo Google Docs theo schema V23: danh sách 48 bảng và 48 bảng chi tiết/907 trường, giữ mẫu native và kiểm tra căn lề, ghim tiêu đề, căn giữa chiều dọc. Đây là cập nhật tài liệu; trạng thái triển khai module vẫn theo code/kiểm thử. PDF/HTML export bị từ chối 403, chưa kiểm bố cục trang.
+
 ## Public policies — TASK-0071 / 2026-10-09
 
 [TASK-0071](../progress/archive/TASK-0071-public-use-case-policies-and-coins.md) sửa UC25/UC71/UC83: đơn 0 đồng do xu không có giao dịch tiền 0 đồng; hoàn tiền thực trả và xu riêng từng đơn. Hủy/hoàn hợp lệ trả toàn bộ xu đã dùng kể cả phí giao, không cấp lại voucher; trả không hoàn phí giao chiều mua đã trả bằng tiền. Giữ điều kiện KTV-only không hoàn vì hỏng nghiêm trọng, không chuyển trùng. Báo cáo đã đọc lại native; code/database V23 chưa đồng bộ quy tắc mới trong task này.

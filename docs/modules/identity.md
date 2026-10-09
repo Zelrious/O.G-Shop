@@ -1,5 +1,9 @@
 # Identity Module
 
+## Database report — TASK-0072 / 2026-10-09
+
+[TASK-0072](../progress/archive/TASK-0072-database-design-report.md) đã điền chương bảng database trong báo cáo Google Docs theo schema V23: danh sách 48 bảng và 48 bảng chi tiết/907 trường, giữ mẫu native và kiểm tra căn lề, ghim tiêu đề, căn giữa chiều dọc. Đây là cập nhật tài liệu; trạng thái triển khai module vẫn theo code/kiểm thử. PDF/HTML export bị từ chối 403, chưa kiểm bố cục trang.
+
 ## Public policies — TASK-0071 / 2026-10-09
 
 [TASK-0071](../progress/archive/TASK-0071-public-use-case-policies-and-coins.md) sửa UC01–UC11/UC66–UC68: đăng ký xác thực email bằng OTP một lần; Google liên kết đúng tài khoản, không tạo trùng; lớp hai tùy chọn riêng khi đăng nhập. Uy tín bắt đầu/tối đa 100, các hạn chế do KTV quyết định, giữ nghĩa vụ đơn cũ. Báo cáo đã đọc lại native; chưa thay code/database V23 theo các chính sách mới.

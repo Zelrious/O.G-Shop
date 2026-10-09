@@ -27,14 +27,19 @@ public class TokenService {
 
     public String issueAccessToken(UserEntity user) {
         Instant now = clock.instant();
+        return issueAccessToken(user, now, now.plus(properties.accessTokenTtl()));
+    }
+
+    /** Reload current roles without extending an existing login's deadline. */
+    public String issueAccessToken(UserEntity user, Instant issuedAt, Instant expiresAt) {
         List<String> roles = user.getRoles().stream()
                 .map(role -> role.getRoleName())
                 .sorted()
                 .toList();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("og-shop")
-                .issuedAt(now)
-                .expiresAt(now.plus(properties.accessTokenTtl()))
+                .issuedAt(issuedAt)
+                .expiresAt(expiresAt)
                 .subject(user.getId().toString())
                 .claim("email", user.getEmail())
                 .claim("roles", roles)

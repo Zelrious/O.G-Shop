@@ -40,7 +40,7 @@ beforeEach(() => {
   vi.mocked(useAuth).mockReturnValue({
     user: { userId: 7, email: profile.email, fullName: profile.fullName, avatarUrl: profile.avatarUrl,
       roles: ['BUYER'], createdAt: profile.createdAt }, isAuthenticated: true, isLoading: false,
-    logout: vi.fn(), login: vi.fn(), register: vi.fn(), refreshSession: vi.fn(), reloadCurrentUser: vi.fn(),
+    logout: vi.fn(), login: vi.fn(), register: vi.fn(), reloadCurrentUser: vi.fn(),
   });
   URL.createObjectURL = vi.fn(() => 'blob:new-avatar-preview');
   URL.revokeObjectURL = vi.fn();

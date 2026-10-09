@@ -1,5 +1,9 @@
 # Commerce Module
 
+## Database report — TASK-0072 / 2026-10-09
+
+[TASK-0072](../progress/archive/TASK-0072-database-design-report.md) đã điền chương bảng database trong báo cáo Google Docs theo schema V23: danh sách 48 bảng và 48 bảng chi tiết/907 trường, giữ mẫu native và kiểm tra căn lề, ghim tiêu đề, căn giữa chiều dọc. Đây là cập nhật tài liệu; trạng thái triển khai module vẫn theo code/kiểm thử. PDF/HTML export bị từ chối 403, chưa kiểm bố cục trang.
+
 ## Public policies — TASK-0071 / 2026-10-09
 
 [TASK-0071](../progress/archive/TASK-0071-public-use-case-policies-and-coins.md) sửa UC20–UC25/UC82: 3.000 xu đăng ký, 10.000 xu bài đầu mở bán, 3.000 xu mua đầu hoàn tất, 500 xu gửi đánh giá, 400/500 xu nhận 4/5 sao; tính một lần mỗi mốc/đánh giá. Voucher trước, xu sau, trừ cả hàng/phí giao đến 0 đồng; hủy hoặc hoàn hợp lệ trả xu, không cấp lại voucher. Uy tín tách riêng. Chỉ cập nhật báo cáo, chưa sửa code/database V23.

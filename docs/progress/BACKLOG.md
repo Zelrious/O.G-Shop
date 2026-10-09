@@ -1,5 +1,10 @@
 # Project Backlog
 
+## Database design report — TASK-0072
+
+- [x] Viết danh sách 48 bảng và 48 bảng chi tiết theo mẫu Google Docs, loại Flyway; native backup, kiểm đủ nội dung và căn lề/ghim tiêu đề.
+- [ ] Kiểm bố cục trang khi PDF/HTML export hoạt động trở lại; lần này Google Drive trả 403.
+
 ## Public use-case policies — TASK-0071
 
 - [x] [TASK-0071](archive/TASK-0071-public-use-case-policies-and-coins.md): sửa đủ 83 đặc tả theo cách dùng/chính sách, điểm uy tín và xu; sao lưu native, đồng bộ tên/tổng quan, đọc lại cấu trúc và nội dung.
@@ -10,7 +15,8 @@
 
 - [x] Gộp 104 nguồn thành 48 bảng nghiệp vụ; preserve count/hash, backend mappings/guards, backup/restore và migrate/validate local og_shop.
 - [x] Regression/Hibernate/runtime và ERD DDL verification; xuất dictionary 48 bảng và schema V22.
-- [ ] Đưa ERD và nội dung dictionary V22 vào chương database của báo cáo khi được yêu cầu.
+- [x] Đưa nội dung 48 bảng/907 trường vào chương database của báo cáo theo TASK-0072.
+- [ ] Đưa ERD vào báo cáo khi người dùng chuẩn bị hoặc yêu cầu dựng sơ đồ.
 - [ ] Nối API/UI/worker canonical theo 83 UC; chuyển service khỏi lớp og_compat theo từng module trước khi loại view. Không double-write money/history.
 
 Các mục expansion V21 bên dưới ghi phần nền và công việc ứng dụng tiếp nối; tên nguồn hiện hành đối chiếu theo [V22](../architecture/DATABASE_CONSOLIDATION_V22_20261009.md).

@@ -42,6 +42,5 @@ export interface AuthContextType {
   login: (credentials: LoginCredentials) => Promise<UserPrincipal>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
-  refreshSession: () => Promise<boolean>;
   reloadCurrentUser: () => Promise<void>;
 }

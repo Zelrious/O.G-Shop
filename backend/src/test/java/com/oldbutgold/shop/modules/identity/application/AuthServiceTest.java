@@ -1,12 +1,6 @@
 package com.oldbutgold.shop.modules.identity.application;
 
-import com.oldbutgold.shop.modules.identity.infrastructure.persistence.RefreshSessionEntity;
-import com.oldbutgold.shop.modules.identity.infrastructure.persistence.RefreshSessionRepository;
-import com.oldbutgold.shop.modules.identity.infrastructure.persistence.RoleEntity;
-import com.oldbutgold.shop.modules.identity.infrastructure.persistence.RoleRepository;
-import com.oldbutgold.shop.modules.identity.infrastructure.persistence.UserEntity;
-import com.oldbutgold.shop.modules.identity.infrastructure.persistence.UserRepository;
-import com.oldbutgold.shop.shared.config.AuthProperties;
+import com.oldbutgold.shop.modules.identity.infrastructure.persistence.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,125 +9,108 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.oauth2.jwt.*;
 
 import java.lang.reflect.Field;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
     @Mock UserRepository users;
     @Mock RoleRepository roles;
-    @Mock RefreshSessionRepository refreshSessions;
     @Mock TokenService tokenService;
-
+    @Mock JwtDecoder jwtDecoder;
     private AuthService service;
     private final Instant now = Instant.parse("2026-09-19T00:00:00Z");
 
-    @BeforeEach
-    void setUp() {
-        service = new AuthService(
-                users, roles, refreshSessions,
-                PasswordEncoderFactories.createDelegatingPasswordEncoder(), tokenService,
-                new AuthProperties(
-                        "test-signing-key-with-at-least-thirty-two-bytes", Duration.ofMinutes(15),
-                        Duration.ofDays(30), "http://localhost:5173", "og_refresh", false,
-                        "/api/v1/auth/refresh"
-                ),
-                Clock.fixed(now, ZoneOffset.UTC)
-        );
+    @BeforeEach void setUp() {
+        service = new AuthService(users, roles, PasswordEncoderFactories.createDelegatingPasswordEncoder(),
+                tokenService, jwtDecoder, Clock.fixed(now, ZoneOffset.UTC));
     }
 
-    @Test
-    void registerHashesPasswordAndOnlyAssignsBuyer() throws Exception {
-        var roleConstructor = RoleEntity.class.getDeclaredConstructor();
-        roleConstructor.setAccessible(true);
-        RoleEntity buyer = roleConstructor.newInstance();
-        Field roleName = RoleEntity.class.getDeclaredField("roleName");
-        roleName.setAccessible(true);
-        roleName.set(buyer, "BUYER");
+    private UserEntity user() {
+        return new UserEntity("buyer@ogshop.vn", "{noop}password", "Buyer", null, now);
+    }
+
+    private Jwt credential(Instant expiry) {
+        return Jwt.withTokenValue("original").header("alg", "HS256").subject("7")
+                .issuedAt(now.minusSeconds(600)).expiresAt(expiry).build();
+    }
+
+    @Test void registerHashesPasswordAndOnlyAssignsBuyer() throws Exception {
+        var constructor = RoleEntity.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        RoleEntity buyer = constructor.newInstance();
+        Field name = RoleEntity.class.getDeclaredField("roleName");
+        name.setAccessible(true);
+        name.set(buyer, "BUYER");
         when(roles.findByRoleName("BUYER")).thenReturn(Optional.of(buyer));
         when(tokenService.issueAccessToken(any())).thenReturn("access-token");
         when(tokenService.accessTokenExpiresInSeconds()).thenReturn(900L);
-        when(users.existsByEmail("new@ogshop.vn")).thenReturn(false);
 
-        service.register(" New@OGSHOP.VN ", "Password123@", "Nguyen An", null,
-                new AuthService.ClientMetadata("127.0.0.1", "test"));
-
-        ArgumentCaptor<UserEntity> captor = ArgumentCaptor.forClass(UserEntity.class);
+        var session = service.register(" New@OGSHOP.VN ", "Password123@", "Nguyen An", null);
+        var captor = ArgumentCaptor.forClass(UserEntity.class);
         verify(users).save(captor.capture());
-        UserEntity saved = captor.getValue();
-        assertThat(saved.getEmail()).isEqualTo("new@ogshop.vn");
-        assertThat(saved.getPasswordHash()).startsWith("{bcrypt}").isNotEqualTo("Password123@");
-        assertThat(saved.getRoles()).extracting(RoleEntity::getRoleName).containsExactly("BUYER");
+        assertThat(captor.getValue().getEmail()).isEqualTo("new@ogshop.vn");
+        assertThat(captor.getValue().getPasswordHash()).startsWith("{bcrypt}").isNotEqualTo("Password123@");
+        assertThat(captor.getValue().getRoles()).extracting(RoleEntity::getRoleName).containsExactly("BUYER");
+        assertThat(session.expiresIn()).isEqualTo(900);
     }
 
-    @Test
-    void loginRejectsWrongPasswordWithGenericAuthenticationFailure() {
-        UserEntity user = new UserEntity(
-                "buyer@ogshop.vn",
+    @Test void loginRejectsWrongPasswordWithGenericAuthenticationFailure() {
+        UserEntity user = new UserEntity("buyer@ogshop.vn",
                 PasswordEncoderFactories.createDelegatingPasswordEncoder().encode("CorrectPassword123@"),
-                "Buyer", null, now
-        );
+                "Buyer", null, now);
         when(users.findByEmail("buyer@ogshop.vn")).thenReturn(Optional.of(user));
-
-        assertThatThrownBy(() -> service.login(
-                "buyer@ogshop.vn", "WrongPassword", new AuthService.ClientMetadata("127.0.0.1", "test")
-        )).isInstanceOf(BadCredentialsException.class);
+        assertThatThrownBy(() -> service.login("buyer@ogshop.vn", "WrongPassword"))
+                .isInstanceOf(BadCredentialsException.class);
+        verifyNoInteractions(tokenService);
     }
 
-    @Test
-    void refreshRotatesSingleUseToken() {
-        when(tokenService.issueAccessToken(any())).thenReturn("access-token");
-        when(tokenService.accessTokenExpiresInSeconds()).thenReturn(900L);
-        UserEntity user = new UserEntity("buyer@ogshop.vn", "{noop}password", "Buyer", null, now);
-        UUID family = UUID.randomUUID();
-        RefreshSessionEntity current = new RefreshSessionEntity(
-                UUID.randomUUID(), user, family, AuthService.digest("old-token"), now.minusSeconds(60),
-                now.plusSeconds(3600), "127.0.0.1", "test"
-        );
-        when(refreshSessions.findByTokenDigest(AuthService.digest("old-token"))).thenReturn(Optional.of(current));
-
-        AuthService.SessionResult result = service.refresh(
-                "old-token", new AuthService.ClientMetadata("127.0.0.1", "test")
-        );
-
-        assertThat(result.refreshToken()).isNotBlank().isNotEqualTo("old-token");
-        assertThat(current.getConsumedAt()).isEqualTo(now);
-        verify(refreshSessions).save(any(RefreshSessionEntity.class));
+    @Test void restoreReloadsCurrentRolesWithoutExtendingOriginalDeadline() {
+        Jwt jwt = credential(now.plusSeconds(90));
+        UserEntity user = user();
+        when(jwtDecoder.decode("original")).thenReturn(jwt);
+        when(users.findById(7L)).thenReturn(Optional.of(user));
+        when(tokenService.issueAccessToken(user, jwt.getIssuedAt(), jwt.getExpiresAt())).thenReturn("current-roles");
+        var restored = service.restoreSession("original");
+        assertThat(restored.expiresIn()).isEqualTo(90);
+        assertThat(restored.accessToken()).isEqualTo("current-roles");
+        verify(tokenService, never()).issueAccessToken(any());
     }
 
-    @Test
-    void refreshReuseRevokesWholeFamily() {
-        UserEntity user = new UserEntity("buyer@ogshop.vn", "{noop}password", "Buyer", null, now);
-        UUID family = UUID.randomUUID();
-        RefreshSessionEntity used = new RefreshSessionEntity(
-                UUID.randomUUID(), user, family, AuthService.digest("used-token"), now.minusSeconds(60),
-                now.plusSeconds(3600), "127.0.0.1", "test"
-        );
-        used.consume(now.minusSeconds(10), UUID.randomUUID());
-        RefreshSessionEntity active = new RefreshSessionEntity(
-                UUID.randomUUID(), user, family, AuthService.digest("active-token"), now.minusSeconds(10),
-                now.plusSeconds(3600), "127.0.0.1", "test"
-        );
-        when(refreshSessions.findByTokenDigest(AuthService.digest("used-token"))).thenReturn(Optional.of(used));
-        when(refreshSessions.findAllByFamilyId(family)).thenReturn(List.of(used, active));
+    @Test void restoreRejectsExpiredCredentialEvenIfDecoderAllowsClockTolerance() {
+        when(jwtDecoder.decode("expired")).thenReturn(credential(now.minusSeconds(1)));
+        assertThatThrownBy(() -> service.restoreSession("expired")).isInstanceOf(BadCredentialsException.class);
+        verifyNoInteractions(users, tokenService);
+    }
 
-        assertThatThrownBy(() -> service.refresh(
-                "used-token", new AuthService.ClientMetadata("127.0.0.1", "test")
-        )).isInstanceOf(InvalidRefreshTokenException.class);
-        assertThat(used.getRevokedAt()).isEqualTo(now);
-        assertThat(active.getRevokedAt()).isEqualTo(now);
+    @Test void restoreRejectsInvalidSignature() {
+        when(jwtDecoder.decode("forged")).thenThrow(new JwtException("Invalid signature"));
+        assertThatThrownBy(() -> service.restoreSession("forged")).isInstanceOf(BadCredentialsException.class);
+        verifyNoInteractions(users, tokenService);
+    }
+
+    @Test void restoreRejectsMissingCookie() {
+        assertThatThrownBy(() -> service.restoreSession(null)).isInstanceOf(BadCredentialsException.class);
+        verifyNoInteractions(jwtDecoder, users, tokenService);
+    }
+
+    @Test void restoreRejectsBlockedAccount() throws Exception {
+        UserEntity user = user();
+        Field status = UserEntity.class.getDeclaredField("status");
+        status.setAccessible(true);
+        status.set(user, "BANNED");
+        when(jwtDecoder.decode("original")).thenReturn(credential(now.plusSeconds(90)));
+        when(users.findById(7L)).thenReturn(Optional.of(user));
+        assertThatThrownBy(() -> service.restoreSession("original")).isInstanceOf(BadCredentialsException.class);
+        verifyNoInteractions(tokenService);
     }
 }

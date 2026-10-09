@@ -1,5 +1,12 @@
 # Project Status
 
+## Database design report — 2026-10-09 / TASK-0072
+
+- Completed: [TASK-0072](archive/TASK-0072-database-design-report.md) điền trực tiếp bảng tổng hợp 48 bảng và 48 bảng chi tiết/907 trường theo PostgreSQL V23; native backup đầy đủ, không có bảng Flyway.
+- Verified: 4.922 ô khớp nội dung; 49 tiêu đề đúng, căn giữa; 49 hàng tiêu đề ghim, STT căn giữa, cột nội dung justified, mọi ô MIDDLE, Times New Roman 13 pt. Ba tab giữ tên/thứ tự. Các chỉnh sửa đồng thời ở ngoài chương database được giữ.
+- Incomplete: PDF/HTML export bị Google Drive từ chối 403 nên chưa kiểm bố cục trang. ERD vẫn là phần riêng người dùng chuẩn bị. Không đổi schema/code hay trạng thái nghiệm thu use case.
+- Next: dùng chương bảng đã cập nhật và dictionary V23 để đối chiếu ERD; kiểm trang khi xuất PDF khả dụng.
+
 ## Public use-case policies — 2026-10-09 / TASK-0071
 
 - Completed: [TASK-0071](archive/TASK-0071-public-use-case-policies-and-coins.md) cập nhật trực tiếp 83 đặc tả, 420 ô; giảm 17,9% ký tự, giữ mẫu 10 trường và sao lưu native đầy đủ. Đồng bộ tổng quan/dẫn chiếu, uy tín 100 và các mức phạt do KTV quyết định, năm nguồn xu, voucher trước rồi xu đến 0 đồng kể cả phí giao, hoàn xu không cấp lại voucher.

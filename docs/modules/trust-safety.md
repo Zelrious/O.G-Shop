@@ -1,5 +1,9 @@
 # Trust & Safety Module
 
+## Database report — TASK-0072 / 2026-10-09
+
+[TASK-0072](../progress/archive/TASK-0072-database-design-report.md) đã điền chương bảng database trong báo cáo Google Docs theo schema V23: danh sách 48 bảng và 48 bảng chi tiết/907 trường, giữ mẫu native và kiểm tra căn lề, ghim tiêu đề, căn giữa chiều dọc. Đây là cập nhật tài liệu; trạng thái triển khai module vẫn theo code/kiểm thử. PDF/HTML export bị từ chối 403, chưa kiểm bố cục trang.
+
 ## Public policies — TASK-0071 / 2026-10-09
 
 [TASK-0071](../progress/archive/TASK-0071-public-use-case-policies-and-coins.md) sửa UC61–UC67/UC74–UC76: nhận 3–5 sao phục hồi uy tín đến 100; KTV xác nhận mới trừ 10–20/7–10/3–5 theo hành vi. Dưới 90 và dưới 80 báo KTV, không tự khóa/xóa; công khai hạn đăng/chat/mua, giữ quyền phản hồi đơn cũ. Đánh giá có xu riêng, hoàn tiền và xu theo UC83. Đây là báo cáo được chốt, chưa triển khai chính sách mới vào code/V23.

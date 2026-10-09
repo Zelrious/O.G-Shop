@@ -1,5 +1,9 @@
 # Platform Module
 
+## Database report — TASK-0072 / 2026-10-09
+
+[TASK-0072](../progress/archive/TASK-0072-database-design-report.md) đã điền chương bảng database trong báo cáo Google Docs theo schema V23: danh sách 48 bảng và 48 bảng chi tiết/907 trường, giữ mẫu native và kiểm tra căn lề, ghim tiêu đề, căn giữa chiều dọc. Đây là cập nhật tài liệu; trạng thái triển khai module vẫn theo code/kiểm thử. PDF/HTML export bị từ chối 403, chưa kiểm bố cục trang.
+
 ## Public policies — TASK-0071 / 2026-10-09
 
 [TASK-0071](../progress/archive/TASK-0071-public-use-case-policies-and-coins.md) rút gọn UC34–UC60/UC77–UC81: thông báo phản ánh kết quả, không thay quyết định; tiền và xu hiển thị riêng, đơn 0 đồng không bị nhắc trả tiền. UC52 cảnh báo uy tín dưới 90 và dưới 80 cho KTV xem xét. Native structure/readback đạt; PDF đã xuất nhưng tải lỗi, chưa kiểm bố cục trang. Chưa thay worker/API hoặc database V23 theo chính sách mới.

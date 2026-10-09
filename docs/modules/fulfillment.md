@@ -1,5 +1,9 @@
 # Fulfillment Module
 
+## Database report — TASK-0072 / 2026-10-09
+
+[TASK-0072](../progress/archive/TASK-0072-database-design-report.md) đã điền chương bảng database trong báo cáo Google Docs theo schema V23: danh sách 48 bảng và 48 bảng chi tiết/907 trường, giữ mẫu native và kiểm tra căn lề, ghim tiêu đề, căn giữa chiều dọc. Đây là cập nhật tài liệu; trạng thái triển khai module vẫn theo code/kiểm thử. PDF/HTML export bị từ chối 403, chưa kiểm bố cục trang.
+
 ## Public policies — TASK-0071 / 2026-10-09
 
 [TASK-0071](../progress/archive/TASK-0071-public-use-case-policies-and-coins.md) rút gọn UC26–UC33, giữ mốc giao hợp lệ, OTP/hai bên, nhận khác hoàn tất sớm, 3 ngày yêu cầu trả và 2 ngày phản hồi sau nhận trả. Phân biệt phí giao đã trả bằng tiền không hoàn khi trả với xu cho phí giao được trả lại trong trường hợp hợp lệ theo UC83. Đây là chính sách báo cáo, không sửa code/database V23.

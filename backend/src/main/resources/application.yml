@@ -26,11 +26,10 @@ app:
   auth:
     jwt-signing-key: ${JWT_SIGNING_KEY:replace-with-at-least-32-random-bytes}
     access-token-ttl: ${AUTH_ACCESS_TOKEN_TTL:PT15M}
-    refresh-token-ttl: ${AUTH_REFRESH_TOKEN_TTL:P30D}
     frontend-origin: ${APP_FRONTEND_ORIGIN:http://localhost:5173}
-    refresh-cookie-name: ${AUTH_REFRESH_COOKIE_NAME:og_refresh}
-    refresh-cookie-secure: ${AUTH_REFRESH_COOKIE_SECURE:false}
-    refresh-cookie-path: ${AUTH_REFRESH_COOKIE_PATH:/api/v1/auth/refresh}
+    session-cookie-name: ${AUTH_SESSION_COOKIE_NAME:og_access}
+    session-cookie-secure: ${AUTH_SESSION_COOKIE_SECURE:false}
+    session-cookie-path: ${AUTH_SESSION_COOKIE_PATH:/api/v1/auth}
   ekyc:
     base-url: ${EKYC_SERVICE_URL:http://localhost:8001}
     internal-token: ${EKYC_INTERNAL_TOKEN:replace-with-a-long-random-internal-token}

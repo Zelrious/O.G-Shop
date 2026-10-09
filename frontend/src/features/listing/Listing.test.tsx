@@ -56,7 +56,6 @@ const createMockAuth = (user: UserPrincipal | null): AuthContextType => ({
   login: vi.fn(),
   register: vi.fn(),
   logout: vi.fn(),
-  refreshSession: vi.fn().mockResolvedValue(true),
   reloadCurrentUser: vi.fn().mockResolvedValue(undefined),
 });
 

@@ -142,7 +142,7 @@ class DatabaseExpansionPostgresTest {
         var start=new CountDownLatch(1);
         try(var pool=Executors.newFixedThreadPool(2)){Callable<Boolean> task=()->{start.await();try{action.run();return true;}catch(DataAccessException e){return false;}};var a=pool.submit(task);var b=pool.submit(task);start.countDown();return(a.get(20,TimeUnit.SECONDS)?1:0)+(b.get(20,TimeUnit.SECONDS)?1:0);}
     }
-    @Test void cleanMigrationsValidate() {flyway(ds,null).validate();assertThat(id("SELECT max(version::int) FROM public.flyway_schema_history WHERE success")).isEqualTo(23);assertThat(id("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history'")).isEqualTo(48);}
+    @Test void cleanMigrationsValidate() {flyway(ds,null).validate();assertThat(id("SELECT max(version::int) FROM public.flyway_schema_history WHERE success")).isEqualTo(24);assertThat(id("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history'")).isEqualTo(47);}
     @Test void upgradePreservesV14WithoutInventingApprovals() {
         String name="ogshop_expansion_"+key().replace("-","");root.execute("CREATE DATABASE "+name);
         try{
@@ -324,7 +324,7 @@ class DatabaseExpansionPostgresTest {
             assertThat(names).hasSize(104);
             for(String table:names) assertThat(j.queryForMap("SELECT count(*) AS rows,md5(coalesce(string_agg(md5(to_jsonb(t)::text),'' ORDER BY md5(to_jsonb(t)::text)),'')) AS fingerprint FROM og_compat."+table+" t")).as(table).isEqualTo(before.get(table));
             assertThat(j.queryForList("SELECT version,checksum FROM public.flyway_schema_history WHERE version::int<=21 ORDER BY installed_rank")).isEqualTo(checksums);
-            assertThat(id("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history'")).isEqualTo(48);
+            assertThat(id("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history'")).isEqualTo(47);
             assertThat(id("SELECT count(*) FROM pg_namespace WHERE nspname='_og70_v21'")).isZero();
             assertThat(id("SELECT reward_balance FROM public.users WHERE user_id=?",buyer)).isEqualTo(10);
             assertThat(j.queryForObject("SELECT email_2fa_enabled FROM public.users WHERE user_id=?",Boolean.class,buyer)).isTrue();
