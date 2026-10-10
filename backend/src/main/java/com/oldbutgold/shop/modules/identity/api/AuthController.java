@@ -8,9 +8,8 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.CookieValue;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -33,106 +32,66 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<AuthDtos.AuthResponse> register(
-            @Valid @RequestBody AuthDtos.RegisterRequest body,
-            HttpServletRequest request
-    ) {
+    public ResponseEntity<AuthDtos.AuthResponse> register(@Valid @RequestBody AuthDtos.RegisterRequest body,
+                                                         HttpServletRequest request) {
         originValidator.validate(request);
-        AuthService.SessionResult result = authService.register(
-                body.email(), body.password(), body.fullName(), body.phoneNumber(), metadata(request)
-        );
-        return sessionResponse(result);
+        return sessionResponse(authService.register(body.email(), body.password(), body.fullName(), body.phoneNumber()), true);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthDtos.AuthResponse> login(
-            @Valid @RequestBody AuthDtos.LoginRequest body,
-            HttpServletRequest request
-    ) {
+    public ResponseEntity<AuthDtos.AuthResponse> login(@Valid @RequestBody AuthDtos.LoginRequest body,
+                                                      HttpServletRequest request) {
         originValidator.validate(request);
-        return sessionResponse(authService.login(body.email(), body.password(), metadata(request)));
+        return sessionResponse(authService.login(body.email(), body.password()), true);
     }
 
-    @PostMapping("/refresh")
-    public ResponseEntity<AuthDtos.AuthResponse> refresh(
-            @CookieValue(name = "og_refresh", required = false) String defaultCookie,
-            HttpServletRequest request
-    ) {
+    @PostMapping("/session")
+    public ResponseEntity<AuthDtos.AuthResponse> restoreSession(HttpServletRequest request) {
         originValidator.validate(request);
-        String rawToken = cookieValue(request, defaultCookie);
-        return sessionResponse(authService.refresh(rawToken, metadata(request)));
+        String credential = null;
+        if (request.getCookies() != null) {
+            for (var cookie : request.getCookies()) {
+                if (properties.sessionCookieName().equals(cookie.getName())) credential = cookie.getValue();
+            }
+        }
+        // Read the existing cookie without renewing its lifetime.
+        return sessionResponse(authService.restoreSession(credential), false);
     }
 
-    @PostMapping("/refresh/logout")
-    public ResponseEntity<Void> logout(
-            @CookieValue(name = "og_refresh", required = false) String defaultCookie,
-            HttpServletRequest request
-    ) {
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletRequest request) {
         originValidator.validate(request);
-        authService.logout(cookieValue(request, defaultCookie));
         return ResponseEntity.noContent()
-                .header(HttpHeaders.SET_COOKIE, clearCookie().toString())
-                .cacheControl(CacheControl.noStore())
-                .build();
+                .header(HttpHeaders.SET_COOKIE, sessionCookie("", Duration.ZERO).toString())
+                .header(HttpHeaders.SET_COOKIE, legacyCookieRemoval().toString())
+                .cacheControl(CacheControl.noStore()).build();
     }
 
     @GetMapping("/me")
     public ResponseEntity<AuthDtos.UserResponse> currentUser(@AuthenticationPrincipal Jwt jwt) {
-        long userId = Long.parseLong(jwt.getSubject());
-        return ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore())
-                .body(AuthDtos.UserResponse.from(authService.currentUser(userId)));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(AuthDtos.UserResponse.from(authService.currentUser(Long.parseLong(jwt.getSubject()))));
     }
 
-    private ResponseEntity<AuthDtos.AuthResponse> sessionResponse(AuthService.SessionResult result) {
-        AuthDtos.AuthResponse body = new AuthDtos.AuthResponse(
-                AuthDtos.UserResponse.from(result.user()), result.accessToken(), result.expiresIn()
-        );
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, refreshCookie(result.refreshToken()).toString())
-                .cacheControl(CacheControl.noStore())
-                .body(body);
-    }
-
-    private ResponseCookie refreshCookie(String value) {
-        return ResponseCookie.from(properties.refreshCookieName(), value)
-                .httpOnly(true)
-                .secure(properties.refreshCookieSecure())
-                .sameSite("Lax")
-                .path(properties.refreshCookiePath())
-                .maxAge(properties.refreshTokenTtl())
-                .build();
-    }
-
-    private ResponseCookie clearCookie() {
-        return ResponseCookie.from(properties.refreshCookieName(), "")
-                .httpOnly(true)
-                .secure(properties.refreshCookieSecure())
-                .sameSite("Lax")
-                .path(properties.refreshCookiePath())
-                .maxAge(Duration.ZERO)
-                .build();
-    }
-
-    private String cookieValue(HttpServletRequest request, String defaultCookie) {
-        if (request.getCookies() != null) {
-            for (var cookie : request.getCookies()) {
-                if (properties.refreshCookieName().equals(cookie.getName())) {
-                    return cookie.getValue();
-                }
-            }
+    private ResponseEntity<AuthDtos.AuthResponse> sessionResponse(AuthService.SessionResult result, boolean start) {
+        var response = ResponseEntity.ok().cacheControl(CacheControl.noStore());
+        if (start) {
+            response.header(HttpHeaders.SET_COOKIE,
+                    sessionCookie(result.accessToken(), Duration.ofSeconds(result.expiresIn())).toString());
+            response.header(HttpHeaders.SET_COOKIE, legacyCookieRemoval().toString());
         }
-        if (defaultCookie != null) {
-            return defaultCookie;
-        }
-        throw new com.oldbutgold.shop.modules.identity.application.InvalidRefreshTokenException();
+        return response.body(new AuthDtos.AuthResponse(
+                AuthDtos.UserResponse.from(result.user()), result.accessToken(), result.expiresIn()));
     }
 
-    private static AuthService.ClientMetadata metadata(HttpServletRequest request) {
-        String userAgent = request.getHeader("User-Agent");
-        if (userAgent != null && userAgent.length() > 255) {
-            userAgent = userAgent.substring(0, 255);
-        }
-        return new AuthService.ClientMetadata(request.getRemoteAddr(), userAgent);
+    private ResponseCookie sessionCookie(String value, Duration lifetime) {
+        return ResponseCookie.from(properties.sessionCookieName(), value).httpOnly(true)
+                .secure(properties.sessionCookieSecure()).sameSite("Lax").path(properties.sessionCookiePath())
+                .maxAge(lifetime).build();
+    }
+
+    private ResponseCookie legacyCookieRemoval() {
+        return ResponseCookie.from("og_refresh", "").httpOnly(true).secure(properties.sessionCookieSecure())
+                .sameSite("Lax").path("/api/v1/auth/refresh").maxAge(Duration.ZERO).build();
     }
 }

@@ -28,7 +28,7 @@ class ModerationMigrationUpgradeTest {
                 return id;
             });
             long decision = jdbc.queryForObject("INSERT INTO " + schema + ".product_moderation_decisions(product_id,reviewer_id,decision,reason,product_version,command_key) VALUES(?,?,'APPROVED','Original approval note',1,'legacy-note') RETURNING decision_id", Long.class, product, user);
-            Flyway.configure().dataSource(ds).schemas(schema).defaultSchema(schema)
+            Flyway.configure().dataSource(ds).schemas(schema).defaultSchema(schema).target("21")
                     .callbacks(new LegacyModerationHistoryCallback()).load().migrate();
             assertThat(jdbc.queryForObject("SELECT original_record->>'reason' FROM " + schema + ".product_moderation_legacy_history WHERE decision_id=?", String.class, decision)).isEqualTo("Original approval note");
             assertThat(jdbc.queryForObject("SELECT decision_content_revision FROM " + schema + ".product_moderation_decisions WHERE decision_id=?", Long.class, decision)).isNull();

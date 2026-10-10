@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "system_fee_policies")
+@Table(name = "system_fee_policies", schema = "og_compat")
 public class SystemFeePolicyEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

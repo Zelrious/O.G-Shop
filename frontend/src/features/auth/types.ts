@@ -18,7 +18,6 @@ export interface TokenPair {
 export interface LoginCredentials {
   email: string;
   password: string;
-  rememberMe?: boolean;
 }
 
 export interface RegisterPayload {
@@ -42,6 +41,5 @@ export interface AuthContextType {
   login: (credentials: LoginCredentials) => Promise<UserPrincipal>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
-  refreshSession: () => Promise<boolean>;
   reloadCurrentUser: () => Promise<void>;
 }

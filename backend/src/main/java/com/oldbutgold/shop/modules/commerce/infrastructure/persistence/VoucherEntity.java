@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "vouchers")
+@Table(name = "vouchers", schema = "og_compat")
 public class VoucherEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

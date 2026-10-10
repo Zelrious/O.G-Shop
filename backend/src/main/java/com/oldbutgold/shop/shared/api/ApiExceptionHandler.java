@@ -2,7 +2,6 @@ package com.oldbutgold.shop.shared.api;
 
 import com.oldbutgold.shop.modules.identity.application.DuplicateEmailException;
 import com.oldbutgold.shop.modules.identity.application.EkycUnavailableException;
-import com.oldbutgold.shop.modules.identity.application.InvalidRefreshTokenException;
 import com.oldbutgold.shop.modules.identity.application.SellerActivationDisabledException;
 import com.oldbutgold.shop.modules.identity.application.InvalidAvatarException;
 import com.oldbutgold.shop.modules.identity.application.AvatarStorageUnavailableException;
@@ -22,7 +21,7 @@ import java.util.UUID;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
-    @ExceptionHandler({BadCredentialsException.class, InvalidRefreshTokenException.class})
+    @ExceptionHandler(BadCredentialsException.class)
     ResponseEntity<ApiError> unauthorized(RuntimeException exception, HttpServletRequest request) {
         return response(HttpStatus.UNAUTHORIZED, "AUTHENTICATION_FAILED", "Phiên đăng nhập không hợp lệ.", request, List.of());
     }

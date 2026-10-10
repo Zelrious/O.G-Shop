@@ -10,7 +10,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 @Entity
-@Table(name = "product_moderation_decisions")
+@Table(name = "product_moderation_decisions", schema = "og_compat")
 public class ProductModerationDecisionEntity {
     public static final String DECISION_APPROVED = "APPROVED";
     public static final String DECISION_REJECTED = "REJECTED";

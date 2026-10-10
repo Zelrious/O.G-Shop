@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "payment_review_audits")
+@Table(name = "payment_review_audits", schema = "og_compat")
 public class PaymentReviewAuditEntity {
 
     public static final String DECISION_APPROVED_SAFE = "APPROVED_SAFE";

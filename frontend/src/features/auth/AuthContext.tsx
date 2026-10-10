@@ -1,41 +1,65 @@
 import React, { useEffect, useState } from 'react';
-import { authApi } from './authApi';
-import { LoginCredentials, RegisterPayload, UserPrincipal } from './types';
+import { authApi, SESSION_EXPIRED_EVENT } from './authApi';
+import { AuthResponse, LoginCredentials, RegisterPayload, UserPrincipal } from './types';
 import { AuthContext } from './context';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserPrincipal | null>(null);
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const acceptSession = (session: AuthResponse) => {
+    setUser(session.user);
+    setExpiresAt(Date.now() + session.expiresIn * 1000);
+  };
 
   useEffect(() => {
     let active = true;
-    // Retire the old demo cache. Browser storage never establishes a session.
     try { localStorage.removeItem('og_dev_user'); } catch { /* Storage may be unavailable. */ }
-    authApi.refresh()
+    authApi.restoreSession()
       .then((session) => {
-        if (active) setUser(session.user);
+        if (active) {
+          setUser(session.user);
+          setExpiresAt(Date.now() + session.expiresIn * 1000);
+        }
       })
       .catch(() => {
         authApi.clearAccessToken();
-        if (active) setUser(null);
+        if (active) {
+          setUser(null);
+          setExpiresAt(null);
+        }
       })
       .finally(() => {
         if (active) setIsLoading(false);
       });
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    const expire = () => {
+      authApi.clearAccessToken();
+      setUser(null);
+      setExpiresAt(null);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, expire);
+    const timer = expiresAt === null ? undefined : window.setTimeout(expire, Math.max(0, expiresAt - Date.now()));
+    return () => {
+      window.removeEventListener(SESSION_EXPIRED_EVENT, expire);
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [expiresAt]);
 
   const login = async (credentials: LoginCredentials): Promise<UserPrincipal> => {
     setIsLoading(true);
     try {
-      const resp = await authApi.login(credentials);
-      setUser(resp.user);
-      return resp.user;
+      const session = await authApi.login(credentials);
+      acceptSession(session);
+      return session.user;
     } catch (error) {
       authApi.clearAccessToken();
       setUser(null);
+      setExpiresAt(null);
       throw error;
     } finally {
       setIsLoading(false);
@@ -45,36 +69,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (payload: RegisterPayload) => {
     setIsLoading(true);
     try {
-      setUser((await authApi.register(payload)).user);
+      acceptSession(await authApi.register(payload));
+    } catch (error) {
+      authApi.clearAccessToken();
+      setUser(null);
+      setExpiresAt(null);
+      throw error;
     } finally {
       setIsLoading(false);
     }
   };
 
   const logout = async () => {
-    try {
-      await authApi.logout();
-    } catch {
-      // Local logout still completes when the server is unavailable.
-    }
+    try { await authApi.logout(); } catch { /* Local logout completes if the server is unavailable. */ }
     authApi.clearAccessToken();
     try { localStorage.removeItem('og_dev_user'); } catch { /* Storage may be unavailable. */ }
     setUser(null);
-  };
-
-  const refreshSession = async (): Promise<boolean> => {
-    try {
-      setUser((await authApi.refresh()).user);
-      return true;
-    } catch {
-      authApi.clearAccessToken();
-      setUser(null);
-      return false;
-    }
+    setExpiresAt(null);
   };
 
   const reloadCurrentUser = async () => {
-    setUser(await authApi.currentUser());
+    try {
+      // Restore current roles within the original deadline, without extending it.
+      acceptSession(await authApi.restoreSession());
+    } catch (error) {
+      authApi.clearAccessToken();
+      setUser(null);
+      setExpiresAt(null);
+      throw error;
+    }
   };
 
   return (
@@ -85,7 +108,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login,
       register,
       logout,
-      refreshSession,
       reloadCurrentUser,
     }}>
       {children}

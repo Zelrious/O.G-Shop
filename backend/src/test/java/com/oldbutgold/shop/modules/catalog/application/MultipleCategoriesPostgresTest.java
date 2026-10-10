@@ -56,6 +56,7 @@ class MultipleCategoriesPostgresTest {
             return (p != null && !p.isBlank()) ? p : "root";
         });
         properties.add("spring.flyway.enabled", () -> true);
+        properties.add("spring.datasource.hikari.connection-init-sql", () -> "SET search_path TO og_compat,public");
         properties.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
     }
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '../../features/auth';
 import { AppHeader } from './AppHeader';
+import { AppFooter } from './AppFooter';
 import { MobileBottomNavigation } from './MobileBottomNavigation';
 
 export const AppLayout: React.FC = () => {
@@ -23,6 +24,7 @@ export const AppLayout: React.FC = () => {
       <main className="og-main-viewport">
         <Outlet />
       </main>
+      <AppFooter />
       <MobileBottomNavigation />
     </div>
   );

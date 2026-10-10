@@ -18,7 +18,6 @@ const createAuthContextValue = (
   login: vi.fn(),
   register: vi.fn(),
   logout: vi.fn(),
-  refreshSession: vi.fn().mockResolvedValue(true),
   reloadCurrentUser,
 });
 

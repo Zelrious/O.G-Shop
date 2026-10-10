@@ -190,4 +190,46 @@ describe('AppHeader Component', () => {
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(screen.getByText('T')).toBeVisible();
   });
+
+  it('renders quick filter toggle button when scrolled on marketplace and allows draft filtering', () => {
+    (authHook.useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      logout: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/marketplace']}>
+        <AppHeader />
+      </MemoryRouter>
+    );
+
+    // Simulate scroll down to trigger sticky header
+    Object.defineProperty(window, 'scrollY', { value: 100, writable: true });
+    fireEvent.scroll(window);
+
+    // Sticky filter button should appear
+    const filterBtn = screen.getByRole('button', { name: /Mở bộ lọc nhanh/i });
+    expect(filterBtn).toBeInTheDocument();
+
+    // Clicking filter button opens quick filter panel
+    fireEvent.click(filterBtn);
+    expect(screen.getByRole('region', { name: /Bộ lọc nhanh/i })).toBeInTheDocument();
+    expect(screen.getByText('Bộ lọc nhanh sản phẩm')).toBeInTheDocument();
+
+    // Selecting a condition chip updates draft selection
+    const likeNewChip = screen.getByRole('button', { name: /Như mới/i });
+    fireEvent.click(likeNewChip);
+    expect(likeNewChip).toHaveClass('og-filter-chip--active');
+
+    // Dragging price range slider works
+    const maxSlider = screen.getByLabelText('Giá tối đa');
+    fireEvent.change(maxSlider, { target: { value: '15000000' } });
+
+    // Apply button commits and closes panel
+    const applyBtn = screen.getByRole('button', { name: /Áp dụng bộ lọc/i });
+    fireEvent.click(applyBtn);
+    expect(screen.queryByRole('region', { name: /Bộ lọc nhanh/i })).toBeNull();
+  });
 });
+

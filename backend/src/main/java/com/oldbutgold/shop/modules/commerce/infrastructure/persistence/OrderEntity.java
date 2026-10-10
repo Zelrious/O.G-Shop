@@ -13,7 +13,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "orders")
+@Table(name = "orders", schema = "og_compat")
 public class OrderEntity {
     public static final String STATUS_PAYMENT_PENDING = "PAYMENT_PENDING";
     public static final String STATUS_PAID_HELD = "PAID_HELD";

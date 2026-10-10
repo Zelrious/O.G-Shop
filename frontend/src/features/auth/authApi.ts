@@ -1,8 +1,9 @@
 import { AuthResponse, LoginCredentials, RegisterPayload, UserPrincipal } from './types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+export const SESSION_EXPIRED_EVENT = 'og:session-expired';
 let accessToken: string | null = null;
-let refreshPromise: Promise<AuthResponse> | null = null;
+let restorePromise: Promise<AuthResponse> | null = null;
 
 interface ApiErrorBody {
   message?: string;
@@ -42,18 +43,18 @@ export const authApi = {
     });
   },
 
-  refresh(): Promise<AuthResponse> {
-    if (!refreshPromise) {
-      refreshPromise = sessionRequest('/auth/refresh').finally(() => {
-        refreshPromise = null;
+  restoreSession(): Promise<AuthResponse> {
+    if (!restorePromise) {
+      restorePromise = sessionRequest('/auth/session').finally(() => {
+        restorePromise = null;
       });
     }
-    return refreshPromise;
+    return restorePromise;
   },
 
   async logout(): Promise<void> {
     try {
-      await parseResponse<void>(await fetch(`${API_BASE}/auth/refresh/logout`, {
+      await parseResponse<void>(await fetch(`${API_BASE}/auth/logout`, {
         method: 'POST',
         credentials: 'include',
       }));
@@ -67,7 +68,7 @@ export const authApi = {
   },
 
   async authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
-    const execute = () => fetch(`${API_BASE}${path}`, {
+    const response = await fetch(`${API_BASE}${path}`, {
       ...init,
       credentials: 'include',
       headers: {
@@ -75,15 +76,9 @@ export const authApi = {
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
     });
-
-    let response = await execute();
     if (response.status === 401) {
-      try {
-        await this.refresh();
-        response = await execute();
-      } catch {
-        accessToken = null;
-      }
+      accessToken = null;
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
     }
     return response;
   },

@@ -67,7 +67,9 @@ export interface PageResponse<T> {
 export interface ProductFilterParams {
   query?: string;
   categoryId?: number;
+  categoryIds?: number[];
   condition?: string;
+  conditions?: string[];
   minPrice?: number;
   maxPrice?: number;
   page?: number;
