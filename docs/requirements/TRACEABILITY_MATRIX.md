@@ -1,5 +1,19 @@
 # Traceability Matrix
 
+## Bộ 83 UC hiện hành — auth / TASK-0082 và TASK-0086
+
+Mã UC không dấu gạch dưới đây thuộc bộ 83 hiện hành; bảng UC-01... phía dưới là baseline 19 UC giữ lịch sử.
+
+| Requirement | Backend / Frontend | Database | Verification | Status |
+|---|---|---|---|---|
+| UC01 email registration | EmailRegistrationService, AuthController; RegisterForm OTP/Buyer/Seller | V25 auth draft/seller metadata; giữ V1–V24 | AuthControllerTest, RegisterForm.test.tsx, 12 EmailRegistrationPostgresTest; local SMTP transport | VERIFIED local; Gmail chờ cấu hình |
+| UC22 registration coins | RegistrationCommerceFacade; thông báo 3.000 xu sau xác nhận | CREDIT_REGISTRATION đúng 3.000, unique/user, verified-account guard | PostgreSQL ledger failure rollback/concurrency/duplicate reward pass | VERIFIED registration source; nguồn xu khác tiếp nối |
+| UC02 Google registration/link | GoogleIdTokenVerifier, AuthFlowService, EmailRegistrationService; GoogleSignInButton/RegisterForm | V26 google_subject, purpose/nonce/ticket; giữ pipeline V25 | GoogleIdTokenVerifierTest RSA/JWK local, AuthFlowsPostgresTest link/new Buyer/Seller/replay, SDK component mock | VERIFIED local implementation; Google/Gmail thật và origin chưa nghiệm thu |
+| UC03 password/Google login và email 2FA | AuthService authenticatePassword, AuthFlowService; LoginForm/AuthOtpForm/AuthContext | V26 auth_data/LOGIN_EMAIL_2FA; settings hiện có, deadline V24 | PostgreSQL no session trước OTP/attempts/concurrency/staff; frontend pending/race/error | VERIFIED local login theo cờ; không thay nghiệm thu UC09 bật/tắt bằng face |
+| UC04 reset / UC05 password change | AuthFlowService/ResetEmailDispatcher, ProfileService; ForgotPasswordForm/SecurityTab | V26 PASSWORD_RESET/COMPLETE và credential_version | PostgreSQL generic/SMTP delay/rollback/replay, old Bearer/cookie/missing-cv; frontend reset ba bước | VERIFIED local; provider email thật và rollout V26 tiếp nối |
+| UC03 locked exception, phần auth UC67 | AccountRestrictedException; LoginForm/GoogleSignInButton | status/restrictions hiện có, cv validator fail closed | Credential đúng 403 structured; sai 401 chung | VERIFIED auth response; full UC67 từng hành động/nghĩa vụ cũ chưa nghiệm thu |
+| UC01 Seller draft, nền UC06–UC07 identity verification | PENDING_EKYC draft, guard AI/MVP cho user mới; màn hình chờ xác minh | V25 store/contact/return address; profile/decisions V15–V24 | PostgreSQL seller/addresses/activation guard và Verification.test.tsx pass | VERIFIED draft; UC06–UC07 eKYC/KTV tiếp nối |
+
 Ma trận này phải được cập nhật khi tài liệu yêu cầu chính thức được đưa vào repository.
 
 | Requirement | Module doc | Backend | Frontend | Database | Test | Status |

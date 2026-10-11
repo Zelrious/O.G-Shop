@@ -1,5 +1,94 @@
 # Project Backlog
 
+## Kết quả audit auth — TASK-0084
+
+- [x] Đọc mới yêu cầu UC01–UC04/UC09/UC67; kiểm UI/API/SMTP trên môi trường riêng; 29 frontend/42 backend tests, typecheck/lint/build/package đạt.
+- [x] Buyer/Seller OTP qua UI và PostgreSQL xác nhận quyền/trạng thái/xu; lưu [báo cáo và bằng chứng](../../output/auth-audit-2026-10-11/AUTH_FUNCTIONAL_AUDIT.md), dọn môi trường test.
+- [x] F1: email 2FA trước phát phiên khi cờ Buyer/Seller bật; password/Google, staff boundary đã kiểm local trong TASK-0086.
+- [x] F2/F3: email/OTP/grant/new password và thu hồi mọi Bearer/cookie bằng cv; rollback/replay/concurrency/old-token có PostgreSQL tests.
+- [x] F4 implementation: Google token/nonce, OTP link email trùng và registration Buyer/Seller không trùng user/xu/hồ sơ; cần provider E2E thật sau config/restart.
+- [x] F6: expose Retry-After/CORS và countdown form tài khoản/Seller; 34 frontend/19 backend tests, quality gates và browser fixture hai vai trò đạt. [TASK-0085](archive/TASK-0085-registration-retry-countdown.md).
+- [x] F5/F7 auth: structured restriction sau credential đúng, Back Seller click/Enter về bước tài khoản và giữ fields; Buyer OTP click qua Profile trên browser fixture.
+- [x] TASK-0086: 64 backend/135 frontend tests, typecheck/scoped lint/build/package; [bằng chứng](../../output/auth-fixes-2026-10-11/README.md), dọn đúng dịch vụ test.
+- [ ] Backup/restore rồi áp V26 vào database đang dùng; thử Google/Gmail thật và xác nhận authorized origin.
+- [ ] UC09 bật/tắt bằng face và các phụ thuộc eKYC/KTV/quyền hạn chế từng hành động UC67 trong phạm vi tiếp nối được duyệt.
+
+## SMTP local và relay — TASK-0083
+
+- [x] Xác định lỗi localhost:1025, nạp Mailpit và dùng IPv4 trong config backend private.
+- [x] Chuẩn hóa mật khẩu ứng dụng; kiểm recipient regex và nạp relay config vào container mới, giữ container cũ.
+- [x] SMTP local/UI và Gmail STARTTLS/AUTH 235; không gửi email thật.
+- [ ] Restart backend rồi xác nhận OTP Gmail và đăng ký qua UI; thư example.test nhận ở Mailpit.
+
+## Auth đợt 1 — TASK-0082
+
+- [x] Đọc code/đặc tả hiện hành, báo cáo phương án và nhận duyệt.
+- [x] Code OTP email hai bước, giới hạn gửi/nhập, hủy/gửi lại và cleanup draft.
+- [x] Buyer/Seller draft và thưởng 3.000 xu một lần trong transaction; mật khẩu mới thống nhất.
+- [x] Cấu hình SMTP và [hướng dẫn Gmail](../setup/EMAIL_OTP.md), V25 giữ migrations/dữ liệu cũ.
+- [x] PostgreSQL V25 clean/upgrade/negative/concurrency: 46 pass; backend 259 pass/26 skip và frontend 113 pass, lint/typecheck/build.
+- [x] V25 local sau backup/restore, 47/47 fingerprints giữ nguyên, runtime health/catalog 200.
+- [ ] Cấu hình SMTP local .env và xác nhận gửi Gmail thật khi có mật khẩu ứng dụng.
+- [ ] Cập nhật báo cáo Google Docs/dictionary/DDL ERD từ checkpoint V24 sang V25 khi có phạm vi tài liệu tương ứng.
+- [x] Code đợt 2: Google và quên mật khẩu OTP/thu hồi mọi thiết bị trong TASK-0086; provider thật và rollout V26 còn cần kiểm.
+- [x] Đợt 3 phần login: thực thi cờ email 2FA Buyer/Seller trong TASK-0086.
+- [ ] Đợt 3 tiếp nối: bật/tắt 2FA bằng face, eKYC và KTV duyệt hồ sơ Người bán.
+
+## Diagram UC01–UC18 — TASK-0081
+
+- [x] Đọc mới và kiểm đặc tả, chốt 2FA chỉ Người mua/Người bán; sửa source theo thứ tự thao tác và giữ mẫu.
+- [x] Thay 34 ảnh được duyệt, thêm hai ảnh UC11, sửa đúng loại Sequence UC07; giữ Hình 3.3–3.38.
+- [x] Kiểm native/backup/PDF và trực quan đủ 36 hình, đồng bộ [checkpoint](../requirements/use-cases-83/report-uc01-18/README.md) và [bàn giao task](archive/TASK-0081-diagrams-uc01-18.md).
+
+## Tên và số caption theo chương — TASK-0080
+
+- [x] Đọc mới chương, mẫu UC01–UC18 và tên UC; chuẩn hóa 322 caption, bảng/hình có bộ đếm riêng theo chương.
+- [x] Backup/readback giữ bảng/ảnh/style/tab; kiểm PDF 322 caption, 166 ảnh cùng caption và chỉnh paragraph UC01 giữ ảnh/cỡ.
+- [x] Kiểm cuối tài liệu và bàn giao [mapping caption hiện tại](../requirements/use-cases-83/chapter-captions/README.md); [task đã archive](archive/TASK-0080-chapter-table-figure-captions.md).
+- Ngoài lượt caption: UC11 thiếu hai ảnh, Sequence UC07 đang dùng ảnh Activity; danh mục đầu báo cáo còn template. Thay ảnh phải hỏi người dùng theo quy trình.
+
+## Report diagrams from UC19 — TASK-0079
+
+- [x] Đọc mới nguồn; chốt RS-02 thành xem xét khóa dưới 80 và bổ sung EXC UC63 2b; đồng bộ native/local/diagram.
+- [x] Kiểm/sửa mã giữ mẫu, render 130 PNG; chèn 118 ảnh mới và thay 12 ảnh được duyệt.
+- [x] Kiểm native giữ nội dung/tab ngoài phạm vi và PDF trọn trang cho cả 130 hình. [Bằng chứng](../requirements/use-cases-83/report-from-uc19/README.md).
+- [x] UC01–UC18 đã hoàn tất trong TASK-0081 sau khi đọc nguồn và được duyệt thay 34 ảnh/thêm UC11.
+
+## Diagram workflow — TASK-0078
+
+- [x] Ghi [quy trình hiện hành](../requirements/use-cases-83/SPECIFICATION_GUIDE.md#quy-trình-thực-hiện-do-người-dùng-quy-định--2026-10-10): kiểm đặc tả trước; hỏi khi luồng không hợp lý; sửa mã theo đặc tả hợp lý và giữ mẫu; xuất/chèn sau kiểm; hỏi trước khi thay ảnh có sẵn.
+- [x] Kiểm cấu trúc tài liệu, 75 liên kết/anchor local và whitespace; đóng [task ghi quy trình](archive/TASK-0078-diagram-workflow.md).
+- Các mục chèn tiếp UC01–UC78 bên dưới tuân thủ quy trình này, kể cả khi vị trí đã có hình.
+
+## Compact diagram presentation — TASK-0077
+
+- [x] Áp dụng mẫu trình bày gọn cho 166 source; giữ văn bản đầy đủ trong comment/tài liệu, kiểm lại nguồn/1.000 đường đi và render toàn bộ.
+- [x] Sao lưu báo cáo và thay mười ảnh UC79–UC83 từ dưới lên, giữ kích thước tự nhiên nếu vừa trang.
+- [x] Kiểm native và PDF cùng layout: mười hình/title/caption trọn một trang, giữ tỷ lệ và các nội dung khác.
+- [ ] Dùng source gọn để chèn UC01–UC78 khi được yêu cầu; đọc lại vị trí/nguồn và kiểm PDF.
+
+## Report diagram insertion — TASK-0076
+
+- [x] Render lại/chèn 10 Activity–Sequence UC83→UC79 và sao lưu native trước ghi.
+- [x] Giữ đặc tả/tab khác/ảnh cũ; kiểm title/image/caption cùng trang trên PDF có cùng layout.
+- [ ] Chèn UC01–UC78 khi được yêu cầu; đọc vị trí mới, giữ tỷ lệ, không phóng ảnh nhỏ, kiểm PDF.
+
+## Use-case documents and diagrams — TASK-0075
+
+- [x] Đọc lại trực tiếp nguồn hiện hành, đủ 83 đặc tả/830 trường và xác nhận nguồn không đổi ở lần đọc cuối.
+- [x] Viết 83 tài liệu, 83 Activity và 83 Sequence ở mức yêu cầu; mapping 78 → 83, hướng dẫn, rà soát và bàn giao.
+- [x] Kiểm nội dung/nhánh/liên kết và render 166 PNG local; giữ bộ 78 làm lịch sử.
+- [ ] Thống nhất các ghi chú nguồn còn mở RS-01/02/03/05/06/07/08 khi hoàn thiện báo cáo; không coi RS-06/07 là chính sách mới cần tự quyết.
+- [ ] TASK-0076 đã chèn UC79–UC83; UC01–UC78 chưa chèn. TASK-0075 chỉ chuẩn bị tài liệu/source.
+- [ ] Khi chuyển sang triển khai: viết sequence chi tiết thiết kế và đối chiếu code/API/database hiện hành; tài liệu không thay bằng chứng nghiệm thu.
+
+## Report language and directories — TASK-0074
+
+- [x] Thay mô tả loại dữ liệu/mã nguồn khó hiểu bằng công dụng; làm rõ 165 trường, 47 bảng và 6 mô tả tổng quan.
+- [x] Điền 52 từ viết tắt và chuẩn hóa phạm vi 7 actor theo 83 đặc tả; giữ mã AT01–AT07, KTV là Kỹ thuật viên theo báo cáo.
+- [x] Sao lưu native đầy đủ, giữ bảng có sẵn và widths; kiểm nội dung/kiểu chữ/căn lề, ghim headers hai bảng danh mục. Không sửa code/schema hoặc chính sách.
+- [ ] Kiểm trang PDF khi Google Drive cho phép export; lần này vẫn 403.
+
 ## Authentication simplification — TASK-0073 / V24
 
 - [x] Bỏ refresh sessions khỏi code/database/report, chuyển login sang thời hạn cố định, restore không gia hạn; giữ OTP/quick-auth và mọi bảng còn lại.

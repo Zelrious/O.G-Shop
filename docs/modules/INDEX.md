@@ -1,5 +1,53 @@
 # Module Index
 
+## Sửa F1–F5/F7 auth — TASK-0086 / 2026-10-11
+
+[Identity](identity.md) đã nối login email 2FA, reset OTP, Google/link/registration, lỗi khóa có cấu trúc và Back Seller; [Platform](platform.md) dùng V26 credential version thu hồi mọi phiên. 64 backend/135 frontend tests và quality gates đạt; 29 PostgreSQL tests chạy riêng, browser dùng HTTP fixture. [Bằng chứng trước/sau](../../output/auth-fixes-2026-10-11/README.md). Client ID đã cấu hình private, cần restart/backend migration sau backup; Google/Gmail thật, UC09 face, eKYC/KTV/full UC67 còn chờ. Các checkpoint dưới đây giữ lịch sử, không thay nghiệm thu provider thật.
+
+## Sửa F6 auth — TASK-0085 / 2026-10-11
+
+[Identity](identity.md) hiển thị countdown đăng ký Buyer/Seller, giữ dữ liệu và cho retry sau hết hạn; [Platform](platform.md) expose Retry-After qua CORS. 34 frontend/19 backend tests và quality gates đạt; browser kiểm hai vai trò với HTTP fixture riêng. [Bằng chứng](../../output/auth-retry-fix-2026-10-11/README.md). Các mục audit phía dưới mô tả kết quả trước sửa; F1–F5/F7 vẫn cần triển khai trong phạm vi tiếp nối.
+
+## Audit auth — TASK-0084 / 2026-10-11
+
+[Identity](identity.md) đã đối chiếu UC01–UC04 với UI/code/API và kiểm OTP Buyer/Seller trên môi trường riêng; 29 frontend/42 backend tests đạt. [Báo cáo](../../output/auth-audit-2026-10-11/AUTH_FUNCTIONAL_AUDIT.md) ghi thiếu Google/reset/2FA, chưa thu hồi phiên sau đổi mật khẩu, lỗi quay lại Seller và Retry-After/CORS. Không đổi source/schema hoặc nâng nghiệm thu toàn bộ các UC.
+
+## Hộp thư OTP local — TASK-0083 / 2026-10-11
+
+[Platform](platform.md) đã kiểm Mailpit SMTP/UI và Gmail STARTTLS/AUTH 235; config private dùng IPv4 và relay giới hạn recipient. [Identity](identity.md) còn cần xác nhận OTP qua UI sau restart backend. Không thay code/schema hoặc nghiệm thu gửi Gmail thật. [Hướng dẫn](../setup/EMAIL_OTP.md).
+
+## Cải tổ auth đợt 1 — TASK-0082 / V25 / 2026-10-10
+
+[Identity](identity.md) đã nối đăng ký email OTP, Buyer/Seller draft, mật khẩu mới thống nhất và chặn quyền bán tức thì cho user mới. [Commerce](commerce.md) cung cấp thưởng 3.000 xu/địa chỉ trong cùng transaction; [Platform](platform.md) ghi SMTP và schema guard. [API](../api/IDENTITY_API.md), [Gmail/local mail](../setup/EMAIL_OTP.md), [schema V25](../../database/docs/EMAIL_REGISTRATION_V25.md). Backend 259 pass/26 skip, gồm 46 PostgreSQL; frontend 113 pass, typecheck/lint/build đạt. V25 local có 47 bảng/901 trường, backup/restore/47 fingerprints và runtime đạt; Gmail thật cần cấu hình local. Phiên giữ deadline cố định. Các checkpoint dưới đây là lịch sử, không nâng nghiệm thu các UC Google/2FA/eKYC/KTV chưa nối.
+
+## Diagram UC01–UC18 — TASK-0081 / 2026-10-10
+
+[36 ảnh đã kiểm và chèn](../requirements/use-cases-83/report-uc01-18/README.md): thay 34 ảnh được duyệt, thêm cặp UC11 và sửa đúng loại Sequence UC07; giữ Hình 3.3–3.38. RS-03 đã chốt 2FA chỉ dành cho Người mua/Người bán, đồng bộ UC03/UC09 native/local/diagram. Native/PDF xác nhận trọn trang, giữ nội dung/caption/ảnh ngoài phạm vi và ba tab khác. Báo cáo hiện đủ 166 ảnh UC cùng hai hình tổng quan. Các checkpoint dưới đây giữ lịch sử.
+
+## Caption báo cáo — TASK-0080 / 2026-10-10
+
+[Tên/số 322 caption theo chương](../requirements/use-cases-83/chapter-captions/README.md) đã cập nhật và kiểm native/PDF; giữ nội dung đặc tả/bảng, 166 ảnh thực tế, ba tab khác. UC11 thiếu hai ảnh, vị trí Sequence UC07 dùng ảnh Activity cũ, danh mục đầu báo cáo còn template. Đây là metadata/trình bày báo cáo dùng chung, không đổi nghiệp vụ hoặc nghiệm thu tám module.
+
+## Report diagrams — TASK-0079 / 2026-10-10
+
+[UC19–UC83 đã có đủ 130 Activity/Sequence trong báo cáo](../requirements/use-cases-83/report-from-uc19/README.md), kiểm native/PDF trọn trang. RS-02/RS-05 được chốt và đồng bộ theo xác nhận người dùng; chuẩn Activity/Sequence gọn được giữ. Đây là tài liệu, không nâng trạng thái code/database/nghiệm thu module.
+
+## Diagram workflow — TASK-0078 / 2026-10-10
+
+Các lượt diagram tiếp theo áp dụng [quy trình kiểm đặc tả → kiểm mã → xuất/chèn ảnh](../requirements/use-cases-83/SPECIFICATION_GUIDE.md#quy-trình-thực-hiện-do-người-dùng-quy-định--2026-10-10). Hỏi người dùng khi luồng đặc tả không hợp lý và trước khi thay ảnh đã có; giữ mẫu Activity/Sequence hiện hành. Đây là quy trình tài liệu, không thay trạng thái nghiệp vụ/nghiệm thu module.
+
+## Diagram presentation — TASK-0077 / 2026-10-10
+
+Mã Activity/Sequence hiện dùng [cách trình bày gọn](../requirements/use-cases-83/diagram-presentation/README.md): bỏ legend khỏi ảnh, rút nhãn và giữ đủ đường đi theo đặc tả. Kiểm nguồn/1.000 đường đi và render 166 PNG đạt; ảnh UC79–UC83 đã kiểm trọn một trang trên PDF. Đây là cập nhật trình bày tài liệu.
+
+## Use-case documents and diagrams — TASK-0075 / 2026-10-10
+
+[Bộ 83 hiện hành](../requirements/use-cases-83/README.md) thay nguồn mã/nội dung bộ 78/80 khi soạn tài liệu và diagram. Đọc mới đủ 83 bảng/830 trường; có 83 đặc tả, 166 source Activity–Sequence, mapping và 8 ghi chú nguồn. Render 166 hình/kiểm từng nhánh đạt; [bằng chứng](../requirements/use-cases-83/VALIDATION.md). Đây là tài liệu mức yêu cầu, không đổi trạng thái nghiệm thu module; chưa đưa ảnh vào Google Docs/Drive.
+
+## Report language — TASK-0074 / 2026-10-10
+
+[TASK-0074](../progress/archive/TASK-0074-report-plain-language-glossary-and-actors.md) làm rõ 165 trường/47 mô tả bảng/6 mô tả yêu cầu, điền 52 từ viết tắt và 7 actor trong báo cáo. Mã AT01–AT07 và 83 đặc tả được giữ; KTV dùng tên Kỹ thuật viên theo phần tổng quan. Native content/styles đạt, PDF export 403 nên chưa kiểm trang. Đây là chỉnh tài liệu; schema V24, code và trạng thái nghiệm thu module không đổi.
+
 ## Current database and authentication — V24 / TASK-0073
 
 [TASK-0073](../progress/archive/TASK-0073-remove-refresh-session-table.md) đã bỏ refresh sessions khỏi backend/frontend/PostgreSQL và báo cáo. Local og_shop còn **47 bảng nghiệp vụ/895 trường**, 48 public tables gồm Flyway history, 103 compatibility views, 7 report views. Đăng nhập có thời hạn cố định 15 phút mặc định, khôi phục không gia hạn; `auth_challenges`/eKYC giữ nguyên. [Dictionary V24](../../database/docs/DATABASE_TABLE_DICTIONARY_V24.md), [DDL ERD](../../database/schema/og_shop_v24_tables_for_erd.sql), [bàn giao](../architecture/DATABASE_AUTH_SIMPLIFICATION_V24_20261009.md).
