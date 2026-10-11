@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth';
 import { verificationApi } from '../features/verification';
 import { Card, Button, Alert, Badge } from '../shared/components';
@@ -7,6 +7,7 @@ import { Card, Button, Alert, Badge } from '../shared/components';
 export const SellerVerificationPage: React.FC = () => {
   const { user, reloadCurrentUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +19,20 @@ export const SellerVerificationPage: React.FC = () => {
   }
 
   const isSeller = user.roles.includes('SELLER');
+
+  if (user.sellerApprovalRequired && !isSeller) {
+    return <div style={{ maxWidth: '680px', margin: '30px auto' }}>
+      <Card title="Xác minh hồ sơ Người bán" subtitle="Quyền bán hàng cần được phê duyệt sau khi xác minh danh tính.">
+        {location.state?.registrationCoins === 3000 && <Alert type="success">Đăng ký thành công. Bạn đã nhận 3.000 xu.</Alert>}
+        <Alert type="info">
+          Nếu bạn đã chọn Người bán khi đăng ký, thông tin cửa hàng, địa chỉ và ngân hàng đã được lưu.
+          Tài khoản hiện có quyền Người mua. Quyền Người bán sẽ được cấp sau eKYC và kiểm duyệt.
+        </Alert>
+        <p>Bước nộp eKYC và theo dõi phê duyệt đang được hoàn thiện. Bạn có thể mua hàng trong thời gian này.</p>
+        <Button variant="primary" onClick={() => navigate('/profile')}>Về Hồ sơ cá nhân</Button>
+      </Card>
+    </div>;
+  }
 
   const handleActivate = async () => {
     if (isLoading || isSeller) return;

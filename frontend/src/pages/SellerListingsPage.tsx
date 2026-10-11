@@ -352,6 +352,6 @@ export const SellerListingsPage: React.FC = () => {
           ))}
         </div>
       )}
-    </div>
+    </div> 
   );
 };

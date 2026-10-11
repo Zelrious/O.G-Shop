@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth';
 import {
   UserProfile,
@@ -16,6 +16,7 @@ type TabKey = 'info' | 'addresses' | 'security' | 'seller';
 export const ProfilePage: React.FC = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [activeTab, setActiveTab] = useState<TabKey>('info');
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -94,6 +95,7 @@ export const ProfilePage: React.FC = () => {
 
   return (
     <div style={{ maxWidth: '900px', margin: '24px auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {location.state?.registrationCoins === 3000 && <Alert type="success">Đăng ký thành công. Bạn đã nhận 3.000 xu.</Alert>}
       {/* Header Profile Card */}
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
