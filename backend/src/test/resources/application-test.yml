@@ -11,7 +11,14 @@ spring:
   flyway:
     enabled: false
 
+management:
+  health:
+    mail:
+      enabled: false
+
 app:
+  registration:
+    cleanup-enabled: false
   auth:
     jwt-signing-key: test-signing-key-with-at-least-thirty-two-bytes
     access-token-ttl: PT15M

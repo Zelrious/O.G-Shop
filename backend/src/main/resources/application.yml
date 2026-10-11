@@ -1,4 +1,16 @@
 spring:
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      "[mail.smtp.auth]": ${SMTP_AUTH:false}
+      "[mail.smtp.starttls.enable]": ${SMTP_STARTTLS:false}
+      "[mail.smtp.starttls.required]": ${SMTP_STARTTLS:false}
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 5000
+      "[mail.smtp.writetimeout]": 5000
   application:
     name: og-shop-backend
   jackson:
@@ -23,6 +35,18 @@ spring:
       max-request-size: ${MAX_REQUEST_SIZE:60MB}
 
 app:
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
+  registration:
+    otp-ttl: ${REGISTRATION_OTP_TTL:PT5M}
+    draft-ttl: ${REGISTRATION_DRAFT_TTL:PT30M}
+    resend-cooldown: ${REGISTRATION_RESEND_COOLDOWN:PT60S}
+    max-attempts: 5
+    email-hourly-limit: 5
+    ip-hourly-limit: ${IP_HOURLY_LIMIT:60}
+    mail-enabled: ${OTP_MAIL_ENABLED:false}
+    from: ${SMTP_FROM:no-reply@ogshop.test}
+    cleanup-enabled: true
   auth:
     jwt-signing-key: ${JWT_SIGNING_KEY:replace-with-at-least-32-random-bytes}
     access-token-ttl: ${AUTH_ACCESS_TOKEN_TTL:PT15M}
@@ -56,6 +80,9 @@ server:
     include-stacktrace: never
 
 management:
+  health:
+    mail:
+      enabled: ${OTP_MAIL_ENABLED:false}
   endpoints:
     web:
       exposure:
