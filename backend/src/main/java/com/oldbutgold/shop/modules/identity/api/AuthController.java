@@ -1,6 +1,7 @@
 package com.oldbutgold.shop.modules.identity.api;
 
 import com.oldbutgold.shop.modules.identity.application.AuthService;
+import com.oldbutgold.shop.modules.identity.application.EmailRegistrationService;
 import com.oldbutgold.shop.shared.config.AuthProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -24,25 +25,67 @@ public class AuthController {
     private final AuthService authService;
     private final AuthProperties properties;
     private final TrustedOriginValidator originValidator;
+    private final EmailRegistrationService registration;
+    private final com.oldbutgold.shop.modules.identity.application.AuthFlowService flows;
 
-    public AuthController(AuthService authService, AuthProperties properties, TrustedOriginValidator originValidator) {
+    public AuthController(AuthService authService, AuthProperties properties, TrustedOriginValidator originValidator,
+                          EmailRegistrationService registration,
+                          com.oldbutgold.shop.modules.identity.application.AuthFlowService flows) {
         this.authService = authService;
         this.properties = properties;
         this.originValidator = originValidator;
+        this.registration = registration;
+        this.flows=flows;
     }
 
     @PostMapping("/register")
-    public ResponseEntity<AuthDtos.AuthResponse> register(@Valid @RequestBody AuthDtos.RegisterRequest body,
+    public ResponseEntity<AuthDtos.RegistrationChallengeResponse> register(@Valid @RequestBody AuthDtos.RegisterRequest body,
                                                          HttpServletRequest request) {
         originValidator.validate(request);
-        return sessionResponse(authService.register(body.email(), body.password(), body.fullName(), body.phoneNumber()), true);
+        var input=new EmailRegistrationService.Input(body.fullName(),body.email(),body.phoneNumber(),body.password(),body.accountType(),body.seller());
+        return pendingResponse(body.googleTicket()==null?registration.start(input,request.getRemoteAddr())
+                :registration.start(input,request.getRemoteAddr(),body.googleTicket()));
+    }
+
+    @PostMapping("/register/verify")
+    public ResponseEntity<AuthDtos.RegistrationCompletionResponse> verifyRegistration(
+            @Valid @RequestBody AuthDtos.VerifyRegistrationRequest body, HttpServletRequest request) {
+        originValidator.validate(request);
+        var completed = registration.verify(body.challengeId(), body.code());
+        var session = completed.session();
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.SET_COOKIE, sessionCookie(session.accessToken(), Duration.ofSeconds(session.expiresIn())).toString())
+                .header(HttpHeaders.SET_COOKIE, legacyCookieRemoval().toString())
+                .body(new AuthDtos.RegistrationCompletionResponse(AuthDtos.UserResponse.from(session.user()),
+                        session.accessToken(), session.expiresIn(), completed.nextStep(), completed.awardedCoins()));
+    }
+
+    @PostMapping("/register/resend")
+    public ResponseEntity<AuthDtos.RegistrationChallengeResponse> resendRegistration(
+            @Valid @RequestBody AuthDtos.RegistrationChallengeRequest body, HttpServletRequest request) {
+        originValidator.validate(request);
+        return pendingResponse(registration.resend(body.challengeId(), request.getRemoteAddr()));
+    }
+
+    @PostMapping("/register/cancel")
+    public ResponseEntity<Void> cancelRegistration(@Valid @RequestBody AuthDtos.RegistrationChallengeRequest body,
+                                                  HttpServletRequest request) {
+        originValidator.validate(request);
+        registration.cancel(body.challengeId());
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+
+    private ResponseEntity<AuthDtos.RegistrationChallengeResponse> pendingResponse(EmailRegistrationService.Pending pending) {
+        return ResponseEntity.accepted().cacheControl(CacheControl.noStore())
+                .body(new AuthDtos.RegistrationChallengeResponse("OTP_REQUIRED", pending.id(), pending.email(),
+                        pending.expiresAt(), pending.resendAt(), pending.attemptsRemaining()));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthDtos.AuthResponse> login(@Valid @RequestBody AuthDtos.LoginRequest body,
+    public ResponseEntity<?> login(@Valid @RequestBody AuthDtos.LoginRequest body,
                                                       HttpServletRequest request) {
         originValidator.validate(request);
-        return sessionResponse(authService.login(body.email(), body.password()), true);
+        return flowResponse(flows.login(body.email(),body.password(),request.getRemoteAddr()));
     }
 
     @PostMapping("/session")
@@ -73,7 +116,12 @@ public class AuthController {
                 .body(AuthDtos.UserResponse.from(authService.currentUser(Long.parseLong(jwt.getSubject()))));
     }
 
-    private ResponseEntity<AuthDtos.AuthResponse> sessionResponse(AuthService.SessionResult result, boolean start) {
+    ResponseEntity<?> flowResponse(com.oldbutgold.shop.modules.identity.application.AuthFlowService.Result result) {
+        return result.session()!=null?sessionResponse(result.session(),true)
+                :ResponseEntity.accepted().cacheControl(CacheControl.noStore()).body(result.pending());
+    }
+
+    ResponseEntity<AuthDtos.AuthResponse> sessionResponse(AuthService.SessionResult result, boolean start) {
         var response = ResponseEntity.ok().cacheControl(CacheControl.noStore());
         if (start) {
             response.header(HttpHeaders.SET_COOKIE,
