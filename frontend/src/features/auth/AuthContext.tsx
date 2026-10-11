@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { authApi, SESSION_EXPIRED_EVENT } from './authApi';
-import { AuthResponse, LoginCredentials, RegisterPayload, UserPrincipal } from './types';
+import { AuthResponse, AuthChallenge, LoginCredentials, RegisterPayload, UserPrincipal } from './types';
 import { AuthContext } from './context';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserPrincipal | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const sessionRevision = useRef(0);
 
   const acceptSession = (session: AuthResponse) => {
     setUser(session.user);
@@ -15,29 +16,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let active = true;
+    const revision = sessionRevision.current;
     try { localStorage.removeItem('og_dev_user'); } catch { /* Storage may be unavailable. */ }
     authApi.restoreSession()
       .then((session) => {
-        if (active) {
+        if (active && sessionRevision.current === revision) {
           setUser(session.user);
           setExpiresAt(Date.now() + session.expiresIn * 1000);
         }
       })
-      .catch(() => {
-        authApi.clearAccessToken();
-        if (active) {
+      .catch(error => {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'SESSION_CHANGED') return;
+        if (active && sessionRevision.current === revision) {
+          authApi.clearAccessToken();
           setUser(null);
           setExpiresAt(null);
         }
       })
       .finally(() => {
-        if (active) setIsLoading(false);
+        if (active && sessionRevision.current === revision) setIsLoading(false);
       });
     return () => { active = false; };
   }, []);
 
   useEffect(() => {
     const expire = () => {
+      sessionRevision.current++;
       authApi.clearAccessToken();
       setUser(null);
       setExpiresAt(null);
@@ -50,10 +54,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [expiresAt]);
 
-  const login = async (credentials: LoginCredentials): Promise<UserPrincipal> => {
+  const login = async (credentials: LoginCredentials): Promise<UserPrincipal | AuthChallenge> => {
+    sessionRevision.current++;
     setIsLoading(true);
     try {
       const session = await authApi.login(credentials);
+      if (!('accessToken' in session)) {
+        setUser(null);
+        setExpiresAt(null);
+        return session;
+      }
       acceptSession(session);
       return session.user;
     } catch (error) {
@@ -66,21 +76,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (payload: RegisterPayload) => {
+  const register = (payload: RegisterPayload) => authApi.register(payload);
+
+  const verifyRegistration = async (challengeId: string, code: string) => {
+    sessionRevision.current++;
     setIsLoading(true);
     try {
-      acceptSession(await authApi.register(payload));
-    } catch (error) {
-      authApi.clearAccessToken();
-      setUser(null);
-      setExpiresAt(null);
-      throw error;
+      const completed = await authApi.verifyRegistration(challengeId, code);
+      acceptSession(completed);
+      return completed;
     } finally {
       setIsLoading(false);
     }
   };
 
   const logout = async () => {
+    sessionRevision.current++;
     try { await authApi.logout(); } catch { /* Local logout completes if the server is unavailable. */ }
     authApi.clearAccessToken();
     try { localStorage.removeItem('og_dev_user'); } catch { /* Storage may be unavailable. */ }
@@ -89,6 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const reloadCurrentUser = async () => {
+    sessionRevision.current++;
     try {
       // Restore current roles within the original deadline, without extending it.
       acceptSession(await authApi.restoreSession());
@@ -107,6 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isLoading,
       login,
       register,
+      verifyRegistration,
       logout,
       reloadCurrentUser,
     }}>
