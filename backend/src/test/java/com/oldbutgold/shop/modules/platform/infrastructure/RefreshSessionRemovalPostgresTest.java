@@ -72,8 +72,9 @@ class RefreshSessionRemovalPostgresTest {
         var checksums = jdbc.queryForList("SELECT version,checksum FROM public.flyway_schema_history ORDER BY installed_rank");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM public.refresh_sessions", Long.class)).isEqualTo(1);
 
-        flyway(null).migrate();
-        flyway(null).validate();
+        // This test isolates V24's removal; later migrations may add columns to retained tables.
+        flyway("24").migrate();
+        flyway("24").validate();
 
         assertThat(jdbc.queryForObject("SELECT to_regclass('public.refresh_sessions')::text", String.class)).isNull();
         assertThat(jdbc.queryForObject("SELECT to_regclass('og_compat.refresh_sessions')::text", String.class)).isNull();
