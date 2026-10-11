@@ -50,10 +50,20 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register",
+                                "/api/v1/auth/register/verify",
+                                "/api/v1/auth/register/resend",
+                                "/api/v1/auth/register/cancel",
                                 "/api/v1/auth/login",
+                                "/api/v1/auth/login/verify",
+                                "/api/v1/auth/password-reset",
+                                "/api/v1/auth/password-reset/**",
+                                "/api/v1/auth/challenge/**",
+                                "/api/v1/auth/google",
+                                "/api/v1/auth/google/**",
                                 "/api/v1/auth/session",
                                 "/api/v1/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.GET,
+                                "/api/v1/auth/google/config",
                                 "/api/v1/categories",
                                 "/api/v1/products",
                                 "/api/v1/products/**",
@@ -95,12 +105,13 @@ public class SecurityConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(SecretKey secretKey) {
+    JwtDecoder jwtDecoder(SecretKey secretKey,
+            com.oldbutgold.shop.modules.identity.infrastructure.security.CredentialVersionValidator versions) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(secretKey)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
-                new JwtTimestampValidator(Duration.ZERO), new JwtIssuerValidator("og-shop")));
+                new JwtTimestampValidator(Duration.ZERO), new JwtIssuerValidator("og-shop"), versions));
         return decoder;
     }
 
@@ -120,6 +131,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(List.of(properties.frontendOrigin()));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID"));
+        configuration.setExposedHeaders(List.of("Retry-After"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

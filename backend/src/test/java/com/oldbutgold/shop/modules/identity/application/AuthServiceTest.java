@@ -44,7 +44,7 @@ class AuthServiceTest {
                 .issuedAt(now.minusSeconds(600)).expiresAt(expiry).build();
     }
 
-    @Test void registerHashesPasswordAndOnlyAssignsBuyer() throws Exception {
+    @Test void verifiedAccountUsesPreparedHashAndOnlyAssignsBuyerWithoutIssuingToken() throws Exception {
         var constructor = RoleEntity.class.getDeclaredConstructor();
         constructor.setAccessible(true);
         RoleEntity buyer = constructor.newInstance();
@@ -52,16 +52,17 @@ class AuthServiceTest {
         name.setAccessible(true);
         name.set(buyer, "BUYER");
         when(roles.findByRoleName("BUYER")).thenReturn(Optional.of(buyer));
-        when(tokenService.issueAccessToken(any())).thenReturn("access-token");
-        when(tokenService.accessTokenExpiresInSeconds()).thenReturn(900L);
-
-        var session = service.register(" New@OGSHOP.VN ", "Password123@", "Nguyen An", null);
+        when(users.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+        var created = service.createVerifiedAccount(new RegistrationDraft("new@ogshop.vn", "{bcrypt}verified-hash",
+                "Nguyen An", null, RegistrationDraft.Type.BUYER, null));
         var captor = ArgumentCaptor.forClass(UserEntity.class);
-        verify(users).save(captor.capture());
+        verify(users).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getEmail()).isEqualTo("new@ogshop.vn");
-        assertThat(captor.getValue().getPasswordHash()).startsWith("{bcrypt}").isNotEqualTo("Password123@");
+        assertThat(captor.getValue().getPasswordHash()).isEqualTo("{bcrypt}verified-hash");
         assertThat(captor.getValue().getRoles()).extracting(RoleEntity::getRoleName).containsExactly("BUYER");
-        assertThat(session.expiresIn()).isEqualTo(900);
+        assertThat(created.getEmailVerifiedAt()).isEqualTo(now);
+        assertThat(created.getIdentityWorkflow()).isEqualTo("UC83");
+        verifyNoInteractions(tokenService);
     }
 
     @Test void loginRejectsWrongPasswordWithGenericAuthenticationFailure() {
@@ -69,9 +70,22 @@ class AuthServiceTest {
                 PasswordEncoderFactories.createDelegatingPasswordEncoder().encode("CorrectPassword123@"),
                 "Buyer", null, now);
         when(users.findByEmail("buyer@ogshop.vn")).thenReturn(Optional.of(user));
-        assertThatThrownBy(() -> service.login("buyer@ogshop.vn", "WrongPassword"))
+        assertThatThrownBy(() -> service.authenticatePassword("buyer@ogshop.vn", "WrongPassword"))
                 .isInstanceOf(BadCredentialsException.class);
         verifyNoInteractions(tokenService);
+    }
+
+    @Test void legacySixCharacterPasswordCanStillLogin() {
+        var user=new UserEntity("legacy@example.invalid","{noop}short6","Legacy",null,now);
+        when(users.findByEmail("legacy@example.invalid")).thenReturn(Optional.of(user));
+        assertThat(service.authenticatePassword("legacy@example.invalid","short6")).isSameAs(user);
+        verifyNoInteractions(tokenService);
+    }
+
+    @Test void oversizedUnicodePasswordFailsBeforeBcryptWithoutServerError() {
+        assertThatThrownBy(()->service.authenticatePassword("buyer@example.invalid","ắ".repeat(25)))
+                .isInstanceOf(BadCredentialsException.class);
+        verifyNoInteractions(users,tokenService);
     }
 
     @Test void restoreReloadsCurrentRolesWithoutExtendingOriginalDeadline() {

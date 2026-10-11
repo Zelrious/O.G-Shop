@@ -142,7 +142,7 @@ class DatabaseExpansionPostgresTest {
         var start=new CountDownLatch(1);
         try(var pool=Executors.newFixedThreadPool(2)){Callable<Boolean> task=()->{start.await();try{action.run();return true;}catch(DataAccessException e){return false;}};var a=pool.submit(task);var b=pool.submit(task);start.countDown();return(a.get(20,TimeUnit.SECONDS)?1:0)+(b.get(20,TimeUnit.SECONDS)?1:0);}
     }
-    @Test void cleanMigrationsValidate() {flyway(ds,null).validate();assertThat(id("SELECT max(version::int) FROM public.flyway_schema_history WHERE success")).isEqualTo(24);assertThat(id("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history'")).isEqualTo(47);}
+    @Test void cleanMigrationsValidate() {flyway(ds,null).validate();assertThat(id("SELECT max(version::int) FROM public.flyway_schema_history WHERE success")).isEqualTo(25);assertThat(id("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history'")).isEqualTo(47);}
     @Test void upgradePreservesV14WithoutInventingApprovals() {
         String name="ogshop_expansion_"+key().replace("-","");root.execute("CREATE DATABASE "+name);
         try{

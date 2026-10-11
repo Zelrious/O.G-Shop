@@ -1,5 +1,93 @@
 # Project Status
 
+## Sửa F1–F5/F7 auth — TASK-0086 / 2026-10-11
+
+- Completed: OTP login theo cờ Buyer/Seller, reset OTP/grant/new password, credential version thu hồi mọi phiên, Google token/nonce/link/registration, lỗi khóa sau credential đúng, Back Seller và race restore; Web Client ID đã cấu hình private. [Trước/sau và bằng chứng](../../output/auth-fixes-2026-10-11/README.md).
+- Verified: 64 backend đạt, 0 lỗi/skip (29 PostgreSQL, 3 SMTP transport, 3 Google RSA/JWK local); 135 frontend đạt; typecheck/scoped lint/build/package đạt. V26 clean/upgrade giữ fixture; OTP concurrent chỉ một winner, reset rollback/replay và old Bearer/cookie bị chặn. Browser HTTP fixture kiểm Back Seller click/Enter, Buyer OTP click, login OTP và reset ba bước. Docs 9 core/8 module, 13 tài liệu/238 liên kết local và whitespace phạm vi auth đạt.
+- Incomplete: V26 chưa áp vào database đang dùng; Google/Gmail và origin thực chưa nghiệm thu. UC09 bật/tắt bằng face, eKYC/KTV và full UC67 tiếp nối. Reset mail queue chưa durable; Vite giữ cảnh báo chunk lớn.
+- Blocked: none cho code/kiểm local. Next: backup có kiểm restore, restart backend để áp V26/nạp Client ID, tải lại frontend và thử Google/email sở hữu theo [setup](../setup/GOOGLE_AUTH.md). Dịch vụ/container/tab test đã dọn, dữ liệu/container người dùng giữ nguyên. [Task](archive/TASK-0086-auth-audit-remaining-findings.md). Các checkpoint dưới đây giữ lịch sử.
+
+## Sửa thời gian chờ đăng ký — TASK-0085 / 2026-10-11
+
+- Completed: sửa F6 bằng expose Retry-After và countdown ở form tài khoản/Seller; đồng bộ thời điểm nhận lỗi, giữ dữ liệu và chặn submit khi đang chờ. [Bằng chứng](../../output/auth-retry-fix-2026-10-11/README.md).
+- Verified: 34 frontend/19 backend tests đạt; typecheck/scoped lint/build/package đạt. Browser Buyer/Seller nhận 429, hiện 5 giây, disable rồi enable và chuyển OTP sau retry; mốc 60 giây được kiểm bằng fake clock/MockMvc.
+- Incomplete: chưa chạy lại PostgreSQL/SMTP E2E hoặc gửi Gmail trong lượt sửa F6; các F1–F5/F7 của TASK-0084 vẫn còn. Vite giữ cảnh báo chunk lớn có sẵn.
+- Blocked: none đối với F6. Next: restart backend bản mới/tải lại frontend; tiếp nối các phát hiện khác theo phạm vi được duyệt. [Task](archive/TASK-0085-registration-retry-countdown.md).
+
+## Kiểm tra ba luồng auth — TASK-0084 / 2026-10-11
+
+- Completed: đọc mới đặc tả SRC-08 UC01–UC04 và phụ thuộc UC09/UC67; review code, browser desktop/mobile và API/SMTP/database riêng; [báo cáo bảy phát hiện](../../output/auth-audit-2026-10-11/AUTH_FUNCTIONAL_AUDIT.md).
+- Verified: 29 frontend/42 backend tests đạt, gồm 12 PostgreSQL và 3 SMTP; typecheck/lint/build/package đạt. Buyer/Seller OTP tạo UC83/BUYER, một khoản 3.000 xu; Seller PENDING_EKYC với hai địa chỉ riêng. Đã dọn đúng dịch vụ/container test.
+- Incomplete: chức năng Google, reset OTP/thu hồi mọi thiết bị và login 2FA; phản hồi khóa, chờ 429/CORS và nút quay lại Seller cần sửa. Một lần OTP Buyer click reload chưa xác định nguyên nhân; Enter và Seller OTP click đạt. Không có bằng chứng Gmail thật hay eKYC/KTV hoàn chỉnh.
+- Blocked: none cho audit. Source nghiệp vụ/migration và dữ liệu đang dùng được giữ; số tests xanh không thay nghiệm thu UC.
+- Next: duyệt triển khai theo thứ tự sửa và tiêu chí trong báo cáo. [Task](archive/TASK-0084-auth-functional-audit.md).
+
+## SMTP local Mailpit — TASK-0083 / 2026-10-11
+
+- Completed: cấu hình private backend dùng 127.0.0.1; mật khẩu ứng dụng bỏ khoảng trắng phân nhóm; Mailpit mới nạp Gmail relay chỉ recipient được chọn, container cũ giữ nguyên dữ liệu.
+- Verified: SMTP nhận một thư example.test vào hộp thư local, UI 200, Gmail STARTTLS/AUTH 235. Không gửi email thật hoặc tạo tài khoản trong lượt chẩn đoán.
+- Incomplete: nhận OTP Gmail và đăng ký qua UI sau khi backend đọc lại cấu hình.
+- Blocked: none đối với kết nối SMTP; backend cần restart từ môi trường đang dùng backend/.env.
+- Next: restart backend, đăng ký bằng email sở hữu và email example.test. [Bàn giao](archive/TASK-0083-mailpit-local-smtp.md).
+
+## Cải tổ đăng ký/đăng nhập đợt 1 — TASK-0082 / 2026-10-10
+
+- Completed: code đăng ký hai bước OTP, Buyer/Seller draft, thưởng 3.000 xu một lần; mật khẩu mới thống nhất và login tài khoản cũ; SMTP adapter/form resend/cancel, V25 và [hướng dẫn Gmail](../setup/EMAIL_OTP.md). Giữ deadline phiên V24.
+- Verified: backend 285 tests: 259 pass/26 skip, 0 failures/errors, gồm 46 PostgreSQL; frontend 113 pass, auth cuối 22 pass, typecheck/lint/build đạt. SMTP transport localhost đạt. V25 local đã backup/restore/migrate/validate; 47/47 fingerprints giữ nguyên, 47 bảng nghiệp vụ/901 trường. JAR mới runtime health/categories/products 200; chưa bật SMTP trả 503, không tạo user/challenge.
+- Incomplete: Gmail thật chờ thông tin gửi/mật khẩu ứng dụng trong local .env; Google, reset OTP, 2FA và eKYC/KTV ngoài đợt 1. Báo cáo Google Docs/dictionary/DDL ERD V24 chưa tự chuyển thành V25.
+- Blocked: none đối với code/kiểm thử/migration đợt 1; Docker đã hoạt động lại sau khi người dùng khởi động lại.
+- Next: cấu hình SMTP theo hướng dẫn và restart backend để dùng bản mới; tiếp tục đợt 2–3 theo phạm vi được duyệt. [Bàn giao](archive/TASK-0082-email-otp-registration.md). Container và runtime kiểm thử riêng đã dọn, backup local được giữ.
+
+## Diagram UC01–UC18 — TASK-0081 / 2026-10-10
+
+- Completed: đọc mới đặc tả, hỏi/chốt RS-03 thành 2FA chỉ Người mua/Người bán; đồng bộ UC03/UC09 và sửa 36 source. Thay 34 ảnh được duyệt, thêm hai ảnh UC11, sửa Sequence UC07; giữ Hình 3.3–3.38. [Bằng chứng/PNG](../requirements/use-cases-83/report-uc01-18/README.md).
+- Verified: 830 trường local/native, 36 luồng chính/236 lượt nhánh/25 kiểm nhân quả; 36 PNG, native giữ 132 ảnh ngoài phạm vi/154 bảng/322 caption/ba tab. PDF 36 ảnh/heading/caption trọn trang và đúng cỡ, kiểm trực quan ảnh dài; backup bốn tab và section QA giữ nguyên.
+- Incomplete: none trong UC01–UC18. Blocked: none. Next: dùng source/caption hiện hành; danh mục đầu báo cáo còn template ngoài lượt này. Không đổi nghiệm thu phần mềm. [Task](archive/TASK-0081-diagrams-uc01-18.md).
+
+## Caption theo chương — TASK-0080 / 2026-10-10
+
+- Completed: tên diagram dùng “Sơ đồ hoạt động/tuần tự [tên UC]”; 322 caption được đánh số riêng cho bảng/hình theo chương, 321 sửa đổi tối thiểu. [Mapping và bằng chứng](../requirements/use-cases-83/chapter-captions/README.md).
+- Verified: native giữ 154 bảng/166 ảnh/ba tab khác, style caption và các TOC; PDF đủ 322 caption và 166 ảnh cùng caption/đúng cỡ. Sáu paragraph UC01 chỉnh leading/keep sau khi PDF phát hiện caption rời ảnh; không thay ảnh.
+- Incomplete: none trong lượt caption; UC11 còn hai vị trí thiếu ảnh, Sequence UC07 dùng ảnh Activity cũ, danh mục hình/bảng đầu báo cáo còn template là các phần ngoài lượt caption. Kiểm 9 core/8 module, 109 Markdown/1.013 liên kết-anchor và whitespace đạt. Blocked: none. Next: dùng mapping caption mới; các lượt ảnh tiếp theo đọc nguồn và hỏi trước thay ảnh theo quy trình. [Task](archive/TASK-0080-chapter-table-figure-captions.md).
+
+## Report diagrams UC19–UC83 — TASK-0079 / 2026-10-10
+
+- Completed: đọc mới 83 bảng/830 trường, kiểm/sửa mã theo đặc tả và giữ mẫu, chèn 118 ảnh mới/thay 12 ảnh được duyệt. [PNG và bằng chứng](../requirements/use-cases-83/report-from-uc19/README.md).
+- Verified: 166 đường chính + 834 đường chọn nhánh, 130 PNG; native giữ nội dung ngoài 5 sửa đổi văn bản được duyệt/caption và ba tab khác. PDF kiểm đủ 130 heading/ảnh/caption cùng trang, cỡ và tỷ lệ đúng.
+- Incomplete: none trong UC19–UC83. Blocked: none. Next: UC01–UC18 là phạm vi tiếp nối nếu được yêu cầu; đọc lại nguồn/vị trí và hỏi trước khi thay ảnh có sẵn. Không đổi nghiệm thu phần mềm. [Task](archive/TASK-0079-diagrams-from-uc19.md).
+
+## Diagram workflow — TASK-0078 / 2026-10-10
+
+- Completed: ghi [quy trình người dùng yêu cầu](../requirements/use-cases-83/SPECIFICATION_GUIDE.md#quy-trình-thực-hiện-do-người-dùng-quy-định--2026-10-10) và dẫn chiếu trong bàn giao/module index: kiểm đặc tả trước, hỏi khi luồng không hợp lý, kiểm/sửa mã giữ mẫu rồi xuất/chèn; hỏi trước khi thay ảnh đã có.
+- Verified: cấu trúc 9 core/8 module, 75 liên kết/anchor local và whitespace đạt. Không đọc lại đặc tả native, render hoặc chèn ảnh trong lượt ghi quy trình này.
+- Incomplete: none trong phạm vi ghi quy trình; [TASK-0078](archive/TASK-0078-diagram-workflow.md) hoàn tất. Blocked: none. Next: áp dụng quy trình cho phạm vi UC tiếp theo được yêu cầu; giữ quy tắc thu ảnh lớn vừa trang và giữ ảnh nhỏ.
+
+## Compact diagram presentation — TASK-0077 / 2026-10-10
+
+- Completed: rút nhãn và bỏ legend/ghi chú dài khỏi 166 source Activity–Sequence của 83 UC theo mẫu; thay mười hình UC83→UC79 trong báo cáo. [Bằng chứng/PNG hiện hành](../requirements/use-cases-83/diagram-presentation/README.md).
+- Verified: 830 trường và 1.000 đường đi kiểm lại đạt, render đủ 166 PNG. Native giữ văn bản/cấu trúc ba tab và 38 ảnh cũ; PDF bản sao có cùng body/layout/cỡ ảnh kiểm mười hình/title/caption trọn trang, giữ tỷ lệ, không phóng lớn.
+- Incomplete: UC01–UC78 chưa chèn vào báo cáo. Blocked: none. Next: dùng source gọn khi chèn các UC còn lại theo yêu cầu tiếp nối. Trạng thái ứng dụng/schema/nghiệm thu giữ theo các checkpoint riêng.
+
+## Report diagram insertion — TASK-0076 / 2026-10-10
+
+- Completed: chèn 10 hình PlantUML Activity/Sequence UC83→UC79 đúng chỗ báo cáo. [Bằng chứng/PNG gốc](../requirements/use-cases-83/report-insertion/README.md).
+- Verified: giữ 83 bảng/830 trường, 38 ảnh cũ và ba tab. Đủ 10 hình cùng title/caption trọn một trang, kiểm native và PDF bản sao cùng body/layout/cỡ ảnh. Sequence tối đa 590 pt; không phóng lớn.
+- Incomplete: UC01–UC78 chưa chèn. Blocked: none cho năm UC; export toàn bộ bản cuối lỗi nhưng đã kiểm bản sao một tab. Next: xem năm mẫu và tiếp tục khi được yêu cầu. Không đổi code/schema/nghiệm thu module.
+
+## Use-case documents and diagrams — TASK-0075 / 2026-10-10
+
+- Completed: đọc lại 83 bảng/830 trường trong tab làm việc Báo cáo đồ án và viết [83 đặc tả/166 Activity–Sequence](../requirements/use-cases-83/README.md), mapping, hướng dẫn và bàn giao. Nguồn cuối vẫn giữ 830/830 trường. Bộ 78/80 được giữ lịch sử.
+- Verified: khớp nội dung, 166 đường chính + 834 đường chọn nhánh, 11 tình huống trọng yếu; PlantUML render 166 PNG thành công, overview đủ bộ và kiểm làn/nhánh/legend. [Bằng chứng](../requirements/use-cases-83/VALIDATION.md).
+- Incomplete: [8 ghi chú câu chữ/diễn giải nguồn](../requirements/use-cases-83/REVIEW.md), trong đó dấu câu UC17 đã sửa local; các điểm còn lại chưa sửa báo cáo. Chưa chèn ảnh Google Docs/tải Drive, chưa viết sequence lớp/API hoặc nghiệm thu phần mềm.
+- Blocked: none đối với bước tài liệu/diagram. Next: xem các ghi chú nguồn, chọn cỡ ảnh và thư mục Drive khi thực hiện bước đưa hình. Không sửa ứng dụng/schema trong TASK-0075; các thay đổi đồng thời được giữ.
+
+## Report language, abbreviations and actors — TASK-0074 / 2026-10-10
+
+- Completed: [TASK-0074](archive/TASK-0074-report-plain-language-glossary-and-actors.md) sửa 165 mô tả trường, 47 mô tả bảng và 6 mô tả yêu cầu theo công dụng; điền 52 từ viết tắt và làm rõ 7 actor AT01–AT07 trong báo cáo hiện hành. KTV thống nhất là Kỹ thuật viên theo phần tổng quan báo cáo.
+- Verified: native backup đủ ba tab; 7.783 ô đối chiếu đạt, 401 ô kiểm kiểu chữ/căn lề đạt, widths giữ nguyên và hai bảng danh mục có header ghim. Giữ nguyên 83 đặc tả, 47 bảng/895 trường, các mã actor, cấu trúc và các tab khác. Không còn hai câu mô tả chung bị yêu cầu sửa.
+- Incomplete: PDF export vẫn 403, chưa kiểm trang; full trusted-read bridge thất bại nên không khẳng định đã kiểm toàn bộ protected controls. Narrow native reads và backup đầy đủ hỗ trợ sửa các ô văn bản trong phạm vi.
+- Blocked: none đối với nội dung/định dạng native. Next: kiểm trang khi export khả dụng. Không đổi code, database hoặc chính sách nghiệp vụ trong TASK-0074; checkpoint V24 dưới đây vẫn hiện hành.
+
 ## Current database and authentication — V24 / TASK-0073
 
 - Completed: [TASK-0073](archive/TASK-0073-remove-refresh-session-table.md) bỏ refresh sessions khỏi code, local PostgreSQL và báo cáo. Còn 47 bảng nghiệp vụ/895 trường, 48 public tables gồm Flyway history; 103 compatibility views và 7 report views. Đăng nhập có thời hạn cố định, mặc định 15 phút, restore giữ deadline. `auth_challenges` và các bảng eKYC được giữ. [Bàn giao V24](../architecture/DATABASE_AUTH_SIMPLIFICATION_V24_20261009.md).

@@ -120,25 +120,31 @@ describe('Profile Feature Components', () => {
   });
 
   it('SecurityTab validates password length and match', () => {
-    render(<SecurityTab />);
+    render(<MemoryRouter><SecurityTab /></MemoryRouter>);
 
     const currentPass = screen.getByPlaceholderText('Nhập mật khẩu đang dùng');
-    const newPass = screen.getByPlaceholderText('Tối thiểu 6 ký tự');
+    const newPass = screen.getByPlaceholderText('Tối thiểu 8 ký tự');
     const confirmPass = screen.getByPlaceholderText('Nhập lại mật khẩu mới');
     const submitBtn = screen.getByRole('button', { name: 'Cập nhật mật khẩu' });
 
     fireEvent.change(currentPass, { target: { value: 'current123' } });
-    fireEvent.change(newPass, { target: { value: '123' } });
-    fireEvent.change(confirmPass, { target: { value: '123' } });
+    fireEvent.change(newPass, { target: { value: 'short67' } });
+    fireEvent.change(confirmPass, { target: { value: 'short67' } });
     fireEvent.click(submitBtn);
 
-    expect(screen.getByText('Mật khẩu mới phải có ít nhất 6 ký tự.')).toBeInTheDocument();
+    expect(screen.getByText('Mật khẩu phải có ít nhất 8 ký tự và không vượt quá 72 byte UTF-8.')).toBeInTheDocument();
 
     fireEvent.change(newPass, { target: { value: 'validpass123' } });
     fireEvent.change(confirmPass, { target: { value: 'mismatchpass' } });
     fireEvent.click(submitBtn);
 
     expect(screen.getByText('Mật khẩu xác nhận không khớp với mật khẩu mới.')).toBeInTheDocument();
+
+    fireEvent.change(newPass, { target: { value: 'current123' } });
+    fireEvent.change(confirmPass, { target: { value: 'current123' } });
+    fireEvent.click(submitBtn);
+
+    expect(screen.getByText('Mật khẩu mới không được trùng với mật khẩu cũ.')).toBeInTheDocument();
   });
 
   it('SellerBankTab displays masked bank account and seller status', () => {

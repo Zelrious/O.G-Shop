@@ -78,12 +78,33 @@ class ProfileServiceTest {
     @DisplayName("Đổi mật khẩu thất bại khi nhập sai mật khẩu hiện tại")
     void changePassword_WrongCurrentPassword_ThrowsException() {
         UserEntity user = new UserEntity("buyer@example.com", "correct_hash", "Nguyễn Văn A", "0901234567", clock.instant());
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findLockedById(1L)).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrong_pass", "correct_hash")).thenReturn(false);
 
         assertThatThrownBy(() -> profileService.changePassword(1L, new ProfileDtos.ChangePasswordRequest("wrong_pass", "new_pass_123")))
                 .isInstanceOf(BadCredentialsException.class)
                 .hasMessageContaining("Mật khẩu hiện tại không chính xác");
+    }
+
+    @Test
+    @DisplayName("Đổi mật khẩu thất bại khi mật khẩu mới trùng với mật khẩu hiện tại")
+    void changePassword_SamePassword_ThrowsException() {
+        UserEntity user = new UserEntity("buyer@example.com", "correct_hash", "Nguyễn Văn A", "0901234567", clock.instant());
+        when(userRepository.findLockedById(1L)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("current_pass", "correct_hash")).thenReturn(true);
+        when(passwordEncoder.matches("same_new_pass", "correct_hash")).thenReturn(true);
+
+        assertThatThrownBy(() -> profileService.changePassword(1L, new ProfileDtos.ChangePasswordRequest("current_pass", "same_new_pass")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Mật khẩu mới không được trùng với mật khẩu cũ.");
+    }
+
+    @Test void rejectsShortOrOversizedNewPasswordBeforeChangingAccount() {
+        for(String value:List.of("short6","ắ".repeat(25))) {
+            assertThatThrownBy(()->profileService.changePassword(1L,
+                    new ProfileDtos.ChangePasswordRequest("current",value))).isInstanceOf(IllegalArgumentException.class);
+        }
+        verifyNoInteractions(userRepository,passwordEncoder);
     }
 
     @Test

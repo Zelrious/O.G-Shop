@@ -12,7 +12,6 @@ import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -38,29 +37,34 @@ public class AuthService {
     }
 
     @Transactional
-    public SessionResult register(String email, String password, String fullName, String phoneNumber) {
-        String normalizedEmail = normalizeEmail(email);
-        if (users.existsByEmail(normalizedEmail)) throw new DuplicateEmailException();
-        if (password.getBytes(StandardCharsets.UTF_8).length > 72) {
-            throw new IllegalArgumentException("Password must not exceed 72 UTF-8 bytes");
+    public UserEntity createVerifiedAccount(RegistrationDraft draft) {
+        if (users.existsByEmail(draft.email())) throw new DuplicateEmailException();
+        UserEntity user = new UserEntity(draft.email(), draft.passwordHash(), draft.fullName(),
+                draft.phoneNumber(), clock.instant());
+        user.verifyRegistrationEmail(clock.instant());
+        if (draft.seller() != null) {
+            user.updateBankAccount(draft.seller().bankName(), draft.seller().accountNumber(),
+                    draft.seller().accountHolder(), clock.instant());
         }
-        UserEntity user = new UserEntity(normalizedEmail, passwordEncoder.encode(password), fullName.strip(),
-                normalizeOptional(phoneNumber), clock.instant());
         RoleEntity buyer = roles.findByRoleName("BUYER")
                 .orElseThrow(() -> new IllegalStateException("BUYER role has not been seeded"));
         user.getRoles().add(buyer);
-        users.save(user);
-        return newSession(user);
+        return users.saveAndFlush(user);
     }
 
     @Transactional(readOnly = true)
-    public SessionResult login(String email, String password) {
-        UserEntity user = users.findByEmail(normalizeEmail(email))
-                .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
-        if (!"ACTIVE".equals(user.getStatus()) || !passwordEncoder.matches(password, user.getPasswordHash())) {
+    public UserEntity authenticatePassword(String email, String password) {
+        if (password == null || password.isBlank()
+                || password.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 72) {
             throw new BadCredentialsException("Invalid credentials");
         }
-        return newSession(user);
+        UserEntity user = users.findByEmail(normalizeEmail(email))
+                .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
+        if (("UC83".equals(user.getIdentityWorkflow()) && user.getEmailVerifiedAt() == null)
+                || !passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw new BadCredentialsException("Invalid credentials");
+        }
+        return user;
     }
 
     @Transactional(readOnly = true)
@@ -88,7 +92,7 @@ public class AuthService {
                 .orElseThrow(AuthService::unavailableSession);
     }
 
-    private SessionResult newSession(UserEntity user) {
+    public SessionResult newSession(UserEntity user) {
         return new SessionResult(user, tokenService.issueAccessToken(user), tokenService.accessTokenExpiresInSeconds());
     }
 
@@ -98,10 +102,6 @@ public class AuthService {
 
     private static String normalizeEmail(String value) {
         return value.strip().toLowerCase(Locale.ROOT);
-    }
-
-    private static String normalizeOptional(String value) {
-        return value == null || value.isBlank() ? null : value.strip();
     }
 
     public record SessionResult(UserEntity user, String accessToken, long expiresIn) {}

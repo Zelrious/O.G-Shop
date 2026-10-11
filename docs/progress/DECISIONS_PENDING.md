@@ -1,5 +1,33 @@
 # Decisions Pending
 
+## F1–F5/F7 đã được duyệt và sửa — TASK-0086 / 2026-10-11
+
+Người dùng duyệt “tiến hành sửa các F khác” và cung cấp Google Web Client ID. Đã triển khai phạm vi audit bằng purpose-bound OTP/grant, Google ID token/nonce/link, V26 credential version và sửa Back Seller; kiểm local/tests đạt. Không còn quyết định code chờ trong phạm vi auth này. [Bàn giao](../../output/auth-fixes-2026-10-11/README.md), [Google setup](../setup/GOOGLE_AUTH.md). Cấu hình origin, Google/Gmail E2E thật và rollout V26 sau backup còn cần thực hiện; đây là việc kiểm/triển khai, không mở lại chính sách đã chốt. UC09 face/eKYC/KTV/full UC67 ngoài lượt này. Các checkpoint dưới đây giữ lịch sử.
+
+## F6 đã được duyệt và sửa — TASK-0085 / 2026-10-11
+
+Người dùng yêu cầu chỉnh sửa sau khi được giải thích Retry-After/CORS. Đã chọn expose header hiện hành và hiển thị countdown, không đổi hợp đồng JSON; kiểm thử/browser fixture đạt. Không còn quyết định chờ cho F6. [Bàn giao](../../output/auth-retry-fix-2026-10-11/README.md); các F1–F5/F7 của audit tiếp tục theo phạm vi được duyệt, không coi lượt này đã triển khai toàn bộ auth.
+
+## Audit auth — TASK-0084 / 2026-10-11
+
+Không mở lại các chính sách đã chốt của UC01–UC04/UC09/UC67. [Audit](../../output/auth-audit-2026-10-11/AUTH_FUNCTIONAL_AUDIT.md) đã hoàn tất; bảy khoảng trống/lỗi và thứ tự sửa được ghi để duyệt triển khai tiếp. Lượt này chỉ kiểm tra, không tự thêm Google/reset/2FA hoặc sửa source UI. Cấu hình SMTP local đã hoàn tất ở TASK-0083; nhận Gmail thật vẫn chưa nghiệm thu. Checkpoint TASK-0082 bên dưới giữ trạng thái lịch sử.
+
+## Auth đợt 1 — TASK-0082 / 2026-10-10
+
+Không còn chờ chọn nghiệp vụ đợt 1: người dùng duyệt email OTP, Buyer/Seller draft và 3.000 xu. Code/kiểm thử/V25 local đã hoàn tất. Local .env chưa có SMTP host/username/password; Gmail thật cần địa chỉ gửi/mật khẩu ứng dụng theo [hướng dẫn](../setup/EMAIL_OTP.md), không gửi secret trong chat. Google/reset/2FA/eKYC/KTV sẽ theo phạm vi đợt 2–3 đã nêu, không coi schema có sẵn là đã triển khai.
+
+## RS-03 đã chốt — TASK-0081 / 2026-10-10
+
+Người dùng chọn 2FA chỉ dành cho Người mua/Người bán; UC09 BR-04 và UC03 bước 3/BR-06 đã đồng bộ native/local/diagram. [Bằng chứng và scope](../requirements/use-cases-83/report-uc01-18/README.md). Không còn chờ quyết định này; các ghi chú đọc ban đầu dưới đây giữ lịch sử.
+
+## Caption báo cáo — TASK-0080 / 2026-10-10
+
+Tên và cách đánh số bảng/hình đã được người dùng chốt theo chương, không còn quyết định chờ trong lượt caption. [Rà hiện trạng](../requirements/use-cases-83/chapter-captions/README.md) ghi UC11 thiếu hai ảnh, Sequence UC07 đang chứa ảnh Activity và danh mục hình/bảng đầu báo cáo còn mẫu. Chưa có yêu cầu thay ảnh UC07; nếu làm lượt thay ảnh phải hỏi ý kiến trước theo quy trình đã chốt. Không dùng lượt sửa caption để suy diễn quyền thay ảnh hoặc sửa nghiệp vụ.
+
+## Câu chữ đặc tả hiện hành — TASK-0075 / 2026-10-10
+
+[REVIEW bộ 83](../requirements/use-cases-83/REVIEW.md) ghi 8 ghi chú đọc mới: trùng mã nhánh UC15, khóa/xóa dưới 80, actor UC09 so với rule 2FA, dấu câu UC17, phản ứng thiếu ở UC63, hai thời điểm UC22, chi tiết chỉ tiêu/định dạng UC78–UC81 và điểm nối cảnh báo AI UC15/UC16. RS-04 đã sửa dấu câu ở bản local. TASK-0079 đã chốt RS-02 thành xem xét khóa tài khoản dưới 80 và bổ sung phản ứng RS-05 của UC63 theo xác nhận người dùng; native/local/diagram đã đồng bộ. Những ghi chú còn lại giữ giải thích theo nguồn. Không mở lại các chính sách đã được nêu rõ; không lấy các mặc định triển khai lịch sử bên dưới thay cho đặc tả hiện hành.
+
 ## Report checkpoint — 2026-10-09
 
 - Quyết định báo cáo hiện hành và nguồn tiếp tục được ghi trong [TASK-0065](archive/TASK-0065-report-policy-checkpoint-20261009.md). Phí tin do Người bán trả sau duyệt, phí bổ sung cộng dồn kể cả Admin giữ nguyên biểu phí; điều kiện nhóm thanh toán, trả/hoàn 100% hoặc miễn hoàn do KTV, cửa sổ lấy trả và phạm vi sandbox đã được đồng bộ trong Google Docs.

@@ -37,6 +37,9 @@ public class SellerVerificationWriter {
     public long recordVerified(long userId, EkycClient.MatchResult match) {
         UserEntity user = users.findById(userId)
                 .orElseThrow(() -> new BadCredentialsException("Account is unavailable"));
+        if ("UC83".equals(user.getIdentityWorkflow())) {
+            throw new SellerActivationDisabledException("Kết quả kiểm tra cần KTV xét duyệt trước khi cấp quyền bán.");
+        }
         var existing = verifications.findFirstByUserIdAndStatus(userId, "VERIFIED");
         if (existing.isPresent()) {
             grantSeller(user);

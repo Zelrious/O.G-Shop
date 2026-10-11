@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { profileApi } from '../index';
 import { Alert, Button, Input } from '../../../shared/components';
+import { acceptsNewPassword, NEW_PASSWORD_HINT } from '../../auth/passwordPolicy';
+import { authApi, SESSION_EXPIRED_EVENT } from '../../auth/authApi';
+import { useNavigate } from 'react-router-dom';
 
 export const SecurityTab: React.FC = () => {
+  const navigate = useNavigate();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -16,8 +20,12 @@ export const SecurityTab: React.FC = () => {
       setErrorMsg('Vui lòng nhập mật khẩu hiện tại.');
       return;
     }
-    if (newPassword.length < 6) {
-      setErrorMsg('Mật khẩu mới phải có ít nhất 6 ký tự.');
+    if (!acceptsNewPassword(newPassword)) {
+      setErrorMsg(NEW_PASSWORD_HINT);
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setErrorMsg('Mật khẩu mới không được trùng với mật khẩu cũ.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -34,11 +42,13 @@ export const SecurityTab: React.FC = () => {
         currentPassword,
         newPassword,
       });
-      setSuccessMsg('Đổi mật khẩu thành công! Hãy ghi nhớ mật khẩu mới của bạn.');
+      setSuccessMsg('Đổi mật khẩu thành công. Hãy đăng nhập lại bằng mật khẩu mới.');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      setTimeout(() => setSuccessMsg(null), 5000);
+      await authApi.logout().catch(() => undefined);
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+      navigate('/login', { replace: true, state: { notice: 'Đổi mật khẩu thành công. Các phiên cũ đã bị thu hồi. Hãy đăng nhập bằng mật khẩu mới.' } });
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Đổi mật khẩu thất bại. Vui lòng kiểm tra lại mật khẩu hiện tại.');
     } finally {
@@ -77,7 +87,7 @@ export const SecurityTab: React.FC = () => {
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="Tối thiểu 6 ký tự"
+            placeholder="Tối thiểu 8 ký tự"
             required
           />
         </div>

@@ -12,6 +12,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.dao.DataIntegrityViolationException;
+import com.oldbutgold.shop.modules.identity.application.RegistrationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -21,6 +22,22 @@ import java.util.UUID;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    @ExceptionHandler(com.oldbutgold.shop.modules.identity.application.AccountRestrictedException.class)
+    ResponseEntity<?> accountRestricted(com.oldbutgold.shop.modules.identity.application.AccountRestrictedException error) {
+        return ResponseEntity.status(403).header("Cache-Control","no-store").body(java.util.Map.of(
+                "code","ACCOUNT_RESTRICTED","message",error.getMessage(),"accountStatus",error.accountStatus(),
+                "supportInstruction","Liên hệ bộ phận hỗ trợ O.G Shop để kiểm tra tình trạng tài khoản.",
+                "allowedFunctions",List.of("CONTACT_SUPPORT")));
+    }
+    @ExceptionHandler(RegistrationException.class)
+    ResponseEntity<ApiError> registrationFailure(RegistrationException exception, HttpServletRequest request) {
+        var result = response(HttpStatus.valueOf(exception.status()), exception.code(), exception.getMessage(), request, List.of());
+        var headers = new org.springframework.http.HttpHeaders();
+        headers.putAll(result.getHeaders());
+        headers.setCacheControl("no-store");
+        if (exception.retryAfter() > 0) headers.set("Retry-After", Long.toString(exception.retryAfter()));
+        return new ResponseEntity<>(result.getBody(), headers, result.getStatusCode());
+    }
     @ExceptionHandler(BadCredentialsException.class)
     ResponseEntity<ApiError> unauthorized(RuntimeException exception, HttpServletRequest request) {
         return response(HttpStatus.UNAUTHORIZED, "AUTHENTICATION_FAILED", "Phiên đăng nhập không hợp lệ.", request, List.of());
@@ -50,7 +67,10 @@ public class ApiExceptionHandler {
                     .map(error -> new FieldError(error.getField(), error.getDefaultMessage()))
                     .toList()
                 : List.of();
-        return response(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "Dữ liệu gửi lên không hợp lệ.", request, fields);
+        String message = (exception instanceof IllegalArgumentException && exception.getMessage() != null && !exception.getMessage().isBlank())
+                ? exception.getMessage()
+                : "Dữ liệu gửi lên không hợp lệ.";
+        return response(HttpStatus.BAD_REQUEST, "INVALID_INPUT", message, request, fields);
     }
 
     @ExceptionHandler(InvalidAvatarException.class)

@@ -3,6 +3,7 @@ package com.oldbutgold.shop.modules.identity.application;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.AddressEntity;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.AddressRepository;
 import com.oldbutgold.shop.modules.identity.api.ProfileDtos;
+import com.oldbutgold.shop.modules.identity.domain.PasswordPolicy;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.RoleEntity;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.SellerVerificationRepository;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.UserEntity;
@@ -85,9 +86,14 @@ public class ProfileService {
     }
 
     public void changePassword(long userId, ProfileDtos.ChangePasswordRequest request) {
-        UserEntity user = getUserOrThrow(userId);
+        PasswordPolicy.requireNewPassword(request.newPassword());
+        UserEntity user = userRepository.findLockedById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản."));
         if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
             throw new BadCredentialsException("Mật khẩu hiện tại không chính xác.");
+        }
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("Mật khẩu mới không được trùng với mật khẩu cũ.");
         }
         Instant now = clock.instant();
         user.updatePassword(passwordEncoder.encode(request.newPassword()), now);

@@ -1,5 +1,31 @@
 # Commerce Module
 
+## Thưởng đăng ký — TASK-0082 / V25 / 2026-10-10
+
+`RegistrationCommerceFacade` cung cấp hai thao tác tham gia transaction do Identity mở: tạo địa chỉ đúng chủ và thưởng đăng ký đúng 3.000 xu. Không gọi repository xuyên module. Ledger CREDIT_REGISTRATION dùng command key theo user, unique một lần/user, chỉ chấp nhận account UC83 ACTIVE/email đã xác thực; không tạo policy/Admin/order giả. V25 delegate mọi validator cũ và giữ quy tắc số dư/nguồn thưởng cũ.
+
+[Thiết kế V25](../../database/docs/EMAIL_REGISTRATION_V25.md). 12 ca đăng ký PostgreSQL đạt, gồm lỗi ghi ledger thật làm rollback user/OTP, xác nhận đồng thời, chặn duplicate/sai số xu và địa chỉ đúng chủ. V25 local giữ 47/47 fingerprints sau backup/restore/migration. Những nguồn xu khác trong UC22 và sử dụng xu khi checkout thuộc công việc tiếp nối; không nâng nghiệm thu toàn bộ Commerce.
+
+## Diagram báo cáo — TASK-0081 / 2026-10-10
+
+[UC01–UC18 đã có 36 ảnh kiểm nguồn/native/PDF](../requirements/use-cases-83/report-uc01-18/README.md), gồm UC13 và các điểm nối thao tác mua/giỏ. Thay 34 ảnh được duyệt và thêm hai ảnh UC11, giữ Hình 3.3–3.38 và ảnh ngoài phạm vi. 2FA chỉ dành cho Người mua/Người bán theo quyết định người dùng. Đây là cập nhật yêu cầu/diagram; không nâng trạng thái code/schema/nghiệm thu module.
+
+## Report diagrams — TASK-0079 / 2026-10-10
+
+[UC19–UC83 đã có đủ 130 Activity/Sequence trong báo cáo](../requirements/use-cases-83/report-from-uc19/README.md), kiểm native/PDF trọn trang. RS-02/RS-05 được chốt và đồng bộ theo xác nhận người dùng; chuẩn Activity/Sequence gọn được giữ. Đây là tài liệu, không nâng trạng thái code/database/nghiệm thu module.
+
+## Diagram presentation — TASK-0077 / 2026-10-10
+
+Mã Activity/Sequence hiện dùng [cách trình bày gọn](../requirements/use-cases-83/diagram-presentation/README.md): bỏ legend khỏi ảnh, rút nhãn và giữ đủ đường đi theo đặc tả. UC82 trong báo cáo đã thay bằng hai hình mới. Kiểm nguồn/1.000 đường đi và render 166 PNG đạt; ảnh UC79–UC83 đã kiểm trọn một trang trên PDF. Đây là cập nhật trình bày tài liệu.
+
+## Report diagrams — TASK-0076 / 2026-10-10
+
+Đã chèn Activity/Sequence UC82 theo source TASK-0075, giữ đặc tả hủy từng đơn. Mỗi hình cùng title/caption nằm trọn một trang, kiểm native/PDF bản sao cùng layout. [Bằng chứng](../requirements/use-cases-83/report-insertion/README.md). Không đổi code/schema/nghiệm thu module.
+
+## Current use-case documents — TASK-0075 / 2026-10-10
+
+[Bộ 83 đặc tả/166 Activity–Sequence](../requirements/use-cases-83/README.md) đã đọc lại trực tiếp báo cáo và viết theo 830 trường hiện hành; [rà soát](../requirements/use-cases-83/REVIEW.md) ghi các điểm nguồn cần làm rõ. UC10/UC20–UC24/UC29–UC31/UC61/UC82 giữ lựa chọn lúc đặt, voucher trước xu, giỏ/nhóm đơn, lịch sử và hủy theo từng đơn. Đây là yêu cầu và diagram ở mức yêu cầu; trạng thái code/schema/nghiệm thu của module không được nâng từ kết quả tài liệu. [Bàn giao](../handoff/USE_CASE_83_AGENT_HANDOFF.md).
+
 ## Database report — TASK-0072 / 2026-10-09
 
 [TASK-0072](../progress/archive/TASK-0072-database-design-report.md) đã điền chương bảng database trong báo cáo Google Docs theo schema V23: danh sách 48 bảng và 48 bảng chi tiết/907 trường, giữ mẫu native và kiểm tra căn lề, ghim tiêu đề, căn giữa chiều dọc. Đây là cập nhật tài liệu; trạng thái triển khai module vẫn theo code/kiểm thử. PDF/HTML export bị từ chối 403, chưa kiểm bố cục trang.
