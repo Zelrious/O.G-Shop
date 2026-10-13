@@ -41,6 +41,7 @@ class SellerProductServiceTest {
     private ProductModerationDecisionRepository productModerationDecisionRepository;
     private PlatformAuditFacade platformAuditFacade;
     private Clock clock;
+    private ListingWorkflowService listingWorkflow;
     private SellerProductService sellerProductService;
 
     private CategoryEntity category;
@@ -57,11 +58,23 @@ class SellerProductServiceTest {
         platformAuditFacade = mock(PlatformAuditFacade.class);
         fixedInstant = Instant.parse("2026-09-20T10:00:00Z");
         clock = Clock.fixed(fixedInstant, ZoneOffset.UTC);
+        listingWorkflow = mock(ListingWorkflowService.class);
+        when(productRepository.findByIdForUpdate(org.mockito.ArgumentMatchers.anyLong()))
+                .thenAnswer(inv -> productRepository.findById(inv.getArgument(0)));
+        when(listingWorkflow.approved(any(), any())).thenAnswer(inv -> {
+            ProductEntity product = inv.getArgument(0);
+            product.approve(clock.instant());
+            return new CatalogDtos.ActionResponse(product.getId(), product.getStatus(), "Đã duyệt");
+        });
+        when(listingWorkflow.replayApproval(any())).thenAnswer(inv -> {
+            ProductModerationDecisionEntity decision = inv.getArgument(0);
+            return new CatalogDtos.ActionResponse(decision.getProductId(), "ACTIVE", "Đã duyệt");
+        });
 
         sellerProductService = new SellerProductService(
                 productRepository, categoryRepository, productMediaRepository,
                 identityCatalogFacade, mediaStorageService,
-                productModerationDecisionRepository, platformAuditFacade, clock
+                productModerationDecisionRepository, platformAuditFacade, clock, listingWorkflow
         );
 
         category = new CategoryEntity("Điện tử", "electronics", "Thiết bị điện tử", true, 1, fixedInstant);
@@ -473,9 +486,9 @@ class SellerProductServiceTest {
 
         CatalogDtos.ActionResponse res = sellerProductService.approveProduct(999L, 700L, 2L, "cmd-approve-1");
         assertThat(res.status()).isEqualTo("ACTIVE");
-        assertThat(res.message()).contains("Phê duyệt tin đăng thành công");
+        assertThat(res.message()).contains("Đã duyệt");
 
-        verify(productModerationDecisionRepository).save(any(ProductModerationDecisionEntity.class));
+        verify(productModerationDecisionRepository).saveAndFlush(any(ProductModerationDecisionEntity.class));
         verify(platformAuditFacade).recordAudit(
                 eq(999L), eq("APPROVE_PRODUCT"), eq("PRODUCT"), eq(700L),
                 eq(Map.of("status", "PENDING", "version", 2L, "contentRevision", 2L)),
@@ -606,7 +619,7 @@ class SellerProductServiceTest {
 
         CatalogDtos.ActionResponse replay = sellerProductService.approveProduct(999L, 700L, 2L, "cmd-key-10");
         assertThat(replay.status()).isEqualTo("ACTIVE");
-        verify(productModerationDecisionRepository, never()).save(any());
+        verify(productModerationDecisionRepository, never()).saveAndFlush(any());
         verify(platformAuditFacade, never()).recordAudit(any(), any(), any(), any(), any(), any(), any(), any());
 
         // Mismatched expectedVersion for same key -> conflict
@@ -650,7 +663,7 @@ class SellerProductServiceTest {
         assertThat(rejectRes.status()).isEqualTo("REJECTED");
         assertThat(rejectRes.message()).contains("Video bị rung mờ không rõ số seri");
 
-        verify(productModerationDecisionRepository).save(any(ProductModerationDecisionEntity.class));
+        verify(productModerationDecisionRepository).saveAndFlush(any(ProductModerationDecisionEntity.class));
         verify(platformAuditFacade).recordAudit(
                 eq(999L), eq("REJECT_PRODUCT"), eq("PRODUCT"), eq(701L),
                 eq(Map.of("status", "PENDING", "version", 1L, "contentRevision", 1L)),
@@ -718,7 +731,7 @@ class SellerProductServiceTest {
 
         doThrow(new RuntimeException("DB insert decision failed"))
                 .when(productModerationDecisionRepository)
-                .save(any());
+                .saveAndFlush(any());
 
         assertThatThrownBy(() -> sellerProductService.rejectProduct(999L, 701L, "Video không rõ nét", 1L, "key-1"))
                 .isInstanceOf(RuntimeException.class)

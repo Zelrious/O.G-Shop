@@ -61,6 +61,7 @@ class MultipleCategoriesPostgresTest {
     }
 
     @Autowired SellerProductService sellerProducts;
+    @Autowired ListingWorkflowService listingWorkflow;
     @Autowired CatalogService catalog;
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc http;
@@ -98,6 +99,8 @@ class MultipleCategoriesPostgresTest {
         sellerProducts.submitProduct(sellerId, productId);
         long version = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, productId);
         sellerProducts.approveProduct(reviewerId, productId, version, "ck-cat-" + productId + "-" + UUID.randomUUID());
+        var fee = listingWorkflow.getFee(sellerId, productId);
+        listingWorkflow.payMock(sellerId, productId, fee.chargeId(), fee.version(), "test-cat-pay-" + UUID.randomUUID());
     }
 
     @Test

@@ -38,6 +38,12 @@ public class ProductModerationDecisionEntity {
     @Column(name = "decision_content_revision")
     private Long decisionContentRevision;
 
+    @Column(name = "revision_id")
+    private Long revisionId;
+
+    public Long getRevisionId() { return revisionId; }
+    public void referenceRevision(long id) { revisionId = id; }
+
     @Column(name = "command_key", length = 100)
     private String commandKey;
 

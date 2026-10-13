@@ -6,7 +6,9 @@ import java.util.Optional;
 
 public interface IdentityCatalogFacade {
     boolean isSellerActive(long userId);
+    void requireListingAllowed(long userId);
     boolean isModeratorActive(long userId);
+    java.util.List<Long> getActiveKtvIds();
 
     Optional<SellerPublicSummary> getSellerSummary(long userId);
 

@@ -25,6 +25,7 @@ public class ProductEntity {
     public static final String CURRENCY_VND = "VND";
     public static final String STATUS_DRAFT = "DRAFT";
     public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_APPROVED_AWAITING_FEE = "APPROVED_AWAITING_FEE";
     public static final String STATUS_ACTIVE = "ACTIVE";
     public static final String STATUS_HIDDEN = "HIDDEN";
     public static final String STATUS_RESERVED = "RESERVED";
@@ -96,6 +97,31 @@ public class ProductEntity {
 
     @Column(name = "content_revision", nullable = false)
     private Long contentRevision = 1L;
+
+    @Column(name = "quantity_total", nullable = false)
+    private int quantityTotal = 1;
+
+    @Column(name = "current_revision_id")
+    private Long currentRevisionId;
+
+    @Column(name = "public_revision_id")
+    private Long publicRevisionId;
+
+    public int getQuantityTotal() { return quantityTotal; }
+    public Long getCurrentRevisionId() { return currentRevisionId; }
+    public void referenceReviewRevision(long revisionId) { currentRevisionId = revisionId; }
+    public void approveAwaitingFee(Instant now) {
+        if (!STATUS_PENDING.equals(status)) throw new ProductStateConflictException("Tin không còn chờ duyệt.");
+        status = STATUS_APPROVED_AWAITING_FEE;
+        updatedAt = now;
+    }
+    public void activatePaidListing(Instant now) {
+        if (!Set.of(STATUS_PENDING, STATUS_APPROVED_AWAITING_FEE).contains(status))
+            throw new ProductStateConflictException("Tin không còn ở trạng thái có thể mở bán.");
+        publicRevisionId = currentRevisionId;
+        status = STATUS_ACTIVE;
+        updatedAt = now;
+    }
 
     @Version
     @Column(nullable = false)
@@ -174,6 +200,7 @@ public class ProductEntity {
         this.requiresBuyerEkyc = requiresBuyerEkyc;
         this.updatedAt = now;
         this.contentRevision++;
+        if (STATUS_ACTIVE.equals(this.status)) this.status = STATUS_HIDDEN;
     }
 
     public void submitForReview(Instant now) {
