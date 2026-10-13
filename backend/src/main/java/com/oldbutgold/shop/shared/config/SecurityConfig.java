@@ -75,6 +75,9 @@ public class SecurityConfig {
                                 "/api/v1/payments/vnpay-ipn").permitAll()
                         .requestMatchers("/api/v1/admin/payments/**").hasAnyRole("ADMIN", "KTV")
                         .requestMatchers("/api/v1/ktv/users/**").hasRole("KTV")
+                        .requestMatchers("/api/v1/admin/vouchers/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/ktv/vouchers/**").hasRole("KTV")
+                        .requestMatchers("/api/v1/commerce/vouchers/**").hasAnyRole("BUYER","SELLER")
                         .requestMatchers("/api/v1/account/**").hasAnyRole("BUYER","SELLER")
                         .requestMatchers("/api/v1/chat/**").hasAnyRole("BUYER","SELLER")
                         .requestMatchers(

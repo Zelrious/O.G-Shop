@@ -23,10 +23,11 @@ public class CheckoutController {
     public ResponseEntity<CheckoutDtos.CheckoutPreviewResponse> getCheckoutPreview(
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam long productId,
-            @RequestParam(required = false) String voucherCode
+            @RequestParam(required = false) String voucherCode,
+            @RequestParam(required = false) Long offerId
     ) {
         long buyerId = extractUserId(jwt);
-        CheckoutDtos.CheckoutPreviewResponse response = checkoutService.getCheckoutPreview(buyerId, productId, voucherCode);
+        CheckoutDtos.CheckoutPreviewResponse response = checkoutService.getCheckoutPreview(buyerId, productId, voucherCode,offerId);
         return ResponseEntity.ok(response);
     }
 
