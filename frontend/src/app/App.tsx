@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { AuthProvider } from '../features/auth';
+import { NotificationsPage } from '../pages/NotificationsPage';
 import { AccountStatusPage } from '../pages/AccountStatusPage';
+import { MessagesPage } from '../pages/MessagesPage';
+import { BlockedBuyersPage } from '../pages/BlockedBuyersPage';
 import { SellerListingReviewPage } from '../pages/SellerListingReviewPage';
 import { ThemeProvider, I18nProvider, DemoProvider, CartProvider } from '../shared/context';
 import { ShowcaseApp } from '../features/showcase/ShowcaseApp';
@@ -50,6 +53,7 @@ import {
 import { SellerDashboardPage } from '../pages/seller/SellerDashboardPage';
 import './styles.css';
 import './ui-theme.css';
+import { ChatProvider } from '../features/chat-offer/ChatProvider';
 import { RouteExperience } from './RouteExperience';
 
 function NotFoundPage() {
@@ -74,6 +78,7 @@ export function App() {
           <DemoProvider>
             <CartProvider>
               <AuthProvider>
+                <ChatProvider>
                 <RouteExperience />
                 <Routes>
                   {/* 1. Guest / Auth Layout Shell */}
@@ -85,7 +90,9 @@ export function App() {
 
                   {/* 2. Main Public & Buyer Marketplace Layout Shell */}
                   <Route element={<AppLayout />}>
+                    <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
                     <Route path="/account/status" element={<ProtectedRoute allowedRoles={['BUYER', 'SELLER']}><AccountStatusPage /></ProtectedRoute>} />
+                    <Route path="/messages" element={<ProtectedRoute allowedRoles={['BUYER', 'SELLER']}><MessagesPage /></ProtectedRoute>} />
                     <Route path="/" element={<HomePage />} />
                     <Route path="/marketplace" element={<MarketplacePage />} />
                     <Route path="/products/:productId" element={<ProductDetailPage />} />
@@ -178,6 +185,7 @@ export function App() {
                   <Route path="/seller/products/:productId/edit" element={<EditListingPage />} />
                   <Route path="/seller/listings/:productId/edit" element={<EditListingPage />} />
                   <Route path="/seller/orders" element={<SellerOrdersPage />} />
+                  <Route path="/seller/blocked" element={<BlockedBuyersPage />} />
                   <Route path="/seller/orders/:orderId" element={<SellerOrderDetailPage />} />
                 </Route>
 
@@ -194,6 +202,7 @@ export function App() {
                   <Route path="/moderation" element={<ModerationPage />} />
                   <Route path="/ktv/escrow" element={<KtvEscrowPage />} />
                   <Route path="/ktv/users" element={<KtvUsersPage />} />
+                  <Route path="/ktv/notifications" element={<NotificationsPage />} />
                   <Route path="/ktv/disputes" element={<KtvDisputesPage />} />
                   <Route path="/ktv/kyc" element={<KtvKycPage />} />
                   <Route path="/ktv/complaints" element={<KtvComplaintsPage />} />
@@ -210,6 +219,7 @@ export function App() {
                 >
                   <Route path="/admin" element={<AdminDashboardPage />} />
                   <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+                  <Route path="/admin/notifications" element={<NotificationsPage />} />
                   <Route path="/admin/ktv-accounts" element={<AdminKtvAccountsPage />} />
                   <Route path="/admin/emergency-alerts" element={<AdminEmergencyAlertsPage />} />
                   <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
@@ -221,6 +231,7 @@ export function App() {
                 {/* 404 Fallback */}
                 <Route path="*" element={<NotFoundPage />} />
               </Routes>
+                </ChatProvider>
             </AuthProvider>
           </CartProvider>
         </DemoProvider>
