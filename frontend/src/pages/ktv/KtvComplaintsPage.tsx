@@ -1,3 +1,4 @@
+import { Button, Badge, EmptyState, PageHeader, Select } from '../../shared/components';
 import React, { useState } from 'react';
 import { useManagementStore } from '../../features/management/useManagementStore';
 import { ConsoleIcons } from '../../shared/layout/ConsoleIcons';
@@ -98,39 +99,28 @@ export const KtvComplaintsPage: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div className="og-ktv-workspace">
       {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: '#0f172a', fontWeight: 800 }}>
-            Tiếp nhận & Xử lý khiếu nại
-          </h1>
-          <p style={{ margin: 0, color: '#64748b', fontSize: '0.92rem' }}>
-            Giải quyết các phản ánh người dùng về giao dịch và đối tác. Khi phát hiện sự cố lỗi hệ thống kỹ thuật, KTV có thể đẩy trực tiếp lên cho Quản Trị Viên (Admin) xử lý khẩn cấp.
-          </p>
-        </div>
-
-        {complaints.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <PageHeader title="Tiếp nhận & Xử lý khiếu nại" description="Giải quyết các phản ánh người dùng về giao dịch và đối tác. Khi phát hiện sự cố lỗi hệ thống kỹ thuật, KTV có thể đẩy trực tiếp lên cho Quản Trị Viên (Admin) xử lý khẩn cấp." actions={<>{complaints.length > 0 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <TableCheckbox
               checked={isAllSelected}
               indeterminate={isSomeSelected}
               onChange={handleToggleAll}
               ariaLabel="Chọn tất cả khiếu nại"
             />
-            <span style={{ fontSize: '0.84rem', color: '#64748b' }}>Chọn tất cả</span>
-          </div>
-        )}
-      </div>
+            <span style={{ fontSize: '0.84rem', color: 'var(--og-color-text-secondary)' }}>Chọn tất cả</span>
+          </label>
+        )}</>} />
 
       {successMessage && (
         <div
           style={{
-            background: '#ecfdf5',
-            border: '1px solid #a7f3d0',
+            background: 'var(--og-color-primary-light)',
+            border: '1px solid var(--og-color-border)',
             borderRadius: '8px',
             padding: '14px 16px',
-            color: '#065f46',
+            color: 'var(--og-color-success)',
             fontSize: '0.9rem',
             display: 'flex',
             alignItems: 'center',
@@ -157,6 +147,7 @@ export const KtvComplaintsPage: React.FC = () => {
         ]}
       />
 
+      {complaints.length === 0 && <EmptyState title="Không có khiếu nại" description="Các phản ánh mới sẽ xuất hiện tại đây." />}
       {/* Complaints List (Light Theme) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {complaints.map((item) => {
@@ -165,8 +156,8 @@ export const KtvComplaintsPage: React.FC = () => {
             <div
               key={item.id}
               style={{
-                background: isSelected ? '#f0fdf4' : '#ffffff',
-                border: item.status === 'ESCALATED_TO_ADMIN' ? '1px solid #fca5a5' : '1px solid #e2e8f0',
+                background: isSelected ? 'var(--og-color-primary-light)' : 'var(--og-color-surface-elevated)',
+                border: item.status === 'ESCALATED_TO_ADMIN' ? '1px solid var(--og-color-danger-border)' : '1px solid var(--og-color-border)',
                 borderRadius: '12px',
                 padding: '20px',
                 display: 'flex',
@@ -186,95 +177,36 @@ export const KtvComplaintsPage: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                      <span
-                        style={{
-                          padding: '3px 8px',
-                          borderRadius: '4px',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          background: item.urgency === 'CRITICAL' ? '#fee2e2' : '#fef3c7',
-                          color: item.urgency === 'CRITICAL' ? '#b91c1c' : '#b45309',
-                          border: `1px solid ${item.urgency === 'CRITICAL' ? '#fecaca' : '#fde68a'}`,
-                        }}
-                      >
-                        {item.urgency === 'CRITICAL' ? 'KHẨN CẤP' : 'TIÊU CHUẨN'}
-                      </span>
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '6px' }}>
+                      <Badge variant={item.urgency === 'CRITICAL' ? 'danger' : 'neutral'}>{item.urgency === 'CRITICAL' ? 'KHẨN CẤP' : 'TIÊU CHUẨN'}</Badge>
 
-                      <span
-                        style={{
-                          padding: '3px 8px',
-                          borderRadius: '4px',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          background: '#eff6ff',
-                          color: '#1d4ed8',
-                          border: '1px solid #bfdbfe',
-                        }}
-                      >
-                        {item.type === 'SYSTEM_ERROR'
+                      <Badge variant="info">{item.type === 'SYSTEM_ERROR'
                           ? 'SỰ CỐ HỆ THỐNG'
                           : item.type === 'TRANSACTION'
                           ? 'GIAO DỊCH / ESCROW'
-                          : 'VI PHẠM NỘI QUY'}
-                      </span>
+                          : 'VI PHẠM NỘI QUY'}</Badge>
 
-                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                        Người phản ánh: <strong style={{ color: '#0f172a' }}>{item.complainantName}</strong> ({item.complainantEmail})
-                      </span>
+
                     </div>
 
-                    <h3 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', color: '#0f172a', fontWeight: 700 }}>
+                    <h3 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', color: 'var(--og-color-text-primary)', fontWeight: 700 }}>
                       {item.title}
                     </h3>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--og-color-text-secondary)' }}>
+                        Người phản ánh: <strong style={{ color: 'var(--og-color-text-primary)' }}>{item.complainantName}</strong> ({item.complainantEmail})
+                      </span>
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {item.status === 'PENDING' && (
-                    <span
-                      style={{
-                        padding: '3px 10px',
-                        borderRadius: '12px',
-                        fontSize: '0.74rem',
-                        fontWeight: 700,
-                        background: '#fef3c7',
-                        color: '#b45309',
-                        border: '1px solid #fde68a',
-                      }}
-                    >
-                      CHỜ KTV XỬ LÝ
-                    </span>
+                    <Badge variant="warning">CHỜ KTV XỬ LÝ</Badge>
                   )}
                   {item.status === 'RESOLVED' && (
-                    <span
-                      style={{
-                        padding: '3px 10px',
-                        borderRadius: '12px',
-                        fontSize: '0.74rem',
-                        fontWeight: 700,
-                        background: '#dcfce7',
-                        color: '#15803d',
-                        border: '1px solid #bbf7d0',
-                      }}
-                    >
-                      ĐÃ GIẢI QUYẾT XONG
-                    </span>
+                    <Badge variant="success">ĐÃ GIẢI QUYẾT XONG</Badge>
                   )}
                   {item.status === 'ESCALATED_TO_ADMIN' && (
-                    <span
-                      style={{
-                        padding: '3px 10px',
-                        borderRadius: '12px',
-                        fontSize: '0.74rem',
-                        fontWeight: 700,
-                        background: '#fee2e2',
-                        color: '#b91c1c',
-                        border: '1px solid #fecaca',
-                      }}
-                    >
-                      ĐÃ ĐẨY LÊN CHO ADMIN
-                    </span>
+                    <Badge variant="danger">ĐÃ ĐẨY LÊN CHO ADMIN</Badge>
                   )}
 
                   <TableActionDropdown
@@ -309,68 +241,40 @@ export const KtvComplaintsPage: React.FC = () => {
                 </div>
               </div>
 
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '14px', borderRadius: '8px', color: '#334155', fontSize: '0.9rem', lineHeight: '1.5' }}>
+              <div style={{ background: 'var(--og-color-surface-subtle)', border: '1px solid var(--og-color-border)', padding: '14px', borderRadius: '8px', color: 'var(--og-color-text-secondary)', fontSize: '0.9rem', lineHeight: '1.5' }}>
                 {item.description}
               </div>
 
               {item.escalationNote && (
-                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px', fontSize: '0.86rem', color: '#991b1b' }}>
+                <div style={{ background: 'var(--og-color-danger-bg)', border: '1px solid var(--og-color-danger-border)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.86rem', color: 'var(--og-color-danger)' }}>
                   <strong>Cảnh báo khẩn đã gửi tới Admin:</strong> {item.escalationNote}
                 </div>
               )}
 
               {item.resolution && (
-                <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', padding: '10px 14px', borderRadius: '8px', fontSize: '0.86rem', color: '#065f46' }}>
+                <div style={{ background: 'var(--og-color-primary-light)', border: '1px solid var(--og-color-border)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.86rem', color: 'var(--og-color-success)' }}>
                   <strong>Kết quả giải quyết của KTV:</strong> {item.resolution}
                 </div>
               )}
 
               {/* Action Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', paddingTop: '10px', borderTop: '1px solid #f1f5f9' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--og-color-surface-subtle)' }}>
                 {item.status !== 'ESCALATED_TO_ADMIN' && item.status !== 'RESOLVED' && (
-                  <button
+                  <Button
                     type="button"
-                    onClick={() => handleOpenEscalate(item)}
-                    style={{
-                      padding: '8px 14px',
-                      background: '#fef2f2',
-                      color: '#dc2626',
-                      border: '1px solid #fecaca',
-                      borderRadius: '6px',
-                      fontSize: '0.84rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                    }}
-                  >
+                    onClick={() => handleOpenEscalate(item)} variant="danger-outline">
                     <ConsoleIcons.AlertTriangle size={15} />
                     <span>Đẩy lên Admin (Báo lỗi hệ thống)</span>
-                  </button>
+                  </Button>
                 )}
 
                 {item.status !== 'RESOLVED' && (
-                  <button
+                  <Button
                     type="button"
-                    onClick={() => handleOpenResolve(item)}
-                    style={{
-                      padding: '8px 16px',
-                      background: '#059669',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '6px',
-                      fontSize: '0.84rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                    }}
-                  >
+                    onClick={() => handleOpenResolve(item)} variant="primary">
                     <ConsoleIcons.CheckCircle size={15} />
                     <span>Xử lý khiếu nại</span>
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -395,50 +299,31 @@ export const KtvComplaintsPage: React.FC = () => {
         >
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--og-color-surface)',
               borderRadius: '14px',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--og-color-border)',
               padding: '24px',
               width: '100%',
               maxWidth: '560px',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
             }}
           >
-            <h2 style={{ margin: '0 0 8px', fontSize: '1.25rem', color: '#0f172a', fontWeight: 700 }}>
+            <h2 style={{ margin: '0 0 8px', fontSize: '1.25rem', color: 'var(--og-color-text-primary)', fontWeight: 700 }}>
               Đẩy sự vụ lên Quản Trị Viên (Admin)
             </h2>
-            <p style={{ margin: '0 0 16px', fontSize: '0.86rem', color: '#64748b' }}>
+            <p style={{ margin: '0 0 16px', fontSize: '0.86rem', color: 'var(--og-color-text-secondary)' }}>
               Khiếu nại này liên quan đến lỗi hệ thống hoặc lỗ hổng kỹ thuật nghiêm trọng vượt quá thẩm quyền của KTV.
             </p>
 
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '0.84rem', color: '#475569', marginBottom: '6px', fontWeight: 600 }}>
-                Mức độ khẩn cấp
-              </label>
-              <select
-                value={escalateSeverity}
-                onChange={(e) => setEscalateSeverity(e.target.value as 'HIGH' | 'CRITICAL')}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px',
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '8px',
-                  color: '#0f172a',
-                  fontSize: '0.88rem',
-                  boxSizing: 'border-box',
-                }}
-              >
-                <option value="CRITICAL">KHẨN CẤP (CRITICAL - Cần xử lý ngay)</option>
-                <option value="HIGH">NGHIÊM TRỌNG (HIGH - Trong 2 giờ)</option>
-              </select>
+              <Select label="Mức độ khẩn cấp" value={escalateSeverity} onChange={value => setEscalateSeverity(value as 'HIGH' | 'CRITICAL')} options={[{ value: 'CRITICAL', label: 'KHẨN CẤP (CRITICAL - Cần xử lý ngay)' }, { value: 'HIGH', label: 'NGHIÊM TRỌNG (HIGH - Trong 2 giờ)' }]} />
             </div>
 
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '0.84rem', color: '#475569', marginBottom: '6px', fontWeight: 600 }}>
+              <label htmlFor="complaint-escalate" style={{ display: 'block', fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                 Báo cáo tóm tắt lỗi hệ thống gửi Admin *
               </label>
-              <textarea
+              <textarea id="complaint-escalate"
                 rows={4}
                 required
                 value={escalateNote}
@@ -446,52 +331,28 @@ export const KtvComplaintsPage: React.FC = () => {
                 style={{
                   width: '100%',
                   padding: '9px 12px',
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
+                  background: 'var(--og-color-surface)',
+                  border: '1px solid var(--og-color-border-strong)',
                   borderRadius: '8px',
-                  color: '#0f172a',
+                  color: 'var(--og-color-text-primary)',
                   fontSize: '0.88rem',
                   boxSizing: 'border-box',
                 }}
               />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <Button
                 type="button"
-                onClick={() => setIsEscalating(false)}
-                style={{
-                  padding: '9px 16px',
-                  background: '#f1f5f9',
-                  border: '1px solid #cbd5e1',
-                  color: '#475569',
-                  borderRadius: '8px',
-                  fontSize: '0.88rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
+                onClick={() => setIsEscalating(false)} variant="secondary">
                 Hủy bỏ
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={handleConfirmEscalate}
-                disabled={!escalateNote.trim()}
-                style={{
-                  padding: '9px 18px',
-                  background: '#dc2626',
-                  border: 'none',
-                  color: '#ffffff',
-                  borderRadius: '8px',
-                  fontSize: '0.88rem',
-                  fontWeight: 700,
-                  cursor: !escalateNote.trim() ? 'not-allowed' : 'pointer',
-                  opacity: !escalateNote.trim() ? 0.6 : 1,
-                  boxShadow: '0 1px 2px rgba(220, 38, 38, 0.2)',
-                }}
-              >
+                disabled={!escalateNote.trim()} variant="danger">
                 Gửi báo cáo khẩn cho Admin
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -514,27 +375,27 @@ export const KtvComplaintsPage: React.FC = () => {
         >
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--og-color-surface)',
               borderRadius: '14px',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--og-color-border)',
               padding: '24px',
               width: '100%',
               maxWidth: '540px',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
             }}
           >
-            <h2 style={{ margin: '0 0 8px', fontSize: '1.25rem', color: '#0f172a', fontWeight: 700 }}>
+            <h2 style={{ margin: '0 0 8px', fontSize: '1.25rem', color: 'var(--og-color-text-primary)', fontWeight: 700 }}>
               Ghi nhận kết quả xử lý khiếu nại
             </h2>
-            <p style={{ margin: '0 0 16px', fontSize: '0.86rem', color: '#64748b' }}>
+            <p style={{ margin: '0 0 16px', fontSize: '0.86rem', color: 'var(--og-color-text-secondary)' }}>
               Khiếu nại: <strong>{selectedComplaint.title}</strong>
             </p>
 
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '0.84rem', color: '#475569', marginBottom: '6px', fontWeight: 600 }}>
+              <label htmlFor="complaint-resolve" style={{ display: 'block', fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                 Nội dung giải quyết và phản hồi cho người dùng *
               </label>
-              <textarea
+              <textarea id="complaint-resolve"
                 rows={4}
                 required
                 placeholder="Ví dụ: Đã liên hệ bên bán hỗ trợ kiểm tra phụ kiện thất lạc, hoàn tất thỏa thuận..."
@@ -543,52 +404,28 @@ export const KtvComplaintsPage: React.FC = () => {
                 style={{
                   width: '100%',
                   padding: '9px 12px',
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
+                  background: 'var(--og-color-surface)',
+                  border: '1px solid var(--og-color-border-strong)',
                   borderRadius: '8px',
-                  color: '#0f172a',
+                  color: 'var(--og-color-text-primary)',
                   fontSize: '0.88rem',
                   boxSizing: 'border-box',
                 }}
               />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <Button
                 type="button"
-                onClick={() => setIsResolving(false)}
-                style={{
-                  padding: '9px 16px',
-                  background: '#f1f5f9',
-                  border: '1px solid #cbd5e1',
-                  color: '#475569',
-                  borderRadius: '8px',
-                  fontSize: '0.88rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
+                onClick={() => setIsResolving(false)} variant="secondary">
                 Hủy bỏ
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={handleConfirmResolve}
-                disabled={!resolutionText.trim()}
-                style={{
-                  padding: '9px 18px',
-                  background: '#059669',
-                  border: 'none',
-                  color: '#ffffff',
-                  borderRadius: '8px',
-                  fontSize: '0.88rem',
-                  fontWeight: 700,
-                  cursor: !resolutionText.trim() ? 'not-allowed' : 'pointer',
-                  opacity: !resolutionText.trim() ? 0.6 : 1,
-                  boxShadow: '0 1px 2px rgba(5, 150, 105, 0.2)',
-                }}
-              >
+                disabled={!resolutionText.trim()} variant="primary">
                 Hoàn tất giải quyết
-              </button>
+              </Button>
             </div>
           </div>
         </div>

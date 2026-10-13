@@ -1,3 +1,4 @@
+import { ChatLink } from '../../chat-offer/ChatLink';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { ordersApi } from '../ordersApi';
@@ -144,13 +145,14 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
                 />
               ) : (
                 <div style={{ width: 84, height: 84, borderRadius: 8, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>
-                  📦
+
                 </div>
               )}
               <div style={{ flex: 1 }}>
                 <h4 style={{ margin: '0 0 6px', fontSize: '1.05rem', color: 'var(--og-color-text-primary)' }}>
                   {order.productTitle}
                 </h4>
+                {order.productId && <ChatLink className="og-button og-button--outline" to={`/messages?productId=${order.productId}&orderId=${order.orderId}`}>Trao đổi về đơn hàng</ChatLink>}
                 <div style={{ fontSize: '0.88rem', color: 'var(--og-color-text-secondary)', marginBottom: 8 }}>
                   Số lượng: x{order.quantity}
                 </div>
@@ -215,7 +217,7 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
               color: '#166534',
               lineHeight: 1.5,
             }}>
-              🪙 <strong>Tiền đã giữ trong Escrow:</strong> Tiền được bảo vệ bởi sàn và sẽ giải ngân vào ví người bán sau khi đơn hàng hoàn tất.
+              <strong>Tiền đã giữ trong Escrow:</strong> Tiền được bảo vệ bởi sàn và sẽ giải ngân vào ví người bán sau khi đơn hàng hoàn tất.
             </div>
 
             {order.status === 'PAID_HELD' && (
@@ -227,7 +229,7 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
                   disabled={confirming}
                   onClick={handleConfirmOrder}
                 >
-                  {confirming ? 'Đang xác nhận...' : '⚡ Xác nhận Đơn hàng'}
+                  {confirming ? 'Đang xác nhận...' : 'Xác nhận Đơn hàng'}
                 </button>
               </div>
             )}

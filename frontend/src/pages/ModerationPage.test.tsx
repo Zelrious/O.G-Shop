@@ -9,6 +9,7 @@ vi.mock('../features/listing/listingApi', async (importOriginal) => {
     ...actual,
     listingApi: {
       getPendingProducts: vi.fn(),
+      getModerationDetail: vi.fn(),
       approveProduct: vi.fn(),
       rejectProduct: vi.fn(),
     },
@@ -54,7 +55,7 @@ const mockModerationProduct: ModerationProduct = {
   updatedAt: '2026-10-01T10:05:00Z',
 };
 
-describe('ModerationPage Component (UC70)', () => {
+describe('ModerationPage Component (UC73)', () => {
   it('submits a selected row once during a pending bulk request and reloads totals', async () => {
     let finish!: (value: { productId: number; status: string; message: string }) => void;
     const pending = new Promise<{ productId: number; status: string; message: string }>(resolve => { finish = resolve; });
@@ -87,12 +88,16 @@ describe('ModerationPage Component (UC70)', () => {
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn tất cả tin' }));
     fireEvent.click(screen.getByRole('button', { name: /Duyệt nhanh các tin đã chọn/ }));
     await screen.findByText(/Đã duyệt 1\/2 tin/);
-    expect(screen.getByText('Another product')).toBeInTheDocument();
+    expect(screen.getAllByText('Another product')[0]).toBeInTheDocument();
     expect(listingApi.approveProduct).toHaveBeenCalledTimes(2);
   });
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(listingApi.getModerationDetail).mockImplementation(async id => {
+      const latest = await vi.mocked(listingApi.getPendingProducts).mock.results.at(-1)?.value;
+      return latest?.items.find((item: ModerationProduct) => item.productId === Number(id)) ?? mockModerationProduct;
+    });
   });
 
   it('returns to a valid page after bulk approval empties the last page', async () => {
@@ -105,12 +110,12 @@ describe('ModerationPage Component (UC70)', () => {
       .mockResolvedValue(response([mockModerationProduct],0,20,1));
     vi.mocked(listingApi.approveProduct).mockResolvedValue({productId:103,status:'ACTIVE',message:'Success'});
     render(<ModerationPage />);
-    await screen.findByText(mockModerationProduct.title);
+    await screen.findAllByText(mockModerationProduct.title);
     fireEvent.click(screen.getByRole('button',{name:/Trang sau/}));
-    await screen.findByText(last.title);
+    await screen.findAllByText(last.title);
     fireEvent.click(screen.getByRole('checkbox',{name:'Chọn tin #103'}));
     fireEvent.click(screen.getByRole('button',{name:/Duyệt nhanh các tin đã chọn/}));
-    await screen.findByText(mockModerationProduct.title);
+    await screen.findAllByText(mockModerationProduct.title);
     expect(listingApi.getPendingProducts).toHaveBeenLastCalledWith(0,20);
     expect(screen.getByText(/Tổng/)).toHaveTextContent('Tổng 20 tin chờ duyệt');
   });
@@ -145,17 +150,17 @@ describe('ModerationPage Component (UC70)', () => {
     render(<ModerationPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Máy ảnh cơ Canon AE-1')).toBeInTheDocument();
+      expect(screen.getAllByText('Máy ảnh cơ Canon AE-1')[0]).toBeInTheDocument();
     });
 
     // Check multiple categories
     expect(screen.getByText(/Máy ảnh · Đồ cổ điển/i)).toBeInTheDocument();
 
     // Check badges
-    expect(screen.getByText(/PENDING/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Chờ duyệt/i)[0]).toBeInTheDocument();
     expect(screen.getByText(/Yêu cầu eKYC Người mua/i)).toBeInTheDocument();
     expect(screen.getByText(/Chưa kiểm tra AI/i)).toBeInTheDocument();
-    expect(screen.getByText(/Mã tin: #101 \| Người bán: #10 \| Bản: v3/i)).toBeInTheDocument();
+    expect(screen.getByText(/phiên bản 3/i)).toBeInTheDocument();
 
     // Check inspection checklist
     expect(screen.getByText('6 tháng')).toBeInTheDocument();
@@ -164,7 +169,7 @@ describe('ModerationPage Component (UC70)', () => {
     expect(screen.getByText('Dây đeo da, nắp lens')).toBeInTheDocument();
 
     // Check Rule V6 media
-    expect(screen.getByText(/Media kiểm định theo Rule V6 \(1 ảnh, 1 video\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 ảnh · 1 video/i)).toBeInTheDocument();
   });
 
   it('approves a pending product with expectedVersion and commandKey', async () => {
@@ -186,11 +191,12 @@ describe('ModerationPage Component (UC70)', () => {
     render(<ModerationPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Máy ảnh cơ Canon AE-1')).toBeInTheDocument();
+      expect(screen.getAllByText('Máy ảnh cơ Canon AE-1')[0]).toBeInTheDocument();
     });
 
-    const approveBtn = screen.getByRole('button', { name: /Phê duyệt \(ACTIVE\)/i });
+    const approveBtn = screen.getByRole('button', { name: /Phê duyệt/i });
     expect(approveBtn).not.toBeDisabled();
+    await waitFor(() => expect(approveBtn).not.toBeDisabled());
     fireEvent.click(approveBtn);
 
     await waitFor(() => {
@@ -226,21 +232,22 @@ describe('ModerationPage Component (UC70)', () => {
     render(<ModerationPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Máy ảnh cơ Canon AE-1')).toBeInTheDocument();
+      expect(screen.getAllByText('Máy ảnh cơ Canon AE-1')[0]).toBeInTheDocument();
     });
 
     // Click "Từ chối tin" to open dialog
     const openRejectBtn = screen.getByRole('button', { name: /Từ chối tin/i });
+    await waitFor(() => expect(openRejectBtn).not.toBeDisabled());
     fireEvent.click(openRejectBtn);
 
-    expect(screen.getByLabelText(/Lý do từ chối duyệt/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Lý do từ chối/i)).toBeInTheDocument();
 
     // Confirm button should be disabled when input is empty
     const confirmRejectBtn = screen.getByRole('button', { name: /Xác nhận từ chối/i });
     expect(confirmRejectBtn).toBeDisabled();
 
     // Enter reason
-    const reasonInput = screen.getByLabelText(/Lý do từ chối duyệt/i);
+    const reasonInput = screen.getByLabelText(/Lý do từ chối/i);
     fireEvent.change(reasonInput, {
       target: { value: 'Video chưa quay cận cảnh vết xước ở đáy máy' },
     });
@@ -280,10 +287,11 @@ describe('ModerationPage Component (UC70)', () => {
     render(<ModerationPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Máy ảnh cơ Canon AE-1')).toBeInTheDocument();
+      expect(screen.getAllByText('Máy ảnh cơ Canon AE-1')[0]).toBeInTheDocument();
     });
 
-    const approveBtn = screen.getByRole('button', { name: /Phê duyệt \(ACTIVE\)/i });
+    const approveBtn = screen.getByRole('button', { name: /Phê duyệt/i });
+    await waitFor(() => expect(approveBtn).not.toBeDisabled());
     fireEvent.click(approveBtn);
 
     await waitFor(() => {
@@ -316,12 +324,12 @@ describe('ModerationPage Component (UC70)', () => {
     render(<ModerationPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Máy ảnh cơ Canon AE-1')).toBeInTheDocument();
+      expect(screen.getAllByText('Máy ảnh cơ Canon AE-1')[0]).toBeInTheDocument();
     });
 
-    const approveBtn = screen.getByRole('button', { name: /Phê duyệt \(ACTIVE\)/i });
+    const approveBtn = screen.getByRole('button', { name: /Phê duyệt/i });
     expect(approveBtn).toBeDisabled();
-    expect(screen.getByText(/Tin này thiếu video cận cảnh sản phẩm!/i)).toBeInTheDocument();
+    expect(screen.getByText(/Thiếu ảnh hoặc video bắt buộc/i)).toBeInTheDocument();
   });
 
   it('handles 409 conflict error via typed ApiError without keyword matching and displays reload button', async () => {
@@ -342,10 +350,11 @@ describe('ModerationPage Component (UC70)', () => {
     render(<ModerationPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Máy ảnh cơ Canon AE-1')).toBeInTheDocument();
+      expect(screen.getAllByText('Máy ảnh cơ Canon AE-1')[0]).toBeInTheDocument();
     });
 
-    const approveBtn = screen.getByRole('button', { name: /Phê duyệt \(ACTIVE\)/i });
+    const approveBtn = screen.getByRole('button', { name: /Phê duyệt/i });
+    await waitFor(() => expect(approveBtn).not.toBeDisabled());
     fireEvent.click(approveBtn);
 
     await waitFor(() => {
@@ -381,10 +390,11 @@ describe('ModerationPage Component (UC70)', () => {
     render(<ModerationPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Máy ảnh cơ Canon AE-1')).toBeInTheDocument();
+      expect(screen.getAllByText('Máy ảnh cơ Canon AE-1')[0]).toBeInTheDocument();
     });
 
-    const approveBtn = screen.getByRole('button', { name: /Phê duyệt \(ACTIVE\)/i });
+    const approveBtn = screen.getByRole('button', { name: /Phê duyệt/i });
+    await waitFor(() => expect(approveBtn).not.toBeDisabled());
     fireEvent.click(approveBtn);
 
     await waitFor(() => {
@@ -394,6 +404,7 @@ describe('ModerationPage Component (UC70)', () => {
     expect(firstCommandKey).toBeTruthy();
 
     // Click retry with same parameters
+    await waitFor(() => expect(approveBtn).not.toBeDisabled());
     fireEvent.click(approveBtn);
 
     await waitFor(() => {

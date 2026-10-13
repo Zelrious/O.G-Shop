@@ -1,6 +1,7 @@
 import React, { HTMLAttributes } from 'react';
 
 export type BadgeVariant =
+  | 'success' | 'warning' | 'danger' | 'info'
   | 'pending'
   | 'verified'
   | 'rejected'

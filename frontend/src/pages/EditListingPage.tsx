@@ -157,7 +157,7 @@ export const EditListingPage: React.FC = () => {
         <Alert type="danger">{loadError}</Alert>
         <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
           <button type="button" className="og-button og-button--primary" onClick={loadData}>
-            🔄 Thử lại
+             Thử lại
           </button>
           <Link to="/seller/listings" className="og-button og-button--ghost">
             ← Quay lại danh sách tin

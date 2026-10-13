@@ -29,6 +29,7 @@ class CheckoutServiceTest {
     private OrderItemRepository orderItemRepository;
     private OrderVoucherRepository orderVoucherRepository;
     private Clock clock;
+    private VoucherService wallet;
 
     private CheckoutService checkoutService;
 
@@ -49,6 +50,7 @@ class CheckoutServiceTest {
         orderRepository = mock(OrderRepository.class);
         orderItemRepository = mock(OrderItemRepository.class);
         orderVoucherRepository = mock(OrderVoucherRepository.class);
+        wallet=mock(VoucherService.class);
 
         now = Instant.parse("2026-09-21T10:00:00Z");
         clock = Clock.fixed(now, ZoneId.of("UTC"));
@@ -56,7 +58,8 @@ class CheckoutServiceTest {
         checkoutService = new CheckoutService(
                 catalogCommerceFacade, identityCommerceFacade,
                 systemFeePolicyRepository, voucherRepository,
-                orderRepository, orderItemRepository, orderVoucherRepository, clock
+                orderRepository, orderItemRepository, orderVoucherRepository, clock,
+                mock(com.oldbutgold.shop.modules.communication.application.NegotiatedCheckoutFacade.class),new com.fasterxml.jackson.databind.ObjectMapper(),wallet
         );
 
         productSummary = new CatalogCommerceFacade.CommerceProductSummary(
@@ -104,6 +107,10 @@ class CheckoutServiceTest {
         setField(voucher, "startTime", now.minusSeconds(3600));
         setField(voucher, "endTime", now.plusSeconds(86400));
         setField(voucher, "isActive", true);
+        var campaign=new com.oldbutgold.shop.modules.commerce.api.VoucherDtos.Campaign(10,11,0,"WELCOMEOG","Giảm 50.000đ","","ORDER_DISCOUNT","FIXED_AMOUNT",new BigDecimal("50000"),null,new BigDecimal("100000"),"CHECKOUT",List.of(),100,now.minusSeconds(3600),now.plusSeconds(86400),true,true,1,0);
+        var grant=new com.oldbutgold.shop.modules.commerce.api.VoucherDtos.Grant(java.util.UUID.randomUUID(),300,"Buyer","AVAILABLE",now,now.plusSeconds(86400),campaign);
+        when(wallet.usable(300L,1001L,new BigDecimal("4500000"))).thenReturn(List.of(grant));
+        when(wallet.resolve(300L,"WELCOMEOG",1001L,new BigDecimal("4500000"),false)).thenReturn(grant);
     }
 
     @Test
@@ -153,7 +160,7 @@ class CheckoutServiceTest {
             setField(o, "id", 9901L);
             return o;
         });
-        when(orderItemRepository.save(any(OrderItemEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderItemRepository.saveAndFlush(any(OrderItemEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CheckoutDtos.BuyNowRequest request = new CheckoutDtos.BuyNowRequest(1001L, 501L, null, null);
         CheckoutDtos.OrderCreatedResponse response = checkoutService.buyNow(300L, request);

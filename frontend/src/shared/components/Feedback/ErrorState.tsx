@@ -1,8 +1,9 @@
+import { Icon } from '../Icon/Icon';
 import React from 'react';
 import { Button } from '../Button/Button';
 
 export interface ErrorStateProps {
-  icon?: string;
+  icon?: React.ReactNode;
   title?: string;
   message: string;
   retryText?: string;
@@ -11,7 +12,7 @@ export interface ErrorStateProps {
 }
 
 export const ErrorState: React.FC<ErrorStateProps> = ({
-  icon = '⚠️',
+  icon = <Icon name="alert" size={40} />,
   title = 'Đã có lỗi xảy ra',
   message,
   retryText = 'Thử lại',
@@ -27,7 +28,7 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
       <p className="og-error-state__desc">{message}</p>
       {onRetry && (
         <Button variant="outline" size="md" onClick={onRetry}>
-          🔄 {retryText}
+           {retryText}
         </Button>
       )}
     </div>

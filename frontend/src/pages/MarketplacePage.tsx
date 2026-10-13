@@ -1,3 +1,4 @@
+import { Icon } from '../shared/components/Icon/Icon';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -262,7 +263,7 @@ export const MarketplacePage: React.FC = () => {
             style={{ marginTop: '16px' }}
             onClick={handleRetry}
           >
-            🔄 Thử lại
+            Thử lại
           </button>
         </div>
       ) : isLoading ? (
@@ -362,14 +363,14 @@ export const MarketplacePage: React.FC = () => {
           ) : (
             /* End of list banner */
             <div className="og-marketplace-end-banner">
-              <span className="og-marketplace-end-icon" aria-hidden="true">✨</span>
+              <span className="og-marketplace-end-icon" aria-hidden="true"><Icon name="check" /></span>
               <span>Bạn đã xem hết tất cả <strong>{products.length}</strong> sản phẩm hiện có</span>
             </div>
           )}
         </>
       ) : (
         <div className="og-marketplace-empty">
-          <div className="og-marketplace-empty__icon">🔍</div>
+          <div className="og-marketplace-empty__icon"></div>
           <h2 className="og-marketplace-empty__title">
             {isFiltered ? 'Không tìm thấy sản phẩm phù hợp' : 'Hiện chưa có sản phẩm nào đang đăng bán'}
           </h2>

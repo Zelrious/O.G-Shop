@@ -141,6 +141,10 @@ export const SellerLayoutShell: React.FC = () => {
               </span>
               <span>Định danh KYC</span>
             </NavLink>
+            <NavLink to="/seller/blocked" className={({ isActive }) => `og-seller-sidebar__item ${isActive ? 'og-seller-sidebar__item--active' : ''}`}>
+              <span className="og-seller-sidebar__icon" aria-hidden="true"><SellerNavIcons.Kyc /></span>
+              <span>Danh sách chặn</span>
+            </NavLink>
           </nav>
         </aside>
 

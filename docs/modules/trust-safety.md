@@ -1,5 +1,31 @@
 # Trust & Safety Module
 
+## Console selects and eKYC — TASK-0096 / 2026-10-13
+
+KTV/Admin:18 native selects chuyển sang shared Select; upward popover neo sát trigger6px, theo dõi vị trí khi sidebar chuyển động; sidebar chờ320ms, transition360ms. Cột queue360–400px; eKYC list/detail và masked list; voucher tự chọn campaign đầu API, bỏ option rỗng. API/handler/rules giữ nguyên.204 tests/43 files, lint/TypeScript/build đạt;82 browser checks không overflow/JS error, menu lệch ngang0px/gap6px. [Ảnh và giới hạn](../../output/ui-0096/README.md).
+
+## Console reports and navigation — TASK-0095 / 2026-10-13
+
+Admin: thẻ doanh thu lớn bên trái gồm biểu đồ/so tháng, ba KPI phụ xếp dọc và bằng đáy0px. KTV/Admin: utilities chung hàng heading, hover tách focus để sidebar không thu khi đổi trang; màu surface/selected theo theme, câu chữ tranh chấp đơn giản. Dữ liệu minh họa và API/handler/export giữ nguyên.201 frontend tests, final5 regression, full lint/TypeScript/build đạt;60 browser checks hai theme1366/1440/1920/390 không overflow/JS error. [Ảnh và giới hạn](../../output/ui-0095/README.md).
+
+## KTV UI system — TASK-0094 / 2026-10-13
+
+Thêm shared Select/Pagination/PageHeader; token surface/popover/disabled và semantic badge/button, sửa contrast card eKYC/khiếu nại, custom voucher/filter/page-size dropdown, phân trang 0 kết quả. Giữ sidebar và tất cả API/handler nghiệp vụ. 195 full-suite pass + 2 eKYC tests mới; final focused26, lint/TypeScript/build đạt. Browser48 geometry +8 contrast +2 dropdown checks, không overflow/JS error; sampled contrast light4,65/dark5,76. [Báo cáo và giới hạn](../../output/ui-0094/README.md).
+
+## Console hai theme — TASK-0091 / 2026-10-13
+
+KTV/Admin shell và trang quản lý dùng token light/charcoal, chuông/theme riêng và sidebar mở khi focus bàn phím. Không đổi nghiệp vụ moderation/KYC/complaint/dispute/evidence. Browser KTV fixture chỉ xác nhận shell/error UI và không có chat trigger; endpoint moderation nằm ngoài fixture. [Bằng chứng](../../output/ui-0091/README.md).
+
+## Chat/offer V31 — TASK-0090 / 2026-10-13
+
+ConversationEvidenceFacade giữ media cho case/report còn mở/recent terminal, native trigger hold trước cleanup. Legacy report không có resolved timestamp được giữ thận trọng. KTV CHAT ban không tước kênh phản hồi hồ sơ chính thức; full pipeline UC74 ngoài phạm vi.
+
+[API](../api/CHAT_OFFER_API.md), [thiết kế/rollout](../architecture/CHAT_OFFER_V31_20261013.md), [test guide/ảnh](../../output/phase34-runtime/README.md). Năm task marketplace hoàn tất trong phạm vi hiện hành; app DB V31/47 bảng, backup/preservation150 nguồn đạt, runtime5174/8080 sẵn sàng. Các checkpoint dưới giữ lịch sử.
+
+## Quản lý user KTV — TASK-0088 / 2026-10-12
+
+AccountTrustFacade đọc penalty đã xác nhận/review hợp lệ để tính điểm 0–100 và lịch sử; cảnh báo <90/<80 không autoban. Creator hoặc order-party đọc/append phản hồi chính thức trong hồ sơ mở/còn hạn, không lộ private evidence. Bù deadline Seller từ lỗi SYSTEM_ISSUE CLOSED/SYSTEM_RESOLVED với khoảng gián đoạn KTV/Admin xác nhận; exact duration/idempotent/native guard. Đây là phần đọc UC11 và phục vụ nghĩa vụ UC67; không triển khai API xác nhận báo cáo/xử phạt UC74 hay full tranh chấp. [Thiết kế/rollout](../architecture/ACCOUNT_GOVERNANCE_V30_20261012.md), [API](../api/ACCOUNT_MANAGEMENT_API.md), [Kiểm chứng](../../output/phase2-runtime/README.md). Các checkpoint dưới đây giữ lịch sử.
+
 ## Diagram báo cáo — TASK-0081 / 2026-10-10
 
 [UC01–UC18 đã có 36 ảnh kiểm nguồn/native/PDF](../requirements/use-cases-83/report-uc01-18/README.md), gồm UC10–UC11, quyền chọn bản ghi/chặn và uy tín. Thay 34 ảnh được duyệt và thêm hai ảnh UC11, giữ Hình 3.3–3.38 và ảnh ngoài phạm vi. 2FA chỉ dành cho Người mua/Người bán theo quyết định người dùng. Đây là cập nhật yêu cầu/diagram; không nâng trạng thái code/schema/nghiệm thu module.

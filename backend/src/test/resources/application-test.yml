@@ -17,6 +17,13 @@ management:
       enabled: false
 
 app:
+  vouchers:
+    reminders-enabled: false
+  chat:
+    expiry-enabled: false
+    cleanup-enabled: false
+  notifications:
+    dispatch-enabled: false
   registration:
     cleanup-enabled: false
   auth:

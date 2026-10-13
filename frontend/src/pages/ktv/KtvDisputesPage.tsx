@@ -1,3 +1,5 @@
+import { Select } from '../../shared/components/Select/Select';
+import { PageHeader } from '../../shared/components';
 import React, { useState } from 'react';
 import { useManagementStore } from '../../features/management/useManagementStore';
 import { ConsoleIcons } from '../../shared/layout/ConsoleIcons';
@@ -55,7 +57,7 @@ export const KtvDisputesPage: React.FC = () => {
     setActionError(null);
     try { resolveDispute(selectedDispute.id, verdictAction, verdictNotes.trim()); }
     catch (error) { setActionError(error instanceof Error ? error.message : 'Không thể ghi nhận quyết định.'); return; }
-    setSuccessMessage(`Đã ban hành phán quyết trọng tài cho vụ việc ${selectedDispute.orderCode} thành công.`);
+    setSuccessMessage(`Đã ghi nhận kết quả xử lý tranh chấp cho đơn ${selectedDispute.orderCode} thành công.`);
     setSelectedDispute(null);
     setTimeout(() => setSuccessMessage(null), 4000);
   };
@@ -132,26 +134,20 @@ export const KtvDisputesPage: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+      {/* Page Header */}
+      <PageHeader title="Phân xử tranh chấp & Khiếu nại giao dịch" description="Kiểm tra video mở kiện hàng của người mua, đối chiếu ảnh đóng gói của người bán và chọn cách xử lý khoản thanh toán." />
       {actionError && <p role="alert">{actionError}</p>}
       <p>Chấp thuận trả hàng chưa phải hoàn tiền. Hoàn tiền hàng sau khi giao trả thành công và Người bán xác nhận hoặc hết 2 ngày không phản hồi; phí ship chiều mua không được hoàn.</p>
-      {/* Page Header */}
-      <div>
-        <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: '#0f172a', fontWeight: 800 }}>
-          Phân xử tranh chấp & Khiếu nại giao dịch
-        </h1>
-        <p style={{ margin: 0, color: '#64748b', fontSize: '0.92rem' }}>
-          Đóng vai trò trọng tài trung gian: kiểm tra video unbox của người mua, đối chiếu ảnh chụp đóng gói của người bán và đưa ra quyết định xử lý dòng tiền.
-        </p>
-      </div>
 
       {successMessage && (
         <div
           style={{
-            background: '#ecfdf5',
-            border: '1px solid #a7f3d0',
+            background: 'var(--og-color-primary-light)',
+            border: '1px solid var(--og-color-border)',
             borderRadius: '8px',
             padding: '12px 16px',
-            color: '#065f46',
+            color: 'var(--og-color-success)',
             fontSize: '0.88rem',
             display: 'flex',
             alignItems: 'center',
@@ -184,9 +180,9 @@ export const KtvDisputesPage: React.FC = () => {
       {/* Disputes Table */}
       <div
         style={{
-          background: '#ffffff',
+          background: 'var(--og-color-surface)',
           borderRadius: '12px',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--og-color-border)',
           overflow: 'hidden',
           boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
         }}
@@ -194,7 +190,7 @@ export const KtvDisputesPage: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', background: '#f8fafc' }}>
+              <tr style={{ borderBottom: '1px solid var(--og-color-border)', color: 'var(--og-color-text-secondary)', background: 'var(--og-color-bg)' }}>
                 <th style={{ padding: '14px 16px', width: '40px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                   <TableCheckbox
                     checked={isAllSelected}
@@ -218,12 +214,12 @@ export const KtvDisputesPage: React.FC = () => {
                   <tr
                     key={item.id}
                     style={{
-                      borderBottom: '1px solid #f1f5f9',
-                      background: isSelected ? '#f0fdf4' : 'transparent',
+                      borderBottom: '1px solid var(--og-color-surface-subtle)',
+                      background: isSelected ? 'var(--og-color-primary-light)' : 'transparent',
                       transition: 'background-color 0.15s ease',
                     }}
                     onMouseEnter={(e) => {
-                      if (!isSelected) e.currentTarget.style.background = '#f8fafc';
+                      if (!isSelected) e.currentTarget.style.background = 'var(--og-color-bg)';
                     }}
                     onMouseLeave={(e) => {
                       if (!isSelected) e.currentTarget.style.background = 'transparent';
@@ -237,26 +233,26 @@ export const KtvDisputesPage: React.FC = () => {
                       />
                     </td>
                     <td style={{ padding: '14px 16px' }}>
-                      <div style={{ fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
+                      <div style={{ fontWeight: 700, color: 'var(--og-color-text-primary)', fontFamily: 'monospace' }}>
                         {item.orderCode}
                       </div>
-                      <div style={{ fontSize: '0.74rem', color: '#64748b' }}>Mở lúc: {item.createdAt}</div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--og-color-text-secondary)' }}>Mở lúc: {item.createdAt}</div>
                     </td>
                     <td style={{ padding: '14px 16px', maxWidth: '300px' }}>
-                      <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.reason}</div>
-                      <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--og-color-text-primary)' }}>{item.reason}</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--og-color-text-secondary)', marginTop: '2px' }}>
                         Bằng chứng: {item.buyerEvidenceUrls?.join(', ') || 'Chưa cung cấp'}
                       </div>
                     </td>
                     <td style={{ padding: '14px 16px' }}>
-                      <div style={{ fontSize: '0.84rem', color: '#0f172a' }}>
+                      <div style={{ fontSize: '0.84rem', color: 'var(--og-color-text-primary)' }}>
                         Mua: <strong style={{ color: '#2563eb' }}>{item.buyerName}</strong>
                       </div>
-                      <div style={{ fontSize: '0.84rem', color: '#64748b' }}>
-                        Bán: <strong style={{ color: '#047857' }}>{item.sellerName}</strong>
+                      <div style={{ fontSize: '0.84rem', color: 'var(--og-color-text-secondary)' }}>
+                        Bán: <strong style={{ color: 'var(--og-color-primary)' }}>{item.sellerName}</strong>
                       </div>
                     </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#059669', fontSize: '0.95rem', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--og-color-primary)', fontSize: '0.95rem', whiteSpace: 'nowrap' }}>
                       {formatVnd(item.disputeAmount)}
                     </td>
                     <td style={{ padding: '14px 16px' }}>{renderStatus(item.status)}</td>
@@ -267,7 +263,7 @@ export const KtvDisputesPage: React.FC = () => {
                           ...(item.status === 'OPEN' || item.status === 'INVESTIGATING'
                             ? [
                                 {
-                                  label: 'Ban hành phán quyết trọng tài',
+                                  label: 'Xử lý tranh chấp',
                                   icon: <ConsoleIcons.Scale size={16} />,
                                   onClick: () => handleOpenArbitration(item),
                                 },
@@ -315,63 +311,47 @@ export const KtvDisputesPage: React.FC = () => {
         >
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--og-color-surface)',
               borderRadius: '14px',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--og-color-border)',
               padding: '24px',
               width: '100%',
               maxWidth: '560px',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
             }}
           >
-            <h2 style={{ margin: '0 0 8px', fontSize: '1.25rem', color: '#0f172a', fontWeight: 700 }}>
-              Ban hành phán quyết: {selectedDispute.orderCode}
+            <h2 style={{ margin: '0 0 8px', fontSize: '1.25rem', color: 'var(--og-color-text-primary)', fontWeight: 700 }}>
+              Xử lý tranh chấp: {selectedDispute.orderCode}
             </h2>
-            <p style={{ margin: '0 0 16px', fontSize: '0.86rem', color: '#64748b' }}>
+            <p style={{ margin: '0 0 16px', fontSize: '0.86rem', color: 'var(--og-color-text-secondary)' }}>
               Số tiền tranh chấp đang giữ tại Escrow:{' '}
-              <strong style={{ color: '#059669' }}>{formatVnd(selectedDispute.disputeAmount)}</strong>
+              <strong style={{ color: 'var(--og-color-primary)' }}>{formatVnd(selectedDispute.disputeAmount)}</strong>
             </p>
 
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '0.84rem', color: '#475569', marginBottom: '6px', fontWeight: 600 }}>
-                Lựa chọn phương án phán quyết dòng tiền *
+              <label style={{ display: 'block', fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                Chọn cách xử lý khoản thanh toán *
               </label>
-              <select
-                value={verdictAction}
-                onChange={(e) => setVerdictAction(e.target.value as 'FULL_REFUND' | 'RELEASE_SELLER')}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px',
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '8px',
-                  color: '#0f172a',
-                  fontSize: '0.88rem',
-                  boxSizing: 'border-box',
-                }}
-              >
-                <option value="FULL_REFUND">Chấp thuận trả hàng; hoàn tiền hàng sau khi giao trả thành công</option>
-                <option value="RELEASE_SELLER">Bác khiếu nại & Giải ngân tiền cho Người bán</option>
-              </select>
+              <Select hideLabel label="Chọn cách xử lý khoản thanh toán" value={String(verdictAction)} onChange={(value) => setVerdictAction(value as 'FULL_REFUND' | 'RELEASE_SELLER')} options={[({ value: "FULL_REFUND", label: "Chấp thuận trả hàng; hoàn tiền hàng sau khi giao trả thành công" }), ({ value: "RELEASE_SELLER", label: "Bác khiếu nại & Giải ngân tiền cho Người bán" })]} />
             </div>
 
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '0.84rem', color: '#475569', marginBottom: '6px', fontWeight: 600 }}>
-                Căn cứ phán quyết & Lời dặn KTV *
+              <label style={{ display: 'block', fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                Lý do xử lý và hướng dẫn cho hai bên *
               </label>
               <textarea
                 rows={4}
                 required
-                placeholder="Nêu rõ kết quả đối soát video mở kiện hàng, lý do đưa ra phán quyết..."
+                placeholder="Nêu rõ kết quả đối soát video mở kiện hàng, lý do chọn cách xử lý..."
                 value={verdictNotes}
                 onChange={(e) => setVerdictNotes(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '9px 12px',
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
+                  background: 'var(--og-color-surface)',
+                  border: '1px solid var(--og-color-border-strong)',
                   borderRadius: '8px',
-                  color: '#0f172a',
+                  color: 'var(--og-color-text-primary)',
                   fontSize: '0.88rem',
                   boxSizing: 'border-box',
                 }}
@@ -384,9 +364,9 @@ export const KtvDisputesPage: React.FC = () => {
                 onClick={() => setSelectedDispute(null)}
                 style={{
                   padding: '9px 16px',
-                  background: '#f1f5f9',
-                  border: '1px solid #cbd5e1',
-                  color: '#475569',
+                  background: 'var(--og-color-surface-subtle)',
+                  border: '1px solid var(--og-color-border-strong)',
+                  color: 'var(--og-color-text-secondary)',
                   borderRadius: '8px',
                   fontSize: '0.88rem',
                   fontWeight: 600,
@@ -401,7 +381,7 @@ export const KtvDisputesPage: React.FC = () => {
                 disabled={!verdictNotes.trim()}
                 style={{
                   padding: '9px 18px',
-                  background: '#059669',
+                  background: 'var(--og-color-primary-fill)',
                   border: 'none',
                   color: '#ffffff',
                   borderRadius: '8px',
@@ -412,7 +392,7 @@ export const KtvDisputesPage: React.FC = () => {
                   boxShadow: '0 1px 2px rgba(5, 150, 105, 0.2)',
                 }}
               >
-                Thực thi phán quyết
+                Xác nhận xử lý tranh chấp
               </button>
             </div>
           </div>

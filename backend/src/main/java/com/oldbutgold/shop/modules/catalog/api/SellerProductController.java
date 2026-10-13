@@ -19,10 +19,29 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/seller/products")
 public class SellerProductController {
     private final SellerProductService sellerProductService;
+    private final com.oldbutgold.shop.modules.catalog.application.ListingWorkflowService workflow;
 
-    public SellerProductController(SellerProductService sellerProductService) {
+    public SellerProductController(SellerProductService sellerProductService,
+        com.oldbutgold.shop.modules.catalog.application.ListingWorkflowService workflow) {
         this.sellerProductService = sellerProductService;
+        this.workflow = workflow;
     }
+
+    @GetMapping("/{productId}/listing-fee")
+    public com.oldbutgold.shop.modules.catalog.application.ListingWorkflowService.FeeSummary getFee(
+        @AuthenticationPrincipal Jwt jwt,@PathVariable long productId) {
+        return workflow.getFee(extractUserId(jwt),productId);
+    }
+
+    @PostMapping("/{productId}/listing-fee/mock-pay")
+    public com.oldbutgold.shop.modules.catalog.application.ListingWorkflowService.FeeSummary payFee(
+        @AuthenticationPrincipal Jwt jwt,@PathVariable long productId,@Valid @RequestBody FeePaymentRequest request) {
+        return workflow.payMock(extractUserId(jwt),productId,request.chargeId(),request.expectedVersion(),request.commandKey().trim());
+    }
+
+    public record FeePaymentRequest(@jakarta.validation.constraints.NotNull java.util.UUID chargeId,
+        @jakarta.validation.constraints.NotNull @jakarta.validation.constraints.Min(0) Long expectedVersion,
+        @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max=100) String commandKey) {}
 
     @GetMapping
     public ResponseEntity<CatalogDtos.PageResponse<CatalogDtos.SellerProductSummaryResponse>> getSellerProducts(

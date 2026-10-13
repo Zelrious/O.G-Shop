@@ -1,5 +1,31 @@
 # Catalog Module
 
+## KTV UI system — TASK-0094 / 2026-10-13
+
+Thêm shared Select/Pagination/PageHeader; token surface/popover/disabled và semantic badge/button, sửa contrast card eKYC/khiếu nại, custom voucher/filter/page-size dropdown, phân trang 0 kết quả. Giữ sidebar và tất cả API/handler nghiệp vụ. 195 full-suite pass + 2 eKYC tests mới; final focused26, lint/TypeScript/build đạt. Browser48 geometry +8 contrast +2 dropdown checks, không overflow/JS error; sampled contrast light4,65/dark5,76. [Báo cáo và giới hạn](../../output/ui-0094/README.md).
+
+## Hero/product contrast — TASK-0092 / 2026-10-13
+
+Hero chia intro/search desktop, thu gọn386,9→234,4px ở1440 (39,4%), mobile highlight2×2. Product title/price/seller/location/condition/hover thay màu cố định bằng theme tokens; dark title/price tương phản12,83:1. Giữ catalog/search API và nội dung listing. [Bằng chứng và giới hạn](../../output/ui-0092/README.md).
+
+## Marketplace/listing UI — TASK-0091 / 2026-10-13
+
+Home/marketplace/product detail và Seller listing/form dùng outline icon/surface sáng-tối. Liên hệ người bán mở chat nhanh desktop hoặc hội thoại mobile; permission/price/media/workflow hiện hành giữ từ API. Không đổi schema/service. [Frontend183/39, full lint/build và ảnh](../../output/ui-0091/README.md).
+
+## Chat/offer V31 — TASK-0090 / 2026-10-13
+
+ConversationCatalogFacade đọc/lock product context, quantity_available, version/public revision. Snapshot offer thay đổi tin sẽ không được accept/checkout; public price giữ nguyên. Adapter trong infrastructure, contract application; không truy cập repository chéo.
+
+[API](../api/CHAT_OFFER_API.md), [thiết kế/rollout](../architecture/CHAT_OFFER_V31_20261013.md), [test guide/ảnh](../../output/phase34-runtime/README.md). Năm task marketplace hoàn tất trong phạm vi hiện hành; app DB V31/47 bảng, backup/preservation150 nguồn đạt, runtime5174/8080 sẵn sàng. Các checkpoint dưới giữ lịch sử.
+
+## Quản lý user KTV — TASK-0088 / 2026-10-12
+
+SellerProductService/ListingWorkflowService gọi Identity facade trước create/edit/media/submit/publish/pay-to-open; quyền đọc/ẩn tin cũ giữ. V28/V29 kiểm thêm ở SQL và serialize với quyết định KTV. Không thêm biện pháp tự ẩn listing đang bán; checkout chặn seller không khả dụng. Hồi quy moderation/category/fee và negative SQL giữ lịch sử đợt 1. [Thiết kế/rollout](../architecture/ACCOUNT_GOVERNANCE_V30_20261012.md), [API](../api/ACCOUNT_MANAGEMENT_API.md), [Kiểm chứng](../../output/phase2-runtime/README.md). Các checkpoint dưới đây giữ lịch sử.
+
+## Kiểm duyệt và phí đăng — TASK-0087 / 2026-10-12
+
+Đã nối DTO đầy đủ và UI KTV danh sách–chi tiết, history, role/version/key/locking; duyệt có fee assessment theo immutable MANUAL_V27, chuyển chờ phí rồi mở bán. Sửa nội dung/media đang bán ẩn tin và cần xét lại; phí bổ sung bảo toàn receipt cũ. Seller có trang kết quả và modal mock fee, owner API. [Thiết kế/rollout](../architecture/MODERATION_LISTING_V27_20261012.md), [API](../api/CATALOG_API.md), [Ảnh và kiểm chứng](../../output/phase1-runtime/README.md). PostgreSQL gồm stale/retry/rollback/race/tổng giá×quantity và tăng/giảm/ngưỡng; UI không suy diễn dữ liệu thiếu. UC73/phần UC15/UC17 đã kiểm local; AI UC16/full eKYC/quantity checkout không thuộc đợt 1, V27 chưa apply app DB. Các checkpoint dưới đây là lịch sử.
+
 ## Diagram báo cáo — TASK-0081 / 2026-10-10
 
 [UC01–UC18 đã có 36 ảnh kiểm nguồn/native/PDF](../requirements/use-cases-83/report-uc01-18/README.md), gồm UC12–UC17, công khai/media, AI hỗ trợ và duyệt/phí. Thay 34 ảnh được duyệt và thêm hai ảnh UC11, giữ Hình 3.3–3.38 và ảnh ngoài phạm vi. 2FA chỉ dành cho Người mua/Người bán theo quyết định người dùng. Đây là cập nhật yêu cầu/diagram; không nâng trạng thái code/schema/nghiệm thu module.

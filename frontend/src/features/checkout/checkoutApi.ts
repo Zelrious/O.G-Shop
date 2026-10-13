@@ -24,8 +24,9 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export const checkoutApi = {
-  async getCheckoutPreview(productId: number, voucherCode?: string): Promise<CheckoutPreview> {
+  async getCheckoutPreview(productId: number, voucherCode?: string, offerId?: number): Promise<CheckoutPreview> {
     const params = new URLSearchParams({ productId: String(productId) });
+    if (offerId) params.set('offerId', String(offerId));
     if (voucherCode && voucherCode.trim()) {
       params.append('voucherCode', voucherCode.trim());
     }

@@ -1,5 +1,47 @@
 # Platform Module
 
+## Console selects and eKYC — TASK-0096 / 2026-10-13
+
+KTV/Admin:18 native selects chuyển sang shared Select; upward popover neo sát trigger6px, theo dõi vị trí khi sidebar chuyển động; sidebar chờ320ms, transition360ms. Cột queue360–400px; eKYC list/detail và masked list; voucher tự chọn campaign đầu API, bỏ option rỗng. API/handler/rules giữ nguyên.204 tests/43 files, lint/TypeScript/build đạt;82 browser checks không overflow/JS error, menu lệch ngang0px/gap6px. [Ảnh và giới hạn](../../output/ui-0096/README.md).
+
+## Console reports and navigation — TASK-0095 / 2026-10-13
+
+Admin: thẻ doanh thu lớn bên trái gồm biểu đồ/so tháng, ba KPI phụ xếp dọc và bằng đáy0px. KTV/Admin: utilities chung hàng heading, hover tách focus để sidebar không thu khi đổi trang; màu surface/selected theo theme, câu chữ tranh chấp đơn giản. Dữ liệu minh họa và API/handler/export giữ nguyên.201 frontend tests, final5 regression, full lint/TypeScript/build đạt;60 browser checks hai theme1366/1440/1920/390 không overflow/JS error. [Ảnh và giới hạn](../../output/ui-0095/README.md).
+
+## KTV UI system — TASK-0094 / 2026-10-13
+
+Thêm shared Select/Pagination/PageHeader; token surface/popover/disabled và semantic badge/button, sửa contrast card eKYC/khiếu nại, custom voucher/filter/page-size dropdown, phân trang 0 kết quả. Giữ sidebar và tất cả API/handler nghiệp vụ. 195 full-suite pass + 2 eKYC tests mới; final focused26, lint/TypeScript/build đạt. Browser48 geometry +8 contrast +2 dropdown checks, không overflow/JS error; sampled contrast light4,65/dark5,76. [Báo cáo và giới hạn](../../output/ui-0094/README.md).
+
+## Voucher audit / notices — TASK-0093 / 2026-10-13
+
+VoucherHistoryFacade stores normalized request and actor/key/result receipts, immutable audit guard/unique key. Mutations/outbox share transaction; VOUCHER_NOTIFICATION and VOUCHER_WALLET/ADMIN_VOUCHERS/KTV_VOUCHERS role-bound destinations. Unused24h/expired reminders use500-row cyclic scan/deterministic event UUID; never auto-grant/reissue. PG privacy/retry/rollback/reminders and9 signed HTTP pass. UC38/54/55 and UC77 writing foundation; central audit viewer separate. [API](../api/VOUCHERS_API.md), [evidence](../../output/vouchers-0093/README.md).
+
+## Tương phản và mật độ UI — TASK-0092 / 2026-10-13
+
+Thêm feature/input surface-border tokens cho light/dark; header/search rõ boundary và guest header320px không tràn. Hero/footer highlight dùng sắc ấm nhẹ ở light/xám nổi hơn ở dark. Không đổi theme persistence/API. Build/full lint và21 regression đạt; [đo màu/ảnh](../../output/ui-0092/README.md).
+
+## Theme và utility chrome — TASK-0091 / 2026-10-13
+
+ThemeProvider đổi ngay/lưu light-dark/system, charcoal trung tính; header/console có theme switch và chuông riêng, customer có MessageBell. Notification popover có loading/empty/error/retry, read/target theo allowlist, giữ badge khi read lỗi và không rò snapshot owner cũ. RouteExperience giữ scroll quay lại, focus/motion có reduced-motion. SVG outline/token chung, không thêm dependency/API/outbox. Frontend183/39, full lint/build và browser fixture đạt. Runtime5174/8080healthUP, PG/Mailpit local hiện có; validate31/no migration necessary. [Bằng chứng](../../output/ui-0091/README.md).
+
+## Chat/offer V31 — TASK-0090 / 2026-10-13
+
+CONVERSATION destination và conversationId, owner-only notice/read/role allowlist; outbox chat/media/offer/result/expiry và đơn theo offer. Seller block audit dùng facade riêng, không trộn với ACCOUNT_GOVERNANCE. Retry không phát notice trùng. Dead-letter và audit viewer toàn hệ thống chưa nối.
+
+[API](../api/CHAT_OFFER_API.md), [thiết kế/rollout](../architecture/CHAT_OFFER_V31_20261013.md), [test guide/ảnh](../../output/phase34-runtime/README.md). Năm task marketplace hoàn tất trong phạm vi hiện hành; app DB V31/47 bảng, backup/preservation150 nguồn đạt, runtime5174/8080 sẵn sàng. Các checkpoint dưới giữ lịch sử.
+
+## Origin local — TASK-0089 / 2026-10-12
+
+Private APP_FRONTEND_ORIGIN5174 khớp Vite5174/strictPort; root template/README đồng bộ. Restart8080 giữ classpath/backend .env, runtime background để người dùng tiếp tục; outside-origin5199 vẫn403, không wildcard. App DB đãV30 trước task; validate30/no migration necessary khi restart, không apply migration mới. Typecheck/lint/build và HTTP/browser đạt; [bằng chứng](../../output/login-origin-fix/README.md).
+
+## Quản lý user KTV — TASK-0088 / 2026-10-12
+
+GovernanceHistoryFacade ghi before/after/reason/actor/key/request và version proof cùng transaction. Account outbox/notification owner + KTV actor, đích ACCOUNT_SELF/KTV_ACCOUNT; payload listing cũ giữ tương thích. Bell/route thông báo nằm đúng customer/KTV/Admin shell. V28–V30 giữ 47 bảng; không apply app DB. UC51/phần UC53, UC59–UC60 account và nền audit UC77; ngưỡng điểm/dead-letter/viewer toàn hệ thống chưa nối. [Thiết kế/rollout](../architecture/ACCOUNT_GOVERNANCE_V30_20261012.md), [API](../api/ACCOUNT_MANAGEMENT_API.md), [Kiểm chứng](../../output/phase2-runtime/README.md). Các checkpoint dưới đây giữ lịch sử.
+
+## Kiểm duyệt và phí đăng — TASK-0087 / 2026-10-12
+
+PlatformNotificationFacade ghi outbox cùng transaction; dispatcher 5 giây, 50 events/batch và SKIP LOCKED/unique event-recipient. Có list recipient-only/read 204, bell và trang đọc/điều hướng theo allowlist role. [Thiết kế/rollout](../architecture/MODERATION_LISTING_V27_20261012.md), [API thông báo](../api/NOTIFICATIONS_API.md), [Ảnh và kiểm chứng](../../output/phase1-runtime/README.md). PostgreSQL kiểm delivery rollback/retry/privacy; browser kiểm đọc giảm badge/mobile. Callback trước V26 xử lý pending trigger events khi populated Google identity; V26 SQL/checksum giữ nguyên. V27 thêm guard/index, giữ 47 bảng. Chưa apply V26/V27 app DB; chưa dead-letter tự động/reminder/chat/user/order notices, phần ghi audit không nghiệm thu toàn UC77 viewer.
+
 ## Auth version và provider — TASK-0086 / 2026-10-11
 
 V26 giữ 47 bảng nghiệp vụ, thêm credential_version/google_subject và auth_data, backfill Google identity, mở rộng users view writer và giữ validator cũ. Password hash đổi tăng version nguyên tử; JWT decoder đối chiếu trên mỗi Bearer/restore, chặn version cũ/status/LOGIN restriction và vẫn giữ deadline V24. Google dùng JWK RS256/issuer/audience/expiry/nonce, bounded network timeouts; Client ID công khai lấy qua backend config. Reset mail after-commit queue hai worker/100 việc, không durable; retry bằng resend nếu mất thư.

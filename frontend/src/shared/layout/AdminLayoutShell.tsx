@@ -1,3 +1,6 @@
+import { useConsoleHover } from './useConsoleHover';
+import { NotificationBell } from '../../features/notifications/NotificationBell';
+import { ThemeSwitch } from './ThemeSwitch';
 import React, { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../features/auth';
@@ -10,10 +13,11 @@ export const AdminLayoutShell: React.FC = () => {
   const navigate = useNavigate();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { unreadAlertsCount } = useManagementStore();
-  const [isHovered, setIsHovered] = useState(false);
+  const { isHovered, onMouseEnter, onMouseLeave } = useConsoleHover();
+  const [isFocused, setIsFocused] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
 
-  const isExpanded = isPinned || isHovered;
+  const isExpanded = isPinned || isHovered || isFocused;
 
   return (
     <div className="og-admin-shell">
@@ -23,8 +27,10 @@ export const AdminLayoutShell: React.FC = () => {
           isExpanded ? 'og-admin-sidebar--expanded' : 'og-admin-sidebar--collapsed'
         }`}
         aria-label="Bảng điều hành quản trị hệ thống O.G Admin"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+        onFocus={() => setIsFocused(true)}
+        onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setIsFocused(false); }}
       >
         {/* Brand Header */}
         <div
@@ -42,7 +48,7 @@ export const AdminLayoutShell: React.FC = () => {
             style={{
               fontWeight: 800,
               fontSize: '1.2rem',
-              color: '#0f172a',
+              color: 'var(--og-color-text-primary)',
               letterSpacing: '-0.02em',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
@@ -58,22 +64,22 @@ export const AdminLayoutShell: React.FC = () => {
               onClick={() => setIsPinned(!isPinned)}
               title={isPinned ? 'Bỏ ghim (tự động thu gọn khi rê chuột ra)' : 'Ghim mở rộng cố định'}
               style={{
-                background: isPinned ? '#ecfdf5' : 'transparent',
+                background: isPinned ? 'var(--og-color-primary-light)' : 'transparent',
                 border: isPinned ? '1px solid #a7f3d0' : '1px solid transparent',
                 borderRadius: '6px',
                 padding: '4px 6px',
                 cursor: 'pointer',
-                color: isPinned ? '#047857' : '#94a3b8',
+                color: isPinned ? 'var(--og-color-primary)' : 'var(--og-color-text-muted)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 transition: 'all 0.15s ease',
               }}
               onMouseEnter={(e) => {
-                if (!isPinned) e.currentTarget.style.color = '#0f172a';
+                if (!isPinned) e.currentTarget.style.color = 'var(--og-color-text-primary)';
               }}
               onMouseLeave={(e) => {
-                if (!isPinned) e.currentTarget.style.color = '#94a3b8';
+                if (!isPinned) e.currentTarget.style.color = 'var(--og-color-text-muted)';
               }}
               aria-label={isPinned ? 'Bỏ ghim thanh điều hướng' : 'Ghim thanh điều hướng'}
             >
@@ -90,7 +96,7 @@ export const AdminLayoutShell: React.FC = () => {
             alignItems: 'center',
             gap: isExpanded ? '10px' : '0',
             padding: isExpanded ? '8px 10px' : '6px',
-            background: isExpanded ? '#f8fafc' : 'transparent',
+            background: isExpanded ? 'var(--og-color-bg)' : 'transparent',
             borderRadius: '8px',
             border: isExpanded ? '1px solid #e2e8f0' : '1px solid transparent',
             justifyContent: isExpanded ? 'flex-start' : 'center',
@@ -103,8 +109,8 @@ export const AdminLayoutShell: React.FC = () => {
               width: '36px',
               height: '36px',
               borderRadius: '50%',
-              background: '#059669',
-              color: '#ffffff',
+              background: 'var(--og-color-primary-fill)',
+              color: 'var(--og-color-text-inverse)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -125,7 +131,7 @@ export const AdminLayoutShell: React.FC = () => {
               style={{
                 fontWeight: 600,
                 fontSize: '0.88rem',
-                color: '#0f172a',
+                color: 'var(--og-color-text-primary)',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -137,7 +143,7 @@ export const AdminLayoutShell: React.FC = () => {
             <div
               style={{
                 fontSize: '0.74rem',
-                color: '#64748b',
+                color: 'var(--og-color-text-secondary)',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -189,8 +195,8 @@ export const AdminLayoutShell: React.FC = () => {
               <span
                 className="og-admin-sidebar__badge"
                 style={{
-                  background: '#fee2e2',
-                  color: '#dc2626',
+                  background: 'var(--og-color-danger-bg)',
+                  color: 'var(--og-color-danger)',
                   border: '1px solid #fca5a5',
                   fontSize: '0.72rem',
                   padding: '1px 7px',
@@ -265,7 +271,7 @@ export const AdminLayoutShell: React.FC = () => {
               alignItems: 'center',
               gap: isExpanded ? '10px' : '0',
               justifyContent: isExpanded ? 'flex-start' : 'center',
-              color: '#dc2626',
+              color: 'var(--og-color-danger)',
               background: 'transparent',
               border: '1px solid transparent',
               padding: isExpanded ? '9px 12px' : '9px 0',
@@ -277,8 +283,8 @@ export const AdminLayoutShell: React.FC = () => {
               transition: 'all 0.15s ease',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#fef2f2';
-              e.currentTarget.style.borderColor = '#fecaca';
+              e.currentTarget.style.background = 'var(--og-color-danger-bg)';
+              e.currentTarget.style.borderColor = 'var(--og-color-danger-border)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = 'transparent';
@@ -293,7 +299,8 @@ export const AdminLayoutShell: React.FC = () => {
 
       {/* Main Admin Content */}
       <main className="og-admin-content">
-        <Outlet />
+        <div className="og-console-utilities"><ThemeSwitch /><NotificationBell /></div>
+        <div className="og-console-page"><Outlet /></div>
       </main>
 
       {/* Logout Confirmation */}

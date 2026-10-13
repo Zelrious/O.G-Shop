@@ -12,7 +12,7 @@ class DefaultIdentityCatalogFacadeTest {
     @ParameterizedTest @ValueSource(strings = {"ADMIN", "KTV", "BUYER", "SELLER"})
     void checksCurrentDatabaseRoleAndActiveStatus(String name) {
         var users = mock(UserRepository.class);
-        var facade = new DefaultIdentityCatalogFacade(users, mock(SellerVerificationRepository.class));
+        var facade = new DefaultIdentityCatalogFacade(users, mock(SellerVerificationRepository.class),mock(AccountAccessService.class));
         var user = mock(UserEntity.class); var role = mock(RoleEntity.class);
         when(role.getRoleName()).thenReturn(name); when(user.getRoles()).thenReturn(Set.of(role));
         when(users.findById(7L)).thenReturn(Optional.of(user)); when(user.getStatus()).thenReturn("ACTIVE");

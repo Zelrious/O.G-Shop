@@ -1,3 +1,4 @@
+import { Icon } from '../Icon/Icon';
 import { InputHTMLAttributes, forwardRef } from 'react';
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -28,7 +29,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         />
         {error && (
           <div id={`${inputId}-error`} className="og-error-msg" role="alert">
-            <span>⚠️</span> {error}
+            <span><Icon name="alert" style={{ width: '1em', height: '1em' }} /></span> {error}
           </div>
         )}
         {!error && helperText && (

@@ -1,5 +1,17 @@
 # Decisions Pending
 
+## TASK-0090 đã được giao hoàn tất — 2026-10-13
+
+Người dùng yêu cầu hoàn thành toàn bộ năm task rồi tự test; không còn approval pending cho chat/offer/kiểm thử/rollout local. REST polling theo kiến trúc hiện hành; offer cho1 món và optional hạn phản hồi; không tự thêm WebSocket/Redis/full UC83. [Thiết kế](../architecture/CHAT_OFFER_V31_20261013.md). Nghiệm thu provider thực và các UC ngoài phạm vi là công việc tiếp nối riêng, không cản bàn giao năm task.
+
+## Quản lý user đã duyệt — TASK-0088 / 2026-10-12
+
+“Tiếp tục triển khai” đã duyệt đợt 2. Không còn quyết định code chờ trong phạm vi UC67 core, đọc uy tín/nghĩa vụ, account notice/audit; giữ RS-02 không tự khóa theo điểm. Ngừng mềm giữ lịch sử/login; auth legacy cần ACTIVATE riêng. Bù thời gian áp vào hạn phản hồi hồ sơ cũ, không tăng thời hạn cấm. [Thiết kế/rollout](../architecture/ACCOUNT_GOVERNANCE_V30_20261012.md). App DB chưa apply V26–V30; chat/block/offer và full UC74/UC68 tiếp nối. Checkpoint đợt 1 bên dưới là lịch sử.
+
+## Kiểm duyệt và phí đăng — TASK-0087 / 2026-10-12
+
+Chủ dự án đã duyệt Đợt 1 bằng “tiến hành”. Không mở lại chính sách phí cộng dồn/xu đã chốt; implementation dùng snapshot đối chiếu thủ công MANUAL_V27 và ledger hiện có, có label mock. Không còn quyết định code chờ trong phạm vi này. [Thiết kế/rollout](../architecture/MODERATION_LISTING_V27_20261012.md), [Ảnh và kiểm chứng](../../output/phase1-runtime/README.md). Rollout app DB chưa thực hiện; quản lý user/chat/offer ở các đợt 2–4 là phạm vi tiếp nối cần được duyệt, không coi schema có sẵn là API/UI đã hoàn tất.
+
 ## F1–F5/F7 đã được duyệt và sửa — TASK-0086 / 2026-10-11
 
 Người dùng duyệt “tiến hành sửa các F khác” và cung cấp Google Web Client ID. Đã triển khai phạm vi audit bằng purpose-bound OTP/grant, Google ID token/nonce/link, V26 credential version và sửa Back Seller; kiểm local/tests đạt. Không còn quyết định code chờ trong phạm vi auth này. [Bàn giao](../../output/auth-fixes-2026-10-11/README.md), [Google setup](../setup/GOOGLE_AUTH.md). Cấu hình origin, Google/Gmail E2E thật và rollout V26 sau backup còn cần thực hiện; đây là việc kiểm/triển khai, không mở lại chính sách đã chốt. UC09 face/eKYC/KTV/full UC67 ngoài lượt này. Các checkpoint dưới đây giữ lịch sử.

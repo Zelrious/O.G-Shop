@@ -1,3 +1,4 @@
+import { Icon } from '../shared/components/Icon/Icon';
 import React, { useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Alert } from '../shared/components';
@@ -40,7 +41,7 @@ export const LoginPage: React.FC = () => {
 
             {/* COMPACT LOGO AT TOP RIGHT */}
             <Link to="/" className="og-form-compact-logo" title="Old but Gold (O.G Shop) — Về trang chủ">
-              <span className="og-compact-logo-coin">🪙</span>
+              <span className="og-compact-logo-coin"><Icon name="credit" style={{ width: '1em', height: '1em' }} /></span>
               <span className="og-compact-logo-text">O.G</span>
               <span className="og-compact-logo-dot" />
             </Link>

@@ -1,7 +1,7 @@
 import React, { ButtonHTMLAttributes } from 'react';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'gold' | 'outline' | 'danger' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'gold' | 'outline' | 'danger' | 'danger-outline' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   fullWidth?: boolean;
   isLoading?: boolean;
@@ -29,7 +29,7 @@ export const Button: React.FC<ButtonProps> = ({
     .join(' ');
 
   return (
-    <button className={classes} disabled={disabled || isLoading} {...props}>
+    <button aria-busy={isLoading || undefined} className={classes} disabled={disabled || isLoading} {...props}>
       {isLoading && <span className="og-spinner" aria-hidden="true" />}
       <span>{children}</span>
     </button>

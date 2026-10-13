@@ -1,5 +1,49 @@
 # Module Index
 
+## Commit delivery — TASK-0097 / 2026-10-13
+
+Đóng gói260 file thay đổi ban đầu thành14 commit trên `feat/marketplace-console-refactor-20261013`, từ HEAD `2061aa8` của nhánh auth (kế thừa14 commit so với main). Backend snapshots của commits2–7 biên dịch main/test đạt; frontend snapshots8–13 typecheck đạt. Hồi quy bản đã commit:204 frontend tests/43 files, lint và TypeScript/Vite build đạt; backend387 discovered,226 passed,161 skipped theo điều kiện môi trường,0 failure/error. Không chạy migration trên database ứng dụng, không push/merge. Logic giữ nguyên; chỉ chuẩn hóa EOF/EOL và thêm metadata bàn giao. Các nhật ký/ảnh QA và liên kết tới output/task trong tài liệu là bằng chứng local, không được force-add vào Git.
+
+## Console selects and eKYC — TASK-0096 / 2026-10-13
+
+KTV/Admin:18 native selects chuyển sang shared Select; upward popover neo sát trigger6px, theo dõi vị trí khi sidebar chuyển động; sidebar chờ320ms, transition360ms. Cột queue360–400px; eKYC list/detail và masked list; voucher tự chọn campaign đầu API, bỏ option rỗng. API/handler/rules giữ nguyên.204 tests/43 files, lint/TypeScript/build đạt;82 browser checks không overflow/JS error, menu lệch ngang0px/gap6px. [Ảnh và giới hạn](../../output/ui-0096/README.md).
+
+## Console reports and navigation — TASK-0095 / 2026-10-13
+
+Admin: thẻ doanh thu lớn bên trái gồm biểu đồ/so tháng, ba KPI phụ xếp dọc và bằng đáy0px. KTV/Admin: utilities chung hàng heading, hover tách focus để sidebar không thu khi đổi trang; màu surface/selected theo theme, câu chữ tranh chấp đơn giản. Dữ liệu minh họa và API/handler/export giữ nguyên.201 frontend tests, final5 regression, full lint/TypeScript/build đạt;60 browser checks hai theme1366/1440/1920/390 không overflow/JS error. [Ảnh và giới hạn](../../output/ui-0095/README.md).
+
+## KTV UI system — TASK-0094 / 2026-10-13
+
+Thêm shared Select/Pagination/PageHeader; token surface/popover/disabled và semantic badge/button, sửa contrast card eKYC/khiếu nại, custom voucher/filter/page-size dropdown, phân trang 0 kết quả. Giữ sidebar và tất cả API/handler nghiệp vụ. 195 full-suite pass + 2 eKYC tests mới; final focused26, lint/TypeScript/build đạt. Browser48 geometry +8 contrast +2 dropdown checks, không overflow/JS error; sampled contrast light4,65/dark5,76. [Báo cáo và giới hạn](../../output/ui-0094/README.md).
+
+## Voucher — TASK-0093 / V32 / 2026-10-13
+
+[Commerce](commerce.md): campaigns/revisions/wallet/claim/bulk/owned checkout. [Identity](identity.md): real audience/role/status/locks. [Platform](platform.md): audit/outbox/reminders/targets.191 frontend/303 distinct executed backend pass across full+corrective runs,84 skipped; final20/lint/build/package, genuine UI and9 signed HTTP pass. App V32/47 tables, backup/restore/upgrade/app preservation150/150. [API](../api/VOUCHERS_API.md), [evidence](../../output/vouchers-0093/README.md).
+
+## Sửa tương phản và khoảng trống — TASK-0092 / 2026-10-13
+
+[Catalog](catalog.md): hero gọn hơn39,4%, product dark text rõ. [Platform](platform.md): feature/footer/input tokens và guest header320px. [Communication](communication.md): toolbar hộp thư gọn, workspace/composer theo viewport.21 regression/4 files, full lint/typecheck/build và browser light/dark/mobile đạt; API/backend/schema giữ nguyên. [Bằng chứng](../../output/ui-0092/README.md), [task](../progress/archive/TASK-0092-ui-contrast-and-density.md).
+
+## UX/UI được duyệt — TASK-0091 / 2026-10-13
+
+[Communication](communication.md): chat nhanh/mobile inbox và memory owner. [Platform](platform.md): hai theme, utility bells, route/focus/motion. [Catalog](catalog.md)/[Commerce](commerce.md)/[Identity](identity.md)/[Payment](payment.md)/[Trust & Safety](trust-safety.md): outline/surface và chat entrypoint, giữ API/nghiệp vụ. Frontend183/39, full lint/typecheck/build và browser fixture đạt; runtime5174/8080healthUP, V31 không migration mới. [Bằng chứng](../../output/ui-0091/README.md), [task](../progress/archive/TASK-0091-approved-ui-quick-chat-themes.md).
+
+## Chat/offer và rollout — TASK-0090 / 2026-10-13
+
+[Communication](communication.md) đã triển khai UC18/UC19/UC10: API/UI/quyền/cursor/private media/lifecycle, offer và checkout1 món, outbox owner-only. [Identity](identity.md), [Catalog](catalog.md), [Commerce](commerce.md), [Trust & Safety](trust-safety.md) và [Platform](platform.md) qua application contracts. Đợt1/2 giữ; tổng năm task đã hoàn tất trong marketplace hiện hành. App DB V31/47 bảng, backup/restore/preservation150 nguồn đạt; runtime5174/8080 sẵn sàng. [Thiết kế](../architecture/CHAT_OFFER_V31_20261013.md), [API](../api/CHAT_OFFER_API.md), [test guide](../../output/phase34-runtime/README.md). Các checkpoint dưới là lịch sử.
+
+## Kết nối local — TASK-0089 / 2026-10-12
+
+[Identity](identity.md)/[Platform](platform.md): login bị CORS do frontend5174/backend origin5173. Private origin và Vite5174/strictPort đã đồng bộ, restart backend; HTTP/browser và quality gates đạt. [Bằng chứng](../../output/login-origin-fix/README.md). App DB đãV30 trước chẩn đoán; không migration mới. Credentials/Google thật cần người dùng thử lại.
+
+## Quản lý user KTV — TASK-0088 / 2026-10-12
+
+[Identity](identity.md) sở hữu UC67/account access; [Commerce](commerce.md) nghĩa vụ/checkout; [Catalog](catalog.md) quyền đăng; [Trust & Safety](trust-safety.md) đọc uy tín/phản hồi/bù deadline; [Platform](platform.md) audit/outbox/account notification. KTV quản lý customer qua API thật; ngừng mềm giữ nghĩa vụ cũ. [Thiết kế/rollout](../architecture/ACCOUNT_GOVERNANCE_V30_20261012.md), [API](../api/ACCOUNT_MANAGEMENT_API.md), [Kiểm chứng UI/tests](../../output/phase2-runtime/README.md). V28–V30 chưa áp app DB; UC74 xử phạt, UC68/full eKYC, chat/block/offer và thông báo ngưỡng điểm tiếp nối.
+
+## Kiểm duyệt và phí đăng — TASK-0087 / 2026-10-12
+
+[Catalog](catalog.md) nối duyệt → assessment → chờ phí → mở bán; [Payment](payment.md) mock receipt; [Commerce](commerce.md) thưởng tin đầu một lần; [Platform](platform.md) outbox/in-app notification; [Identity](identity.md) KTV audience. 148 frontend, 220 backend thường/2 skip và 65 PostgreSQL đạt; lint/build/package đạt. [Thiết kế/rollout](../architecture/MODERATION_LISTING_V27_20261012.md), [Ảnh và kiểm chứng](../../output/phase1-runtime/README.md). V27 chưa áp app DB; user/chat/offer theo đợt 2–4, không nâng full UC83/provider thật.
+
 ## Sửa F1–F5/F7 auth — TASK-0086 / 2026-10-11
 
 [Identity](identity.md) đã nối login email 2FA, reset OTP, Google/link/registration, lỗi khóa có cấu trúc và Back Seller; [Platform](platform.md) dùng V26 credential version thu hồi mọi phiên. 64 backend/135 frontend tests và quality gates đạt; 29 PostgreSQL tests chạy riêng, browser dùng HTTP fixture. [Bằng chứng trước/sau](../../output/auth-fixes-2026-10-11/README.md). Client ID đã cấu hình private, cần restart/backend migration sau backup; Google/Gmail thật, UC09 face, eKYC/KTV/full UC67 còn chờ. Các checkpoint dưới đây giữ lịch sử, không thay nghiệm thu provider thật.
@@ -83,7 +127,7 @@ Agent phải đọc file này và tài liệu của mọi module bị tác độ
 |---|---|---|---|
 | Identity | UC-01, UC-02 | IMPLEMENTED | [identity.md](identity.md) |
 | Catalog | UC-03, UC-04 | IMPLEMENTED | [catalog.md](catalog.md) |
-| Communication | UC-05, UC-06 | PLANNED | [communication.md](communication.md) |
+| Communication | UC18, UC19, UC10 | IMPLEMENTED / VERIFIED local | [communication.md](communication.md) |
 | Commerce | UC-07, UC-09 | PLANNED | [commerce.md](commerce.md) |
 | Payment | UC-08, UC-14 | PLANNED | [payment.md](payment.md) |
 | Fulfillment | UC-10, UC-11, UC-14 | PLANNED | [fulfillment.md](fulfillment.md) |

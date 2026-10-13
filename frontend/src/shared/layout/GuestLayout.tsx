@@ -1,3 +1,4 @@
+import { Icon } from '../components/Icon/Icon';
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 
@@ -35,7 +36,7 @@ export const GuestLayout: React.FC = () => {
               color: 'var(--og-color-primary)',
             }}
           >
-            <span>🪙</span>
+            <span><Icon name="credit" style={{ width: '1em', height: '1em' }} /></span>
             <span>Old but Gold</span>
             <span
               style={{

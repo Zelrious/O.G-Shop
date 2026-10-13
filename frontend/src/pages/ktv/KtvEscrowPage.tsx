@@ -1,3 +1,4 @@
+import { Select } from '../../shared/components/Select/Select';
 import React, { useState } from 'react';
 import { useManagementStore } from '../../features/management/useManagementStore';
 import { ConsoleIcons } from '../../shared/layout/ConsoleIcons';
@@ -134,38 +135,38 @@ export const KtvEscrowPage: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Header */}
       <div>
-        <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: '#0f172a', fontWeight: 800 }}>
+        <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: 'var(--og-color-text-primary)', fontWeight: 800 }}>
           Quản lý dòng tiền Ký Quỹ Escrow
         </h1>
-        <p style={{ margin: 0, color: '#64748b', fontSize: '0.92rem' }}>
+        <p style={{ margin: 0, color: 'var(--og-color-text-secondary)', fontSize: '0.92rem' }}>
           Giám sát trạng thái dòng tiền trung gian giữ hộ cho các đơn mua bán đồ cũ trên nền tảng O.G Shop.
         </p>
       </div>
 
       {/* KPI Stats Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-        <div style={{ background: '#ffffff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>Tiền đang bảo vệ tại Escrow (Held)</div>
-          <div style={{ fontSize: '1.65rem', fontWeight: 800, color: '#059669', margin: '6px 0' }}>
+        <div style={{ background: 'var(--og-color-surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--og-color-border)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: '0.82rem', color: 'var(--og-color-text-secondary)', fontWeight: 600 }}>Tiền đang bảo vệ tại Escrow (Held)</div>
+          <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--og-color-primary)', margin: '6px 0' }}>
             {formatVnd(totalHeld)}
           </div>
           <div style={{ fontSize: '0.78rem', color: '#16a34a', fontWeight: 600 }}>Chờ người mua đồng kiểm tra hàng</div>
         </div>
 
-        <div style={{ background: '#ffffff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>Dòng tiền đang đóng băng tranh chấp</div>
+        <div style={{ background: 'var(--og-color-surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--og-color-border)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: '0.82rem', color: 'var(--og-color-text-secondary)', fontWeight: 600 }}>Dòng tiền đang đóng băng tranh chấp</div>
           <div style={{ fontSize: '1.65rem', fontWeight: 800, color: '#dc2626', margin: '6px 0' }}>
             {formatVnd(totalFrozen)}
           </div>
           <div style={{ fontSize: '0.78rem', color: '#dc2626', fontWeight: 600 }}>Cần KTV can thiệp phân xử</div>
         </div>
 
-        <div style={{ background: '#ffffff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>Đã giải ngân thành công (Tháng này)</div>
+        <div style={{ background: 'var(--og-color-surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--og-color-border)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: '0.82rem', color: 'var(--og-color-text-secondary)', fontWeight: 600 }}>Đã giải ngân thành công (Tháng này)</div>
           <div style={{ fontSize: '1.65rem', fontWeight: 800, color: '#2563eb', margin: '6px 0' }}>
             {formatVnd(totalReleased)}
           </div>
-          <div style={{ fontSize: '0.78rem', color: '#64748b' }}>Đã chuyển vào ví người bán</div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--og-color-text-secondary)' }}>Đã chuyển vào ví người bán</div>
         </div>
       </div>
 
@@ -177,10 +178,10 @@ export const KtvEscrowPage: React.FC = () => {
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '12px',
-          background: '#ffffff',
+          background: 'var(--og-color-surface)',
           padding: '16px',
           borderRadius: '12px',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--og-color-border)',
           boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
         }}
       >
@@ -191,7 +192,7 @@ export const KtvEscrowPage: React.FC = () => {
               left: '12px',
               top: '50%',
               transform: 'translateY(-50%)',
-              color: '#94a3b8',
+              color: 'var(--og-color-text-muted)',
               display: 'flex',
             }}
           >
@@ -205,10 +206,10 @@ export const KtvEscrowPage: React.FC = () => {
             style={{
               width: '100%',
               padding: '9px 12px 9px 36px',
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
+              background: 'var(--og-color-surface)',
+              border: '1px solid var(--og-color-border-strong)',
               borderRadius: '8px',
-              color: '#0f172a',
+              color: 'var(--og-color-text-primary)',
               fontSize: '0.88rem',
               boxSizing: 'border-box',
             }}
@@ -216,25 +217,8 @@ export const KtvEscrowPage: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '0.84rem', color: '#64748b', fontWeight: 600 }}>Trạng thái:</span>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              borderRadius: '8px',
-              color: '#0f172a',
-              fontSize: '0.88rem',
-            }}
-          >
-            <option value="ALL">Tất cả giao dịch Escrow</option>
-            <option value="HELD">Đang tạm giữ (HELD)</option>
-            <option value="FROZEN">Đóng băng tranh chấp (FROZEN)</option>
-            <option value="RELEASED">Đã giải ngân (RELEASED)</option>
-            <option value="REFUNDED">Đã hoàn tiền (REFUNDED)</option>
-          </select>
+          <span style={{ fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', fontWeight: 600 }}>Trạng thái:</span>
+          <Select hideLabel label="Trạng thái" value={String(statusFilter)} onChange={(value) => setStatusFilter(value)} options={[({ value: "ALL", label: "Tất cả giao dịch Escrow" }), ({ value: "HELD", label: "Đang tạm giữ (HELD)" }), ({ value: "FROZEN", label: "Đóng băng tranh chấp (FROZEN)" }), ({ value: "RELEASED", label: "Đã giải ngân (RELEASED)" }), ({ value: "REFUNDED", label: "Đã hoàn tiền (REFUNDED)" })]} />
         </div>
       </div>
 
@@ -268,9 +252,9 @@ export const KtvEscrowPage: React.FC = () => {
       {/* Table */}
       <div
         style={{
-          background: '#ffffff',
+          background: 'var(--og-color-surface)',
           borderRadius: '12px',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--og-color-border)',
           overflow: 'hidden',
           boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
         }}
@@ -278,7 +262,7 @@ export const KtvEscrowPage: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', background: '#f8fafc' }}>
+              <tr style={{ borderBottom: '1px solid var(--og-color-border)', color: 'var(--og-color-text-secondary)', background: 'var(--og-color-bg)' }}>
                 <th style={{ padding: '14px 16px', width: '40px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                   <TableCheckbox
                     checked={isAllSelected}
@@ -299,7 +283,7 @@ export const KtvEscrowPage: React.FC = () => {
             <tbody>
               {filteredEscrows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: 'var(--og-color-text-secondary)' }}>
                     Không tìm thấy giao dịch Escrow nào phù hợp.
                   </td>
                 </tr>
@@ -310,12 +294,12 @@ export const KtvEscrowPage: React.FC = () => {
                     <tr
                       key={item.id}
                       style={{
-                        borderBottom: '1px solid #f1f5f9',
-                        background: isSelected ? '#f0fdf4' : 'transparent',
+                        borderBottom: '1px solid var(--og-color-surface-subtle)',
+                        background: isSelected ? 'var(--og-color-primary-light)' : 'transparent',
                         transition: 'background-color 0.15s ease',
                       }}
                       onMouseEnter={(e) => {
-                        if (!isSelected) e.currentTarget.style.background = '#f8fafc';
+                        if (!isSelected) e.currentTarget.style.background = 'var(--og-color-bg)';
                       }}
                       onMouseLeave={(e) => {
                         if (!isSelected) e.currentTarget.style.background = 'transparent';
@@ -329,31 +313,31 @@ export const KtvEscrowPage: React.FC = () => {
                         />
                       </td>
                       <td style={{ padding: '14px 16px' }}>
-                        <span style={{ fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
+                        <span style={{ fontWeight: 700, color: 'var(--og-color-text-primary)', fontFamily: 'monospace' }}>
                           {item.orderCode}
                         </span>
-                        <div style={{ fontSize: '0.74rem', color: '#64748b' }}>{item.updatedAt}</div>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--og-color-text-secondary)' }}>{item.updatedAt}</div>
                       </td>
                       <td style={{ padding: '14px 16px', maxWidth: '240px' }}>
-                        <div style={{ fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div style={{ fontWeight: 600, color: 'var(--og-color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {item.productTitle}
                         </div>
                       </td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700, color: '#059669', fontSize: '0.95rem', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--og-color-primary)', fontSize: '0.95rem', whiteSpace: 'nowrap' }}>
                         {formatVnd(item.amount)}
                       </td>
                       <td style={{ padding: '14px 16px' }}>
-                        <div style={{ fontSize: '0.84rem', color: '#0f172a' }}>
+                        <div style={{ fontSize: '0.84rem', color: 'var(--og-color-text-primary)' }}>
                           Mua: <strong style={{ color: '#2563eb' }}>{item.buyerName}</strong>
                         </div>
-                        <div style={{ fontSize: '0.84rem', color: '#64748b' }}>
-                          Bán: <strong style={{ color: '#047857' }}>{item.sellerName}</strong>
+                        <div style={{ fontSize: '0.84rem', color: 'var(--og-color-text-secondary)' }}>
+                          Bán: <strong style={{ color: 'var(--og-color-primary)' }}>{item.sellerName}</strong>
                         </div>
                       </td>
                       <td style={{ padding: '14px 16px' }}>
                         {renderStatusBadge(item.status)}
                       </td>
-                      <td style={{ padding: '14px 16px', color: '#64748b', fontSize: '0.82rem' }}>
+                      <td style={{ padding: '14px 16px', color: 'var(--og-color-text-secondary)', fontSize: '0.82rem' }}>
                         {item.releaseDeadline || '3 ngày sau giao hàng; tạm dừng nếu có vụ việc mở'}
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'right' }}>
@@ -407,9 +391,9 @@ export const KtvEscrowPage: React.FC = () => {
         >
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--og-color-surface)',
               borderRadius: '14px',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--og-color-border)',
               padding: '24px',
               width: '100%',
               maxWidth: '520px',
@@ -417,37 +401,37 @@ export const KtvEscrowPage: React.FC = () => {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#0f172a', fontWeight: 700 }}>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--og-color-text-primary)', fontWeight: 700 }}>
                 Chi tiết Ký Quỹ Escrow: {selectedEscrow.orderCode}
               </h2>
               <button
                 type="button"
                 onClick={() => setSelectedEscrow(null)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '1.2rem', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: 'none', color: 'var(--og-color-text-muted)', fontSize: '1.2rem', cursor: 'pointer' }}
               >
                 ✕
               </button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.9rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e2e8f0' }}>
-                <span style={{ color: '#64748b' }}>Mặt hàng:</span>
-                <strong style={{ color: '#0f172a' }}>{selectedEscrow.productTitle}</strong>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--og-color-border)' }}>
+                <span style={{ color: 'var(--og-color-text-secondary)' }}>Mặt hàng:</span>
+                <strong style={{ color: 'var(--og-color-text-primary)' }}>{selectedEscrow.productTitle}</strong>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e2e8f0' }}>
-                <span style={{ color: '#64748b' }}>Số tiền ký quỹ:</span>
-                <strong style={{ color: '#059669', fontSize: '1.1rem' }}>{formatVnd(selectedEscrow.amount)}</strong>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--og-color-border)' }}>
+                <span style={{ color: 'var(--og-color-text-secondary)' }}>Số tiền ký quỹ:</span>
+                <strong style={{ color: 'var(--og-color-primary)', fontSize: '1.1rem' }}>{formatVnd(selectedEscrow.amount)}</strong>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e2e8f0' }}>
-                <span style={{ color: '#64748b' }}>Người mua:</span>
-                <span style={{ color: '#0f172a' }}>{selectedEscrow.buyerName}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--og-color-border)' }}>
+                <span style={{ color: 'var(--og-color-text-secondary)' }}>Người mua:</span>
+                <span style={{ color: 'var(--og-color-text-primary)' }}>{selectedEscrow.buyerName}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e2e8f0' }}>
-                <span style={{ color: '#64748b' }}>Người bán:</span>
-                <span style={{ color: '#0f172a' }}>{selectedEscrow.sellerName}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--og-color-border)' }}>
+                <span style={{ color: 'var(--og-color-text-secondary)' }}>Người bán:</span>
+                <span style={{ color: 'var(--og-color-text-primary)' }}>{selectedEscrow.sellerName}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e2e8f0' }}>
-                <span style={{ color: '#64748b' }}>Trạng thái Escrow:</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--og-color-border)' }}>
+                <span style={{ color: 'var(--og-color-text-secondary)' }}>Trạng thái Escrow:</span>
                 <span>{renderStatusBadge(selectedEscrow.status)}</span>
               </div>
             </div>
@@ -458,7 +442,7 @@ export const KtvEscrowPage: React.FC = () => {
                 onClick={() => setSelectedEscrow(null)}
                 style={{
                   padding: '9px 18px',
-                  background: '#059669',
+                  background: 'var(--og-color-primary-fill)',
                   border: 'none',
                   color: '#ffffff',
                   borderRadius: '8px',

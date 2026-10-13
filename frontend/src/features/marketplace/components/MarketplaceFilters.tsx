@@ -316,7 +316,7 @@ export const MarketplaceFilters: React.FC<MarketplaceFiltersProps> = ({
         {/* Search input with integrated icon */}
         <div className="og-filterbar__search-group">
           <span className="og-filterbar__search-icon" aria-hidden="true">
-            🔍
+
           </span>
           <input
             id="filter-query"
@@ -333,7 +333,7 @@ export const MarketplaceFilters: React.FC<MarketplaceFiltersProps> = ({
               onClick={() => setQuery('')}
               aria-label="Xóa từ khóa tìm kiếm"
             >
-              ✕
+
             </button>
           )}
         </div>
@@ -397,7 +397,7 @@ export const MarketplaceFilters: React.FC<MarketplaceFiltersProps> = ({
             className="og-button og-button--primary og-filterbar__submit-btn"
             disabled={isLoading}
           >
-            🔍 Áp dụng
+            Áp dụng
           </button>
           <button
             type="button"
@@ -434,7 +434,7 @@ export const MarketplaceFilters: React.FC<MarketplaceFiltersProps> = ({
             {/* 1. Category Section (Multi-Select, Horizontal Scroll) */}
             <div className="og-filter-group">
               <div className="og-filter-group__header">
-                <span className="og-filter-group__title">🏷️ Loại sản phẩm / Danh mục</span>
+                <span className="og-filter-group__title">Loại sản phẩm / Danh mục</span>
                 <span className="og-filter-group__sub">
                   {selectedCategoryIds.length > 0
                     ? `(Đã chọn ${selectedCategoryIds.length})`
@@ -518,7 +518,7 @@ export const MarketplaceFilters: React.FC<MarketplaceFiltersProps> = ({
             {/* 3. Price Range Section (Tầm giá: Text Boxes + Thanh kéo 2 đầu + Lọc nhanh) */}
             <div className="og-filter-group og-filter-group--price">
               <div className="og-filter-group__header">
-                <span className="og-filter-group__title">💰 Tầm giá</span>
+                <span className="og-filter-group__title">Tầm giá</span>
               </div>
 
               <div className="og-filter-price-card">
@@ -591,7 +591,7 @@ export const MarketplaceFilters: React.FC<MarketplaceFiltersProps> = ({
                           }}
                           title="Xóa giá đã nhập"
                         >
-                          ✕ Xóa giá
+                          Xóa giá
                         </button>
                       )}
                     </div>
@@ -730,7 +730,7 @@ export const MarketplaceFilters: React.FC<MarketplaceFiltersProps> = ({
                   aria-label={`Xóa tiêu chí ${tag.label}`}
                   title="Xóa tiêu chí này"
                 >
-                  ✕
+
                 </button>
               </span>
             ))}

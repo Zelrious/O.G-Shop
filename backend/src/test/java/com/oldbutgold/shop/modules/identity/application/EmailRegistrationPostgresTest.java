@@ -75,6 +75,7 @@ class EmailRegistrationPostgresTest {
         properties.add("spring.datasource.password",()->System.getenv("OGSHOP_TEST_DB_PASSWORD"));
         properties.add("spring.jpa.hibernate.ddl-auto",()->"validate");
         properties.add("spring.flyway.enabled",()->true);
+        properties.add("app.registration.ip-hourly-limit",()->20);
     }
     @AfterAll static void cleanup() {
         if(root!=null && database!=null && database.matches("ogshop_registration_[0-9a-f]{32}"))

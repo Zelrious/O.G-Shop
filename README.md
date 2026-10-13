@@ -65,7 +65,7 @@ npm run dev
 
 Dùng Node.js 24 trở lên và npm 11 trở lên, cùng phiên bản với quality gate. Console Admin/KTV đã có giao diện sơ bộ; nhiều chức năng vẫn dùng dữ liệu demo. Xem phạm vi bản tích hợp và việc còn mở trong [hướng dẫn backend](backend/README.md#bản-tích-hợp-sơ-bộ).
 
-Frontend mặc định: `http://localhost:5173`.
+Frontend mặc định: `http://localhost:5174`. Vite dùng strictPort; backend cần `APP_FRONTEND_ORIGIN=http://localhost:5174` trong `.env` đang nạp rồi restart để đồng bộ CORS. Nếu cổng bận, dừng đúng phiên frontend cũ trước khi chạy lại.
 
 ### 4. Chạy eKYC AI Microservice
 

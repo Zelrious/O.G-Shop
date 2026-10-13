@@ -1,13 +1,14 @@
+import { Icon } from '../shared/components/Icon/Icon';
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../shared/context';
 
 const CONDITION_MAP: Record<string, string> = {
-  LIKE_NEW: '✨ Như mới',
-  GOOD: '👌 Khá tốt',
-  FAIR: '👍 Chấp nhận được',
-  POOR: '⚠️ Kém',
-  VINTAGE: '🏺 Đồ cổ',
+  LIKE_NEW: 'Như mới',
+  GOOD: 'Khá tốt',
+  FAIR: 'Chấp nhận được',
+  POOR: 'Kém',
+  VINTAGE: 'Đồ cổ',
 };
 
 export const CartPage: React.FC = () => {
@@ -32,7 +33,7 @@ export const CartPage: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: '0 0 6px', color: 'var(--og-color-text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span>🛒 Giỏ Hàng Của Bạn</span>
+            <span> Giỏ Hàng Của Bạn</span>
             {totalCount > 0 && (
               <span style={{ fontSize: '0.9rem', fontWeight: 700, padding: '2px 10px', borderRadius: '12px', background: 'var(--og-color-primary-light)', color: 'var(--og-color-primary)' }}>
                 {totalCount} món
@@ -62,7 +63,7 @@ export const CartPage: React.FC = () => {
             boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}
         >
-          <span>📦</span>
+          <span><Icon name="package" style={{ width: '1em', height: '1em' }} /></span>
           <span>Xem các đơn đã mua</span>
         </Link>
       </div>
@@ -80,7 +81,7 @@ export const CartPage: React.FC = () => {
           gap: '12px',
         }}
       >
-        <span style={{ fontSize: '1.5rem' }}>🛡️</span>
+        <span style={{ fontSize: '1.5rem' }}><Icon name="shield" style={{ width: '1em', height: '1em' }} /></span>
         <div style={{ fontSize: '0.88rem', color: 'var(--og-color-text-primary)', lineHeight: 1.45 }}>
           <strong>Bảo vệ ký quỹ 100% O.G Escrow:</strong> Tiền của bạn chỉ được chuyển cho người bán sau khi bạn đã nhận hàng và xác nhận món đồ đúng mô tả.
         </div>
@@ -97,7 +98,7 @@ export const CartPage: React.FC = () => {
             border: '1px dashed var(--og-color-border)',
           }}
         >
-          <div style={{ fontSize: '4rem', marginBottom: '16px' }}>🛒</div>
+          <div style={{ fontSize: '4rem', marginBottom: '16px' }}><Icon name="cart" style={{ width: '1em', height: '1em' }} /></div>
           <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: '0 0 8px', color: 'var(--og-color-text-primary)' }}>
             Giỏ hàng của bạn đang trống
           </h2>
@@ -110,14 +111,14 @@ export const CartPage: React.FC = () => {
               className="og-button og-button--primary"
               style={{ textDecoration: 'none', padding: '10px 24px' }}
             >
-              🔍 Khám phá Chợ Đồ Cũ
+               Khám phá Chợ Đồ Cũ
             </Link>
             <Link
               to="/orders"
               className="og-button og-button--ghost"
               style={{ textDecoration: 'none', padding: '10px 20px' }}
             >
-              📦 Xem đơn hàng đã mua
+               Xem đơn hàng đã mua
             </Link>
           </div>
         </div>
@@ -163,7 +164,7 @@ export const CartPage: React.FC = () => {
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                     ) : (
-                      <span style={{ fontSize: '2rem' }}>📦</span>
+                      <span style={{ fontSize: '2rem' }}><Icon name="package" style={{ width: '1em', height: '1em' }} /></span>
                     )}
                   </Link>
 
@@ -184,7 +185,7 @@ export const CartPage: React.FC = () => {
                       </span>
                       {item.location && (
                         <span style={{ fontSize: '0.78rem', color: 'var(--og-color-text-muted)' }}>
-                          📍 {item.location}
+                           {item.location}
                         </span>
                       )}
                     </div>
@@ -225,7 +226,7 @@ export const CartPage: React.FC = () => {
                       onClick={() => navigate(`/checkout?productId=${item.productId}`)}
                       style={{ whiteSpace: 'nowrap' }}
                     >
-                      ⚡ Mua ngay
+                       Mua ngay
                     </button>
                     <button
                       type="button"
@@ -308,7 +309,7 @@ export const CartPage: React.FC = () => {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--og-color-text-muted)', lineHeight: 1.4 }}>
-                  💡 Lưu ý: Do mỗi món đồ cũ thuộc một người bán khác nhau, bạn sẽ tiến hành thanh toán từng đơn hàng riêng biệt.
+                   Lưu ý: Do mỗi món đồ cũ thuộc một người bán khác nhau, bạn sẽ tiến hành thanh toán từng đơn hàng riêng biệt.
                 </p>
                 <Link
                   to="/marketplace"

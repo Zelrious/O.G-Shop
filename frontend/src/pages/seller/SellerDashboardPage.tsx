@@ -16,7 +16,7 @@ export const SellerDashboardPage: React.FC = () => {
         </div>
         <Link to="/seller/products/new">
           <Button variant="gold" size="md">
-            ➕ Đăng tin bán mới
+             Đăng tin bán mới
           </Button>
         </Link>
       </div>
@@ -25,7 +25,7 @@ export const SellerDashboardPage: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
         <Card>
           <div style={{ fontSize: '0.85rem', color: 'var(--og-color-text-muted)', marginBottom: '6px' }}>
-            🔒 Tiền đang bảo vệ tại Escrow (Held)
+             Tiền đang bảo vệ tại Escrow (Held)
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--og-color-primary)' }}>
             14.850.000₫
@@ -37,7 +37,7 @@ export const SellerDashboardPage: React.FC = () => {
 
         <Card>
           <div style={{ fontSize: '0.85rem', color: 'var(--og-color-text-muted)', marginBottom: '6px' }}>
-            📦 Đơn hàng cần đóng gói
+             Đơn hàng cần đóng gói
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--og-color-warning)' }}>
             2 đơn
@@ -49,7 +49,7 @@ export const SellerDashboardPage: React.FC = () => {
 
         <Card>
           <div style={{ fontSize: '0.85rem', color: 'var(--og-color-text-muted)', marginBottom: '6px' }}>
-            🏷️ Tin đang hiển thị trên sàn
+             Tin đang hiển thị trên sàn
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--og-color-text-primary)' }}>
             5 tin

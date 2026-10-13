@@ -1,3 +1,4 @@
+import { Icon } from '../../../shared/components/Icon/Icon';
 import React from 'react';
 
 interface RoleSelectorCardsProps {
@@ -31,9 +32,7 @@ export const RoleSelectorCards: React.FC<RoleSelectorCardsProps> = ({
           }}
         >
           <div className="og-role-card-header">
-            <span className="og-role-card-icon" role="img" aria-label="Giỏ hàng">
-              🛒
-            </span>
+            <span className="og-role-card-icon" role="img" aria-label="Giỏ hàng"><Icon name="cart" style={{ width: '1em', height: '1em' }} /></span>
             <div className="og-role-card-check" aria-hidden="true">
               {value === 'BUYER' && (
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -75,9 +74,7 @@ export const RoleSelectorCards: React.FC<RoleSelectorCardsProps> = ({
           }}
         >
           <div className="og-role-card-header">
-            <span className="og-role-card-icon" role="img" aria-label="Cửa hàng">
-              🏪
-            </span>
+            <span className="og-role-card-icon" role="img" aria-label="Cửa hàng"><Icon name="store" style={{ width: '1em', height: '1em' }} /></span>
             <div className="og-role-card-check" aria-hidden="true">
               {value === 'SELLER' && (
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">

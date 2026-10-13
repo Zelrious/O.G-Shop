@@ -1,5 +1,69 @@
 # Project Status
 
+## Commit delivery — TASK-0097 / 2026-10-13
+
+Đóng gói260 file thay đổi ban đầu thành14 commit trên `feat/marketplace-console-refactor-20261013`, từ HEAD `2061aa8` của nhánh auth (kế thừa14 commit so với main). Backend snapshots của commits2–7 biên dịch main/test đạt; frontend snapshots8–13 typecheck đạt. Hồi quy bản đã commit:204 frontend tests/43 files, lint và TypeScript/Vite build đạt; backend387 discovered,226 passed,161 skipped theo điều kiện môi trường,0 failure/error. Không chạy migration trên database ứng dụng, không push/merge. Logic giữ nguyên; chỉ chuẩn hóa EOF/EOL và thêm metadata bàn giao. Các nhật ký/ảnh QA và liên kết tới output/task trong tài liệu là bằng chứng local, không được force-add vào Git.
+
+## Console selects and eKYC — TASK-0096 / 2026-10-13
+
+KTV/Admin:18 native selects chuyển sang shared Select; upward popover neo sát trigger6px, theo dõi vị trí khi sidebar chuyển động; sidebar chờ320ms, transition360ms. Cột queue360–400px; eKYC list/detail và masked list; voucher tự chọn campaign đầu API, bỏ option rỗng. API/handler/rules giữ nguyên.204 tests/43 files, lint/TypeScript/build đạt;82 browser checks không overflow/JS error, menu lệch ngang0px/gap6px. [Ảnh và giới hạn](../../output/ui-0096/README.md).
+
+## Console reports and navigation — TASK-0095 / 2026-10-13
+
+Admin: thẻ doanh thu lớn bên trái gồm biểu đồ/so tháng, ba KPI phụ xếp dọc và bằng đáy0px. KTV/Admin: utilities chung hàng heading, hover tách focus để sidebar không thu khi đổi trang; màu surface/selected theo theme, câu chữ tranh chấp đơn giản. Dữ liệu minh họa và API/handler/export giữ nguyên.201 frontend tests, final5 regression, full lint/TypeScript/build đạt;60 browser checks hai theme1366/1440/1920/390 không overflow/JS error. [Ảnh và giới hạn](../../output/ui-0095/README.md).
+
+## KTV UI system — TASK-0094 / 2026-10-13
+
+Thêm shared Select/Pagination/PageHeader; token surface/popover/disabled và semantic badge/button, sửa contrast card eKYC/khiếu nại, custom voucher/filter/page-size dropdown, phân trang 0 kết quả. Giữ sidebar và tất cả API/handler nghiệp vụ. 195 full-suite pass + 2 eKYC tests mới; final focused26, lint/TypeScript/build đạt. Browser48 geometry +8 contrast +2 dropdown checks, không overflow/JS error; sampled contrast light4,65/dark5,76. [Báo cáo và giới hạn](../../output/ui-0094/README.md).
+
+## Voucher thật và thao tác hàng loạt — TASK-0093 / 2026-10-13
+
+- Completed: customer ví/nhận/owned checkout; Admin campaigns/version/revisions; KTV filter real audience/select1–100/preview/reason/confirm/per-item result/revalidation/retry; private outbox/audit/reminders. Thay voucher localStorage pages bằng API. Light/dark/outline/mobile theo UI hiện có.
+- Verified:191 frontend pass;303 distinct executed backend pass qua full+corrective V32 assertion rerun,84 backend skipped. Final20 UI regression/full lint/TypeScript/Vite/package pass; genuine QA Admin→KTV grant2/revoke2→customer claim,390/320/768 no overflow,9 signed HTTP. [Evidence](../../output/vouchers-0093/README.md), [API](../api/VOUCHERS_API.md).
+- Runtime: frontend5174 retained; backend8080 V32 healthUP;47 tables. Final private backup restore, clone upgrade và app migration giữ150/150 sources. Không grant/order trên app để QA/reset/commit/push. QA services/tab/container đã dọn khi bàn giao; PG/Mailpit app giữ.
+- Incomplete ngoài hai voucher tasks: full xu spending/refund/history pagination, canonical multi-seller checkout, central audit viewer/providers thật. Blocked:none. Next: Admin tạo/bật chương trình, KTV cấp theo bộ lọc; customer mở Voucher và xu. [Task](archive/TASK-0093-vouchers-and-bulk-distribution.md). Checkpoints dưới giữ lịch sử.
+
+## Sửa tương phản và khoảng trống — TASK-0092 / 2026-10-13
+
+- Completed: bốn vùng ảnh người dùng: hero/trust, product dark text, footer highlights, đầu hộp thư; thêm header/search và guest320px. Hero1440 giảm386,9→234,4px (39,4%); dark title/price12,83:1.
+- Verified:21 regression/4 files, full lint, TypeScript/Vite build đạt. Browser light/dark, product/footer, hero390/320 và inbox desktop/mobile; geometry/contrast/ảnh có trong [bằng chứng](../../output/ui-0092/README.md). Inbox dùng fixture5192, không gửi chat/offer/order thật.
+- Incomplete ngoài phạm vi: providers/backlog nghiệp vụ trước task. Blocked:none. Next: tải lại5174 để xem. Runtime hiện có giữ chạy; QA tab/fixture và viewport đã dọn. Không reset data/commit/push. [Task](archive/TASK-0092-ui-contrast-and-density.md).
+
+## UX/UI được duyệt — TASK-0091 / 2026-10-13
+
+- Completed: React hai theme sáng/charcoal, SVG outline, message icon và chuông riêng/popover, chat desktop nổi/mobile inbox, draft/tệp/retry/pending-send chung và privacy theo owner, entrypoint sản phẩm/đơn/notification, scroll/focus/motion và console theo theme.
+- Verified: frontend183/39 files, full frontend lint, TypeScript/Vite build đạt. Browser fixture desktop/light/dark/read/offer modal/draft/send/handoff, mobile320/390 không tràn ngang, Seller/KTV shell. [Before/after, ảnh và giới hạn](../../output/ui-0091/README.md).
+- Runtime: mở lại frontend5174, container PG/Mailpit local hiện có và artifact backendV31/private config; healthUP, validate31/no migration necessary. Không reset/seed app DB hoặc gửi chat/offer/order thật; không commit/push.
+- Incomplete ngoài phạm vi: provider thật, showcase prototype và backlog nghiệp vụ trước task. Blocked:none. Next: tải lại5174, đăng nhập và thử theme/chat. [Task](archive/TASK-0091-approved-ui-quick-chat-themes.md). Checkpoint dưới giữ lịch sử.
+
+## Hoàn tất năm task marketplace — TASK-0090 / 2026-10-13
+
+- Completed: kiểm duyệt manual KTV (UC73), quản lý account KTV core (UC67), kiểm thử, chat UC18/quan hệ chặn UC10 và offer UC19 nối checkout. Thông báo chat/media/offer/kết quả/đơn từ offer qua outbox, đọc và điều hướng UC47/UC59–UC60. UI desktop/mobile theo design system hiện có.
+- Verified: frontend168/36 files; backend regression373 (372pass/1 Windows skip), cuối39/39 gồm27 PG chat/offer và package; tổng374 tests khác nhau/373pass/1skip qua các lượt. Typecheck/scoped lint/build đạt. Browser Buyer/Seller/CHAT ban + 8 signed HTTP checks; mobile chat/blocks/checkout không tràn ngang. [API](../api/CHAT_OFFER_API.md), [thiết kế](../architecture/CHAT_OFFER_V31_20261013.md), [test guide/ảnh](../../output/phase34-runtime/README.md).
+- Rollout: app DB V31/47 bảng; backup cuối restore và migration QA giữ150/150 nguồn, app migration cũng giữ150/150. Backend8080/frontend5174 chạy bản mới; origin5174 và providers/private settings giữ. Không seed staff vào app DB, không reset/commit/push.
+- Incomplete ngoài năm task: full UC68/UC74/AI, audit viewer, canonical multi-seller checkout và provider thật; không coi local QA là nghiệm thu Cloudinary/VNPay/Google/Gmail thực. Blocked: none. Next: người dùng thử tài khoản hiện có tại5174 theo test guide. [Task](archive/TASK-0090-chat-offer-completion.md). Các checkpoint phía dưới giữ lịch sử.
+
+## Sửa đăng nhập local — TASK-0089 / 2026-10-12
+
+- Completed: sửa CORS origin5173→5174 trong private config, cố định Vite5174/strictPort, template/README đồng bộ; restart đúng backend8080. [Before/after và ảnh](../../output/login-origin-fix/README.md).
+- Verified: Google config/preflight login5174 từ403→200, credentials/ACAO đúng; origin5199 vẫn403. Browser Google button tải được, fake login nhận lỗi xác thực backend thay Failed to fetch. Typecheck/scoped lint/build đạt.
+- Incomplete: người dùng thử lại credentials/Google thật; không nghiệm thu login thật từ tài khoản giả. App DB đãV30 trước chẩn đoán (runtime người dùng đã chạy sau bàn giao0088), restart validate30/no migration necessary; không chạy migration mới trong0089.
+- Blocked:none. Next: tải lại trang5174/login. Backend8080 chạy background cùng classpath/private settings, frontend5174 giữ chạy; dừng đúng backend cũ khi chạy lại trong IntelliJ. Không commit/push. [Task](archive/TASK-0089-local-login-origin.md). Checkpoint dưới là lịch sử.
+
+## Quản lý user KTV — TASK-0088 / 2026-10-12
+
+- Completed: Đợt 2 UC67 core: API KTV/customer-only, tra cứu/hồ sơ/uy tín/nghĩa vụ, scope/thời hạn, khóa/ngừng mềm/gỡ/kích hoạt; giữ login/nghĩa vụ cũ, phản hồi hồ sơ, bù deadline đúng lỗi xác nhận; audit/version/key/locks/outbox và UI desktop/mobile. [Thiết kế/rollout](../architecture/ACCOUNT_GOVERNANCE_V30_20261012.md), [API](../api/ACCOUNT_MANAGEMENT_API.md), [Bằng chứng](../../output/phase2-runtime/README.md).
+- Verified: 157 frontend/34 files pass; 9 account UI kiểm lại sau thay đổi cuối; tsc/lint/build pass. Backend 222 chạy, 220 pass/2 skip và package pass. 83 PostgreSQL tests khác nhau đạt qua các lượt V30: 17 governance, 34 expansion và 32 listing/category/moderation/migration; service compensation kiểm lại trong test expansion. Browser KTV + chủ tài khoản bị khóa: notice/read/target, login lại, old-order detail, official response; modal/status/response mobile390×844 không tràn ngang. Docs/manifest có bằng chứng và giới hạn.
+- Incomplete: V26–V30 chưa áp app DB; full UC74/UC68, notification ngưỡng điểm, chat/block/offer, audit viewer/dead-letter và provider thật tiếp nối. Legacy auth LOCKED/SUSPENDED cần ACTIVATE; deleted_at cũ không có restore UI. Không commit/push.
+- Blocked: none trong phạm vi code đợt 2. Next: đợt 3 chat UC18/UC47/UC10 theo kế hoạch; rollout DB riêng sau backup/restore theo tài liệu. QA runtime/container/tab đã dọn, app PostgreSQL/Mailpit giữ nguyên. [Task](archive/TASK-0088-ktv-user-management.md). Các checkpoint dưới đây giữ lịch sử.
+
+## Kiểm duyệt và phí đăng — TASK-0087 / 2026-10-12
+
+- Completed: Đợt 1 đã được duyệt: DTO/UI đối chiếu thật, history, chờ phí server, mock-pay mở bán, phí cộng dồn, thưởng tin đầu một lần, thông báo bền vững/read/điều hướng. [Thiết kế/rollout](../architecture/MODERATION_LISTING_V27_20261012.md), [Ảnh và kiểm chứng](../../output/phase1-runtime/README.md).
+- Verified: frontend 148/31 files; backend 222 chạy, 220 pass/2 skip, 0 lỗi; 65 PostgreSQL tests khác nhau đạt sau kiểm lại 33 expansion. Lint/tsc/Vite/package đạt, cảnh báo bundle lớn còn có sẵn. Browser KTV/Seller và mobile 390×844 trên fixture riêng đạt; video/provider thật chưa kiểm.
+- Incomplete: V26/V27 chưa apply database ứng dụng; user/chat/offer, AI/full eKYC/canonical checkout và provider thật tiếp nối. Notification chưa có dead-letter tự động. Không commit/push.
+- Blocked: none trong phạm vi code đợt 1. Next: backup/restore rồi rollout theo tài liệu; triển khai đợt 2 quản lý user khi được duyệt. [Task](archive/TASK-0087-moderation-fees-and-notifications.md). Checkpoint bên dưới giữ lịch sử.
+
 ## Sửa F1–F5/F7 auth — TASK-0086 / 2026-10-11
 
 - Completed: OTP login theo cờ Buyer/Seller, reset OTP/grant/new password, credential version thu hồi mọi phiên, Google token/nonce/link/registration, lỗi khóa sau credential đúng, Back Seller và race restore; Web Client ID đã cấu hình private. [Trước/sau và bằng chứng](../../output/auth-fixes-2026-10-11/README.md).
