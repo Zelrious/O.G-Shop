@@ -76,6 +76,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/admin/payments/**").hasAnyRole("ADMIN", "KTV")
                         .requestMatchers("/api/v1/ktv/users/**").hasRole("KTV")
                         .requestMatchers("/api/v1/account/**").hasAnyRole("BUYER","SELLER")
+                        .requestMatchers("/api/v1/chat/**").hasAnyRole("BUYER","SELLER")
                         .requestMatchers(
                                 "/api/v1/auth/me",
                                 "/api/v1/profile/**",

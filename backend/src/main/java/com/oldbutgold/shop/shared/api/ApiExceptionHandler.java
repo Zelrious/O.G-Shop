@@ -22,6 +22,8 @@ import java.util.UUID;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    @ExceptionHandler(com.oldbutgold.shop.modules.communication.application.CommunicationException.class)
+    ResponseEntity<ApiError> communicationFailure(com.oldbutgold.shop.modules.communication.application.CommunicationException error,HttpServletRequest request){return response(HttpStatus.valueOf(error.status()),error.code(),error.getMessage(),request,List.of());}
     @ExceptionHandler(com.oldbutgold.shop.modules.identity.application.AccountRestrictedException.class)
     ResponseEntity<?> accountRestricted(com.oldbutgold.shop.modules.identity.application.AccountRestrictedException error) {
         return ResponseEntity.status(403).header("Cache-Control","no-store").body(java.util.Map.of(
