@@ -1,5 +1,37 @@
 # Commerce Module
 
+## Console selects and eKYC — TASK-0096 / 2026-10-13
+
+KTV/Admin:18 native selects chuyển sang shared Select; upward popover neo sát trigger6px, theo dõi vị trí khi sidebar chuyển động; sidebar chờ320ms, transition360ms. Cột queue360–400px; eKYC list/detail và masked list; voucher tự chọn campaign đầu API, bỏ option rỗng. API/handler/rules giữ nguyên.204 tests/43 files, lint/TypeScript/build đạt;82 browser checks không overflow/JS error, menu lệch ngang0px/gap6px. [Ảnh và giới hạn](../../output/ui-0096/README.md).
+
+## KTV UI system — TASK-0094 / 2026-10-13
+
+Thêm shared Select/Pagination/PageHeader; token surface/popover/disabled và semantic badge/button, sửa contrast card eKYC/khiếu nại, custom voucher/filter/page-size dropdown, phân trang 0 kết quả. Giữ sidebar và tất cả API/handler nghiệp vụ. 195 full-suite pass + 2 eKYC tests mới; final focused26, lint/TypeScript/build đạt. Browser48 geometry +8 contrast +2 dropdown checks, không overflow/JS error; sampled contrast light4,65/dark5,76. [Báo cáo và giới hạn](../../output/ui-0094/README.md).
+
+## Voucher wallet và bulk — TASK-0093 / V32 / 2026-10-13
+
+VoucherService/WalletRepository owns campaigns/revisions/grants/events and grant→order. Admin authors/edits/stops issuing; KTV filters real customers, explicit1–100 selections, preview/reason/confirm/revalidation and persisted per-item receipt. Own wallet/self-claim/xu balance/latest30; checkout eligible owned revision, immutable benefit/single-use, no voucher return after cancellation. React features/vouchers replaces local voucher pages and links from header/checkout. Full xu/multi-seller/audit viewer remains separate.
+
+[API](../api/VOUCHERS_API.md), [design](../architecture/VOUCHER_WALLET_V32_20261013.md), [evidence](../../output/vouchers-0093/README.md).191 frontend/303 distinct executed backend pass across full+corrective runs;84 skipped; final20/lint/build/package pass. App V32/47 tables, backup/restore/upgrade/app preservation150/150.
+
+## Giao diện mua/bán — TASK-0091 / 2026-10-13
+
+Cart/checkout/Buyer-Seller order dùng nhãn gọn, outline icon và token hai theme; ChatLink chi tiết đơn giữ ngữ cảnh màn hình. Accepted-offer source/price/checkout, quyền và command hiện hành giữ nguyên. Frontend183/39, full lint/build đạt; không tạo đơn thật trong QA. [Bằng chứng](../../output/ui-0091/README.md).
+
+## Chat/offer V31 — TASK-0090 / 2026-10-13
+
+Checkout nhận offerId tùy chọn; preview listed/agreed, voucher trên giá agreed, fee snapshot, fingerprint, single-use/cancel/rollback/race và conversation-order link. Notice đơn theo offer cùng transaction. Current buy-now1 món giữ; full canonical multi-seller checkout chưa được nâng trạng thái.
+
+[API](../api/CHAT_OFFER_API.md), [thiết kế/rollout](../architecture/CHAT_OFFER_V31_20261013.md), [test guide/ảnh](../../output/phase34-runtime/README.md). Năm task marketplace hoàn tất trong phạm vi hiện hành; app DB V31/47 bảng, backup/preservation150 nguồn đạt, runtime5174/8080 sẵn sàng. Các checkpoint dưới giữ lịch sử.
+
+## Quản lý user KTV — TASK-0088 / 2026-10-12
+
+AccountObligationsFacade trả tối đa 50 đơn ưu tiên mở. Checkout preview/buy-now dùng Identity facade: BUY_ALL riêng với BUY_EKYC và seller NEW_TRANSACTIONS. V30 tách mua hàng khỏi đăng/chat/bán; không tự hủy/refund/release đơn cũ. Native order/checkout/items guard và signed-token integration kiểm quyền mua, giữ old order đọc/xử lý. [Thiết kế/rollout](../architecture/ACCOUNT_GOVERNANCE_V30_20261012.md), [API](../api/ACCOUNT_MANAGEMENT_API.md), [Kiểm chứng](../../output/phase2-runtime/README.md). Các checkpoint dưới đây giữ lịch sử.
+
+## Kiểm duyệt và phí đăng — TASK-0087 / 2026-10-12
+
+ListingRewardFacade cấp CREDIT_FIRST_LISTING 10.000 xu một lần/Seller sau mở bán có proof duyệt, unique key và khóa user; rollback/retry/concurrency đã kiểm PostgreSQL. [Thiết kế/rollout](../architecture/MODERATION_LISTING_V27_20261012.md), [Ảnh và kiểm chứng](../../output/phase1-runtime/README.md). Bổ sung nguồn xu tin đầu của UC22; không kết luận hoàn tất mọi nguồn/sử dụng xu. Checkout quantity/canonical UC83 vẫn ngoài đợt 1.
+
 ## Thưởng đăng ký — TASK-0082 / V25 / 2026-10-10
 
 `RegistrationCommerceFacade` cung cấp hai thao tác tham gia transaction do Identity mở: tạo địa chỉ đúng chủ và thưởng đăng ký đúng 3.000 xu. Không gọi repository xuyên module. Ledger CREDIT_REGISTRATION dùng command key theo user, unique một lần/user, chỉ chấp nhận account UC83 ACTIVE/email đã xác thực; không tạo policy/Admin/order giả. V25 delegate mọi validator cũ và giữ quy tắc số dư/nguồn thưởng cũ.

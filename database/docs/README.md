@@ -1,5 +1,9 @@
 # Database design documents
 
+## Voucher wallet V32 — 2026-10-13
+
+Current app V32/47 business tables. Additive wallet metadata, unique grant→order binding, voucher command/history guards; immutable V1–V31 retained. [Design/forward-fix](../../docs/architecture/VOUCHER_WALLET_V32_20261013.md), [restore/upgrade/app preservation150/150](../../output/vouchers-0093/README.md). Earlier checkpoints below describe prior states.
+
 ## Current database — V24 / 47 business tables
 
 [Dictionary V24](DATABASE_TABLE_DICTIONARY_V24.md) là nguồn hiện hành cho 47 bảng/895 trường, PK/FK và mapping 103 nguồn còn giữ. [Bàn giao V24](../../docs/architecture/DATABASE_AUTH_SIMPLIFICATION_V24_20261009.md) ghi việc bỏ refresh sessions, kiểm chứng dữ liệu và cập nhật báo cáo. `auth_challenges` chưa bị bỏ; các đề xuất gộp eKYC chưa triển khai trong đợt này.

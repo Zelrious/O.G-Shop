@@ -1,5 +1,39 @@
 # Identity Module
 
+## Console selects and eKYC — TASK-0096 / 2026-10-13
+
+KTV/Admin:18 native selects chuyển sang shared Select; upward popover neo sát trigger6px, theo dõi vị trí khi sidebar chuyển động; sidebar chờ320ms, transition360ms. Cột queue360–400px; eKYC list/detail và masked list; voucher tự chọn campaign đầu API, bỏ option rỗng. API/handler/rules giữ nguyên.204 tests/43 files, lint/TypeScript/build đạt;82 browser checks không overflow/JS error, menu lệch ngang0px/gap6px. [Ảnh và giới hạn](../../output/ui-0096/README.md).
+
+## KTV UI system — TASK-0094 / 2026-10-13
+
+Thêm shared Select/Pagination/PageHeader; token surface/popover/disabled và semantic badge/button, sửa contrast card eKYC/khiếu nại, custom voucher/filter/page-size dropdown, phân trang 0 kết quả. Giữ sidebar và tất cả API/handler nghiệp vụ. 195 full-suite pass + 2 eKYC tests mới; final focused26, lint/TypeScript/build đạt. Browser48 geometry +8 contrast +2 dropdown checks, không overflow/JS error; sampled contrast light4,65/dark5,76. [Báo cáo và giới hạn](../../output/ui-0094/README.md).
+
+## Voucher audience — TASK-0093 / 2026-10-13
+
+VoucherIdentityFacade checks database staff role/active; customer BUYER/SELLER excludes staff/deleted, effective status; paginated query/role/status/include/exclude and ordered numeric locks. Commerce uses facade. Inactive customers keep wallet history; only ACTIVE receive new grants. Admin authors, KTV issues/revokes. PG and signed HTTP negatives pass. [API](../api/VOUCHERS_API.md), [evidence](../../output/vouchers-0093/README.md).
+
+## Giao diện và owner chat — TASK-0091 / 2026-10-13
+
+Auth/profile dùng outline icon/token theme. Chat runtime key theo user/customer eligibility, đổi owner/role loại bỏ cache/draft/tệp/pending UI; staff không có chat trigger. Backend auth/governance không đổi. Theme/owner/staff tests nằm trong183 frontend tests đạt; [bằng chứng](../../output/ui-0091/README.md).
+
+## Chat/offer V31 — TASK-0090 / 2026-10-13
+
+ConversationIdentityFacade kiểm customer/role/governance và user-pair lock; CHAT giữ read/history nhưng chặn send, BUY_ALL giữ chat. Guards đọc permission noRollbackFor denial được xử lý trong projection, command vẫn rollback khi lỗi đi ra. Signed QA KTV CHAT thu hồi phiên/login lại và giữ owned order đã kiểm.
+
+[API](../api/CHAT_OFFER_API.md), [thiết kế/rollout](../architecture/CHAT_OFFER_V31_20261013.md), [test guide/ảnh](../../output/phase34-runtime/README.md). Năm task marketplace hoàn tất trong phạm vi hiện hành; app DB V31/47 bảng, backup/preservation150 nguồn đạt, runtime5174/8080 sẵn sàng. Các checkpoint dưới giữ lịch sử.
+
+## Đăng nhập local — TASK-0089 / 2026-10-12
+
+Failed to fetch từ CORS origin mismatch5173/5174, không từ phép kiểm credentials. Đã đồng bộ private origin5174 và Vite/strictPort, restart backend. Config/preflight200, fake login nhận AUTHENTICATION_FAILED, Google button tải được; không thử password thật/Google popup. [Bằng chứng](../../output/login-origin-fix/README.md). Không đổi auth logic/password/role.
+
+## Quản lý user KTV — TASK-0088 / 2026-10-12
+
+Identity sở hữu API KTV customer-only, governance state/version riêng với auth, biện pháp scope/deadline, gỡ/kích hoạt/ngừng mềm và thu hồi token. KtvUsersPage thay demo bằng API list–detail; /account/status, banner và phản hồi hồ sơ owner. Facade chặn hoạt động mới, vẫn giữ login và nghĩa vụ cũ; status auth legacy cần ACTIVATE riêng. UC67 core và phần đọc UC11; UC68/UC74/UC10 đầy đủ tiếp nối. [Thiết kế/rollout](../architecture/ACCOUNT_GOVERNANCE_V30_20261012.md), [API](../api/ACCOUNT_MANAGEMENT_API.md), [Kiểm chứng](../../output/phase2-runtime/README.md). Các checkpoint dưới đây giữ lịch sử.
+
+## Kiểm duyệt và phí đăng — TASK-0087 / 2026-10-12
+
+IdentityCatalogFacade bổ sung truy vấn KTV active cho notification audience. Quyền Seller active và role KTV/ADMIN được dùng trong listing workflow; auth hiện hành được hồi quy. [Thiết kế/rollout](../architecture/MODERATION_LISTING_V27_20261012.md), [Ảnh và kiểm chứng](../../output/phase1-runtime/README.md). Không xây API quản lý user/khóa scope trong đợt này; UC67/full eKYC/KTV và provider Google/Gmail thật tiếp nối.
+
 ## Sửa auth còn lại — TASK-0086 / 2026-10-11
 
 F1–F5/F7 đã sửa trong code: OTP login Buyer/Seller trước phát phiên khi bật cờ; reset email/OTP/grant/new password/đăng nhập lại; cv thu hồi mọi token/cookie sau đổi hash; Google verify/link/registration và 2FA; phản hồi khóa sau credential đúng; Back Seller chặn default/key riêng. Google mới vẫn đặt mật khẩu/OTP, Seller giữ PENDING_EKYC/BUYER, thưởng 3.000 xu một lần. Admin/KTV dùng login do Admin cấp, không dùng reset/Google/2FA khách hàng.

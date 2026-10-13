@@ -1,5 +1,19 @@
 # Communication Module
 
+## Hộp thư gọn — TASK-0092 / 2026-10-13
+
+MessagesPage truyền returnTo hợp lệ vào toolbar chung của ConversationWorkspace. Bỏ eyebrow/mô tả/H1 lớn; giữ H1 cho screen reader, return/connection/blocked. Inbox root100dvh và main/workspace flex/min-height0 giữ composer trong màn hình; mobile connection chỉ hiển thị khi lỗi/offline. Compact dock và send/read/draft/owner authority không đổi.21 regression chat/theme/footer, full lint/build và browser fixture đạt; [ảnh/geometry](../../output/ui-0092/README.md).
+
+## Chat nhanh — TASK-0091 / 2026-10-13
+
+MessageBell riêng và ChatDock desktop/mobile inbox; ConversationWorkspace dùng chung giữ draft/tệp/clientId retry và pending-send theo owner. Đổi tài khoản/quyền xóa memory; thu nhỏ dừng detail polling/read. Sản phẩm/đơn/notification mở đúng hội thoại. Giữ REST/private media/permission/offer authority V31, không đổi backend. Frontend183/39, full lint/build và browser fixture đạt; [bằng chứng/giới hạn](../../output/ui-0091/README.md).
+
+## Chat/offer V31 — TASK-0090 / 2026-10-13
+
+Communication đã triển khai UC18/UC19/UC10 và nguồn notices UC47/59/60: REST thread/message/media/cursor/block/offer, expiry/cleanup, snapshot single-use nối checkout. Desktop/mobile inbox và authority từ server. PostgreSQL/history/outbox là nguồn bền vững; polling visible/reconnect. WebSocket/Redis là phần mở rộng sau khi có nhu cầu.
+
+[API](../api/CHAT_OFFER_API.md), [thiết kế/rollout](../architecture/CHAT_OFFER_V31_20261013.md), [test guide/ảnh](../../output/phase34-runtime/README.md). Năm task marketplace hoàn tất trong phạm vi hiện hành; app DB V31/47 bảng, backup/preservation150 nguồn đạt, runtime5174/8080 sẵn sàng. Các checkpoint dưới giữ lịch sử.
+
 ## Diagram báo cáo — TASK-0081 / 2026-10-10
 
 [UC01–UC18 đã có 36 ảnh kiểm nguồn/native/PDF](../requirements/use-cases-83/report-uc01-18/README.md), gồm UC18, quyền gửi và nhánh lỗi giữ bản soạn. Thay 34 ảnh được duyệt và thêm hai ảnh UC11, giữ Hình 3.3–3.38 và ảnh ngoài phạm vi. 2FA chỉ dành cho Người mua/Người bán theo quyết định người dùng. Đây là cập nhật yêu cầu/diagram; không nâng trạng thái code/schema/nghiệm thu module.
@@ -41,9 +55,9 @@ V17/V20 tái dùng conversations/messages/offers, thêm conversation_order_links
 
 Theo [bản rà soát 83 UC](../architecture/DATABASE_COVERAGE_83_USE_CASES_20261009.md), UC18–UC19/UC47/UC56 tái dùng participant/message dedup/offer chain; cần link đơn, snapshot lượng, kiểm tra offer đúng buyer/product và quyền trao đổi nghĩa vụ cũ khi chặn. Media hold chỉ từ hồ sơ chính thức, chat không tự giữ tiền. Chưa triển khai; trạng thái bên dưới là baseline trước rà soát.
 
-- Status: PLANNED
+- Status: IMPLEMENTED / VERIFIED local UC18, UC19, UC10 (baseline UC-05/UC-06 dưới là lịch sử)
 - Requirements: UC-05, UC-06
-- Completion: 0/2 use cases verified
+- Completion: UC18/UC19/UC10 đã nối và kiểm local; các UC ngoài phạm vi không tự nâng trạng thái
 - Last reviewed: 2026-09-17
 
 ## Purpose and scope
@@ -84,10 +98,10 @@ Reservation, checkout, payment và quyết định khiếu nại.
 ## Remaining tasks
 
 - [x] Thiết kế offer state machine ở database (`PENDING/ACCEPTED/REJECTED/COUNTERED/WITHDRAWN/EXPIRED`).
-- [ ] Triển khai REST tạo/lấy conversation, lịch sử cursor, gửi message và read cursor.
-- [ ] Triển khai offer/counter-offer/reject/withdraw/accept trong transaction.
-- [ ] Kết nối frontend chat/offer cơ bản bằng REST hoặc polling.
-- [ ] Kiểm thử participant access, idempotency, transition và accept đồng thời.
+- [x] Triển khai REST tạo/lấy conversation, lịch sử cursor, gửi message và read cursor.
+- [x] Triển khai offer/counter-offer/reject/withdraw/accept trong transaction.
+- [x] Kết nối frontend chat/offer cơ bản bằng REST hoặc polling.
+- [x] Kiểm thử participant access, idempotency, transition và accept đồng thời.
 - [ ] Chỉ sau khi các mục trên đạt: bổ sung WebSocket single-instance và chốt authentication/reconnect.
 - [ ] Chỉ bổ sung Redis cache/Pub/Sub khi có số đo hoặc yêu cầu multi-instance.
 

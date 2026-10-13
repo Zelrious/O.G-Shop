@@ -1,5 +1,96 @@
 # Project Backlog
 
+## TASK-0097 — Commit delivery / COMPLETE
+
+260 original changed/new files grouped into14 commits on the separate marketplace/console branch. Exact-index intermediate builds and final frontend/backend regression passed; integration skips and existing provider/bundle backlog retained. Local QA artifacts stay ignored. Push/merge is outside this delivery.
+
+## TASK-0096 — Console selects/queues/eKYC / COMPLETE
+
+Unified18 controls, corrected popover anchor, delayed sidebar, first voucher default and two-column eKYC verified. Existing eKYC preview/backend/provider/bundle limits unchanged. [Evidence](../../output/ui-0096/README.md).
+
+## TASK-0095 — Console reports/navigation / COMPLETE
+
+Revenue hierarchy, integrated utilities, persistent hover and plain dispute copy verified. Existing report fixture data and backend/provider/bundle backlog retained. [Evidence](../../output/ui-0095/README.md).
+
+## TASK-0094 — KTV UI refactor / COMPLETE
+
+UI scope verified: Select/Pagination/PageHeader, themed eKYC/complaint cards, voucher controls and shared semantic actions. No business/API/sidebar changes. Existing backend/provider and large-bundle backlog unchanged. [Evidence](../../output/ui-0094/README.md).
+
+## Voucher — TASK-0093 / 2026-10-13
+
+- [x] Own wallet/receivable/self-claim and owned voucher application in current buy-now.
+- [x] Admin real campaigns/create/update/version/policy revisions/pause; code/benefit/date/scope/limit validation.
+- [x] KTV real audience quick filters, explicit1–100 selections, preview/reason/confirmation, per-item results/recheck/stable retry receipts.
+- [x] Only unused/unexpired receipts revocable; spent coupons never restored, orders retain discount history.
+- [x] Private notices/audit/reminders, role/owner/negative/race/rollback verification.
+- [x]191 frontend/303 executed backend across full+corrective runs;84 skipped. Final20/lint/build/package, genuine UI/9 signed HTTP, appV32/47 and150/150 preserved.
+- [ ] Separate follow-up: full xu spending/refund/history pagination, multi-seller checkout, central audit viewer/providers.
+
+[Evidence](../../output/vouchers-0093/README.md), [task](archive/TASK-0093-vouchers-and-bulk-distribution.md). Other backlog unchanged.
+
+## Sửa UI theo bốn ảnh — TASK-0092 / 2026-10-13
+
+- [x] Hero gọn và highlight tách nền ở hai theme.
+- [x] Product title/price/meta/condition/hover dark dùng token đúng.
+- [x] Footer highlights và header/search rõ màu/boundary.
+- [x] Hộp thư toolbar40px, workspace/composer theo viewport.
+- [x] Guest header320px hết tràn;21 regression/full lint/typecheck/build và browser/ảnh đạt.
+
+[Bằng chứng](../../output/ui-0092/README.md), [task](archive/TASK-0092-ui-contrast-and-density.md). Backlog nghiệp vụ trước task giữ nguyên.
+
+## UX/UI được duyệt — TASK-0091 / 2026-10-13
+
+- [x] Hai theme sáng/charcoal, đổi ngay và lưu lựa chọn.
+- [x] Outline icon/chrome và token các luồng chính/console.
+- [x] Message icon/bell riêng, popover và chat nhanh desktop/mobile inbox.
+- [x] Draft/tệp/retry/pending-send chung, owner reset và permission từ server.
+- [x] Sản phẩm/đơn/notification entrypoint, quay lại giữ ngữ cảnh, focus/reduced-motion.
+- [x] Frontend183/39, full lint/typecheck/build, browser fixture/mobile và runtimehealthUP.
+- [ ] Provider thật, showcase prototype và backlog nghiệp vụ trước task tiếp nối.
+
+[Bằng chứng](../../output/ui-0091/README.md), [task](archive/TASK-0091-approved-ui-quick-chat-themes.md).
+
+## Năm task marketplace — TASK-0090 / 2026-10-13
+
+- [x] Kiểm duyệt manual bài đăng và quản lý user KTV core (đợt1/2).
+- [x] Chat/private media/read cursor/unread/search/retry và quan hệ chặn, giữ nghĩa vụ cũ.
+- [x] Offer/counter/accept/reject/withdraw/expiry, checkout giá snapshot một lần, thông báo kết quả và đơn.
+- [x] Frontend168, backend full regression +39 scoped, signed HTTP/browser desktop/mobile và quality gates.
+- [x] Backup đã kiểm restore, V31/47 bảng,150 nguồn giữ; runtime5174/8080 cho người dùng thử.
+
+[Test guide](../../output/phase34-runtime/README.md). Full UC68/UC74/AI/provider thật, audit viewer/dead-letter và canonical multi-seller checkout là backlog riêng. Các checklist chưa rollout/chat ở checkpoint cũ dưới đây mô tả trạng thái lúc bàn giao từng đợt.
+
+## Kết nối đăng nhập local — TASK-0089
+
+- [x] Origin/cổng frontend5174 đồng bộ, strictPort và restart backend; HTTP allow/deny, browser config/fake login, typecheck/lint/build đạt.
+- [ ] Người dùng thử lại mật khẩu/Google thật sau tải lại trang. [Bằng chứng](../../output/login-origin-fix/README.md).
+
+DB hiệnV30 khi kiểm0089; không chạy migration mới trong lượt sửa kết nối. Rollout/backup ở các checkpoint dưới mô tả phạm vi và trạng thái lịch sử, không coi restart là đã nghiệm thu dữ liệu/provider.
+
+## Quản lý user KTV — TASK-0088 / 2026-10-12
+
+- [x] Đợt 2 UC67 core, đọc UC11, thông báo account UC51/phần UC53/UC59–UC60 và audit nền UC77; API thật, scope/deadline/soft-state, nghĩa vụ/phản hồi cũ, bù hạn từ lỗi xác nhận.
+- [x] Frontend157, backend220 pass/2skip, PostgreSQL83 khác nhau và browser KTV/customer/mobile theo [bằng chứng](../../output/phase2-runtime/README.md).
+- [ ] Backup/restore và rollout V26–V30 vào database đang dùng cùng backend/frontend mới.
+- [ ] Đợt 3: UC18 chat, UC47 unread/notification, UC10 chặn; participant/privacy, quota/media, retry/reconnect.
+- [ ] Đợt 4: UC19 offer, giá/số lượng, expiry/revision/stock, accept race và UC23–UC25.
+- [ ] Full UC74 xác nhận/xử phạt và pipeline uy tín/notification UC52 ngưỡng điểm; UC68/eKYC, audit viewer, dead-letter và tối ưu polling khi được triển khai.
+
+[Thiết kế/rollout](../architecture/ACCOUNT_GOVERNANCE_V30_20261012.md). Các mục đợt 2 ở checkpoint TASK-0087 bên dưới là kế hoạch lịch sử đã tiếp nối; chat/offer vẫn chưa triển khai.
+
+## Kiểm duyệt và phí đăng — TASK-0087 / 2026-10-12
+
+- [x] DTO/UI KTV và Seller result/fee, dữ liệu thiếu trung thực, history/version/key.
+- [x] V27 MANUAL_V27, mock receipt, cumulative fee, activation proof, reward tin đầu và notification outbox/read/target.
+- [x] 148 frontend, 220 backend thường/2 skip, 65 PostgreSQL; lint/build/package và browser desktop/mobile riêng.
+- [ ] Backup/restore và rollout V26/V27 vào DB đang dùng; kiểm provider/media thật theo phạm vi riêng.
+- [ ] Đợt 2: UC67 user, UC11 lịch sử xử phạt/uy tín, UC51 thông báo, auth/restriction/old obligations và audit.
+- [ ] Đợt 3: UC18 chat, UC47 unread/notification, UC10 chặn, participant/privacy/media/quota và reconnect.
+- [ ] Đợt 4: UC19 offer, state/expiry/accept race và chốt price/quantity vào UC23–UC25.
+- [ ] Kiểm thử xuyên suốt mỗi đợt; vận hành notification payload lỗi/dead-letter và Vite chunking khi có phạm vi tối ưu.
+
+[Thiết kế/rollout](../architecture/MODERATION_LISTING_V27_20261012.md), [Ảnh và kiểm chứng](../../output/phase1-runtime/README.md). Các mục đợt 2–4 là kế hoạch, chưa triển khai.
+
 ## Kết quả audit auth — TASK-0084
 
 - [x] Đọc mới yêu cầu UC01–UC04/UC09/UC67; kiểm UI/API/SMTP trên môi trường riêng; 29 frontend/42 backend tests, typecheck/lint/build/package đạt.

@@ -1,5 +1,13 @@
 # Payment Module
 
+## Giao diện checkout — TASK-0091 / 2026-10-13
+
+Checkout dùng token sáng/tối và icon đơn sắc; logo vendor giữ màu nhận diện. Không đổi provider/callback/receipt/transaction. Hồi quy frontend accepted-offer checkout đạt; provider thật chưa được nghiệm thu lại trong task UI. [Bằng chứng](../../output/ui-0091/README.md).
+
+## Kiểm duyệt và phí đăng — TASK-0087 / 2026-10-12
+
+ListingFeePaymentFacade/receipt repository xác nhận LISTING_MOCK từ server charge, chống command key trùng/sai charge. Fee receipt, activation/reward/audit/outbox cùng transaction Catalog; rollback và cạnh tranh hai thanh toán đã kiểm PostgreSQL. [Thiết kế/rollout](../architecture/MODERATION_LISTING_V27_20261012.md), [Ảnh và kiểm chứng](../../output/phase1-runtime/README.md). Đây là phần UC72 phí đăng mô phỏng; provider thật/checkout payment không được nâng nghiệm thu. V27 chưa apply app DB.
+
 ## Diagram báo cáo — TASK-0081 / 2026-10-10
 
 [UC01–UC18 đã có 36 ảnh kiểm nguồn/native/PDF](../requirements/use-cases-83/report-uc01-18/README.md), gồm UC17, thanh toán phí còn nợ và không thu trùng. Thay 34 ảnh được duyệt và thêm hai ảnh UC11, giữ Hình 3.3–3.38 và ảnh ngoài phạm vi. 2FA chỉ dành cho Người mua/Người bán theo quyết định người dùng. Đây là cập nhật yêu cầu/diagram; không nâng trạng thái code/schema/nghiệm thu module.
