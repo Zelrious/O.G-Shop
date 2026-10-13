@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { AuthProvider } from '../features/auth';
 import { NotificationsPage } from '../pages/NotificationsPage';
 import { AccountStatusPage } from '../pages/AccountStatusPage';
+import { VouchersPage } from '../pages/VouchersPage';
 import { MessagesPage } from '../pages/MessagesPage';
 import { BlockedBuyersPage } from '../pages/BlockedBuyersPage';
 import { SellerListingReviewPage } from '../pages/SellerListingReviewPage';
@@ -95,6 +96,7 @@ export function App() {
                     <Route path="/messages" element={<ProtectedRoute allowedRoles={['BUYER', 'SELLER']}><MessagesPage /></ProtectedRoute>} />
                     <Route path="/" element={<HomePage />} />
                     <Route path="/marketplace" element={<MarketplacePage />} />
+                    <Route path="/vouchers" element={<ProtectedRoute allowedRoles={['BUYER', 'SELLER']}><VouchersPage /></ProtectedRoute>} />
                     <Route path="/products/:productId" element={<ProductDetailPage />} />
                     <Route path="/cart" element={<CartPage />} />
                   <Route

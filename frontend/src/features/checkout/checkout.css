@@ -1,0 +1,8 @@
+.og-checkout-columns { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
+.og-checkout-columns > div { min-width: 0; }
+.og-checkout-address-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.og-checkout-page h1, .og-checkout-page h2 { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .og-checkout-columns, .og-checkout-address-fields { grid-template-columns: minmax(0, 1fr); }
+  .og-checkout-page { padding-inline: 0 !important; }
+}
