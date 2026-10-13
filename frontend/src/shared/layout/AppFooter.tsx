@@ -1,64 +1,20 @@
-import React, { useRef, useState } from 'react';
+import React from 'react';
+import { Icon, type IconName } from '../components/Icon/Icon';
 import { Link } from 'react-router-dom';
 
 // 3D Tilt Card Component for the 4 Project Criteria (Requirement 1)
 interface TiltFeatureCardProps {
-  icon: string;
+  icon: IconName;
   title: string;
   desc: string;
 }
 
-const TiltFeatureCard: React.FC<TiltFeatureCardProps> = ({ icon, title, desc }) => {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [tiltStyle, setTiltStyle] = useState<React.CSSProperties>({});
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const width = rect.width > 0 ? rect.width : 260;
-    const height = rect.height > 0 ? rect.height : 120;
-    const centerX = width / 2;
-    const centerY = height / 2;
-
-    // Tilt calculations in 3D: rotateX tilts up/down, rotateY tilts left/right
-    const rotateX = ((y - centerY) / centerY) * -12;
-    const rotateY = ((x - centerX) / centerX) * 12;
-
-    setTiltStyle({
-      transform: `perspective(700px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateY(-6px) scale(1.02)`,
-      boxShadow: '0 16px 32px rgba(0, 0, 0, 0.45), 0 0 20px rgba(245, 158, 11, 0.18)',
-      borderColor: 'rgba(245, 158, 11, 0.45)',
-    });
-  };
-
-  const handleMouseLeave = () => {
-    setTiltStyle({
-      transform: 'perspective(700px) rotateX(0deg) rotateY(0deg) translateY(0) scale(1)',
-      boxShadow: '',
-      borderColor: '',
-    });
-  };
-
-  return (
-    <div
-      ref={cardRef}
-      className="og-footer__feature-card"
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      style={tiltStyle}
-    >
-      <span className="og-footer__feature-icon" aria-hidden="true">
-        {icon}
-      </span>
-      <div className="og-footer__feature-content">
-        <h4 className="og-footer__feature-title">{title}</h4>
-        <p className="og-footer__feature-desc">{desc}</p>
-      </div>
-    </div>
-  );
-};
+const TiltFeatureCard: React.FC<TiltFeatureCardProps> = ({ icon, title, desc }) => (
+  <div className="og-footer__feature-card">
+    <span className="og-footer__feature-icon" aria-hidden="true"><Icon name={icon} size={24} /></span>
+    <div className="og-footer__feature-content"><h4 className="og-footer__feature-title">{title}</h4><p className="og-footer__feature-desc">{desc}</p></div>
+  </div>
+);
 
 // Brand Logos for Payment & Shipping (Requirement 2)
 const BrandLogos = {
@@ -157,22 +113,22 @@ export const AppFooter: React.FC = () => {
         <div className="og-footer__container">
           <div className="og-footer__highlights-grid">
             <TiltFeatureCard
-              icon="🛡️"
+              icon="shield"
               title="Ký Quỹ An Toàn Escrow"
               desc="Sàn giữ tiền 3 ngày, chỉ chuyển cho người bán khi bạn hoàn toàn hài lòng với món đồ."
             />
             <TiltFeatureCard
-              icon="🔍"
+              icon="search"
               title="Kiểm Định Minh Bạch"
               desc="Đội ngũ KTV kiểm duyệt tin đăng, đối chiếu khuyết điểm và hỗ trợ giải quyết tranh chấp."
             />
             <TiltFeatureCard
-              icon="💬"
+              icon="message"
               title="Trả Giá Linh Hoạt"
               desc="Thương lượng giá mua trực tiếp với người bán nhanh chóng, chốt deal tiện lợi."
             />
             <TiltFeatureCard
-              icon="⚡"
+              icon="credit"
               title="Thanh Toán Tiện Lợi"
               desc="Hỗ trợ quét mã VNPay, VietQR, ví điện tử và các loại thẻ ngân hàng an toàn tuyệt đối."
             />
@@ -187,7 +143,7 @@ export const AppFooter: React.FC = () => {
             {/* Brand Column */}
             <div className="og-footer__col og-footer__col--brand">
               <Link to="/" className="og-footer__brand" aria-label="Logo O.G Shop" style={{ textDecoration: 'none' }}>
-                <span className="og-footer__brand-icon" aria-hidden="true">🪙</span>
+                <span className="og-footer__brand-icon" aria-hidden="true"><span className="og-brand-mark" /></span>
                 <span className="og-footer__brand-name">Old but Gold</span>
                 <span className="og-footer__brand-dot" aria-hidden="true" />
               </Link>
@@ -196,15 +152,15 @@ export const AppFooter: React.FC = () => {
               </p>
               <div className="og-footer__contact-info">
                 <div className="og-footer__contact-row">
-                  <span aria-hidden="true">📞</span>
+                  <span aria-hidden="true"><Icon name="phone" size={16} /></span>
                   <span>Tổng đài hỗ trợ: <strong>1900 8888</strong> (8:00 - 21:00)</span>
                 </div>
                 <div className="og-footer__contact-row">
-                  <span aria-hidden="true">✉️</span>
+                  <span aria-hidden="true"><Icon name="mail" size={16} /></span>
                   <span>Email: <strong>hotro@oldbutgold.vn</strong></span>
                 </div>
                 <div className="og-footer__contact-row">
-                  <span aria-hidden="true">📍</span>
+                  <span aria-hidden="true"><Icon name="pin" size={16} /></span>
                   <span>Địa chỉ: Khu Đô thị ĐHQG, TP. Hồ Chí Minh</span>
                 </div>
               </div>
@@ -281,7 +237,7 @@ export const AppFooter: React.FC = () => {
               © {currentYear} Old but Gold (O.G Shop) - Bản quyền thuộc về Đồ Cũ Chất Lượng Cao.
             </div>
             <div className="og-footer__security-text">
-              🔒 Giao dịch ký quỹ O.G Escrow | Giữ tiền 3 ngày an tâm mua sắm
+              Giao dịch ký quỹ O.G Escrow | Giữ tiền 3 ngày an tâm mua sắm
             </div>
           </div>
         </div>
@@ -289,4 +245,3 @@ export const AppFooter: React.FC = () => {
     </footer>
   );
 };
-

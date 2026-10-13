@@ -1,3 +1,4 @@
+import { Icon } from '../shared/components/Icon/Icon';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
@@ -127,7 +128,7 @@ export const HomePage: React.FC = () => {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: 1, minWidth: '280px' }}>
-            <span style={{ fontSize: '32px' }}>⚠️</span>
+            <span style={{ fontSize: '32px' }}><Icon name="alert" /></span>
             <div>
               <div style={{ fontWeight: 800, color: '#9a3412', fontSize: '1.05rem', marginBottom: '4px' }}>
                 Đơn hàng #{pendingOrderId} chưa hoàn tất thanh toán!
@@ -143,14 +144,14 @@ export const HomePage: React.FC = () => {
               className="og-button og-button--primary"
               style={{ padding: '10px 18px', fontWeight: 700, fontSize: '0.92rem', whiteSpace: 'nowrap' }}
             >
-              ⚡ Thanh toán ngay
+              Thanh toán ngay
             </Link>
             <Link
               to={`/orders/${pendingOrderId}`}
               className="og-button og-button--secondary"
-              style={{ padding: '10px 18px', fontWeight: 600, fontSize: '0.92rem', whiteSpace: 'nowrap', background: '#fff' }}
+              style={{ padding: '10px 18px', fontWeight: 600, fontSize: '0.92rem', whiteSpace: 'nowrap', background: 'var(--og-color-surface)' }}
             >
-              📦 Xem đơn hàng
+              Xem đơn hàng
             </Link>
             <button
               type="button"
@@ -166,84 +167,38 @@ export const HomePage: React.FC = () => {
               }}
               title="Đóng thông báo"
             >
-              ✕
+
             </button>
           </div>
         </section>
       )}
 
       {/* 1. Mall Banner: Escrow Protection & Trust Welcome */}
-      <section
-        style={{
-          background: 'linear-gradient(135deg, #1d4d38 0%, #102d21 100%)',
-          color: '#ffffff',
-          borderRadius: 'var(--og-radius-lg)',
-          padding: '36px 28px',
-          boxShadow: 'var(--og-shadow-md)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '18px',
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        <div style={{ maxWidth: '720px', zIndex: 1 }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: 'rgba(198, 147, 58, 0.25)',
-              border: '1px solid #c6933a',
-              color: '#f5d596',
-              padding: '4px 12px',
-              borderRadius: 'var(--og-radius-full)',
-              fontSize: '0.82rem',
-              fontWeight: 700,
-              marginBottom: '10px',
-            }}
-          >
-            <span>🛡️ SÀN MUA BÁN ĐỒ CŨ BẢO VỆ 100% ESCROW</span>
+      <section className="og-home-hero">
+        <div className="og-home-hero__main">
+          <div className="og-home-hero__intro">
+            <div className="og-home-hero__eyebrow">
+              <span>SÀN MUA BÁN ĐỒ CŨ BẢO VỆ 100% ESCROW</span>
+            </div>
+            <h1>Old but Gold</h1>
+            <p>
+              Đồ cũ còn giá trị. Giao dịch an tâm tuyệt đối với bảo vệ 100% Escrow và đồng kiểm cùng bưu tá.
+            </p>
           </div>
 
-          <h1
-            style={{
-              fontFamily: 'var(--og-font-serif)',
-              fontSize: 'clamp(1.8rem, 4vw, 2.6rem)',
-              lineHeight: 1.15,
-              margin: '0 0 10px',
-              color: '#ffffff',
-            }}
-          >
-            Old but Gold
-          </h1>
-
-          <p style={{ margin: '0 0 18px', color: '#b9d4c7', fontSize: '1rem', lineHeight: 1.5 }}>
-            Đồ cũ còn giá trị. Giao dịch an tâm tuyệt đối với bảo vệ 100% Escrow và đồng kiểm cùng bưu tá.
-          </p>
-
           {/* Quick Mall Search Bar */}
-          <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '10px', maxWidth: '560px' }}>
+          <form onSubmit={handleSearchSubmit} className="og-home-hero__search" role="search" aria-label="Tìm món đồ">
             <input
               type="search"
               className="og-input"
+              aria-label="Tìm theo món đồ hoặc thương hiệu"
               placeholder="Tìm theo món đồ, thương hiệu (Sony A7, Keychron, Seiko 5...)"
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
-              style={{
-                height: '46px',
-                borderRadius: 'var(--og-radius-full)',
-                background: '#ffffff',
-                border: 'none',
-                color: 'var(--og-color-text-primary)',
-                fontSize: '0.95rem',
-                padding: '0 20px',
-              }}
             />
             <button
               type="submit"
               className="og-button og-button--gold"
-              style={{ borderRadius: 'var(--og-radius-full)', padding: '0 22px', fontWeight: 700 }}
             >
               Tìm kiếm
             </button>
@@ -254,7 +209,7 @@ export const HomePage: React.FC = () => {
         <div className="og-hero-trust-grid">
           <div className="og-hero-trust-card">
             <div className="og-hero-trust-icon-wrap" aria-hidden="true">
-              <span>🛡️</span>
+              <span><Icon name="shield" /></span>
             </div>
             <div className="og-hero-trust-content">
               <div className="og-hero-trust-title">Người bán xác minh eKYC</div>
@@ -264,7 +219,7 @@ export const HomePage: React.FC = () => {
 
           <div className="og-hero-trust-card">
             <div className="og-hero-trust-icon-wrap" aria-hidden="true">
-              <span>🔒</span>
+              <span><Icon name="lock" /></span>
             </div>
             <div className="og-hero-trust-content">
               <div className="og-hero-trust-title">Tiền giữ an toàn tại Escrow</div>
@@ -274,7 +229,7 @@ export const HomePage: React.FC = () => {
 
           <div className="og-hero-trust-card">
             <div className="og-hero-trust-icon-wrap" aria-hidden="true">
-              <span>📦</span>
+              <span><Icon name="package" /></span>
             </div>
             <div className="og-hero-trust-content">
               <div className="og-hero-trust-title">Cho xem hàng cùng bưu tá</div>
@@ -284,7 +239,7 @@ export const HomePage: React.FC = () => {
 
           <div className="og-hero-trust-card">
             <div className="og-hero-trust-icon-wrap" aria-hidden="true">
-              <span>⏱️</span>
+              <span><Icon name="clock" /></span>
             </div>
             <div className="og-hero-trust-content">
               <div className="og-hero-trust-title">48h kiểm tra hàng sau nhận</div>
@@ -347,7 +302,7 @@ export const HomePage: React.FC = () => {
                     }}
                     title="Xóa bộ lọc danh mục"
                   >
-                    ✕
+
                   </button>
                 </span>
               )}
@@ -358,10 +313,10 @@ export const HomePage: React.FC = () => {
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {[
               { key: 'ALL', label: 'Tất cả' },
-              { key: 'LIKE_NEW', label: '✨ Như mới' },
-              { key: 'GOOD', label: '👌 Khá tốt' },
-              { key: 'FAIR', label: '👍 Chấp nhận được' },
-              { key: 'VINTAGE', label: '🏺 Đồ cổ' },
+              { key: 'LIKE_NEW', label: 'Như mới' },
+              { key: 'GOOD', label: 'Khá tốt' },
+              { key: 'FAIR', label: 'Chấp nhận được' },
+              { key: 'VINTAGE', label: 'Đồ cổ' },
             ].map((cond) => (
               <button
                 key={cond.key}
@@ -403,7 +358,7 @@ export const HomePage: React.FC = () => {
               border: '1px dashed var(--og-color-border)',
             }}
           >
-            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🔍</div>
+            <div style={{ fontSize: '3rem', marginBottom: '12px' }}></div>
             <h3 style={{ margin: '0 0 6px', color: 'var(--og-color-text-primary)' }}>
               Không tìm thấy món đồ phù hợp
             </h3>

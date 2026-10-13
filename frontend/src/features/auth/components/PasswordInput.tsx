@@ -1,3 +1,4 @@
+import { Icon } from '../../../shared/components/Icon/Icon';
 import { useState, forwardRef, InputHTMLAttributes } from 'react';
 
 export interface PasswordInputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -52,7 +53,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
         </div>
         {error && (
           <div id={`${inputId}-error`} className="og-error-msg" role="alert">
-            <span>⚠️</span> {error}
+            <span><Icon name="alert" style={{ width: '1em', height: '1em' }} /></span> {error}
           </div>
         )}
         {!error && helperText && (

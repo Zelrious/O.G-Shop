@@ -2,6 +2,10 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../features/auth';
 import { marketplaceApi, Category } from '../../features/marketplace';
+import { ThemeSwitch } from './ThemeSwitch';
+import { MessageBell } from '../../features/chat-offer/MessageBell';
+import { Icon } from '../components/Icon/Icon';
+import { NotificationBell } from '../../features/notifications/NotificationBell';
 import { Button } from '../components/Button/Button';
 import { ConfirmDialog } from '../components/Dialog/ConfirmDialog';
 import { useCart } from '../context';
@@ -113,7 +117,7 @@ const QuickFilterPanel: React.FC<QuickFilterPanelProps> = ({
         <div style={{ marginBottom: '12px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
             <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--og-color-text-primary)' }}>
-              🏷️ Ngành hàng / Danh mục:
+              <Icon name="tag" size={16} /> Ngành hàng / Danh mục:
             </span>
             {draftCatId && (
               <span style={{ fontSize: '0.78rem', color: 'var(--og-color-primary)', fontWeight: 600 }}>
@@ -148,7 +152,7 @@ const QuickFilterPanel: React.FC<QuickFilterPanelProps> = ({
         {/* 2. Condition Selection (Local draft) */}
         <div style={{ marginBottom: '14px' }}>
           <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--og-color-text-primary)', display: 'block', marginBottom: '6px' }}>
-            ⭐ Tình trạng sản phẩm:
+            <Icon name="check" size={16} /> Tình trạng sản phẩm:
           </span>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
             {[
@@ -177,7 +181,7 @@ const QuickFilterPanel: React.FC<QuickFilterPanelProps> = ({
         <div className="og-quick-filter-slider-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--og-color-text-primary)' }}>
-              💰 Khoảng giá:
+              <Icon name="credit" size={16} /> Khoảng giá:
             </span>
             <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--og-color-primary)' }}>
               {draftMinPrice === 0 && draftMaxPrice >= MAX_QUICK_PRICE
@@ -626,6 +630,9 @@ export const AppHeader: React.FC = () => {
 
             {/* Tier 1 Actions */}
             <div className="og-header__actions">
+              <ThemeSwitch />
+              <MessageBell />
+              <NotificationBell />
               {/* Menu Toggle Button (appears when scrolled down - Hình 3) */}
               {isScrolled && (
                 <button
@@ -639,7 +646,7 @@ export const AppHeader: React.FC = () => {
                   <span className="og-header__toggle-tabs-icon" aria-hidden="true">
                     {isTabsExpanded ? <OutlineIcons.Close /> : <OutlineIcons.Menu />}
                   </span>
-                  <span className="og-header__toggle-tabs-text">Tab</span>
+                  <span className="og-header__toggle-tabs-text">Menu</span>
                 </button>
               )}
 
@@ -737,6 +744,12 @@ export const AppHeader: React.FC = () => {
                           <OutlineIcons.User />
                         </span>
                         <span>Hồ sơ & Sổ địa chỉ</span>
+                      </Link>
+                      <Link to="/account/status" className="og-header__dropdown-item" role="menuitem" onClick={() => setIsUserMenuOpen(false)}>
+                        <span className="og-header__dropdown-icon"><OutlineIcons.User /></span><span>Tình trạng & Điểm uy tín</span>
+                      </Link>
+                      <Link to="/vouchers" className="og-header__dropdown-item" role="menuitem" onClick={() => setIsUserMenuOpen(false)}>
+                        <span className="og-header__dropdown-icon"><Icon name="tag" /></span><span>Voucher và xu</span>
                       </Link>
 
                       <Link
@@ -934,7 +947,6 @@ export const AppHeader: React.FC = () => {
                       <span>Bán đồ cũ</span>
                     </Link>
                   )}
-
                   {/* Tab Đơn mua */}
                   <Link
                     to="/orders"

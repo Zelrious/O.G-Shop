@@ -1,3 +1,4 @@
+import { Icon } from '../../../shared/components/Icon/Icon';
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ordersApi } from '../ordersApi';
@@ -102,25 +103,25 @@ export const BuyerOrdersView: React.FC = () => {
       case 'PAID_HELD':
         return (
           <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
-            🪙 Đã giữ tiền (Ký quỹ)
+             Đã giữ tiền (Ký quỹ)
           </span>
         );
       case 'SELLER_CONFIRMED':
         return (
           <span style={{ background: '#f3e8ff', color: '#6b21a8', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
-            📦 Người bán đang chuẩn bị
+             Người bán đang chuẩn bị
           </span>
         );
       case 'SHIPPED':
         return (
           <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
-            🚚 Đang vận chuyển
+             Đang vận chuyển
           </span>
         );
       case 'DELIVERED':
         return (
           <span style={{ background: '#ccfbf1', color: '#0f766e', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
-            📬 Đã giao hàng
+             Đã giao hàng
           </span>
         );
       case 'COMPLETED':
@@ -137,7 +138,7 @@ export const BuyerOrdersView: React.FC = () => {
         );
       default:
         return (
-          <span style={{ background: '#f3f4f6', color: '#4b5563', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
+          <span style={{ background: 'var(--og-color-surface-subtle)', color: 'var(--og-color-text-secondary)', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
             {status}
           </span>
         );
@@ -148,7 +149,7 @@ export const BuyerOrdersView: React.FC = () => {
     <div style={{ maxWidth: 960, margin: '24px auto', padding: '0 16px 60px' }}>
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: '0 0 6px', color: 'var(--og-color-text-primary)' }}>
-          📦 Đơn Mua Của Bạn (OR-01)
+           Đơn Mua Của Bạn (OR-01)
         </h1>
         <p style={{ color: 'var(--og-color-text-secondary)', fontSize: '0.9rem', margin: 0 }}>
           Theo dõi trạng thái ký quỹ, tiến độ giao hàng và xác nhận nhận hàng an toàn.
@@ -232,7 +233,7 @@ export const BuyerOrdersView: React.FC = () => {
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🛒</div>
+            <div style={{ fontSize: 48, marginBottom: 12 }}><Icon name="cart" style={{ width: '1em', height: '1em' }} /></div>
             <h3 style={{ margin: '0 0 8px', color: 'var(--og-color-text-primary)' }}>Chưa có đơn hàng nào</h3>
             <p style={{ color: 'var(--og-color-text-secondary)', fontSize: '0.9rem', marginBottom: 20 }}>
               Bạn chưa có đơn hàng nào trong mục này. Hãy khám phá chợ đồ cũ để săn món đồ yêu thích!
@@ -259,7 +260,7 @@ export const BuyerOrdersView: React.FC = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                borderBottom: '1px solid var(--og-color-border-subtle, #f3f4f6)',
+                borderBottom: '1px solid var(--og-color-border-subtle, var(--og-color-surface-subtle))',
                 paddingBottom: 12,
                 marginBottom: 16,
                 fontSize: '0.88rem',
@@ -289,14 +290,12 @@ export const BuyerOrdersView: React.FC = () => {
                     width: 80,
                     height: 80,
                     borderRadius: 8,
-                    background: '#f3f4f6',
+                    background: 'var(--og-color-surface-subtle)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: 28,
-                  }}>
-                    📦
-                  </div>
+                  }}><Icon name="package" style={{ width: '1em', height: '1em' }} /></div>
                 )}
 
                 <div style={{ flex: 1 }}>
@@ -324,7 +323,7 @@ export const BuyerOrdersView: React.FC = () => {
                 justifyContent: 'flex-end',
                 alignItems: 'center',
                 gap: 12,
-                borderTop: '1px solid var(--og-color-border-subtle, #f3f4f6)',
+                borderTop: '1px solid var(--og-color-border-subtle, var(--og-color-surface-subtle))',
                 paddingTop: 14,
                 marginTop: 16,
               }}>
@@ -336,7 +335,7 @@ export const BuyerOrdersView: React.FC = () => {
                       style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 600 }}
                       onClick={() => navigate(`/checkout/payment?orderId=${order.orderId}`)}
                     >
-                      ⚡ Thanh toán ngay
+                       Thanh toán ngay
                     </button>
                     <button
                       type="button"
@@ -469,8 +468,7 @@ export const BuyerOrdersView: React.FC = () => {
               fontSize: '0.82rem',
               color: '#92400e',
               marginBottom: 16,
-            }}>
-              ⚠️ <strong>Lưu ý:</strong> Voucher giảm giá đã áp dụng cho đơn hàng này sẽ <strong>không được hoàn lại</strong> lượt dùng.
+            }}><Icon name="alert" style={{ width: '1em', height: '1em' }} /><strong>Lưu ý:</strong> Voucher giảm giá đã áp dụng cho đơn hàng này sẽ <strong>không được hoàn lại</strong> lượt dùng.
             </div>
 
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>

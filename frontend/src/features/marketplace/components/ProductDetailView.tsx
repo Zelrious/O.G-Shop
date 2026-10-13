@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { CONDITION_LABELS, ProductDetail } from '../types';
 import { AuthContext } from '../../auth/context';
 import { ConditionBadge, VerificationBadge } from '../../../shared/components';
+import { ChatContext } from '../../chat-offer/chatContext';
+import { Icon } from '../../../shared/components/Icon/Icon';
 import { useCart } from '../../../shared/context';
 
 interface ProductDetailViewProps {
@@ -13,15 +15,13 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
   const authContext = useContext(AuthContext);
   const isAuthenticated = Boolean(authContext?.isAuthenticated);
   const navigate = useNavigate();
+  const chat = useContext(ChatContext);
   const { addToCart } = useCart();
   const productCategories = product.categories?.length ? product.categories : [product.category];
 
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authActionName, setAuthActionName] = useState<string>('');
-  const [offerModalOpen, setOfferModalOpen] = useState(false);
-  const [offerPriceInput, setOfferPriceInput] = useState<string>('');
-  const [offerSuccessMsg, setOfferSuccessMsg] = useState<string | null>(null);
   const [cartSuccessMsg, setCartSuccessMsg] = useState<string | null>(null);
   const [isFavorited, setIsFavorited] = useState(false);
 
@@ -73,22 +73,14 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
 
   const handleChat = () => {
     requireAuth('Nhắn tin trao đổi với người bán', () => {
-      navigate(`/messages?sellerId=${product.seller.sellerId}&productId=${product.productId}`);
+      if (chat?.enabled) chat.open({ productId: product.productId }); else navigate(`/messages?productId=${product.productId}`);
     });
   };
 
   const handleOpenOffer = () => {
     requireAuth('Gửi đề xuất Trả giá món đồ này', () => {
-      setOfferPriceInput(String(Math.round(product.listedPrice * 0.9)));
-      setOfferModalOpen(true);
+      if (chat?.enabled) chat.open({ productId: product.productId, offer: true }); else navigate(`/messages?productId=${product.productId}&offer=1`);
     });
-  };
-
-  const handleSubmitOffer = (e: React.FormEvent) => {
-    e.preventDefault();
-    setOfferModalOpen(false);
-    setOfferSuccessMsg(`Đã gửi đề xuất trả giá ${new Intl.NumberFormat('vi-VN').format(Number(offerPriceInput))} đ tới ${product.seller.displayName}.`);
-    setTimeout(() => setOfferSuccessMsg(null), 5000);
   };
 
   return (
@@ -114,7 +106,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
           style={{
             padding: '12px 20px',
             background: 'var(--og-color-success-bg, #ecfdf5)',
-            border: '1px solid var(--og-color-success-border, #a7f3d0)',
+            border: '1px solid var(--og-color-success-border, var(--og-color-border))',
             color: 'var(--og-color-success, #065f46)',
             borderRadius: '8px',
             marginBottom: '16px',
@@ -123,25 +115,10 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
             justifyContent: 'space-between',
           }}
         >
-          <span>🛒 {cartSuccessMsg}</span>
+          <span>{cartSuccessMsg}</span>
           <Link to="/cart" style={{ fontWeight: 700, color: '#065f46', textDecoration: 'none' }}>
             Xem giỏ hàng →
           </Link>
-        </div>
-      )}
-
-      {offerSuccessMsg && (
-        <div
-          style={{
-            padding: '12px 20px',
-            background: '#f0f9ff',
-            border: '1px solid #bae6fd',
-            color: '#0369a1',
-            borderRadius: '8px',
-            marginBottom: '16px',
-          }}
-        >
-          🏷️ {offerSuccessMsg}
         </div>
       )}
 
@@ -170,18 +147,18 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
                   flexDirection: 'column',
                   alignItems: 'center',
                   gap: '8px',
-                  color: '#94a3b8',
+                  color: 'var(--og-color-text-muted)',
                 }}
                 aria-hidden="true"
               >
-                <span style={{ fontSize: '2.5rem' }}>📦</span>
+                <span style={{ fontSize: '2.5rem' }}><Icon name="package" /></span>
                 <span>Chưa có ảnh cho sản phẩm này</span>
               </div>
             )}
 
             {product.media.length > 0 && (
               <span className="og-product-detail__image-badge">
-                {isCurrentVideo ? '🎥 1 Video cận cảnh' : `📷 ${activeMediaIndex + 1} / ${product.media.length} media`}
+                {isCurrentVideo ? '1 Video cận cảnh' : `${activeMediaIndex + 1} / ${product.media.length} media`}
               </span>
             )}
           </div>
@@ -201,8 +178,8 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
                   style={{ position: 'relative' }}
                 >
                   {media.mediaType === 'VIDEO' ? (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1e293b', color: '#fff', fontSize: '1.2rem' }}>
-                      🎥
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--og-color-text-primary)', color: '#fff', fontSize: '1.2rem' }}>
+
                     </div>
                   ) : (
                     <img src={media.mediaUrl} alt={`Ảnh nhỏ ${idx + 1}`} />
@@ -227,7 +204,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
                 title="Báo cáo tin đăng"
                 onClick={() => alert('Đã ghi nhận yêu cầu báo cáo tin đăng vi phạm.')}
               >
-                🚩 <span>Báo cáo</span>
+                <span>Báo cáo</span>
               </button>
               <button
                 type="button"
@@ -238,7 +215,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
                   alert('Đã sao chép liên kết sản phẩm vào bộ nhớ tạm!');
                 }}
               >
-                🔗 <span>Chia sẻ</span>
+                <span>Chia sẻ</span>
               </button>
               <button
                 type="button"
@@ -247,7 +224,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
                 title="Lưu tin yêu thích"
                 onClick={() => setIsFavorited(!isFavorited)}
               >
-                <span>{isFavorited ? '❤️ Đã lưu' : '🤍 Lưu tin'}</span>
+                <span>{isFavorited ? 'Đã lưu' : 'Lưu tin'}</span>
               </button>
             </div>
           </div>
@@ -265,7 +242,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
             <ConditionBadge condition={product.condition} />
             {product.requiresBuyerEkyc && (
               <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '3px 10px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.4)' }}>
-                🛡️ Yêu cầu xác thực eKYC
+                Yêu cầu xác thực eKYC
               </span>
             )}
           </div>
@@ -291,7 +268,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
             </div>
             <div className="og-product-detail__shipping-row">
               <span className="og-product-detail__shipping-label">Phí ship:</span>
-              <span style={{ color: '#059669', fontWeight: 600 }}>
+              <span style={{ color: 'var(--og-color-primary)', fontWeight: 600 }}>
                 30.000 ₫ (Hỗ trợ đồng kiểm tận nơi trước khi thanh toán)
               </span>
             </div>
@@ -303,7 +280,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
 
           {/* Escrow Guarantee Banner (Oreka green guarantee) */}
           <div className="og-product-detail__guarantee-box">
-            <span style={{ fontSize: '1.3rem', flexShrink: 0 }}>🛡️</span>
+            <span style={{ fontSize: '1.3rem', flexShrink: 0 }}><Icon name="shield" /></span>
             <div>
               <strong>Old but Gold cam kết:</strong> Nhận sản phẩm chuẩn như mô tả hoặc nhận hoàn tiền 100%. Tiền mua của bạn được bảo mật và tạm giữ an toàn trong suốt 48h kiểm tra hàng.
             </div>
@@ -321,7 +298,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
               </svg>
-              <span>💬 Nhắn tin bảo mật với {product.seller.displayName}</span>
+              <span>Nhắn tin bảo mật với {product.seller.displayName}</span>
             </button>
           </div>
 
@@ -332,7 +309,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
               className="og-btn-add-cart"
               onClick={handleAddToCart}
             >
-              <span>🛒</span>
+              <span><Icon name="cart" /></span>
               <span>Thêm vào giỏ</span>
             </button>
 
@@ -341,7 +318,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
               className="og-btn-buy-now"
               onClick={handleBuyNow}
             >
-              <span>⚡ Mua ngay</span>
+              <span>Mua ngay</span>
             </button>
           </div>
 
@@ -351,7 +328,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
             className="og-btn-make-offer"
             onClick={handleOpenOffer}
           >
-            <span>🏷️</span>
+            <span><Icon name="tag" /></span>
             <span>Đề xuất Trả giá (Make an Offer)</span>
           </button>
         </section>
@@ -370,7 +347,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
               <VerificationBadge status="VERIFIED" showLabel={false} />
             </div>
             <div className="og-seller-stats">
-              <span>⭐ 5.0 (18 đánh giá)</span>
+              <span><Icon name="star" size={15} /> 5.0 (18 đánh giá)</span>
               <span>•</span>
               <span>12 sản phẩm đang bán</span>
               <span>•</span>
@@ -382,22 +359,22 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
         {/* Trust statistics row */}
         <div className="og-seller-trust-grid">
           <div className="og-seller-trust-item">
-            <span className="og-seller-trust-icon">🛡️</span>
+            <span className="og-seller-trust-icon"><Icon name="shield" /></span>
             <span className="og-seller-trust-text">Đáng tin cậy</span>
             <span>Xác thực CCCD</span>
           </div>
           <div className="og-seller-trust-item">
-            <span className="og-seller-trust-icon">📅</span>
+            <span className="og-seller-trust-icon"><Icon name="clock" /></span>
             <span className="og-seller-trust-text">Thành viên từ</span>
             <span>Năm 2024</span>
           </div>
           <div className="og-seller-trust-item">
-            <span className="og-seller-trust-icon">💬</span>
+            <span className="og-seller-trust-icon"><Icon name="message" /></span>
             <span className="og-seller-trust-text">Phản hồi nhanh</span>
             <span>100% trong 5 phút</span>
           </div>
           <div className="og-seller-trust-item">
-            <span className="og-seller-trust-icon">🚚</span>
+            <span className="og-seller-trust-icon"><Icon name="truck" /></span>
             <span className="og-seller-trust-text">Giao hàng nhanh</span>
             <span>Gửi bưu cục 24h</span>
           </div>
@@ -451,7 +428,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
           {product.location && (
             <div className="og-specs-row">
               <span className="og-specs-label">Khu vực đăng bán</span>
-              <span className="og-specs-value">📍 {product.location}</span>
+              <span className="og-specs-value">{product.location}</span>
             </div>
           )}
           <div className="og-specs-row">
@@ -479,7 +456,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
         >
           <div className="og-modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="og-modal-dialog__header">
-              <h3 className="og-modal-dialog__title">🔒 Đăng nhập để tiếp tục</h3>
+              <h3 className="og-modal-dialog__title">Đăng nhập để tiếp tục</h3>
             </div>
             <div className="og-modal-dialog__body">
               <p style={{ margin: '0 0 12px' }}>
@@ -491,10 +468,10 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
                   padding: '12px',
                   borderRadius: '8px',
                   fontSize: '0.86rem',
-                  color: '#475569',
+                  color: 'var(--og-color-text-secondary)',
                 }}
               >
-                🛡️ <strong>Lợi ích khi đăng nhập:</strong> Mọi giao dịch được bảo vệ bởi thanh toán giữ tiền Escrow, trò chuyện trực tiếp và mở khiếu nại nếu hàng không đúng mô tả.
+                <strong>Lợi ích khi đăng nhập:</strong> Mọi giao dịch được bảo vệ bởi thanh toán giữ tiền Escrow, trò chuyện trực tiếp và mở khiếu nại nếu hàng không đúng mô tả.
               </div>
             </div>
             <div className="og-modal-dialog__footer" style={{ justifyContent: 'space-between' }}>
@@ -526,73 +503,6 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
         </div>
       )}
 
-      {/* 7. Modal Trả Giá (Make Offer CH-03) */}
-      {offerModalOpen && (
-        <div
-          className="og-modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setOfferModalOpen(false)}
-        >
-          <div className="og-modal-dialog" onClick={(e) => e.stopPropagation()}>
-            <form onSubmit={handleSubmitOffer}>
-              <div className="og-modal-dialog__header">
-                <h3 className="og-modal-dialog__title">🏷️ Đề xuất Trả giá món đồ</h3>
-              </div>
-              <div className="og-modal-dialog__body">
-                <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#64748b' }}>
-                  Gửi mức giá bạn mong muốn tới <strong>{product.seller.displayName}</strong>. Nếu người bán chấp nhận, bạn sẽ được mua với mức giá này.
-                </p>
-
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>
-                    Giá niêm yết hiện tại:
-                  </label>
-                  <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#e25b29' }}>
-                    {formattedPrice}
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: '16px' }}>
-                  <label htmlFor="offer-price-input" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>
-                    Mức giá đề xuất của bạn (VNĐ):
-                  </label>
-                  <input
-                    id="offer-price-input"
-                    type="number"
-                    className="og-input"
-                    value={offerPriceInput}
-                    onChange={(e) => setOfferPriceInput(e.target.value)}
-                    min="10000"
-                    max={product.listedPrice}
-                    required
-                    style={{ fontSize: '1.1rem', fontWeight: 700 }}
-                  />
-                  <span style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '4px', display: 'block' }}>
-                    💡 Gợi ý: Các đề xuất trong khoảng 85% - 95% giá niêm yết thường dễ được chấp nhận.
-                  </span>
-                </div>
-              </div>
-              <div className="og-modal-dialog__footer">
-                <button
-                  type="button"
-                  className="og-button og-button--ghost og-button--sm"
-                  onClick={() => setOfferModalOpen(false)}
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="og-button og-button--primary og-button--sm"
-                  style={{ background: '#d97706', borderColor: '#d97706' }}
-                >
-                  Gửi đề xuất trả giá
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </article>
   );
 };

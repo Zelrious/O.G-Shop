@@ -23,7 +23,7 @@ function AddressFields({
   return (
     <div role="group" aria-label={title} className="og-form-section">
       <div className="og-form-section-header">
-        <h4 className="og-form-section-title">📍 {title}</h4>
+        <h4 className="og-form-section-title"> {title}</h4>
         {subtitle && <p className="og-form-section-desc">{subtitle}</p>}
       </div>
 
@@ -108,7 +108,7 @@ export const SellerRegistrationFields: React.FC<SellerRegistrationFieldsProps> =
       {/* 2. STORE INFORMATION SECTION */}
       <div className="og-form-section" style={{ marginTop: 0, paddingTop: 0, borderTop: 0 }}>
         <div className="og-form-section-header">
-          <h4 className="og-form-section-title">🏪 Thông tin cửa hàng</h4>
+          <h4 className="og-form-section-title"> Thông tin cửa hàng</h4>
           <p className="og-form-section-desc">Tên gian hàng và số điện thoại hỗ trợ khách hàng của bạn.</p>
         </div>
 
@@ -195,7 +195,7 @@ export const SellerRegistrationFields: React.FC<SellerRegistrationFieldsProps> =
       {/* 5. PAYMENT INFORMATION SECTION */}
       <div className="og-form-section">
         <div className="og-form-section-header">
-          <h4 className="og-form-section-title">💳 Thông tin nhận thanh toán</h4>
+          <h4 className="og-form-section-title"> Thông tin nhận thanh toán</h4>
           <p className="og-form-section-desc">
             Thông tin này được sử dụng để nhận thanh toán từ các giao dịch hoàn tất trên O.G Shop.
           </p>

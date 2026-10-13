@@ -1,3 +1,4 @@
+import { Icon } from '../shared/components/Icon/Icon';
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ProductDetail, ProductDetailView, marketplaceApi } from '../features/marketplace';
@@ -74,7 +75,7 @@ export const ProductDetailPage: React.FC = () => {
   if (isNotFound) {
     return (
       <div className="og-detail-not-found">
-        <div className="og-detail-not-found__icon">📦</div>
+        <div className="og-detail-not-found__icon"><Icon name="package" style={{ width: '1em', height: '1em' }} /></div>
         <h1 className="og-detail-not-found__title">Sản phẩm không tồn tại</h1>
         <p className="og-detail-not-found__desc">
           Sản phẩm này có thể đã được gỡ xuống, đã bán hoặc liên kết không chính xác.
@@ -96,7 +97,7 @@ export const ProductDetailPage: React.FC = () => {
           style={{ marginTop: '16px' }}
           onClick={fetchDetail}
         >
-          🔄 Thử lại
+           Thử lại
         </button>
       </div>
     );

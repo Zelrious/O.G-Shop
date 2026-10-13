@@ -1,3 +1,4 @@
+import { Icon } from '../../../shared/components/Icon/Icon';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ProductSummary } from '../types';
@@ -49,7 +50,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             />
           ) : (
             <div className="og-product-card__image-placeholder" aria-hidden="true">
-              <span className="og-product-card__placeholder-icon">📦</span>
+              <span className="og-product-card__placeholder-icon"><Icon name="package" /></span>
               <span>Chưa có ảnh</span>
             </div>
           )}
