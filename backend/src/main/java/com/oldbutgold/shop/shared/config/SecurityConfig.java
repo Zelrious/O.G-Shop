@@ -40,12 +40,16 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             CorsConfigurationSource corsConfigurationSource,
-            JwtAuthenticationConverter jwtAuthenticationConverter
+            JwtAuthenticationConverter jwtAuthenticationConverter,
+            com.oldbutgold.shop.modules.identity.application.AccountAccessService accountAccess,
+            com.fasterxml.jackson.databind.ObjectMapper json
     ) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterAfter(new com.oldbutgold.shop.modules.identity.infrastructure.security.AccountAccessFilter(accountAccess,json),
+                    org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST,
@@ -70,6 +74,8 @@ public class SecurityConfig {
                                 "/api/v1/media/**",
                                 "/api/v1/payments/vnpay-ipn").permitAll()
                         .requestMatchers("/api/v1/admin/payments/**").hasAnyRole("ADMIN", "KTV")
+                        .requestMatchers("/api/v1/ktv/users/**").hasRole("KTV")
+                        .requestMatchers("/api/v1/account/**").hasAnyRole("BUYER","SELLER")
                         .requestMatchers(
                                 "/api/v1/auth/me",
                                 "/api/v1/profile/**",

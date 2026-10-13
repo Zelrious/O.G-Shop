@@ -12,6 +12,20 @@ import java.math.BigDecimal;
 import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.function.Supplier;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.oldbutgold.shop.modules.identity.api.AccountManagementDtos;
+import com.oldbutgold.shop.modules.identity.application.AccountManagementService;
+import com.oldbutgold.shop.modules.identity.infrastructure.persistence.AccountManagementRepository;
+import com.oldbutgold.shop.modules.commerce.application.DefaultAccountObligationsFacade;
+import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.AccountOrderRepository;
+import com.oldbutgold.shop.modules.trustsafety.application.DefaultAccountTrustFacade;
+import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.AccountTrustRepository;
+import com.oldbutgold.shop.modules.platform.application.DefaultGovernanceHistoryFacade;
+import com.oldbutgold.shop.modules.platform.application.NotificationService;
+import com.oldbutgold.shop.modules.platform.infrastructure.persistence.GovernanceHistoryRepository;
+import com.oldbutgold.shop.modules.platform.infrastructure.persistence.NotificationRepository;
 import static org.assertj.core.api.Assertions.*;
 
 /** Isolated real PostgreSQL databases. Never resets the supplied application database. */
@@ -142,7 +156,39 @@ class DatabaseExpansionPostgresTest {
         var start=new CountDownLatch(1);
         try(var pool=Executors.newFixedThreadPool(2)){Callable<Boolean> task=()->{start.await();try{action.run();return true;}catch(DataAccessException e){return false;}};var a=pool.submit(task);var b=pool.submit(task);start.countDown();return(a.get(20,TimeUnit.SECONDS)?1:0)+(b.get(20,TimeUnit.SECONDS)?1:0);}
     }
-    @Test void cleanMigrationsValidate() {flyway(ds,null).validate();assertThat(id("SELECT max(version::int) FROM public.flyway_schema_history WHERE success")).isEqualTo(25);assertThat(id("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history'")).isEqualTo(47);}
+    @Test void cleanMigrationsValidate() {flyway(ds,null).validate();assertThat(id("SELECT max(version::int) FROM public.flyway_schema_history WHERE success")).isEqualTo(32);assertThat(id("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history'")).isEqualTo(47);}
+    @Test void accountDeadlineCompensationRequiresCanonicalOrderAndConfirmedExactOutage() {
+        Checkout checkout=checkout(listing(2,50000),1);paid(checkout);deliver(checkout);
+        long target=returnCase(checkout);
+        long round=id("INSERT INTO case_rounds(case_id,round_no,stage) VALUES(?,1,'RETURN_APPROVAL') RETURNING round_id",target);
+        j.update("INSERT INTO case_decisions(round_id,reviewed_by,outcome,reason,command_key) VALUES(?,?,'APPROVE_RETURN','Test approval',?)",round,seller,key());
+        tx(()->{
+            long shipment=id("INSERT INTO shipments(order_id,carrier,status,workflow_model,delivery_method,fee_snapshot,fee_payer,leg,return_case_id) VALUES(?,'SELF_PICKUP','PENDING','UC83','SELF_PICKUP',0,'BUYER','RETURN',?) RETURNING shipment_id",checkout.order,target);
+            confirmations(shipment);assertThat(j.queryForObject("SELECT og_confirm_direct_handover(?)",Boolean.class,shipment)).isTrue();return null;
+        });
+        long source=id("INSERT INTO cases(case_type,target_user_id,created_by,description,command_key) VALUES('SYSTEM_ISSUE',?,?,'Test outage',?) RETURNING case_id",buyer,seller,key());
+        long sourceRound=id("INSERT INTO case_rounds(case_id,round_no,stage) VALUES(?,1,'SYSTEM_REVIEW') RETURNING round_id",source);
+        j.update("INSERT INTO case_decisions(round_id,reviewed_by,outcome,reason,command_key) VALUES(?,?,'SYSTEM_RESOLVED','Test resolution',?)",sourceRound,ktv,key());
+        var from=java.time.Instant.now().minusSeconds(7200).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);var until=from.plusSeconds(3600);
+        j.update("INSERT INTO case_events(event_id,case_id,actor_id,event_type,reason,metadata,command_key) VALUES(?,?,?,'COMPENSATION','One confirmed hour',jsonb_build_object('affectedFrom',?::text,'affectedUntil',?::text),?)",uuid(),source,ktv,from.toString(),until.toString(),key());
+        var original=j.queryForObject("SELECT public.og28_response_deadline(?)",java.sql.Timestamp.class,target).toInstant();
+        String metadata="{\"source\":\"ACCOUNT_UC67\",\"userId\":"+seller+",\"systemCaseId\":"+source+",\"affectedFrom\":\""+from+"\",\"affectedUntil\":\""+until+"\"}";
+        rejected(()->j.update("INSERT INTO case_events(event_id,case_id,actor_id,event_type,reason,metadata,command_key) VALUES(?,?,?,'DEADLINE_EXTENSION','Unauthorized',?::jsonb,?)",uuid(),target,buyer,metadata,key()));
+        var json=new ObjectMapper().registerModule(new JavaTimeModule()).disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        var service=new AccountManagementService(new AccountManagementRepository(j,json),
+            new DefaultAccountObligationsFacade(new AccountOrderRepository(j)),
+            new DefaultAccountTrustFacade(new AccountTrustRepository(j)),
+            new DefaultGovernanceHistoryFacade(new GovernanceHistoryRepository(j,json)),
+            new NotificationService(new NotificationRepository(j,json)),json,java.time.Clock.systemUTC());
+        String commandKey=key();
+        var command=new AccountManagementDtos.Command(AccountManagementDtos.Action.COMPENSATE,0L,commandKey,"Exact confirmed hour",null,null,null,source,from,until,null,target);
+        var result=tx(()->service.command(ktv,seller,command));
+        assertThat(tx(()->service.command(ktv,seller,command))).isEqualTo(result);
+        assertThat(id("SELECT governance_version FROM public.users WHERE user_id=?",seller)).isEqualTo(1);
+        assertThat(id("SELECT count(*) FROM public.audit_logs WHERE command_key=?",commandKey)).isEqualTo(1);
+        assertThat(java.time.Duration.between(original,j.queryForObject("SELECT public.og28_response_deadline(?)",java.sql.Timestamp.class,target).toInstant())).isEqualTo(java.time.Duration.ofHours(1));
+        rejected(()->j.update("INSERT INTO case_events(event_id,case_id,actor_id,event_type,reason,metadata,command_key) VALUES(?,?,?,'DEADLINE_EXTENSION','Duplicate',?::jsonb,?)",uuid(),target,ktv,metadata,key()));
+    }
     @Test void upgradePreservesV14WithoutInventingApprovals() {
         String name="ogshop_expansion_"+key().replace("-","");root.execute("CREATE DATABASE "+name);
         try{
@@ -322,7 +368,14 @@ class DatabaseExpansionPostgresTest {
             flyway(ds,null).migrate();flyway(ds,null).validate();
             var properties=new java.util.Properties();properties.setProperty("currentSchema","og_compat,public");ds.setConnectionProperties(properties);
             assertThat(names).hasSize(103); // V24 intentionally retires refresh credentials.
-            for(String table:names) assertThat(j.queryForMap("SELECT count(*) AS rows,md5(coalesce(string_agg(md5(to_jsonb(t)::text),'' ORDER BY md5(to_jsonb(t)::text)),'')) AS fingerprint FROM og_compat."+table+" t")).as(table).isEqualTo(before.get(table));
+            for(String table:names) {
+                // V26 extends the users compatibility projection with a new
+                // credential counter. Compare every original source field.
+                String row = table.equals("users") ? "(to_jsonb(t)-'credential_version')" : "to_jsonb(t)";
+                assertThat(j.queryForMap("SELECT count(*) AS rows,md5(coalesce(string_agg(md5("+row+"::text),'' ORDER BY md5("+row+"::text)),'')) AS fingerprint FROM og_compat."+table+" t")).as(table).isEqualTo(before.get(table));
+            }
+            assertThat(id("SELECT count(*) FROM public.users WHERE credential_version<>0")).isZero();
+            assertThat(j.queryForObject("SELECT u.google_subject=e.provider_subject FROM public.users u JOIN og_compat.external_identities e ON e.user_id=u.user_id AND e.provider='GOOGLE' WHERE u.user_id=?",Boolean.class,buyer)).isTrue();
             assertThat(j.queryForList("SELECT version,checksum FROM public.flyway_schema_history WHERE version::int<=21 ORDER BY installed_rank")).isEqualTo(checksums);
             assertThat(id("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history'")).isEqualTo(47);
             assertThat(id("SELECT count(*) FROM pg_namespace WHERE nspname='_og70_v21'")).isZero();
