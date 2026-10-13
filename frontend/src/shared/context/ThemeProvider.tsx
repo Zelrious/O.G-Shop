@@ -1,4 +1,4 @@
-import { useEffect, useState, ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { Theme, ThemeContext } from './themeContext';
 
 const THEME_STORAGE_KEY = 'og_shop_theme';
@@ -14,44 +14,38 @@ function getInitialResolvedTheme(t: Theme): 'light' | 'dark' {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem(THEME_STORAGE_KEY) : null;
-    return (saved as Theme) || 'light';
+    try {
+      const saved = localStorage.getItem(THEME_STORAGE_KEY);
+      return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'light';
+    } catch { return 'light'; }
   });
 
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => getInitialResolvedTheme(theme));
+  const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => getInitialResolvedTheme('system'));
+  const resolvedTheme = theme === 'system' ? systemTheme : theme;
+
+  useLayoutEffect(() => {
+    document.documentElement.setAttribute('data-theme', resolvedTheme);
+    document.documentElement.classList.toggle('dark', resolvedTheme === 'dark');
+    document.documentElement.style.colorScheme = resolvedTheme;
+  }, [resolvedTheme]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
-    const applyThemeToDOM = (active: 'light' | 'dark') => {
-      document.documentElement.setAttribute('data-theme', active);
-      if (active === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    };
-
-    applyThemeToDOM(resolvedTheme);
-
     const listener = (e: MediaQueryListEvent) => {
-      if (theme === 'system') {
-        const next = e.matches ? 'dark' : 'light';
-        setResolvedTheme(next);
-        applyThemeToDOM(next);
-      }
+      setSystemTheme(e.matches ? 'dark' : 'light');
     };
 
     mediaQuery.addEventListener('change', listener);
     return () => mediaQuery.removeEventListener('change', listener);
-  }, [theme, resolvedTheme]);
+  }, []);
 
-  const setTheme = (newTheme: Theme) => {
+  const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme);
-    localStorage.setItem(THEME_STORAGE_KEY, newTheme);
-  };
+    try { localStorage.setItem(THEME_STORAGE_KEY, newTheme); } catch { /* Theme still works when storage is unavailable. */ }
+  }, []);
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === 'light' ? 'dark' : 'light');

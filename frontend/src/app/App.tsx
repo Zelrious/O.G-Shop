@@ -47,6 +47,8 @@ import {
 } from '../pages';
 import { SellerDashboardPage } from '../pages/seller/SellerDashboardPage';
 import './styles.css';
+import './ui-theme.css';
+import { RouteExperience } from './RouteExperience';
 
 function NotFoundPage() {
   return (
@@ -70,6 +72,7 @@ export function App() {
           <DemoProvider>
             <CartProvider>
               <AuthProvider>
+                <RouteExperience />
                 <Routes>
                   {/* 1. Guest / Auth Layout Shell */}
                   <Route element={<GuestLayout />}>

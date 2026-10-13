@@ -1,3 +1,4 @@
+import { Icon } from '../Icon/Icon';
 import React from 'react';
 
 export type VerificationStatus = 'VERIFIED' | 'PENDING' | 'REJECTED' | 'NOT_SUBMITTED' | 'MVP_BYPASS';
@@ -25,7 +26,7 @@ export const VerificationBadge: React.FC<VerificationBadgeProps> = ({
           className={`og-badge og-badge--verified ${className}`}
           title={`${type === 'SELLER' ? 'Người bán' : 'Người mua'} đã xác minh danh tính eKYC`}
         >
-          <span>🛡️</span>
+          <span><Icon name="shield" /></span>
           {showLabel && <span>{type === 'SELLER' ? 'Người Bán Đã Xác Minh' : 'Đã Xác Minh'}</span>}
         </span>
       );
@@ -35,7 +36,7 @@ export const VerificationBadge: React.FC<VerificationBadgeProps> = ({
           className={`og-badge og-badge--pending ${className}`}
           title="Hồ sơ xác minh đang được xét duyệt"
         >
-          <span>⏳</span>
+          <span><Icon name="clock" /></span>
           {showLabel && <span>Chờ Duyệt KYC</span>}
         </span>
       );
@@ -45,7 +46,7 @@ export const VerificationBadge: React.FC<VerificationBadgeProps> = ({
           className={`og-badge og-badge--rejected ${className}`}
           title="Hồ sơ xác minh bị từ chối"
         >
-          <span>❌</span>
+          <span><Icon name="close" /></span>
           {showLabel && <span>Chưa Đạt KYC</span>}
         </span>
       );
