@@ -77,6 +77,7 @@ public class SecurityConfig {
                                 "/api/v1/seller-verification/**",
                                 "/api/v1/seller/products/**",
                                 "/api/v1/moderation/**",
+                                "/api/v1/notifications/**",
                                 "/api/v1/commerce/**",
                                 "/api/v1/payments/**").authenticated()
 
