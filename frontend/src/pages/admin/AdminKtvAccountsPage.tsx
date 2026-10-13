@@ -1,3 +1,4 @@
+import { Select } from '../../shared/components/Select/Select';
 import React, { useState } from 'react';
 import { useManagementStore } from '../../features/management/useManagementStore';
 import { ConsoleIcons } from '../../shared/layout/ConsoleIcons';
@@ -137,10 +138,10 @@ export const AdminKtvAccountsPage: React.FC = () => {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: '#0f172a', fontWeight: 800 }}>
+          <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: 'var(--og-color-text-primary)', fontWeight: 800 }}>
             Quản lý tài khoản Kỹ Thuật Viên (KTV)
           </h1>
-          <p style={{ margin: 0, color: '#64748b', fontSize: '0.92rem' }}>
+          <p style={{ margin: 0, color: 'var(--og-color-text-secondary)', fontSize: '0.92rem' }}>
             Cấp quyền, phân công khu vực trực ban, chỉnh sửa thông tin hoặc tạm ngừng quyền kiểm duyệt của nhân sự KTV.
           </p>
         </div>
@@ -150,7 +151,7 @@ export const AdminKtvAccountsPage: React.FC = () => {
           onClick={handleOpenCreate}
           style={{
             padding: '10px 18px',
-            background: '#059669',
+            background: 'var(--og-color-primary-fill)',
             color: '#ffffff',
             border: 'none',
             borderRadius: '8px',
@@ -163,8 +164,8 @@ export const AdminKtvAccountsPage: React.FC = () => {
             boxShadow: '0 1px 3px rgba(5, 150, 105, 0.2)',
             transition: 'background-color 0.15s ease',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#047857')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = '#059669')}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--og-color-primary)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--og-color-primary)')}
         >
           <ConsoleIcons.Plus size={18} />
           <span>Tạo tài khoản KTV mới</span>
@@ -176,8 +177,8 @@ export const AdminKtvAccountsPage: React.FC = () => {
         <div
           style={{
             padding: '12px 16px',
-            background: '#ecfdf5',
-            border: '1px solid #a7f3d0',
+            background: 'var(--og-color-primary-light)',
+            border: '1px solid var(--og-color-border)',
             borderRadius: '8px',
             color: '#065f46',
             fontSize: '0.88rem',
@@ -199,10 +200,10 @@ export const AdminKtvAccountsPage: React.FC = () => {
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '12px',
-          background: '#ffffff',
+          background: 'var(--og-color-surface)',
           padding: '16px',
           borderRadius: '12px',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--og-color-border)',
           boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
         }}
       >
@@ -213,7 +214,7 @@ export const AdminKtvAccountsPage: React.FC = () => {
               left: '12px',
               top: '50%',
               transform: 'translateY(-50%)',
-              color: '#94a3b8',
+              color: 'var(--og-color-text-muted)',
               display: 'flex',
               alignItems: 'center',
             }}
@@ -228,18 +229,18 @@ export const AdminKtvAccountsPage: React.FC = () => {
             style={{
               width: '100%',
               padding: '9px 12px 9px 36px',
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
+              background: 'var(--og-color-surface)',
+              border: '1px solid var(--og-color-border-strong)',
               borderRadius: '8px',
-              color: '#0f172a',
+              color: 'var(--og-color-text-primary)',
               fontSize: '0.88rem',
               outline: 'none',
               boxSizing: 'border-box',
             }}
           />
         </div>
-        <div style={{ fontSize: '0.86rem', color: '#64748b' }}>
-          Đội ngũ KTV: <strong style={{ color: '#0f172a' }}>{ktvAccounts.length}</strong> nhân sự
+        <div style={{ fontSize: '0.86rem', color: 'var(--og-color-text-secondary)' }}>
+          Đội ngũ KTV: <strong style={{ color: 'var(--og-color-text-primary)' }}>{ktvAccounts.length}</strong> nhân sự
         </div>
       </div>
 
@@ -267,9 +268,9 @@ export const AdminKtvAccountsPage: React.FC = () => {
       {/* KTV Table (Light Theme) */}
       <div
         style={{
-          background: '#ffffff',
+          background: 'var(--og-color-surface)',
           borderRadius: '12px',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--og-color-border)',
           overflow: 'hidden',
           boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
         }}
@@ -277,7 +278,7 @@ export const AdminKtvAccountsPage: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', background: '#f8fafc' }}>
+              <tr style={{ borderBottom: '1px solid var(--og-color-border)', color: 'var(--og-color-text-secondary)', background: 'var(--og-color-bg)' }}>
                 <th style={{ padding: '14px 16px', width: '40px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                   <TableCheckbox
                     checked={isAllSelected}
@@ -302,12 +303,12 @@ export const AdminKtvAccountsPage: React.FC = () => {
                   <tr
                     key={item.id}
                     style={{
-                      borderBottom: '1px solid #f1f5f9',
-                      background: isSelected ? '#f0fdf4' : 'transparent',
+                      borderBottom: '1px solid var(--og-color-surface-subtle)',
+                      background: isSelected ? 'var(--og-color-primary-light)' : 'transparent',
                       transition: 'background-color 0.15s ease',
                     }}
                     onMouseEnter={(e) => {
-                      if (!isSelected) e.currentTarget.style.background = '#f8fafc';
+                      if (!isSelected) e.currentTarget.style.background = 'var(--og-color-bg)';
                     }}
                     onMouseLeave={(e) => {
                       if (!isSelected) e.currentTarget.style.background = 'transparent';
@@ -321,13 +322,13 @@ export const AdminKtvAccountsPage: React.FC = () => {
                       />
                     </td>
                     <td style={{ padding: '14px 16px' }}>
-                      <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.fullName}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Hoạt động: {item.lastActive}</div>
+                      <div style={{ fontWeight: 600, color: 'var(--og-color-text-primary)' }}>{item.fullName}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--og-color-text-secondary)' }}>Hoạt động: {item.lastActive}</div>
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#334155' }}>{item.email}</td>
-                    <td style={{ padding: '14px 16px', color: '#334155' }}>{item.phoneNumber}</td>
-                    <td style={{ padding: '14px 16px', color: '#475569' }}>{item.assignedZone}</td>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#059669' }}>
+                    <td style={{ padding: '14px 16px', color: 'var(--og-color-text-secondary)' }}>{item.email}</td>
+                    <td style={{ padding: '14px 16px', color: 'var(--og-color-text-secondary)' }}>{item.phoneNumber}</td>
+                    <td style={{ padding: '14px 16px', color: 'var(--og-color-text-secondary)' }}>{item.assignedZone.replace('Trọng tài tranh chấp', 'Xử lý tranh chấp')}</td>
+                    <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--og-color-primary)' }}>
                       {item.casesResolvedCount} vụ
                     </td>
                     <td style={{ padding: '14px 16px' }}>
@@ -404,9 +405,9 @@ export const AdminKtvAccountsPage: React.FC = () => {
         >
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--og-color-surface)',
               borderRadius: '14px',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--og-color-border)',
               padding: '24px',
               width: '100%',
               maxWidth: '520px',
@@ -414,7 +415,7 @@ export const AdminKtvAccountsPage: React.FC = () => {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#0f172a', fontWeight: 700 }}>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--og-color-text-primary)', fontWeight: 700 }}>
                 {editingKtv ? 'Chỉnh sửa thông tin KTV' : 'Tạo tài khoản KTV mới'}
               </h2>
               <button
@@ -426,7 +427,7 @@ export const AdminKtvAccountsPage: React.FC = () => {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#94a3b8',
+                  color: 'var(--og-color-text-muted)',
                   fontSize: '1.2rem',
                   cursor: 'pointer',
                   padding: '4px',
@@ -454,7 +455,7 @@ export const AdminKtvAccountsPage: React.FC = () => {
 
             <form onSubmit={handleSaveKtv} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.84rem', color: '#475569', marginBottom: '6px', fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                   Họ và tên KTV *
                 </label>
                 <input
@@ -466,10 +467,10 @@ export const AdminKtvAccountsPage: React.FC = () => {
                   style={{
                     width: '100%',
                     padding: '9px 12px',
-                    background: '#ffffff',
-                    border: '1px solid #cbd5e1',
+                    background: 'var(--og-color-surface)',
+                    border: '1px solid var(--og-color-border-strong)',
                     borderRadius: '8px',
-                    color: '#0f172a',
+                    color: 'var(--og-color-text-primary)',
                     fontSize: '0.88rem',
                     boxSizing: 'border-box',
                   }}
@@ -477,7 +478,7 @@ export const AdminKtvAccountsPage: React.FC = () => {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.84rem', color: '#475569', marginBottom: '6px', fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                   Địa chỉ Email làm việc *
                 </label>
                 <input
@@ -489,10 +490,10 @@ export const AdminKtvAccountsPage: React.FC = () => {
                   style={{
                     width: '100%',
                     padding: '9px 12px',
-                    background: '#ffffff',
-                    border: '1px solid #cbd5e1',
+                    background: 'var(--og-color-surface)',
+                    border: '1px solid var(--og-color-border-strong)',
                     borderRadius: '8px',
-                    color: '#0f172a',
+                    color: 'var(--og-color-text-primary)',
                     fontSize: '0.88rem',
                     boxSizing: 'border-box',
                   }}
@@ -500,7 +501,7 @@ export const AdminKtvAccountsPage: React.FC = () => {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.84rem', color: '#475569', marginBottom: '6px', fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                   Số điện thoại nội bộ *
                 </label>
                 <input
@@ -512,10 +513,10 @@ export const AdminKtvAccountsPage: React.FC = () => {
                   style={{
                     width: '100%',
                     padding: '9px 12px',
-                    background: '#ffffff',
-                    border: '1px solid #cbd5e1',
+                    background: 'var(--og-color-surface)',
+                    border: '1px solid var(--og-color-border-strong)',
                     borderRadius: '8px',
-                    color: '#0f172a',
+                    color: 'var(--og-color-text-primary)',
                     fontSize: '0.88rem',
                     boxSizing: 'border-box',
                   }}
@@ -523,28 +524,10 @@ export const AdminKtvAccountsPage: React.FC = () => {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.84rem', color: '#475569', marginBottom: '6px', fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                   Phân vùng / Nhiệm vụ trực ban
                 </label>
-                <select
-                  value={formData.assignedZone}
-                  onChange={(e) => setFormData({ ...formData, assignedZone: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    background: '#ffffff',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '8px',
-                    color: '#0f172a',
-                    fontSize: '0.88rem',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  <option value="Miền Bắc & Kiểm duyệt điện tử">Miền Bắc & Kiểm duyệt điện tử</option>
-                  <option value="Miền Nam & Trọng tài tranh chấp">Miền Nam & Trọng tài tranh chấp</option>
-                  <option value="Toàn quốc & Kiểm duyệt eKYC">Toàn quốc & Kiểm duyệt eKYC</option>
-                  <option value="Ca đêm & Xử lý sự cố Escrow">Ca đêm & Xử lý sự cố Escrow</option>
-                </select>
+                <Select hideLabel label="Phân công phụ trách" value={String(formData.assignedZone)} onChange={(value) => setFormData({ ...formData, assignedZone: value })} options={[({ value: "Miền Bắc & Kiểm duyệt điện tử", label: "Miền Bắc & Kiểm duyệt điện tử" }), ({ value: "Miền Nam & Trọng tài tranh chấp", label: "Miền Nam & Xử lý tranh chấp" }), ({ value: "Toàn quốc & Kiểm duyệt eKYC", label: "Toàn quốc & Kiểm duyệt eKYC" }), ({ value: "Ca đêm & Xử lý sự cố Escrow", label: "Ca đêm & Xử lý sự cố Escrow" })]} />
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '14px' }}>
@@ -556,9 +539,9 @@ export const AdminKtvAccountsPage: React.FC = () => {
                   }}
                   style={{
                     padding: '9px 16px',
-                    background: '#f1f5f9',
-                    border: '1px solid #cbd5e1',
-                    color: '#475569',
+                    background: 'var(--og-color-surface-subtle)',
+                    border: '1px solid var(--og-color-border-strong)',
+                    color: 'var(--og-color-text-secondary)',
                     borderRadius: '8px',
                     fontSize: '0.88rem',
                     fontWeight: 600,
@@ -571,7 +554,7 @@ export const AdminKtvAccountsPage: React.FC = () => {
                   type="submit"
                   style={{
                     padding: '9px 18px',
-                    background: '#059669',
+                    background: 'var(--og-color-primary-fill)',
                     border: 'none',
                     color: '#ffffff',
                     borderRadius: '8px',

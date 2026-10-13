@@ -5,6 +5,14 @@ import { AdminDashboardPage } from './AdminDashboardPage';
 import { managementStore } from '../../features/management/managementStore';
 
 describe('AdminDashboardPage Component', () => {
+  it('puts the revenue chart and calculated month comparison inside the main card', () => {
+    render(<MemoryRouter><AdminDashboardPage /></MemoryRouter>);
+    const card = screen.getByRole('article', { name: 'Tổng doanh thu phí sàn (Năm 2026)' });
+    expect(card).toHaveTextContent('Giảm 56,6%');
+    expect(card).toHaveTextContent('Tháng 10 chưa kết thúc');
+    expect(card.querySelector('figure')).toHaveAttribute('aria-label', 'Doanh thu phí sàn theo tháng, đơn vị triệu đồng');
+    expect(card.parentElement?.querySelectorAll('.og-report-secondary > article')).toHaveLength(3);
+  });
   it('renders revenue charts, user stats, top searches, and triggers CSV export', () => {
     const exportRevenueSpy = vi.spyOn(managementStore, 'exportRevenueDataCsv').mockImplementation(() => {});
     const exportUserSpy = vi.spyOn(managementStore, 'exportUserDataCsv').mockImplementation(() => {});

@@ -1,3 +1,4 @@
+import { Select } from '../../shared/components/Select/Select';
 import React, { useState } from 'react';
 import { useManagementStore } from '../../features/management/useManagementStore';
 import { ConsoleIcons } from '../../shared/layout/ConsoleIcons';
@@ -76,10 +77,10 @@ export const AdminAuditLogsPage: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Header */}
       <div>
-        <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: '#0f172a', fontWeight: 800 }}>
+        <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: 'var(--og-color-text-primary)', fontWeight: 800 }}>
           Lịch sử thao tác hệ thống (Audit Logs)
         </h1>
-        <p style={{ margin: 0, color: '#64748b', fontSize: '0.92rem' }}>
+        <p style={{ margin: 0, color: 'var(--og-color-text-secondary)', fontSize: '0.92rem' }}>
           Theo dõi toàn bộ nhật ký nghiệp vụ: phê duyệt tin, xử lý Escrow, can thiệp tài khoản và điều chỉnh biểu phí. Nhấp vào hàng để xem chi tiết đối tượng.
         </p>
       </div>
@@ -92,10 +93,10 @@ export const AdminAuditLogsPage: React.FC = () => {
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '12px',
-          background: '#ffffff',
+          background: 'var(--og-color-surface)',
           padding: '16px',
           borderRadius: '12px',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--og-color-border)',
           boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
         }}
       >
@@ -106,7 +107,7 @@ export const AdminAuditLogsPage: React.FC = () => {
               left: '12px',
               top: '50%',
               transform: 'translateY(-50%)',
-              color: '#94a3b8',
+              color: 'var(--og-color-text-muted)',
               display: 'flex',
             }}
           >
@@ -120,10 +121,10 @@ export const AdminAuditLogsPage: React.FC = () => {
             style={{
               width: '100%',
               padding: '9px 12px 9px 36px',
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
+              background: 'var(--og-color-surface)',
+              border: '1px solid var(--og-color-border-strong)',
               borderRadius: '8px',
-              color: '#0f172a',
+              color: 'var(--og-color-text-primary)',
               fontSize: '0.88rem',
               boxSizing: 'border-box',
             }}
@@ -131,24 +132,8 @@ export const AdminAuditLogsPage: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '0.84rem', color: '#64748b', fontWeight: 600 }}>Chủ thể thao tác:</span>
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              borderRadius: '8px',
-              color: '#0f172a',
-              fontSize: '0.88rem',
-            }}
-          >
-            <option value="ALL">Tất cả (Admin, KTV, Hệ thống)</option>
-            <option value="ADMIN">Chỉ Quản trị viên (ADMIN)</option>
-            <option value="KTV">Chỉ Kỹ thuật viên (KTV)</option>
-            <option value="SYSTEM">Hệ thống tự động (SYSTEM)</option>
-          </select>
+          <span style={{ fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', fontWeight: 600 }}>Chủ thể thao tác:</span>
+          <Select hideLabel label="Chủ thể thao tác" value={String(roleFilter)} onChange={(value) => setRoleFilter(value)} options={[({ value: "ALL", label: "Tất cả (Admin, KTV, Hệ thống)" }), ({ value: "ADMIN", label: "Chỉ Quản trị viên (ADMIN)" }), ({ value: "KTV", label: "Chỉ Kỹ thuật viên (KTV)" }), ({ value: "SYSTEM", label: "Hệ thống tự động (SYSTEM)" })]} />
         </div>
       </div>
 
@@ -170,9 +155,9 @@ export const AdminAuditLogsPage: React.FC = () => {
       {/* Logs Table (Light Theme) */}
       <div
         style={{
-          background: '#ffffff',
+          background: 'var(--og-color-surface)',
           borderRadius: '12px',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--og-color-border)',
           overflow: 'hidden',
           boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
         }}
@@ -180,7 +165,7 @@ export const AdminAuditLogsPage: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', background: '#f8fafc' }}>
+              <tr style={{ borderBottom: '1px solid var(--og-color-border)', color: 'var(--og-color-text-secondary)', background: 'var(--og-color-bg)' }}>
                 <th style={{ padding: '14px 16px', width: '40px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                   <TableCheckbox
                     checked={isAllSelected}
@@ -200,7 +185,7 @@ export const AdminAuditLogsPage: React.FC = () => {
             <tbody>
               {filteredLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: 'var(--og-color-text-secondary)' }}>
                     Không tìm thấy bản ghi nhật ký hệ thống nào.
                   </td>
                 </tr>
@@ -212,13 +197,13 @@ export const AdminAuditLogsPage: React.FC = () => {
                       key={log.id}
                       onClick={() => setSelectedDetailLog(log)}
                       style={{
-                        borderBottom: '1px solid #f1f5f9',
-                        background: isSelected ? '#f0fdf4' : 'transparent',
+                        borderBottom: '1px solid var(--og-color-surface-subtle)',
+                        background: isSelected ? 'var(--og-color-primary-light)' : 'transparent',
                         transition: 'background-color 0.15s ease',
                         cursor: 'pointer',
                       }}
                       onMouseEnter={(e) => {
-                        if (!isSelected) e.currentTarget.style.background = '#f8fafc';
+                        if (!isSelected) e.currentTarget.style.background = 'var(--og-color-bg)';
                       }}
                       onMouseLeave={(e) => {
                         if (!isSelected) e.currentTarget.style.background = 'transparent';
@@ -232,11 +217,11 @@ export const AdminAuditLogsPage: React.FC = () => {
                           ariaLabel={`Chọn log #${log.id}`}
                         />
                       </td>
-                      <td style={{ padding: '14px 16px', color: '#64748b', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '14px 16px', color: 'var(--og-color-text-secondary)', whiteSpace: 'nowrap' }}>
                         {log.timestamp}
                       </td>
                       <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
-                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{log.actorName}</div>
+                        <div style={{ fontWeight: 600, color: 'var(--og-color-text-primary)' }}>{log.actorName}</div>
                       </td>
                       <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
                         <span
@@ -251,26 +236,26 @@ export const AdminAuditLogsPage: React.FC = () => {
                                 ? '#fef3c7'
                                 : log.actorRole === 'KTV'
                                 ? '#dcfce7'
-                                : '#f1f5f9',
+                                : 'var(--og-color-surface-subtle)',
                             color:
                               log.actorRole === 'ADMIN'
                                 ? '#b45309'
                                 : log.actorRole === 'KTV'
                                 ? '#15803d'
-                                : '#475569',
+                                : 'var(--og-color-text-secondary)',
                             border: `1px solid ${
                               log.actorRole === 'ADMIN'
                                 ? '#fde68a'
                                 : log.actorRole === 'KTV'
                                 ? '#bbf7d0'
-                                : '#e2e8f0'
+                                : 'var(--og-color-border)'
                             }`,
                           }}
                         >
                           {log.actorRole === 'ADMIN' ? 'Quản trị viên' : log.actorRole === 'KTV' ? 'Kỹ thuật viên' : 'Hệ thống'}
                         </span>
                       </td>
-                      <td style={{ padding: '14px 16px', fontWeight: 600, color: '#0f172a' }}>
+                      <td style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--og-color-text-primary)' }}>
                         {log.action}
                       </td>
                       <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
@@ -294,12 +279,12 @@ export const AdminAuditLogsPage: React.FC = () => {
                           onClick={() => setSelectedDetailLog(log)}
                           style={{
                             padding: '5px 12px',
-                            background: '#f1f5f9',
-                            border: '1px solid #cbd5e1',
+                            background: 'var(--og-color-surface-subtle)',
+                            border: '1px solid var(--og-color-border-strong)',
                             borderRadius: '6px',
                             fontSize: '0.8rem',
                             fontWeight: 600,
-                            color: '#334155',
+                            color: 'var(--og-color-text-secondary)',
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -307,12 +292,12 @@ export const AdminAuditLogsPage: React.FC = () => {
                             transition: 'all 0.15s ease',
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#e2e8f0';
-                            e.currentTarget.style.color = '#0f172a';
+                            e.currentTarget.style.background = 'var(--og-color-border)';
+                            e.currentTarget.style.color = 'var(--og-color-text-primary)';
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.background = '#f1f5f9';
-                            e.currentTarget.style.color = '#334155';
+                            e.currentTarget.style.background = 'var(--og-color-surface-subtle)';
+                            e.currentTarget.style.color = 'var(--og-color-text-secondary)';
                           }}
                         >
                           <ConsoleIcons.FileText size={14} />
@@ -348,12 +333,12 @@ export const AdminAuditLogsPage: React.FC = () => {
         >
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--og-color-surface)',
               borderRadius: '14px',
               width: '100%',
               maxWidth: '560px',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--og-color-border)',
               overflow: 'hidden',
             }}
             onClick={(e) => e.stopPropagation()}
@@ -362,11 +347,11 @@ export const AdminAuditLogsPage: React.FC = () => {
             <div
               style={{
                 padding: '18px 24px',
-                borderBottom: '1px solid #e2e8f0',
+                borderBottom: '1px solid var(--og-color-border)',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                background: '#f8fafc',
+                background: 'var(--og-color-bg)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -375,8 +360,8 @@ export const AdminAuditLogsPage: React.FC = () => {
                     width: '36px',
                     height: '36px',
                     borderRadius: '8px',
-                    background: '#ecfdf5',
-                    color: '#059669',
+                    background: 'var(--og-color-primary-light)',
+                    color: 'var(--og-color-primary)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -385,10 +370,10 @@ export const AdminAuditLogsPage: React.FC = () => {
                   <ConsoleIcons.FileText size={20} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--og-color-text-primary)' }}>
                     Chi tiết lịch sử thao tác
                   </h3>
-                  <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--og-color-text-secondary)' }}>
                     Mã bản ghi: #{selectedDetailLog.id}
                   </span>
                 </div>
@@ -400,7 +385,7 @@ export const AdminAuditLogsPage: React.FC = () => {
                   background: 'transparent',
                   border: 'none',
                   fontSize: '1.4rem',
-                  color: '#64748b',
+                  color: 'var(--og-color-text-secondary)',
                   cursor: 'pointer',
                   padding: '4px',
                   borderRadius: '6px',
@@ -415,13 +400,13 @@ export const AdminAuditLogsPage: React.FC = () => {
             {/* Modal Content */}
             <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Thời gian thực hiện</div>
-                  <div style={{ fontSize: '0.88rem', color: '#0f172a', fontWeight: 600 }}>{selectedDetailLog.timestamp}</div>
+                <div style={{ background: 'var(--og-color-bg)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--og-color-border)' }}>
+                  <div style={{ fontSize: '0.76rem', color: 'var(--og-color-text-secondary)', fontWeight: 600, marginBottom: '4px' }}>Thời gian thực hiện</div>
+                  <div style={{ fontSize: '0.88rem', color: 'var(--og-color-text-primary)', fontWeight: 600 }}>{selectedDetailLog.timestamp}</div>
                 </div>
 
-                <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Kết quả thao tác</div>
+                <div style={{ background: 'var(--og-color-bg)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--og-color-border)' }}>
+                  <div style={{ fontSize: '0.76rem', color: 'var(--og-color-text-secondary)', fontWeight: 600, marginBottom: '4px' }}>Kết quả thao tác</div>
                   <span
                     style={{
                       display: 'inline-block',
@@ -438,33 +423,33 @@ export const AdminAuditLogsPage: React.FC = () => {
                   </span>
                 </div>
 
-                <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Người tác động</div>
-                  <div style={{ fontSize: '0.88rem', color: '#0f172a', fontWeight: 600 }}>{selectedDetailLog.actorName}</div>
+                <div style={{ background: 'var(--og-color-bg)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--og-color-border)' }}>
+                  <div style={{ fontSize: '0.76rem', color: 'var(--og-color-text-secondary)', fontWeight: 600, marginBottom: '4px' }}>Người tác động</div>
+                  <div style={{ fontSize: '0.88rem', color: 'var(--og-color-text-primary)', fontWeight: 600 }}>{selectedDetailLog.actorName}</div>
                 </div>
 
-                <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Chức vụ / Vai trò</div>
-                  <div style={{ fontSize: '0.88rem', color: '#0f172a', fontWeight: 600 }}>
+                <div style={{ background: 'var(--og-color-bg)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--og-color-border)' }}>
+                  <div style={{ fontSize: '0.76rem', color: 'var(--og-color-text-secondary)', fontWeight: 600, marginBottom: '4px' }}>Chức vụ / Vai trò</div>
+                  <div style={{ fontSize: '0.88rem', color: 'var(--og-color-text-primary)', fontWeight: 600 }}>
                     {selectedDetailLog.actorRole === 'ADMIN' ? 'Quản trị viên (ADMIN)' : selectedDetailLog.actorRole === 'KTV' ? 'Kỹ thuật viên (KTV)' : 'Hệ thống tự động'}
                   </div>
                 </div>
               </div>
 
-              <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Hành động nghiệp vụ</div>
-                <div style={{ fontSize: '0.92rem', color: '#0f172a', fontWeight: 700 }}>{selectedDetailLog.action}</div>
+              <div style={{ background: 'var(--og-color-bg)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--og-color-border)' }}>
+                <div style={{ fontSize: '0.76rem', color: 'var(--og-color-text-secondary)', fontWeight: 600, marginBottom: '4px' }}>Hành động nghiệp vụ</div>
+                <div style={{ fontSize: '0.92rem', color: 'var(--og-color-text-primary)', fontWeight: 700 }}>{selectedDetailLog.action}</div>
               </div>
 
-              <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Đối tượng tác động</div>
-                <div style={{ fontSize: '0.92rem', color: '#059669', fontWeight: 700 }}>{selectedDetailLog.target}</div>
+              <div style={{ background: 'var(--og-color-bg)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--og-color-border)' }}>
+                <div style={{ fontSize: '0.76rem', color: 'var(--og-color-text-secondary)', fontWeight: 600, marginBottom: '4px' }}>Đối tượng tác động</div>
+                <div style={{ fontSize: '0.92rem', color: 'var(--og-color-primary)', fontWeight: 700 }}>{selectedDetailLog.target}</div>
               </div>
 
               {selectedDetailLog.details && (
-                <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Nội dung / Ghi chú chi tiết</div>
-                  <div style={{ fontSize: '0.88rem', color: '#334155', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                <div style={{ background: 'var(--og-color-bg)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--og-color-border)' }}>
+                  <div style={{ fontSize: '0.76rem', color: 'var(--og-color-text-secondary)', fontWeight: 600, marginBottom: '4px' }}>Nội dung / Ghi chú chi tiết</div>
+                  <div style={{ fontSize: '0.88rem', color: 'var(--og-color-text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
                     {selectedDetailLog.details}
                   </div>
                 </div>
@@ -475,11 +460,11 @@ export const AdminAuditLogsPage: React.FC = () => {
             <div
               style={{
                 padding: '14px 24px',
-                borderTop: '1px solid #e2e8f0',
+                borderTop: '1px solid var(--og-color-border)',
                 display: 'flex',
                 justifyContent: 'flex-end',
                 gap: '10px',
-                background: '#f8fafc',
+                background: 'var(--og-color-bg)',
               }}
             >
               <button
@@ -492,9 +477,9 @@ export const AdminAuditLogsPage: React.FC = () => {
                 }}
                 style={{
                   padding: '8px 16px',
-                  background: '#ffffff',
-                  color: '#334155',
-                  border: '1px solid #cbd5e1',
+                  background: 'var(--og-color-surface)',
+                  color: 'var(--og-color-text-secondary)',
+                  border: '1px solid var(--og-color-border-strong)',
                   borderRadius: '6px',
                   fontSize: '0.85rem',
                   fontWeight: 600,
@@ -508,7 +493,7 @@ export const AdminAuditLogsPage: React.FC = () => {
                 onClick={() => setSelectedDetailLog(null)}
                 style={{
                   padding: '8px 20px',
-                  background: '#059669',
+                  background: 'var(--og-color-primary-fill)',
                   color: '#ffffff',
                   border: 'none',
                   borderRadius: '6px',
