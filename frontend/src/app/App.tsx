@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { AuthProvider } from '../features/auth';
+import { AccountStatusPage } from '../pages/AccountStatusPage';
+import { SellerListingReviewPage } from '../pages/SellerListingReviewPage';
 import { ThemeProvider, I18nProvider, DemoProvider, CartProvider } from '../shared/context';
 import { ShowcaseApp } from '../features/showcase/ShowcaseApp';
 import { ProtectedRoute } from './ProtectedRoute';
@@ -83,6 +85,7 @@ export function App() {
 
                   {/* 2. Main Public & Buyer Marketplace Layout Shell */}
                   <Route element={<AppLayout />}>
+                    <Route path="/account/status" element={<ProtectedRoute allowedRoles={['BUYER', 'SELLER']}><AccountStatusPage /></ProtectedRoute>} />
                     <Route path="/" element={<HomePage />} />
                     <Route path="/marketplace" element={<MarketplacePage />} />
                     <Route path="/products/:productId" element={<ProductDetailPage />} />
@@ -169,6 +172,7 @@ export function App() {
                   <Route path="/seller/dashboard" element={<SellerDashboardPage />} />
                   <Route path="/seller/products" element={<SellerListingsPage />} />
                   <Route path="/seller/listings" element={<SellerListingsPage />} />
+                  <Route path="/seller/listings/:productId/review" element={<SellerListingReviewPage />} />
                   <Route path="/seller/products/new" element={<CreateListingPage />} />
                   <Route path="/seller/listings/new" element={<CreateListingPage />} />
                   <Route path="/seller/products/:productId/edit" element={<EditListingPage />} />

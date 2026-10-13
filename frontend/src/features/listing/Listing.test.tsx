@@ -401,7 +401,7 @@ describe('SellerListingsPage Component', () => {
     );
 
     expect(screen.getByText('Chờ kiểm duyệt')).toBeInTheDocument();
-    expect(screen.getByText('🛡️ Yêu cầu eKYC')).toBeInTheDocument();
+    expect(screen.getByText('Yêu cầu eKYC')).toBeInTheDocument();
     expect(screen.getByText(/Tin đang được KTV kiểm duyệt nội dung/i)).toBeInTheDocument();
   });
 

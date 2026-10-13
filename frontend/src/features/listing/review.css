@@ -1,0 +1,68 @@
+.og-eyebrow { color: var(--og-color-gold-text); font-size: .72rem; font-weight: 700; letter-spacing: .12em; }
+.og-review-workspace { max-width: 1440px; margin: auto; display: grid; gap: 20px; }
+.og-review-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.og-review-heading h1 { margin: 5px 0 8px; font-size: 1.8rem; letter-spacing: -.025em; }
+.og-review-heading p, .og-review-detail__heading p { margin: 0; color: var(--og-color-text-secondary); }
+.og-review-columns { display: grid; grid-template-columns: 310px minmax(0, 1fr); gap: 22px; align-items: start; }
+.og-review-queue, .og-review-detail { background: var(--og-color-surface); border: 1px solid var(--og-color-border); border-radius: var(--og-radius-lg); overflow: hidden; }
+.og-review-queue__heading { display: flex; justify-content: space-between; align-items: center; padding: 18px; border-bottom: 1px solid var(--og-color-border); }
+.og-review-queue__list { list-style: none; padding: 0; margin: 0; }
+.og-review-queue__list li { display: flex; gap: 8px; padding: 12px 14px; align-items: center; border-bottom: 1px solid var(--og-color-border); }
+.og-review-queue__list li.is-selected { background: var(--og-color-primary-light); box-shadow: inset 3px 0 var(--og-color-primary); }
+.og-review-queue__item { border: none; background: transparent; display: flex; align-items: center; gap: 12px; text-align: left; width: 100%; padding: 4px; cursor: pointer; color: var(--og-color-text-primary); min-width: 0; }
+.og-review-queue__item > span { display: grid; gap: 3px; min-width: 0; }
+.og-review-queue__item strong { font-size: .9rem; line-height: 1.4; overflow-wrap: anywhere; }
+.og-review-queue__item small { color: var(--og-color-text-secondary); font-size: .74rem; }
+.og-review-queue__item img, .og-review-thumb { width: 52px; height: 60px; object-fit: cover; flex-shrink: 0; border-radius: 8px; background: var(--og-color-bg-subtle); }
+.og-review-pagination { padding: 15px; display: grid; gap: 10px; font-size: .8rem; }
+.og-review-pagination label, .og-review-pagination > div { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.og-review-pagination select { padding: 6px; border: 1px solid var(--og-color-border); border-radius: 6px; background: var(--og-color-surface); color: var(--og-color-text-primary); }
+.og-review-detail__heading { padding: 24px; display: flex; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--og-color-border); }
+.og-review-detail__heading h2 { font-size: 1.35rem; margin: 12px 0 6px; overflow-wrap: anywhere; }
+.og-status-pill { display: inline-flex; font-size: .75rem; font-weight: 700; border-radius: 99px; padding: 5px 10px; background: var(--og-color-accent-gold-light); color: var(--og-color-gold-text); }
+.og-review-meta { color: var(--og-color-text-secondary); font-size: .76rem; margin-left: 8px; }
+.og-review-price { flex-shrink: 0; display: grid; align-content: center; gap: 4px; text-align: right; }
+.og-review-price strong { font-size: 1.25rem; color: var(--og-color-primary); }
+.og-review-price span { font-size: .76rem; color: var(--og-color-text-secondary); }
+.og-review-inspection { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(220px, 1fr); gap: 24px; padding: 24px; }
+.og-review-detail h3 { margin: 0 0 12px; font-size: .94rem; }
+.og-review-gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.og-review-gallery a:first-child { grid-column: 1 / -1; }
+.og-review-gallery img { width: 100%; max-height: 340px; display: block; object-fit: contain; border-radius: 10px; background: var(--og-color-bg); }
+.og-review-image-error { min-height: 140px; padding: 12px; display: grid; place-items: center; border-radius: 10px; background: var(--og-color-bg-subtle); color: var(--og-color-text-secondary); font-size: .8rem; }
+.og-review-queue__item .og-review-image-error { min-height: 60px; width: 52px; padding: 4px; font-size: .65rem; flex-shrink: 0; }
+.og-review-media video { width: 100%; max-height: 280px; border-radius: 10px; background: #14231c; margin-bottom: 20px; }
+.og-review-description { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--og-color-text-secondary); line-height: 1.7; }
+.og-review-checklist dl { margin: 0; }
+.og-review-checklist dl > div { padding: 12px 0; border-bottom: 1px solid var(--og-color-border); }
+.og-review-checklist dt { font-size: .78rem; color: var(--og-color-text-secondary); margin-bottom: 4px; }
+.og-review-checklist dd { margin: 0; font-size: .87rem; font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }
+.og-review-note { margin-top: 18px; padding: 14px; border-radius: 10px; background: var(--og-color-bg); font-size: .82rem; }
+.og-review-note p { color: var(--og-color-text-secondary); margin: 5px 0 0; }
+.og-review-history { padding: 20px 24px; border-top: 1px solid var(--og-color-border); }
+.og-review-history > p { font-size: .85rem; color: var(--og-color-text-secondary); }
+.og-review-history ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.og-review-history li { display: grid; gap: 4px; font-size: .84rem; border-left: 2px solid var(--og-color-border); padding-left: 14px; }
+.og-review-history li span { color: var(--og-color-text-secondary); font-size: .76rem; }
+.og-review-history li p { margin: 0; white-space: pre-wrap; }
+.og-review-actions { position: sticky; bottom: 0; background: var(--og-color-surface); border-top: 1px solid var(--og-color-border); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.og-review-actions p { max-width: 390px; margin: 0; font-size: .8rem; color: var(--og-color-text-secondary); }
+.og-review-actions > div, .og-review-rejection > div { display: flex; gap: 10px; flex-shrink: 0; }
+.og-review-rejection { padding: 20px 24px; background: var(--og-color-danger-bg); display: grid; gap: 8px; }
+.og-review-rejection label { font-weight: 600; }
+.og-review-rejection textarea { padding: 12px; border: 1px solid var(--og-color-danger-border); border-radius: 8px; background: var(--og-color-surface); color: var(--og-color-text-primary); width: 100%; resize: vertical; }
+.og-review-empty { padding: 28px 20px; color: var(--og-color-text-secondary); font-size: .88rem; }
+.og-review-empty h2 { color: var(--og-color-text-primary); font-size: 1.05rem; }
+.og-fee-dialog { width: min(560px, 100%); max-height: calc(100dvh - 32px); overflow: auto; background: var(--og-color-surface); border-radius: 16px; box-shadow: var(--og-shadow-lg); padding: 24px; }
+.og-fee-dialog h2 { margin: 0; font-size: 1.4rem; }
+.og-fee-dialog h3 { margin: 16px 0 8px; font-size: 1rem; }
+.og-fee-dialog p { color: var(--og-color-text-secondary); font-size: .86rem; }
+.og-fee-dialog header, .og-fee-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.og-fee-summary { margin: 20px 0; padding: 16px; background: var(--og-color-bg); border-radius: 10px; }
+.og-fee-summary > div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; font-size: .86rem; }
+.og-fee-summary dt { color: var(--og-color-text-secondary); }
+.og-fee-summary dd { margin: 0; font-weight: 600; text-align: right; }
+.og-fee-summary__total { border-top: 1px solid var(--og-color-border); color: var(--og-color-primary); font-size: 1.1rem !important; margin-top: 8px; }
+@media (max-width: 600px) { .og-fee-dialog footer { flex-direction: column; align-items: stretch; } .og-fee-dialog footer button { width: 100%; } }
+@media (max-width: 1100px) { .og-review-columns { grid-template-columns: 260px minmax(0, 1fr); gap: 14px; } .og-review-inspection { grid-template-columns: 1fr; } .og-review-detail__heading { flex-direction: column; } .og-review-price { text-align: left; } .og-review-actions { flex-wrap: wrap; } }
+@media (max-width: 760px) { .og-review-heading { align-items: flex-start; flex-direction: column; } .og-review-heading h1 { font-size: 1.5rem; } .og-review-columns { grid-template-columns: 1fr; } .og-review-queue__list { max-height: 290px; overflow-y: auto; } .og-review-detail__heading, .og-review-inspection, .og-review-history { padding: 18px; } .og-review-actions { padding: 14px 18px; } .og-review-actions > div { width: 100%; } .og-review-actions button { flex: 1; min-height: 44px; } .og-review-meta { display: block; margin: 8px 0 0; } }

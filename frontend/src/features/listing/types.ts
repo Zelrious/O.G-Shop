@@ -73,6 +73,9 @@ export interface MediaUploadResponse {
 }
 
 export interface ModerationProduct {
+  quantity?: number;
+  sellerName?: string;
+  history?: Array<{ decisionId: number; reviewerId: number; decision: string; reason: string | null; contentRevision: number | null; reviewedAt: string }>;
   productId: number;
   sellerId: number;
   title: string;
@@ -96,6 +99,7 @@ export interface ModerationProduct {
 }
 
 export const LISTING_STATUS_LABELS: Record<string, string> = {
+  APPROVED_AWAITING_FEE: 'Đã duyệt, chờ phí',
   DRAFT: 'Bản nháp',
   PENDING: 'Chờ kiểm duyệt',
   ACTIVE: 'Đang bán',
@@ -105,7 +109,14 @@ export const LISTING_STATUS_LABELS: Record<string, string> = {
   REJECTED: 'Bị từ chối',
 };
 
+export interface ListingFeeSummary {
+  productId: number; title: string; status: string; version: number; quantity: number;
+  chargeId: string | null; policyCode: string | null; listedTotal: number | null;
+  computedFee: number; totalPaid: number; amountDue: number; paymentState: string;
+}
+
 export const LISTING_STATUS_VARIANTS: Record<string, 'draft' | 'pending' | 'active' | 'hidden' | 'reserved' | 'sold' | 'rejected' | 'neutral'> = {
+  APPROVED_AWAITING_FEE: 'pending',
   DRAFT: 'draft',
   PENDING: 'pending',
   ACTIVE: 'active',
