@@ -66,10 +66,6 @@ class ShipmentPostgresTest {
                 jdbcTemplate.update("DELETE FROM shipments WHERE order_id IN (" + orderInPlaceholders + ")", createdOrderIds.toArray());
                 jdbcTemplate.update("DELETE FROM orders WHERE order_id IN (" + orderInPlaceholders + ")", createdOrderIds.toArray());
             }
-            if (!createdUserIds.isEmpty()) {
-                String userInPlaceholders = String.join(",", Collections.nCopies(createdUserIds.size(), "?"));
-                jdbcTemplate.update("DELETE FROM users WHERE user_id IN (" + userInPlaceholders + ")", createdUserIds.toArray());
-            }
         } finally {
             createdOrderIds.clear();
             createdUserIds.clear();

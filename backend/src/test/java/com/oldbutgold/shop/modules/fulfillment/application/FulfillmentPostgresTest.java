@@ -25,6 +25,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -100,10 +101,6 @@ class FulfillmentPostgresTest {
                 String inClause = String.join(",", Collections.nCopies(createdOrderIds.size(), "?"));
                 jdbcTemplate.update("DELETE FROM shipments WHERE order_id IN (" + inClause + ")", createdOrderIds.toArray());
                 jdbcTemplate.update("DELETE FROM orders WHERE order_id IN (" + inClause + ")", createdOrderIds.toArray());
-            }
-            if (!createdUserIds.isEmpty()) {
-                String inClause = String.join(",", Collections.nCopies(createdUserIds.size(), "?"));
-                jdbcTemplate.update("DELETE FROM users WHERE user_id IN (" + inClause + ")", createdUserIds.toArray());
             }
             jdbcTemplate.update("DELETE FROM ghn_webhook_events WHERE order_code LIKE 'OG-PG-%'");
         } finally {
@@ -416,7 +413,7 @@ class FulfillmentPostgresTest {
                 INSERT INTO shipments(order_id, carrier, client_order_code, status, claim_token, claim_expires_at, next_reconciliation_at, reconciliation_attempts, created_at, updated_at)
                 VALUES (?, 'GHN', 'OG-PG-RELEASE-TEST', 'PENDING', 'my-token', ?, ?, 1, ?, ?)
                 """,
-                orderId, now.plusSeconds(30), nextRecon, now, now
+                orderId, Timestamp.from(now.plusSeconds(30)), Timestamp.from(nextRecon), Timestamp.from(now), Timestamp.from(now)
         );
 
         // Gọi releaseClaim
@@ -447,7 +444,7 @@ class FulfillmentPostgresTest {
                 INSERT INTO shipments(order_id, carrier, client_order_code, status, next_reconciliation_at, created_at, updated_at)
                 VALUES (?, 'GHN', 'OG-PG-RECON-FUTURE', 'PENDING', ?, ?, ?)
                 """,
-                orderId1, now.plusSeconds(120), now.minusSeconds(60), now.minusSeconds(60)
+                orderId1, Timestamp.from(now.plusSeconds(120)), Timestamp.from(now.minusSeconds(60)), Timestamp.from(now.minusSeconds(60))
         );
 
         // Shipment 2: next_reconciliation_at = now - 10s (đã đến hạn)
@@ -455,7 +452,7 @@ class FulfillmentPostgresTest {
                 INSERT INTO shipments(order_id, carrier, client_order_code, status, next_reconciliation_at, created_at, updated_at)
                 VALUES (?, 'GHN', 'OG-PG-RECON-DUE', 'PENDING', ?, ?, ?)
                 """,
-                orderId2, now.minusSeconds(10), now.minusSeconds(60), now.minusSeconds(60)
+                orderId2, Timestamp.from(now.minusSeconds(10)), Timestamp.from(now.minusSeconds(60)), Timestamp.from(now.minusSeconds(60))
         );
 
         Instant cooldownThreshold = now.minusSeconds(30);
@@ -480,7 +477,7 @@ class FulfillmentPostgresTest {
                 INSERT INTO shipments(order_id, carrier, client_order_code, status, created_at, updated_at)
                 VALUES (?, 'GHN', 'OG-PG-CONCURRENT-CLAIM', 'PENDING', ?, ?)
                 """,
-                orderId, now.minusSeconds(60), now.minusSeconds(60)
+                orderId, Timestamp.from(now.minusSeconds(60)), Timestamp.from(now.minusSeconds(60))
         );
 
         // Worker 1 (on-demand) giành claim lease 10s
