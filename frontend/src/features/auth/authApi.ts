@@ -1,59 +1,158 @@
-import { AuthResponse, LoginCredentials, RegisterPayload, UserPrincipal } from './types';
+import { AuthResponse, LoginCredentials, RegisterPayload, UserPrincipal, RegistrationChallenge, RegistrationCompletion } from './types';
+import type { AuthChallenge, LoginResponse, GoogleResponse } from './types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+export const SESSION_EXPIRED_EVENT = 'og:session-expired';
 let accessToken: string | null = null;
-let refreshPromise: Promise<AuthResponse> | null = null;
+let restorePromise: Promise<AuthResponse> | null = null;
+let credentialGeneration = 0;
+let cachedGoogleNonce: { nonceId: string; expiresAt: number } | null = null;
 
 interface ApiErrorBody {
   message?: string;
+  code?: string;
+  fieldErrors?: { message: string }[];
+  accountStatus?: string;
+  supportInstruction?: string;
+  allowedFunctions?: string[];
+}
+
+export class AuthRequestError extends Error {
+  readonly code?: string;
+  readonly retryAfter: number;
+  readonly details?: ApiErrorBody;
+  constructor(message: string, code?: string, retryAfter = 0, details?: ApiErrorBody) {
+    super(message);
+    this.name = 'AuthRequestError';
+    this.code = code;
+    this.retryAfter = retryAfter;
+    this.details = details;
+  }
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
-    throw new Error(body.message || `Yêu cầu không thành công (${response.status}).`);
+    throw new AuthRequestError(body.fieldErrors?.map(field => field.message).join(' ') || body.message
+      || 'Yêu cầu không thành công (' + response.status + ').', body.code, Number(response.headers.get('Retry-After')) || 0, body);
   }
   return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
 }
 
-async function sessionRequest(path: string, body?: unknown): Promise<AuthResponse> {
+async function publicRequest<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     credentials: 'include',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  const result = await parseResponse<AuthResponse>(response);
+  return parseResponse<T>(response);
+}
+
+async function sessionRequest<T extends AuthResponse = AuthResponse>(path: string, body?: unknown): Promise<T> {
+  const generation = credentialGeneration;
+  const result = await publicRequest<T>(path, body);
+  if (generation !== credentialGeneration) throw new AuthRequestError('Yêu cầu phiên đã bị thay thế.', 'SESSION_CHANGED');
   accessToken = result.accessToken;
   return result;
 }
 
 export const authApi = {
-  login(credentials: LoginCredentials): Promise<AuthResponse> {
-    return sessionRequest('/auth/login', { email: credentials.email, password: credentials.password });
+  async login(credentials: LoginCredentials): Promise<LoginResponse> {
+    const generation = ++credentialGeneration;
+    restorePromise = null;
+    accessToken = null;
+    const result = await publicRequest<LoginResponse>('/auth/login', { email: credentials.email, password: credentials.password });
+    if (generation === credentialGeneration && 'accessToken' in result) accessToken = result.accessToken;
+    return result;
   },
 
-  register(payload: RegisterPayload): Promise<AuthResponse> {
-    return sessionRequest('/auth/register', {
+  verifyLogin(challenge: AuthChallenge, code: string): Promise<LoginResponse> {
+    const generation = ++credentialGeneration;
+    restorePromise = null;
+    const path = challenge.purpose === 'GOOGLE_LINK' ? '/auth/google/link/verify' : '/auth/login/verify';
+    return publicRequest<LoginResponse>(path, { challengeId: challenge.challengeId, code }).then(result => {
+      if (generation === credentialGeneration && 'accessToken' in result) accessToken = result.accessToken;
+      return result;
+    });
+  },
+  startReset(email: string): Promise<AuthChallenge> { return publicRequest('/auth/password-reset', { email }); },
+  verifyReset(challengeId: string, code: string): Promise<AuthChallenge> { return publicRequest('/auth/password-reset/verify', { challengeId, code }); },
+  async finishReset(challengeId: string, password: string, confirmPassword: string): Promise<void> {
+    await publicRequest('/auth/password-reset/complete', { challengeId, password, confirmPassword });
+    accessToken = null;
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+  },
+  resendChallenge(challengeId: string): Promise<AuthChallenge> { return publicRequest('/auth/challenge/resend', { challengeId }); },
+  cancelChallenge(challengeId: string): Promise<void> { return publicRequest('/auth/challenge/cancel', { challengeId }); },
+  googleConfig(): Promise<{ enabled: boolean; clientId: string }> {
+    return fetch(`${API_BASE}/auth/google/config`).then(parseResponse<{ enabled: boolean; clientId: string }>);
+  },
+  googleNonce(): Promise<{ nonceId: string }> {
+    if (cachedGoogleNonce && Date.now() < cachedGoogleNonce.expiresAt) {
+      return Promise.resolve({ nonceId: cachedGoogleNonce.nonceId });
+    }
+    return publicRequest<{ nonceId: string }>('/auth/google/nonce').then(res => {
+      cachedGoogleNonce = { nonceId: res.nonceId, expiresAt: Date.now() + 4 * 60 * 1000 };
+      return res;
+    }).catch(err => {
+      cachedGoogleNonce = null;
+      throw err;
+    });
+  },
+  clearGoogleNonce(): void {
+    cachedGoogleNonce = null;
+  },
+  async googleLogin(credential: string, nonceId: string): Promise<GoogleResponse> {
+    const generation = ++credentialGeneration;
+    restorePromise = null;
+    accessToken = null;
+    cachedGoogleNonce = null;
+    const result = await publicRequest<GoogleResponse>('/auth/google', { credential, nonceId });
+    if (generation === credentialGeneration && 'accessToken' in result) accessToken = result.accessToken;
+    return result;
+  },
+
+  register(payload: RegisterPayload): Promise<RegistrationChallenge> {
+    return publicRequest('/auth/register', {
       fullName: payload.fullName,
       email: payload.email,
       phoneNumber: payload.phoneNumber,
       password: payload.password,
+      accountType: payload.accountType,
+      seller: payload.seller,
+      googleTicket: payload.googleTicket,
     });
   },
 
-  refresh(): Promise<AuthResponse> {
-    if (!refreshPromise) {
-      refreshPromise = sessionRequest('/auth/refresh').finally(() => {
-        refreshPromise = null;
+  verifyRegistration(challengeId: string, code: string): Promise<RegistrationCompletion> {
+    credentialGeneration++;
+    return sessionRequest<RegistrationCompletion>('/auth/register/verify', { challengeId, code });
+  },
+
+  resendRegistration(challengeId: string): Promise<RegistrationChallenge> {
+    return publicRequest('/auth/register/resend', { challengeId });
+  },
+
+  cancelRegistration(challengeId: string): Promise<void> {
+    return publicRequest('/auth/register/cancel', { challengeId });
+  },
+
+  restoreSession(): Promise<AuthResponse> {
+    if (!restorePromise) {
+      const restoring = sessionRequest('/auth/session').finally(() => {
+        if (restorePromise === restoring) restorePromise = null;
       });
+      restorePromise = restoring;
     }
-    return refreshPromise;
+    return restorePromise;
   },
 
   async logout(): Promise<void> {
+    credentialGeneration++;
+    restorePromise = null;
     try {
-      await parseResponse<void>(await fetch(`${API_BASE}/auth/refresh/logout`, {
+      await parseResponse<void>(await fetch(`${API_BASE}/auth/logout`, {
         method: 'POST',
         credentials: 'include',
       }));
@@ -67,7 +166,7 @@ export const authApi = {
   },
 
   async authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
-    const execute = () => fetch(`${API_BASE}${path}`, {
+    const response = await fetch(`${API_BASE}${path}`, {
       ...init,
       credentials: 'include',
       headers: {
@@ -75,20 +174,16 @@ export const authApi = {
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
     });
-
-    let response = await execute();
     if (response.status === 401) {
-      try {
-        await this.refresh();
-        response = await execute();
-      } catch {
-        accessToken = null;
-      }
+      accessToken = null;
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
     }
     return response;
   },
 
   clearAccessToken(): void {
+    credentialGeneration++;
+    restorePromise = null;
     accessToken = null;
   },
 };

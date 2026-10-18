@@ -1,5 +1,42 @@
 # Fulfillment Module
 
+## Report diagrams — TASK-0079 / 2026-10-10
+
+[UC19–UC83 đã có đủ 130 Activity/Sequence trong báo cáo](../requirements/use-cases-83/report-from-uc19/README.md), kiểm native/PDF trọn trang. RS-02/RS-05 được chốt và đồng bộ theo xác nhận người dùng; chuẩn Activity/Sequence gọn được giữ. Đây là tài liệu, không nâng trạng thái code/database/nghiệm thu module.
+
+## Diagram presentation — TASK-0077 / 2026-10-10
+
+Mã Activity/Sequence hiện dùng [cách trình bày gọn](../requirements/use-cases-83/diagram-presentation/README.md): bỏ legend khỏi ảnh, rút nhãn và giữ đủ đường đi theo đặc tả. Kiểm nguồn/1.000 đường đi và render 166 PNG đạt; ảnh UC79–UC83 đã kiểm trọn một trang trên PDF. Đây là cập nhật trình bày tài liệu.
+
+## Current use-case documents — TASK-0075 / 2026-10-10
+
+[Bộ 83 đặc tả/166 Activity–Sequence](../requirements/use-cases-83/README.md) đã đọc lại trực tiếp báo cáo và viết theo 830 trường hiện hành; [rà soát](../requirements/use-cases-83/REVIEW.md) ghi các điểm nguồn cần làm rõ. UC26–UC28/UC32/UC33/UC62/UC63/UC75/UC82 giữ căn cứ bàn giao, cho trả trước gửi, 3 ngày hoặc 3 lượt thất bại và phản hồi 2 ngày từ nhận lại hợp lệ. Đây là yêu cầu và diagram ở mức yêu cầu; trạng thái code/schema/nghiệm thu của module không được nâng từ kết quả tài liệu. [Bàn giao](../handoff/USE_CASE_83_AGENT_HANDOFF.md).
+
+## Database report — TASK-0072 / 2026-10-09
+
+[TASK-0072](../progress/archive/TASK-0072-database-design-report.md) đã điền chương bảng database trong báo cáo Google Docs theo schema V23: danh sách 48 bảng và 48 bảng chi tiết/907 trường, giữ mẫu native và kiểm tra căn lề, ghim tiêu đề, căn giữa chiều dọc. Đây là cập nhật tài liệu; trạng thái triển khai module vẫn theo code/kiểm thử. PDF/HTML export bị từ chối 403, chưa kiểm bố cục trang.
+
+## Public policies — TASK-0071 / 2026-10-09
+
+[TASK-0071](../progress/archive/TASK-0071-public-use-case-policies-and-coins.md) rút gọn UC26–UC33, giữ mốc giao hợp lệ, OTP/hai bên, nhận khác hoàn tất sớm, 3 ngày yêu cầu trả và 2 ngày phản hồi sau nhận trả. Phân biệt phí giao đã trả bằng tiền không hoàn khi trả với xu cho phí giao được trả lại trong trường hợp hợp lệ theo UC83. Đây là chính sách báo cáo, không sửa code/database V23.
+
+## Database consolidation — TASK-0070 / V23
+
+2 bảng: shipments/shipment_events; events, pickup attempts và handover confirmations chung sổ có record_type. OTP/hạn giao/trả giữ nguyên; direct handover vẫn cần chứng cứ hai bên, không tự valid-deliver từ một xác nhận.
+
+Local og_shop đã migrate/validate V23: 48 bảng nghiệp vụ, 49 gồm Flyway history; 104 nguồn khớp fingerprint trước/sau. Backend entity/join-table dùng schema og_compat. 252 tests: 251 pass, 1 Windows symlink skip; 33 expansion PostgreSQL pass. [Bàn giao V22](../architecture/DATABASE_CONSOLIDATION_V22_20261009.md), [dictionary 48 bảng](../../database/docs/DATABASE_TABLE_DICTIONARY_V22.md). API/UI/worker canonical còn cần nối; checkpoint V21/baseline dưới đây là lịch sử.
+
+V22 tạo cấu trúc 48 bảng; V23 đã căn bộ đếm ID qua mọi loại dòng, kiểm thử tạo mới profile/legacy verification/voucher/payment sau populated upgrade đạt. Trạng thái runtime hiện hành là V23.
+
+## Database expansion — TASK-0069 / V21
+
+V19: shipment leg, events/pickup attempts, OTP/two-party handover, valid delivery và early consent. Deadline trả/pickup tách riêng; attention view hỗ trợ xử lý conflict/im lặng, chưa có worker/API mới. [Bàn giao và ma trận 83 UC](../architecture/DATABASE_EXPANSION_V21_20261009.md). Local og_shop V1–V21 đã migrate/validate; 249 tests, 0 failures/errors, 1 Windows symlink skip; 30 expansion PostgreSQL tests đạt. Đây là nền database và mapping tương thích, chưa nghiệm thu các API/UI mới. Phần Database review và trạng thái baseline cũ bên dưới ghi tình trạng trước TASK-0069.
+
+
+## Database review — 2026-10-09
+
+Theo [bản rà soát 83 UC](../architecture/DATABASE_COVERAGE_83_USE_CASES_20261009.md), UC26–UC28/UC32–UC33 cần G08: outbound/return leg, events/attempts, OTP/hai bên, mốc nhận hợp lệ và hạn riêng. shipments hiện UNIQUE order_id, chưa đủ giao trả và pickup window; early completion khác receipt. Chưa triển khai; trạng thái bên dưới là baseline trước rà soát.
+
 - Status: PLANNED
 - Requirements: UC-10, UC-11, phần return của UC-14
 - Completion: 0/3 use cases verified

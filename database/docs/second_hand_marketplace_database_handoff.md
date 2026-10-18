@@ -1,5 +1,16 @@
 # Handoff Summary – Trust-oriented Second-hand C2C Marketplace
 
+## Current checkpoint — V23 / 48 bảng nghiệp vụ
+
+Đã gộp/migrate local og_shop V21→V23 với private backup/restore và proof cả 104 nguồn. [Handoff V22](../../docs/architecture/DATABASE_CONSOLIDATION_V22_20261009.md), [dictionary 48 bảng](DATABASE_TABLE_DICTIONARY_V22.md), [ERD SQL](../schema/og_shop_v22_tables_for_erd.sql). Chọn public/48 bảng, bỏ flyway_schema_history và og_compat views khi dựng ERD. Checkpoint V21/baseline phía dưới là lịch sử.
+
+V22 tạo cấu trúc 48 bảng; V23 đã căn bộ đếm ID qua mọi loại dòng, kiểm thử tạo mới profile/legacy verification/voucher/payment sau populated upgrade đạt. Trạng thái runtime hiện hành là V23.
+
+## Current checkpoint — V21
+
+Xem [bàn giao mở rộng 83 UC](../../docs/architecture/DATABASE_EXPANSION_V21_20261009.md): local V14→V21 đã áp dụng, có backup/restore và PostgreSQL regression. Nội dung baseline bên dưới giữ để tham khảo lịch sử; chưa phải thiết kế mới nhất cho phí tin, checkout theo lượng, eKYC/KTV, component settlement và case nhiều round.
+
+
 ## 1. Bối cảnh project
 
 Tên đề tài:

@@ -10,3 +10,6 @@ export { translations } from './i18nContext';
 export { DemoProvider } from './DemoProvider';
 export { useDemo } from './useDemo';
 export type { UserRole, DeviceMode } from './demoContext';
+
+export { CartProvider, useCart } from './CartContext';
+export type { CartItem } from './CartContext';

@@ -1,3 +1,4 @@
+import { Icon } from '../../../shared/components/Icon/Icon';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ordersApi } from '../ordersApi';
@@ -11,6 +12,7 @@ export const SellerOrdersView: React.FC = () => {
   const [totalPages, setTotalPages] = useState<number>(0);
   const [totalElements, setTotalElements] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [reloadVersion, setReloadVersion] = useState(0);
@@ -19,7 +21,7 @@ export const SellerOrdersView: React.FC = () => {
   const PAGE_SIZE = 10;
 
   const tabs = [
-    { id: 'PAID_HELD', label: '⚡ Cần xử lý (Đã Ký quỹ)' },
+    { id: 'PAID_HELD', label: ' Cần xử lý (Đã Ký quỹ)' },
     { id: 'SELLER_CONFIRMED', label: 'Đã xác nhận' },
     { id: 'PAYMENT_PENDING', label: 'Chờ thanh toán' },
     { id: 'COMPLETED', label: 'Hoàn thành' },
@@ -39,6 +41,7 @@ export const SellerOrdersView: React.FC = () => {
         const totalE = res.totalElements || 0;
         setTotalPages(totalP);
         setTotalElements(totalE);
+        setHasLoaded(true);
 
         // Clamp if page is beyond new totalPages
         if (totalP > 0 && pageIndex >= totalP) {
@@ -49,6 +52,7 @@ export const SellerOrdersView: React.FC = () => {
         if (seq !== reqSeqRef.current) return;
         setOrders([]);
         setErrorMsg(err.message || 'Không thể tải danh sách đơn bán.');
+        setHasLoaded(true);
       })
       .finally(() => {
         if (seq === reqSeqRef.current) {
@@ -94,7 +98,7 @@ export const SellerOrdersView: React.FC = () => {
       case 'PAID_HELD':
         return (
           <span style={{ background: '#dcfce7', color: '#15803d', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 700 }}>
-            🪙 Tiền đã Ký quỹ — Cần xác nhận
+             Tiền đã Ký quỹ — Cần xác nhận
           </span>
         );
       case 'SELLER_CONFIRMED':
@@ -123,7 +127,7 @@ export const SellerOrdersView: React.FC = () => {
         );
       default:
         return (
-          <span style={{ background: '#f3f4f6', color: '#4b5563', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
+          <span style={{ background: 'var(--og-color-surface-subtle)', color: 'var(--og-color-text-secondary)', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
             {status}
           </span>
         );
@@ -134,7 +138,7 @@ export const SellerOrdersView: React.FC = () => {
     <div style={{ maxWidth: 1000, margin: '20px auto', padding: '0 16px 60px' }}>
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '0 0 6px', color: 'var(--og-color-text-primary)' }}>
-          📋 Quản Lý Đơn Hàng Cần Gửi (SL-09)
+           Quản Lý Đơn Hàng Cần Gửi (SL-09)
         </h1>
         <p style={{ color: 'var(--og-color-text-secondary)', fontSize: '0.88rem', margin: 0 }}>
           Xem các đơn hàng đã được giữ tiền qua Escrow, xác nhận chuẩn bị đơn và in vận đơn giao hàng.
@@ -142,27 +146,14 @@ export const SellerOrdersView: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div style={{
-        display: 'flex',
-        borderBottom: '1px solid var(--og-color-border)',
-        overflowX: 'auto',
-        marginBottom: 20,
-        gap: 8,
-      }}>
+      <div className="og-seller-tabs-bar" aria-label="Bộ lọc trạng thái đơn bán">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
+            className={`og-seller-tab-btn-line ${activeTab === tab.id ? 'og-seller-tab-btn-line--active' : ''}`}
             style={{
-              padding: '12px 16px',
-              border: 'none',
-              background: 'transparent',
-              borderBottom: activeTab === tab.id ? '2px solid var(--og-color-primary)' : '2px solid transparent',
-              color: activeTab === tab.id ? 'var(--og-color-primary)' : 'var(--og-color-text-secondary)',
-              fontWeight: activeTab === tab.id ? 700 : 500,
-              fontSize: '0.9rem',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
+              fontWeight: activeTab === tab.id ? 700 : 600,
             }}
             onClick={() => handleTabChange(tab.id)}
           >
@@ -196,27 +187,48 @@ export const SellerOrdersView: React.FC = () => {
         </div>
       )}
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '48px 0' }}>
-          <div className="og-spinner" style={{ margin: '0 auto 12px' }} />
-          <p style={{ color: 'var(--og-color-text-secondary)' }}>Đang tải danh sách đơn bán...</p>
-        </div>
-      ) : orders.length === 0 ? (
-        <div style={{
-          background: 'var(--og-color-surface)',
-          border: '1px dashed var(--og-color-border)',
-          borderRadius: 12,
-          padding: '48px 16px',
-          textAlign: 'center',
-        }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>📦</div>
-          <h3 style={{ margin: '0 0 6px', color: 'var(--og-color-text-primary)' }}>Không có đơn hàng nào</h3>
-          <p style={{ color: 'var(--og-color-text-secondary)', fontSize: '0.88rem' }}>
-            Không tìm thấy đơn hàng nào ở mục này.
-          </p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Main Content Area with Stable Min-Height & Anti-Jitter Loading */}
+      <div
+        className="og-seller-orders-container"
+        style={{
+          opacity: loading && hasLoaded ? 0.5 : 1,
+          pointerEvents: loading && hasLoaded ? 'none' : 'auto',
+          transition: 'opacity 0.2s ease',
+        }}
+      >
+        {/* Sleek top loading progress bar when refetching / switching tabs */}
+        {loading && hasLoaded && (
+          <div className="og-seller-tab-loader" role="progressbar" aria-label="Đang cập nhật danh sách đơn bán...">
+            <div className="og-seller-tab-loader__bar" />
+          </div>
+        )}
+
+        {loading && !hasLoaded ? (
+          <div style={{ textAlign: 'center', padding: '64px 0', minHeight: 460, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="og-spinner" style={{ margin: '0 auto 12px' }} />
+            <p style={{ color: 'var(--og-color-text-secondary)' }}>Đang tải danh sách đơn bán...</p>
+          </div>
+        ) : orders.length === 0 ? (
+          <div style={{
+            background: 'var(--og-color-surface)',
+            border: '1px dashed var(--og-color-border)',
+            borderRadius: 12,
+            padding: '56px 16px',
+            textAlign: 'center',
+            minHeight: 380,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <div style={{ fontSize: 40, marginBottom: 8 }}><Icon name="package" style={{ width: '1em', height: '1em' }} /></div>
+            <h3 style={{ margin: '0 0 6px', color: 'var(--og-color-text-primary)' }}>Không có đơn hàng nào</h3>
+            <p style={{ color: 'var(--og-color-text-secondary)', fontSize: '0.88rem' }}>
+              Không tìm thấy đơn hàng nào ở mục này.
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {orders.map((order) => (
             <div
               key={order.orderId}
@@ -232,7 +244,7 @@ export const SellerOrdersView: React.FC = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                borderBottom: '1px solid var(--og-color-border-subtle, #f3f4f6)',
+                borderBottom: '1px solid var(--og-color-border-subtle, var(--og-color-surface-subtle))',
                 paddingBottom: 12,
                 marginBottom: 16,
                 fontSize: '0.85rem',
@@ -262,14 +274,12 @@ export const SellerOrdersView: React.FC = () => {
                     width: 72,
                     height: 72,
                     borderRadius: 8,
-                    background: '#f3f4f6',
+                    background: 'var(--og-color-surface-subtle)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: 24,
-                  }}>
-                    📦
-                  </div>
+                  }}><Icon name="package" style={{ width: '1em', height: '1em' }} /></div>
                 )}
 
                 <div style={{ flex: 1 }}>
@@ -297,7 +307,7 @@ export const SellerOrdersView: React.FC = () => {
                 justifyContent: 'flex-end',
                 alignItems: 'center',
                 gap: 12,
-                borderTop: '1px solid var(--og-color-border-subtle, #f3f4f6)',
+                borderTop: '1px solid var(--og-color-border-subtle, var(--og-color-surface-subtle))',
                 paddingTop: 12,
                 marginTop: 16,
               }}>
@@ -309,7 +319,7 @@ export const SellerOrdersView: React.FC = () => {
                     disabled={confirmingId === order.orderId}
                     onClick={() => handleConfirmOrder(order.orderId)}
                   >
-                    {confirmingId === order.orderId ? 'Đang xác nhận...' : '⚡ Xác nhận đơn hàng'}
+                    {confirmingId === order.orderId ? 'Đang xác nhận...' : ' Xác nhận đơn hàng'}
                   </button>
                 )}
 
@@ -368,6 +378,7 @@ export const SellerOrdersView: React.FC = () => {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 };

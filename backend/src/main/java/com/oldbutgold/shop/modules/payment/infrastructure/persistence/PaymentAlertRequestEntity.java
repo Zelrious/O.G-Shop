@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "payment_alert_requests")
+@Table(name = "payment_alert_requests", schema = "og_compat")
 public class PaymentAlertRequestEntity {
 
     public static final String STATUS_PENDING = "PENDING";

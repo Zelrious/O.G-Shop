@@ -1,5 +1,6 @@
+import { Icon } from '../shared/components/Icon/Icon';
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth';
 import {
   UserProfile,
@@ -16,6 +17,7 @@ type TabKey = 'info' | 'addresses' | 'security' | 'seller';
 export const ProfilePage: React.FC = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [activeTab, setActiveTab] = useState<TabKey>('info');
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -85,15 +87,16 @@ export const ProfilePage: React.FC = () => {
 
   const isSeller = profile.roles.includes('SELLER');
 
-  const tabs: { key: TabKey; label: string; icon: string }[] = [
-    { key: 'info', label: 'Thông tin cá nhân', icon: '👤' },
-    { key: 'addresses', label: 'Sổ địa chỉ', icon: '📍' },
-    { key: 'security', label: 'Bảo mật & Mật khẩu', icon: '🔒' },
-    { key: 'seller', label: 'Gian hàng & Thanh toán', icon: '🏪' },
+  const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+    { key: 'info', label: 'Thông tin cá nhân', icon: <Icon name="user" /> },
+    { key: 'addresses', label: 'Sổ địa chỉ', icon: <Icon name="pin" /> },
+    { key: 'security', label: 'Bảo mật & Mật khẩu', icon: <Icon name="lock" /> },
+    { key: 'seller', label: 'Gian hàng & Thanh toán', icon: <Icon name="store" /> },
   ];
 
   return (
     <div style={{ maxWidth: '900px', margin: '24px auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {location.state?.registrationCoins === 3000 && <Alert type="success">Đăng ký thành công. Bạn đã nhận 3.000 xu.</Alert>}
       {/* Header Profile Card */}
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
@@ -120,7 +123,7 @@ export const ProfilePage: React.FC = () => {
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
               ) : (
-                profile.fullName ? profile.fullName.charAt(0).toUpperCase() : '👤'
+                profile.fullName ? profile.fullName.charAt(0).toUpperCase() : <Icon name="user" />
               )}
             </div>
 

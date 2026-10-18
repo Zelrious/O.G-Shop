@@ -1,3 +1,4 @@
+import { Icon } from '../../../shared/components/Icon/Icon';
 import React, { useState, useRef } from 'react';
 import { Category, CONDITION_LABELS, ProductMedia } from '../../marketplace/types';
 import { CreateOrUpdateProductPayload, SellerProductDetail } from '../types';
@@ -200,7 +201,7 @@ export const ListingForm: React.FC<ListingFormProps> = ({
     <form className="og-listing-form" onSubmit={handleSubmit} noValidate>
       {errorMessage && (
         <div className="og-alert og-alert--danger" role="alert" tabIndex={0}>
-          ⚠️ {errorMessage}
+           {errorMessage}
         </div>
       )}
 
@@ -468,9 +469,7 @@ export const ListingForm: React.FC<ListingFormProps> = ({
 
         {/* eKYC Verification Card */}
         <div className="og-verification-card">
-          <div className="og-verification-card__icon-wrap" aria-hidden="true">
-            🛡️
-          </div>
+          <div className="og-verification-card__icon-wrap" aria-hidden="true"><Icon name="shield" style={{ width: '1em', height: '1em' }} /></div>
           <div className="og-verification-card__body">
             <h3 className="og-verification-card__title">Xác minh người mua an toàn</h3>
             <p className="og-verification-card__desc">
@@ -542,13 +541,13 @@ export const ListingForm: React.FC<ListingFormProps> = ({
             </h2>
           </div>
           <div style={{ fontSize: '0.85rem', fontWeight: 600, color: hasMinMedia ? '#166534' : '#b45309' }}>
-            {hasMinMedia ? '✅ Đã đủ điều kiện gửi duyệt' : '⚠️ Cần ít nhất 1 ảnh và 1 video'}
+            {hasMinMedia ? ' Đã đủ điều kiện gửi duyệt' : ' Cần ít nhất 1 ảnh và 1 video'}
           </div>
         </div>
 
         {mediaError && (
           <div className="og-alert og-alert--danger" role="alert" style={{ marginBottom: '16px' }}>
-            ⚠️ {mediaError}
+             {mediaError}
           </div>
         )}
 
@@ -564,9 +563,7 @@ export const ListingForm: React.FC<ListingFormProps> = ({
               onDragLeave={() => setIsDragOver(false)}
               onDrop={handleDrop}
             >
-              <div className="og-media-dropzone__icon" aria-hidden="true">
-                🖼️
-              </div>
+              <div className="og-media-dropzone__icon" aria-hidden="true"><Icon name="image" style={{ width: '1em', height: '1em' }} /></div>
               <div className="og-media-dropzone__title">
                 Thêm hình ảnh hoặc video cận cảnh
               </div>
@@ -582,7 +579,7 @@ export const ListingForm: React.FC<ListingFormProps> = ({
                     onClick={() => imageInputRef.current?.click()}
                     disabled={isMediaActionLoading}
                   >
-                    <span>📸 Chọn ảnh ({images.length}/5)</span>
+                    <span> Chọn ảnh ({images.length}/5)</span>
                   </button>
                 )}
 
@@ -593,7 +590,7 @@ export const ListingForm: React.FC<ListingFormProps> = ({
                     onClick={() => videoInputRef.current?.click()}
                     disabled={isMediaActionLoading}
                   >
-                    <span>🎥 Chọn video cận cảnh ({videos.length}/1)</span>
+                    <span> Chọn video cận cảnh ({videos.length}/1)</span>
                   </button>
                 )}
               </div>
@@ -698,7 +695,7 @@ export const ListingForm: React.FC<ListingFormProps> = ({
                             fontWeight: 600,
                           }}
                         >
-                          🗑️ Xóa video
+                           Xóa video
                         </button>
                       )}
                     </div>
@@ -721,7 +718,7 @@ export const ListingForm: React.FC<ListingFormProps> = ({
               textAlign: 'center',
             }}
           >
-            <div style={{ fontSize: '2rem', marginBottom: '6px' }}>📸</div>
+            <div style={{ fontSize: '2rem', marginBottom: '6px' }}><Icon name="image" style={{ width: '1em', height: '1em' }} /></div>
             <p style={{ margin: '0 0 6px', color: 'var(--og-color-text-primary)', fontWeight: 600, fontSize: '14.5px' }}>
               Tải lên hình ảnh & video ở bước tiếp theo
             </p>
@@ -752,7 +749,7 @@ export const ListingForm: React.FC<ListingFormProps> = ({
               disabled={isSubmitting || isMediaActionLoading}
               style={{ height: '42px', padding: '0 20px', fontSize: '14.5px' }}
             >
-              🚀 Gửi kiểm duyệt (PENDING)
+               Gửi kiểm duyệt (PENDING)
             </button>
           )}
         </div>

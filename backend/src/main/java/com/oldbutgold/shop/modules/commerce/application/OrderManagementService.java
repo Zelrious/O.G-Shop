@@ -223,7 +223,7 @@ public class OrderManagementService {
         Long productId = firstItem != null ? firstItem.getProductId() : null;
         String productTitle = firstItem != null ? firstItem.getProductTitle() : "Đơn hàng #" + order.getId();
         BigDecimal unitPrice = firstItem != null ? firstItem.getAgreedPrice() : order.getSubtotal();
-        short quantity = firstItem != null ? firstItem.getQuantity() : 1;
+        int quantity = firstItem != null ? firstItem.getQuantity() : 1;
 
         String thumbnail = null;
         if (productId != null) {
@@ -269,7 +269,7 @@ public class OrderManagementService {
         Long productId = firstItem != null ? firstItem.getProductId() : null;
         String productTitle = firstItem != null ? firstItem.getProductTitle() : "Đơn hàng #" + order.getId();
         BigDecimal unitPrice = firstItem != null ? firstItem.getAgreedPrice() : order.getSubtotal();
-        short quantity = firstItem != null ? firstItem.getQuantity() : 1;
+        int quantity = firstItem != null ? firstItem.getQuantity() : 1;
 
         String thumbnail = null;
         if (productId != null) {

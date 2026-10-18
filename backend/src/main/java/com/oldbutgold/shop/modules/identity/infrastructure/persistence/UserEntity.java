@@ -16,8 +16,12 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "users")
+@Table(name = "users", schema = "og_compat")
 public class UserEntity {
+    @Column(name = "credential_version", insertable = false, updatable = false)
+    private long credentialVersion;
+
+    public long getCredentialVersion() { return credentialVersion; }
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "user_id")
@@ -47,6 +51,12 @@ public class UserEntity {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
+    @Column(name = "email_verified_at")
+    private Instant emailVerifiedAt;
+
+    @Column(name = "identity_workflow", length = 20)
+    private String identityWorkflow = "LEGACY_V14";
+
     @Column(name = "bank_name", length = 100)
     private String bankName;
 
@@ -59,6 +69,7 @@ public class UserEntity {
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",
+            schema = "og_compat",
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
@@ -97,6 +108,11 @@ public class UserEntity {
         this.updatedAt = now;
     }
 
+    public void verifyRegistrationEmail(Instant now) {
+        this.emailVerifiedAt = now;
+        this.identityWorkflow = "UC83";
+    }
+
     public void updateBankAccount(String bankName, String bankAccountNumber, String bankAccountHolder, Instant now) {
         this.bankName = bankName != null && !bankName.isBlank() ? bankName.trim() : null;
         this.bankAccountNumber = bankAccountNumber != null && !bankAccountNumber.isBlank() ? bankAccountNumber.trim() : null;
@@ -113,6 +129,8 @@ public class UserEntity {
     public String getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public Instant getEmailVerifiedAt() { return emailVerifiedAt; }
+    public String getIdentityWorkflow() { return identityWorkflow; }
     public String getBankName() { return bankName; }
     public String getBankAccountNumber() { return bankAccountNumber; }
     public String getBankAccountHolder() { return bankAccountHolder; }

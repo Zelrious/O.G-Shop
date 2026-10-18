@@ -84,7 +84,9 @@ public final class CheckoutDtos {
             List<AddressSummaryResponse> addresses,
             AddressSummaryResponse selectedAddress,
             List<VoucherSummaryResponse> availableVouchers,
-            VoucherSummaryResponse appliedVoucher
+            VoucherSummaryResponse appliedVoucher,
+            BigDecimal agreedPrice,
+            Long acceptedOfferId
     ) {}
 
     public record BuyNowRequest(
@@ -92,8 +94,11 @@ public final class CheckoutDtos {
             Long productId,
             Long addressId,
             CreateAddressRequest newAddress,
-            String voucherCode
-    ) {}
+            String voucherCode,
+            Long offerId
+    ) {
+        public BuyNowRequest(Long productId,Long addressId,CreateAddressRequest newAddress,String voucherCode){this(productId,addressId,newAddress,voucherCode,null);}
+    }
 
     public record OrderCreatedResponse(
             Long orderId,

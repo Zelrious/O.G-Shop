@@ -372,8 +372,23 @@ public final class CatalogDtos {
             Instant createdAt,
             List<CategoryResponse> categories,
             long version,
-            Instant updatedAt
+            Instant updatedAt,
+            String currency,
+            String usageDuration,
+            String defects,
+            String repairHistory,
+            String includedAccessories,
+            String location,
+            int quantity,
+            String sellerName,
+            List<ModerationHistory> history
     ) {
+        public ModerationProductResponse(long productId, String title, String description, BigDecimal listedPrice,
+            String condition, String status, Long sellerId, CategoryResponse category, List<ProductMediaResponse> media,
+            boolean requiresBuyerEkyc, Instant createdAt, List<CategoryResponse> categories, long version, Instant updatedAt) {
+            this(productId,title,description,listedPrice,condition,status,sellerId,category,media,requiresBuyerEkyc,
+                createdAt,categories,version,updatedAt,"VND",null,null,null,null,null,1,null,List.of());
+        }
         public ModerationProductResponse(
                 long productId, String title, String description, BigDecimal listedPrice,
                 String condition, String status, Long sellerId, CategoryResponse category,
@@ -384,6 +399,9 @@ public final class CatalogDtos {
                     category, media, requiresBuyerEkyc, createdAt, categories, 0L, createdAt);
         }
     }
+
+    public record ModerationHistory(Long decisionId,Long reviewerId,String decision,String reason,
+                                    Long contentRevision,Instant reviewedAt) {}
 
     public record ApproveProductRequest(
             @NotNull(message = "expectedVersion là bắt buộc")

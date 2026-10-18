@@ -12,13 +12,15 @@ import java.time.Duration;
 public record AuthProperties(
         @NotBlank String jwtSigningKey,
         @NotNull Duration accessTokenTtl,
-        @NotNull Duration refreshTokenTtl,
         @NotBlank String frontendOrigin,
-        @NotBlank String refreshCookieName,
-        boolean refreshCookieSecure,
-        @NotBlank String refreshCookiePath
+        @NotBlank String sessionCookieName,
+        boolean sessionCookieSecure,
+        @NotBlank String sessionCookiePath
 ) {
     public AuthProperties {
+        if (accessTokenTtl != null && (accessTokenTtl.isZero() || accessTokenTtl.isNegative())) {
+            throw new IllegalArgumentException("Access token lifetime must be positive");
+        }
         if (jwtSigningKey != null && jwtSigningKey.getBytes(java.nio.charset.StandardCharsets.UTF_8).length < 32) {
             throw new IllegalArgumentException("JWT signing key must contain at least 32 bytes");
         }

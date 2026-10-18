@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "payment_attempts")
+@Table(name = "payment_attempts", schema = "og_compat")
 public class PaymentAttemptEntity {
 
     public static final String STATUS_PENDING = "PENDING";

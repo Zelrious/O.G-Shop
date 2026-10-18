@@ -34,6 +34,9 @@ class DefaultIdentityCommerceFacadeTest {
     @Mock
     private SellerVerificationRepository sellerVerificationRepository;
 
+    @Mock
+    private AccountAccessService accountAccess;
+
     private Clock clock;
     private DefaultIdentityCommerceFacade facade;
 
@@ -44,7 +47,8 @@ class DefaultIdentityCommerceFacadeTest {
                 userRepository,
                 addressRepository,
                 sellerVerificationRepository,
-                clock
+                clock,
+                accountAccess
         );
     }
 

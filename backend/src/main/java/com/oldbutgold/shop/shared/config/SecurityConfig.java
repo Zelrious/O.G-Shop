@@ -14,7 +14,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
-import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
+import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
@@ -27,6 +29,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 
 @Configuration
@@ -37,21 +40,35 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             CorsConfigurationSource corsConfigurationSource,
-            JwtAuthenticationConverter jwtAuthenticationConverter
+            JwtAuthenticationConverter jwtAuthenticationConverter,
+            com.oldbutgold.shop.modules.identity.application.AccountAccessService accountAccess,
+            com.fasterxml.jackson.databind.ObjectMapper json
     ) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterAfter(new com.oldbutgold.shop.modules.identity.infrastructure.security.AccountAccessFilter(accountAccess,json),
+                    org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register",
+                                "/api/v1/auth/register/verify",
+                                "/api/v1/auth/register/resend",
+                                "/api/v1/auth/register/cancel",
                                 "/api/v1/auth/login",
-                                "/api/v1/auth/refresh",
-                                "/api/v1/auth/refresh/logout",
+                                "/api/v1/auth/login/verify",
+                                "/api/v1/auth/password-reset",
+                                "/api/v1/auth/password-reset/**",
+                                "/api/v1/auth/challenge/**",
+                                "/api/v1/auth/google",
+                                "/api/v1/auth/google/**",
+                                "/api/v1/auth/session",
+                                "/api/v1/auth/logout",
                                 "/api/v1/fulfillment/webhook").permitAll()
                         .requestMatchers(HttpMethod.GET,
+                                "/api/v1/auth/google/config",
                                 "/api/v1/categories",
                                 "/api/v1/products",
                                 "/api/v1/products/**",
@@ -60,6 +77,12 @@ public class SecurityConfig {
                                 "/api/v1/shipping/master-data/**").permitAll()
                         .requestMatchers("/api/v1/admin/payments/**").hasAnyRole("ADMIN", "KTV")
                         .requestMatchers("/api/v1/admin/fulfillment/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/ktv/users/**").hasRole("KTV")
+                        .requestMatchers("/api/v1/admin/vouchers/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/ktv/vouchers/**").hasRole("KTV")
+                        .requestMatchers("/api/v1/commerce/vouchers/**").hasAnyRole("BUYER","SELLER")
+                        .requestMatchers("/api/v1/account/**").hasAnyRole("BUYER","SELLER")
+                        .requestMatchers("/api/v1/chat/**").hasAnyRole("BUYER","SELLER")
                         .requestMatchers(
                                 "/api/v1/auth/me",
                                 "/api/v1/profile/**",
@@ -67,6 +90,7 @@ public class SecurityConfig {
                                 "/api/v1/seller-verification/**",
                                 "/api/v1/seller/products/**",
                                 "/api/v1/moderation/**",
+                                "/api/v1/notifications/**",
                                 "/api/v1/commerce/**",
                                 "/api/v1/payments/**",
                                 "/api/v1/fulfillment/**").authenticated()
@@ -96,11 +120,13 @@ public class SecurityConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(SecretKey secretKey) {
+    JwtDecoder jwtDecoder(SecretKey secretKey,
+            com.oldbutgold.shop.modules.identity.infrastructure.security.CredentialVersionValidator versions) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(secretKey)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
-        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer("og-shop"));
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                new JwtTimestampValidator(Duration.ZERO), new JwtIssuerValidator("og-shop"), versions));
         return decoder;
     }
 
@@ -120,6 +146,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(List.of(properties.frontendOrigin()));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID"));
+        configuration.setExposedHeaders(List.of("Retry-After"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

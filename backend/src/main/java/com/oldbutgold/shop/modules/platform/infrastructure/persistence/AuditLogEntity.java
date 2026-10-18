@@ -7,13 +7,15 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.Immutable;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.Map;
 
 @Entity
-@Table(name = "audit_logs")
+@Immutable
+@Table(name = "audit_logs", schema = "og_compat")
 public class AuditLogEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

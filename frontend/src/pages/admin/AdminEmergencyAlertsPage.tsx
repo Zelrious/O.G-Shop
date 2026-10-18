@@ -85,10 +85,10 @@ export const AdminEmergencyAlertsPage: React.FC = () => {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: '#0f172a', fontWeight: 800 }}>
+          <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: 'var(--og-color-text-primary)', fontWeight: 800 }}>
             Thông báo khẩn cấp từ Kỹ Thuật Viên
           </h1>
-          <p style={{ margin: 0, color: '#64748b', fontSize: '0.92rem' }}>
+          <p style={{ margin: 0, color: 'var(--og-color-text-secondary)', fontSize: '0.92rem' }}>
             Tiếp nhận các cảnh báo lỗi hệ thống, sự cố cổng thanh toán hoặc nghi vấn gian lận nghiêm trọng được đội ngũ KTV đẩy lên.
           </p>
         </div>
@@ -101,7 +101,7 @@ export const AdminEmergencyAlertsPage: React.FC = () => {
               onChange={handleToggleAll}
               ariaLabel="Chọn tất cả cảnh báo"
             />
-            <span style={{ fontSize: '0.84rem', color: '#64748b' }}>Chọn tất cả</span>
+            <span style={{ fontSize: '0.84rem', color: 'var(--og-color-text-secondary)' }}>Chọn tất cả</span>
           </div>
         )}
       </div>
@@ -109,8 +109,8 @@ export const AdminEmergencyAlertsPage: React.FC = () => {
       {successMessage && (
         <div
           style={{
-            background: '#ecfdf5',
-            border: '1px solid #a7f3d0',
+            background: 'var(--og-color-primary-light)',
+            border: '1px solid var(--og-color-border)',
             borderRadius: '8px',
             padding: '12px 16px',
             color: '#065f46',
@@ -151,19 +151,19 @@ export const AdminEmergencyAlertsPage: React.FC = () => {
         {emergencyAlerts.length === 0 ? (
           <div
             style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              background: 'var(--og-color-surface)',
+              border: '1px solid var(--og-color-border)',
               borderRadius: '12px',
               padding: '60px 20px',
               textAlign: 'center',
               boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
             }}
           >
-            <div style={{ color: '#059669', marginBottom: '12px', display: 'flex', justifyContent: 'center' }}>
+            <div style={{ color: 'var(--og-color-primary)', marginBottom: '12px', display: 'flex', justifyContent: 'center' }}>
               <ConsoleIcons.CheckCircle size={40} />
             </div>
-            <h3 style={{ color: '#0f172a', margin: '0 0 6px', fontWeight: 700 }}>Hệ thống vận hành an toàn</h3>
-            <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>
+            <h3 style={{ color: 'var(--og-color-text-primary)', margin: '0 0 6px', fontWeight: 700 }}>Hệ thống vận hành an toàn</h3>
+            <p style={{ margin: 0, color: 'var(--og-color-text-secondary)', fontSize: '0.9rem' }}>
               Hiện không có thông báo khẩn cấp nào từ đội ngũ KTV.
             </p>
           </div>
@@ -174,7 +174,7 @@ export const AdminEmergencyAlertsPage: React.FC = () => {
               <div
                 key={item.id}
                 style={{
-                  background: isSelected ? '#f0fdf4' : '#ffffff',
+                  background: isSelected ? 'var(--og-color-primary-light)' : 'var(--og-color-surface)',
                   border: item.status === 'UNREAD' ? '1px solid #fca5a5' : '1px solid #e2e8f0',
                   borderRadius: '12px',
                   padding: '20px',
@@ -210,12 +210,12 @@ export const AdminEmergencyAlertsPage: React.FC = () => {
                           {item.severity === 'CRITICAL' ? 'KHẨN CẤP (CRITICAL)' : 'NGHIÊM TRỌNG (HIGH)'}
                         </span>
 
-                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                          KTV chuyển giao: <strong style={{ color: '#0f172a' }}>{item.ktvName}</strong> · Lúc: {item.createdAt}
+                        <span style={{ fontSize: '0.8rem', color: 'var(--og-color-text-secondary)' }}>
+                          KTV chuyển giao: <strong style={{ color: 'var(--og-color-text-primary)' }}>{item.ktvName}</strong> · Lúc: {item.createdAt}
                         </span>
                       </div>
 
-                      <h3 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', color: '#0f172a', fontWeight: 700 }}>
+                      <h3 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', color: 'var(--og-color-text-primary)', fontWeight: 700 }}>
                         {item.title}
                       </h3>
                     </div>
@@ -303,13 +303,13 @@ export const AdminEmergencyAlertsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '14px', borderRadius: '8px', color: '#334155', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                <div style={{ background: 'var(--og-color-bg)', border: '1px solid var(--og-color-border)', padding: '14px', borderRadius: '8px', color: 'var(--og-color-text-secondary)', fontSize: '0.9rem', lineHeight: '1.5' }}>
                   {item.details}
                 </div>
 
                 {item.adminNote && (
-                  <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', padding: '10px 14px', borderRadius: '8px', fontSize: '0.85rem' }}>
-                    <strong style={{ color: '#047857' }}>Chỉ đạo xử lý của Admin:</strong>{' '}
+                  <div style={{ background: 'var(--og-color-primary-light)', border: '1px solid var(--og-color-border)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.85rem' }}>
+                    <strong style={{ color: 'var(--og-color-primary)' }}>Chỉ đạo xử lý của Admin:</strong>{' '}
                     <span style={{ color: '#065f46' }}>{item.adminNote}</span>
                   </div>
                 )}
@@ -336,24 +336,24 @@ export const AdminEmergencyAlertsPage: React.FC = () => {
         >
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--og-color-surface)',
               borderRadius: '14px',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--og-color-border)',
               padding: '24px',
               width: '100%',
               maxWidth: '540px',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
             }}
           >
-            <h2 style={{ margin: '0 0 8px 0', fontSize: '1.25rem', color: '#0f172a', fontWeight: 700 }}>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: '1.25rem', color: 'var(--og-color-text-primary)', fontWeight: 700 }}>
               Ghi chú hoàn tất xử lý sự cố khẩn cấp
             </h2>
-            <p style={{ margin: '0 0 16px 0', fontSize: '0.86rem', color: '#64748b' }}>
+            <p style={{ margin: '0 0 16px 0', fontSize: '0.86rem', color: 'var(--og-color-text-secondary)' }}>
               Nhập chỉ đạo hoặc nguyên nhân sự cố đã khắc phục để thông báo lại cho KTV <strong>{selectedAlert.ktvName}</strong>.
             </p>
 
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '0.84rem', color: '#475569', marginBottom: '6px', fontWeight: 600 }}>
+              <label style={{ display: 'block', fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                 Nội dung xử lý hoàn tất *
               </label>
               <textarea
@@ -365,10 +365,10 @@ export const AdminEmergencyAlertsPage: React.FC = () => {
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
+                  background: 'var(--og-color-surface)',
+                  border: '1px solid var(--og-color-border-strong)',
                   borderRadius: '8px',
-                  color: '#0f172a',
+                  color: 'var(--og-color-text-primary)',
                   fontSize: '0.88rem',
                   boxSizing: 'border-box',
                 }}
@@ -381,9 +381,9 @@ export const AdminEmergencyAlertsPage: React.FC = () => {
                 onClick={() => setSelectedAlert(null)}
                 style={{
                   padding: '9px 16px',
-                  background: '#f1f5f9',
-                  border: '1px solid #cbd5e1',
-                  color: '#475569',
+                  background: 'var(--og-color-surface-subtle)',
+                  border: '1px solid var(--og-color-border-strong)',
+                  color: 'var(--og-color-text-secondary)',
                   borderRadius: '8px',
                   fontSize: '0.88rem',
                   fontWeight: 600,
@@ -398,7 +398,7 @@ export const AdminEmergencyAlertsPage: React.FC = () => {
                 disabled={!adminNote.trim()}
                 style={{
                   padding: '9px 18px',
-                  background: '#059669',
+                  background: 'var(--og-color-primary-fill)',
                   border: 'none',
                   color: '#ffffff',
                   borderRadius: '8px',

@@ -2,7 +2,7 @@
 
 Tài liệu đặc tả toàn bộ REST API của module Catalog thuộc hệ thống O.G Shop.
 
-- Version: 1.1.0
+- Version: 1.2.0 (V27 / TASK-0087)
 - Base URL: `/api/v1`
 - Module: Catalog
 - Authentication: Bearer JWT trong header `Authorization: Bearer <token>` cho các endpoint Người bán (Seller). Các endpoint công khai không yêu cầu authentication.
@@ -182,7 +182,7 @@ Backend tự động trích xuất `sellerId` từ JWT Subject (`userId`). Ngư�
 
 - **Endpoint:** `GET /api/v1/seller/products`
 - **Query Parameters:** `page` (mặc định 0), `size` (mặc định 20, tối đa 50).
-- **Mô tả:** Trả về danh sách tất cả sản phẩm thuộc quyền sở hữu của Seller (bao gồm cả `DRAFT`, `ACTIVE`, `HIDDEN`, `RESERVED`, `SOLD`).
+- **Mô tả:** Trả về danh sách tất cả sản phẩm thuộc quyền sở hữu của Seller (bao gồm cả `DRAFT`, `PENDING`, `APPROVED_AWAITING_FEE`, `ACTIVE`, `REJECTED`, `HIDDEN`, `RESERVED`, `SOLD`).
 
 #### Phản hồi thành công (HTTP 200 OK):
 
@@ -271,7 +271,7 @@ Trả về chi tiết sản phẩm vừa tạo ở trạng thái `DRAFT`.
 
 - **Endpoint:** `PUT /api/v1/seller/products/{productId}`
 - **Ràng buộc nghiệp vụ:**
-  - Chỉ cho phép sửa tin khi ở trạng thái `DRAFT`, `ACTIVE`, hoặc `HIDDEN`.
+  - Chỉ cho phép sửa tin khi DRAFT, ACTIVE, HIDDEN hoặc REJECTED. Sửa nội dung/media ACTIVE chuyển HIDDEN, cần submit và duyệt lại; PENDING/APPROVED_AWAITING_FEE/transacting không cho sửa.
   - Nếu sản phẩm đang ở trạng thái `RESERVED` hoặc `SOLD`, từ chối với HTTP 409 `PRODUCT_STATE_CONFLICT`.
   - Nếu sản phẩm thuộc về Seller khác, trả về HTTP 404 `PRODUCT_NOT_FOUND`.
   - Hỗ trợ Optimistic Locking: Client có thể gửi trường `version`. Nếu `version` không khớp với database (bị sửa đổi đồng thời bởi phiên khác), Backend trả về HTTP 409 `PRODUCT_VERSION_CONFLICT`.
@@ -290,10 +290,10 @@ Trả về chi tiết sản phẩm sau khi cập nhật với `version` mới. C
 
 - **Endpoint:** `POST /api/v1/seller/products/{productId}/publish`
 - **Mô tả:** Đăng bán lại sản phẩm đang ở trạng thái `HIDDEN` sang `ACTIVE`.
-- **Ràng buộc chính sách kiểm duyệt thủ công (DP-22 & UC70):**
+- **Ràng buộc chính sách kiểm duyệt thủ công (DP-22 & UC73):**
   - **Chặn đường tắt bypass KTV:** API này **CHỈ** chấp nhận sản phẩm ở trạng thái `HIDDEN`.
   - Nếu sản phẩm ở trạng thái `DRAFT` hoặc `REJECTED`, Seller **bắt buộc** phải qua luồng gửi duyệt (`POST /api/v1/seller/products/{productId}/submit`). Nếu gọi `/publish` khi đang `DRAFT`, `PENDING` hoặc `REJECTED`, backend trả về HTTP 409 `PRODUCT_STATE_CONFLICT`.
-  - Nếu sản phẩm đang ở trạng thái `ACTIVE`, trả về thành công (idempotent).
+  - Trạng thái khác HIDDEN bị từ chối; ACTIVE không phải thao tác publish idempotent.
   - Nếu sản phẩm đang ở trạng thái `RESERVED` hoặc `SOLD`, từ chối với HTTP 409 `PRODUCT_STATE_CONFLICT`.
 
 #### Phản hồi thành công (HTTP 200 OK):
@@ -302,12 +302,12 @@ Trả về thông tin chi tiết sản phẩm với `status = "ACTIVE"`.
 
 ---
 
-### 2.6. Gửi tin đăng để KTV kiểm duyệt thủ công (Submit Listing for Review - UC15/UC70)
+### 2.6. Gửi tin đăng để KTV kiểm duyệt thủ công (Submit Listing for Review - UC15/UC73)
 
 - **Endpoint:** `POST /api/v1/seller/products/{productId}/submit`
-- **Mô tả:** Chuyển trạng thái tin đăng từ `DRAFT` hoặc `REJECTED` sang `PENDING` để bước vào hàng chờ xét duyệt thủ công của KTV (UC70).
+- **Mô tả:** Chuyển trạng thái tin đăng từ `DRAFT`, `REJECTED` hoặc `HIDDEN` sang `PENDING` để bước vào hàng chờ xét duyệt thủ công của KTV (UC73).
 - **Ràng buộc nghiệp vụ (Rule V6 & DP-22):**
-  - Chỉ cho phép gửi duyệt khi sản phẩm ở trạng thái `DRAFT` hoặc `REJECTED`.
+  - Chỉ cho phép gửi duyệt khi sản phẩm ở trạng thái `DRAFT`, `REJECTED` hoặc `HIDDEN`.
   - Bắt buộc phải có **tối thiểu 1 ảnh** (`IMAGE`) và **đúng 1 video quay cận cảnh** (`VIDEO`). Nếu thiếu, trả về HTTP 400/500 lỗi nghiệp vụ.
   - Tự động cập nhật `version` của sản phẩm để nhận diện chính xác nội dung/media đã gửi KTV.
   - Sau khi gửi duyệt thành công, sản phẩm mang trạng thái `PENDING`. Seller không thể tự approve sản phẩm.
@@ -330,149 +330,57 @@ Trả về thông tin chi tiết sản phẩm với `status = "PENDING"`.
 
 Trả về thông tin chi tiết sản phẩm với `status = "HIDDEN"`.
 
-### 2.8. Đăng bán lại tin đăng đã ẩn (Publish Listing)
+### 2.8. Phí đăng tin đã duyệt — UC72
 
-- **Endpoint:** `POST /api/v1/seller/products/{productId}/publish`
-- **Mô tả:** Đăng bán lại tin đăng đang ở trạng thái `HIDDEN`.
-- **Ràng buộc bảo mật & kiểm duyệt:**
-  - Sản phẩm bắt buộc phải đang ở trạng thái `HIDDEN`. Tin ở trạng thái `DRAFT` hoặc `REJECTED` không được publish trực tiếp mà phải gửi duyệt (`POST /api/v1/seller/products/{id}/submit`) để KTV kiểm định.
-  - Phải có bằng chứng quyết định `APPROVED` gần nhất từ KTV trong `product_moderation_decisions`. Các tin `HIDDEN` cũ (legacy data) chưa từng có quyết định duyệt sẽ bị chặn với HTTP 409 `PRODUCT_STATE_CONFLICT`, yêu cầu gửi duyệt.
-  - Quyết định `APPROVED` phải có `product_version` khớp chính xác với `content_revision` hiện tại của tin đăng. Nếu Seller đã thay đổi tiêu đề, mô tả, giá, tình trạng, danh mục, hoặc thêm/xóa ảnh/video sau khi được duyệt, hệ thống từ chối với HTTP 409 `PRODUCT_STATE_CONFLICT` ("Nội dung hoặc media của tin đăng đã thay đổi so với phiên bản được KTV phê duyệt...").
-
-#### Phản hồi thành công (HTTP 200 OK):
-
-Trả về thông tin chi tiết sản phẩm với `status = "ACTIVE"`.
-
----
-
-## 3. Moderation Endpoints (Dành cho KTV kiểm duyệt tin - UC70)
-
-**Trạng thái triển khai và giới hạn kiểm chứng:**
-
-Kiểm tra độc lập còn ghi nhận hai giới hạn lifecycle: decision V9 có entity version cũ bị dùng như proof content revision mới sau V10; expectedVersion hiện chỉ là content revision, không nhận diện round reject/resubmit không sửa. V10 còn sửa reason lịch sử; SQL DELETE case có false positive. Các vấn đề này chờ sửa, chưa nghiệm thu toàn bộ UC70.
-
-- Đã tách `content_revision` độc lập với `@Version` entity để kiểm soát chính xác phiên bản nội dung KTV duyệt qua Flyway V10.
-- `expectedVersion` và `commandKey` là **BẮT BUỘC** trên cả Approve và Reject (`@Valid @RequestBody`). Request thiếu body hoặc sai định dạng trả về HTTP 400 Bad Request ngay lập tức.
-- Replay hỗ trợ trả về kết quả nguyên gốc đã ghi (`ACTIVE` hoặc `REJECTED`), không phụ thuộc vào trạng thái hiện tại của sản phẩm sau resubmit.
-- Bảng `product_moderation_decisions` được bảo vệ toàn vẹn bằng database trigger append-only (chặn mọi `UPDATE` và `DELETE`).
-- Xác thực: Bearer JWT. Role KTV đã có trong migration V11; tài khoản test `ktv@gmail.com` dùng KTV. API hiện mới kiểm tra đăng nhập, chưa giới hạn ADMIN/KTV. reviewerId được trích xuất trực tiếp từ principal JWT và lưu vào bản ghi quyết định cùng Clock backend.
-
-### 3.1. Lấy danh sách hàng chờ tin cần kiểm duyệt
-
-- **Endpoint:** `GET /api/v1/moderation/products`
-- **Quyền:** Authenticated.
-- **Query Parameters:**
-  - `page`: số trang (mặc định 0).
-  - `size`: kích thước trang (1 đến 50, mặc định 20).
-- **Mô tả:** Trả về danh sách phân trang các tin đăng mang trạng thái `PENDING`, kèm toàn bộ media (ảnh/video), danh mục đã gắn, cờ eKYC Người mua và phiên bản nội dung `version` (`content_revision`) phục vụ kiểm soát xung đột đồng thời.
-
-#### Phản hồi thành công (HTTP 200 OK):
+- GET /api/v1/seller/products/{productId}/listing-fee: owner có SELLER active. Trả productId/title/status/version/quantity, chargeId, policyCode, listedTotal, computedFee, totalPaid, amountDue, paymentState. NOT_ASSESSED khi chưa đánh giá; CONFIRMED khi đã đủ phí. chargeId có thể null, không tạo charge số tiền 0.
+- POST /api/v1/seller/products/{productId}/listing-fee/mock-pay: owner/active, body bắt buộc:
 
 ```json
-{
-  "items": [
-    {
-      "productId": 101,
-      "title": "Máy ảnh cơ Canon AE-1",
-      "description": "Máy chụp tốt, cơ êm, kèm lens 50mm f/1.8",
-      "listedPrice": 3500000,
-      "condition": "GOOD",
-      "status": "PENDING",
-      "sellerId": 10,
-      "category": { "categoryId": 1, "categoryName": "Máy ảnh", "slug": "cameras", "displayOrder": 1 },
-      "categories": [
-        { "categoryId": 1, "categoryName": "Máy ảnh", "slug": "cameras", "displayOrder": 1 }
-      ],
-      "media": [
-        { "mediaId": 1, "mediaType": "IMAGE", "mediaUrl": "https://example.com/img1.jpg", "displayOrder": 1 },
-        { "mediaId": 2, "mediaType": "VIDEO", "mediaUrl": "https://example.com/vid1.mp4", "displayOrder": 2 }
-      ],
-      "requiresBuyerEkyc": true,
-      "createdAt": "2026-10-01T10:00:00Z",
-      "version": 1,
-      "updatedAt": "2026-10-01T10:05:00Z"
-    }
-  ],
-  "page": 0,
-  "size": 20,
-  "totalElements": 1,
-  "totalPages": 1,
-  "hasNext": false
-}
+{"chargeId":"11111111-1111-1111-1111-111111111111","expectedVersion":2,"commandKey":"unique-retry-key"}
 ```
 
----
+chargeId UUID, expectedVersion ≥0, key 1–100 ký tự. Tiền lấy từ charge server. Phải là charge hiện tại ở tin APPROVED_AWAITING_FEE và version khớp; matching retry giữ receipt/reward một lần, key dùng cho charge khác trả COMMAND_KEY_CONFLICT. HTTP 200 FeeSummary mới; state ACTIVE sau receipt/guard/activation. Không gọi provider thật.
 
-### 3.2. Lấy chi tiết tin đăng chờ duyệt
+Tổng niêm yết = listedPrice × quantity được duyệt. Phí bổ sung = max(phí theo policy tại lượt duyệt − tổng receipt đã đóng cùng tin,0). Giảm giá không hoàn phí cũ. Thu đủ hoặc bổ sung bằng 0 mới mở bán; cấp 10.000 xu tin đầu một lần/Seller lúc thực sự mở bán.
 
-- **Endpoint:** `GET /api/v1/moderation/products/{productId}`
-- **Quyền:** Authenticated.
-- **Mô tả:** Lấy toàn bộ chi tiết kiểm định của tin đăng (thời gian đã dùng, khuyết điểm, lịch sử sửa chữa, phụ kiện kèm theo, media, version).
+## 3. Moderation Endpoints — UC73
 
----
+Quyền ADMIN/KTV, reviewerId từ JWT subject; người đăng nhập vai trò khác trả 403. V27 lưu snapshot MANUAL_V27 cho đối chiếu thủ công, không khẳng định đã kiểm AI/eKYC canonical. [Chi tiết rollout/giới hạn](../architecture/MODERATION_LISTING_V27_20261012.md).
 
-### 3.3. Phê duyệt tin đăng (Approve - UC70)
+### 3.1. Hàng chờ và chi tiết
 
-- **Endpoint:** `POST /api/v1/moderation/products/{productId}/approve`
-- **Quyền:** Authenticated (lấy reviewerId từ JWT subject).
-- **Request Body (bắt buộc):**
-  ```json
-  {
-    "expectedVersion": 1,
-    "commandKey": "ck-app-101-1-1696320000"
-  }
-  ```
-- **Ràng buộc & Xử lý đồng thời:**
-  - `expectedVersion` (@NotNull, @Min(0)) và `commandKey` (@NotBlank, @Size(max=100)) là bắt buộc. Thiếu body, JSON null hoặc tham số sai trả về HTTP 400 Bad Request.
-  - Tin phải ở trạng thái `PENDING`. Nếu trạng thái khác (ACTIVE, REJECTED, RESERVED, SOLD), trả về HTTP 409 `PRODUCT_STATE_CONFLICT`.
-  - Phải có đủ tối thiểu 1 ảnh và 1 video (Rule V6).
-  - `expectedVersion` phải khớp chính xác với `content_revision` hiện tại của tin trong DB; nếu không khớp (tin đã bị sửa), trả về HTTP 409 `PRODUCT_VERSION_CONFLICT`.
-  - Hỗ trợ idempotent replay: nếu gọi lại với cùng key và thông tin khớp, trả về kết quả gốc (`ACTIVE`) không tạo bản ghi mới; nếu cùng key nhưng khác actor, product, action hoặc version, trả về HTTP 409 `COMMAND_KEY_CONFLICT`.
-  - Đổi trạng thái sang `ACTIVE`, lưu bản ghi quyết định `APPROVED` vào bảng `product_moderation_decisions` (với reason = NULL), và ghi `audit_logs` diễn ra trong cùng một transaction nguyên tử (atomic).
+- GET /api/v1/moderation/products?page=0&size=20: PENDING, page chuẩn hóa ≥0, size 1–50; items/page/size/totalElements/totalPages/hasNext.
+- GET /api/v1/moderation/products/{productId}: xem chi tiết kể cả tin đã quyết định để mở lại từ thông báo.
+- DTO gồm productId/sellerId/sellerName, title/description/listedPrice/currency/condition, usageDuration/defects/repairHistory/includedAccessories/location, quantity, categories/category/media, status/requiresBuyerEkyc, version/createdAt/updatedAt, history. Giá trị thiếu giữ null; UI “Chưa cung cấp”.
+- history: decisionId/reviewerId/decision/reason/contentRevision/reviewedAt. Legacy contentRevision có thể null, không suy diễn thành proof mới. version là entity row version, khác contentRevision; gửi nguyên giá trị lấy từ server, không tự tăng.
 
-#### Phản hồi thành công (HTTP 200 OK):
+### 3.2. Duyệt
+
+POST /api/v1/moderation/products/{productId}/approve:
 
 ```json
-{
-  "productId": 101,
-  "status": "ACTIVE",
-  "message": "Phê duyệt tin đăng thành công."
-}
+{"expectedVersion":1,"commandKey":"approval-retry-key"}
 ```
 
----
-
-### 3.4. Từ chối tin đăng (Reject - UC70)
-
-- **Endpoint:** `POST /api/v1/moderation/products/{productId}/reject`
-- **Quyền:** Authenticated (lấy reviewerId từ JWT subject).
-- **Request Body (bắt buộc):**
-  ```json
-  {
-    "reason": "Video quay cận cảnh bị mờ nhòe, không nhìn rõ vết xước màn hình.",
-    "expectedVersion": 1,
-    "commandKey": "ck-rej-101-1-1696320000"
-  }
-  ```
-- **Ràng buộc:**
-  - `reason` là trường **BẮT BUỘC**, không được null, rỗng hoặc toàn khoảng trắng, độ dài tối đa 500 ký tự. `expectedVersion` (@NotNull, @Min(0)) và `commandKey` (@NotBlank, @Size(max=100)) là bắt buộc. Request thiếu body, JSON null hoặc lý do không hợp lệ trả về HTTP 400 Bad Request ngay lập tức.
-  - Tin phải ở trạng thái `PENDING`. Trạng thái khác trả về HTTP 409 `PRODUCT_STATE_CONFLICT`.
-  - Nếu `expectedVersion` không khớp với `content_revision`, trả về HTTP 409 `PRODUCT_VERSION_CONFLICT`.
-  - Hỗ trợ idempotent replay: cùng command key trả về kết quả `REJECTED` gốc kể cả sau khi Seller đã resubmit lên `PENDING`. Khác thông tin trả về HTTP 409 `COMMAND_KEY_CONFLICT`.
-  - Đổi trạng thái sang `REJECTED`, lưu lý do và quyết định vào bảng `product_moderation_decisions`, và ghi `audit_logs` atomically.
-  - Seller có thể xem lại lý do từ chối thực tế này khi tra cứu danh sách hoặc chi tiết tin của mình (`GET /api/v1/seller/products/{id}`). Public API tuyệt đối không để lộ dữ liệu kiểm duyệt nội bộ.
-
-#### Phản hồi thành công (HTTP 200 OK):
+Tin PENDING, đủ media bắt buộc, active Seller, version đúng. Khóa product, kiểm key lại sau khóa; snapshot/decision/assessment/charge/status/audit/outbox cùng transaction. Phí còn thiếu >0 trả APPROVED_AWAITING_FEE; bằng 0 trả ACTIVE.
 
 ```json
-{
-  "productId": 101,
-  "status": "REJECTED",
-  "message": "Đã từ chối tin đăng: Video quay cận cảnh bị mờ nhòe, không nhìn rõ vết xước màn hình."
-}
+{"productId":101,"status":"APPROVED_AWAITING_FEE","message":"Đã duyệt tin. Người bán cần trả 80.000 đồng để mở bán."}
 ```
 
----
+Retry cùng actor/product/action/version/key trả kết quả gốc, kể cả sau trả phí; dùng key khác payload trả 409 COMMAND_KEY_CONFLICT. State sai hoặc Seller không còn active trả 409 PRODUCT_STATE_CONFLICT; version sai trả 409 PRODUCT_VERSION_CONFLICT. Decision append-only.
+
+### 3.3. Từ chối
+
+POST /api/v1/moderation/products/{productId}/reject:
+
+```json
+{"reason":"Bổ sung video cận cảnh khuyết điểm.","expectedVersion":1,"commandKey":"rejection-retry-key"}
+```
+
+reason bắt buộc sau trim, tối đa 500 ký tự; version/key bắt buộc như duyệt. Tin PENDING/version đúng; lưu REJECTED/reason/decision/audit/outbox atomically, HTTP 200 ActionResponse. Retry trả quyết định gốc sau resubmit; key khác thông tin trả 409. Seller thấy reason/reviewedAt qua owner API; public không lộ history/rejection data.
+
+Thông báo submit/decision/open đi qua outbox và API riêng; [Notifications API](NOTIFICATIONS_API.md). Tin chờ phí không có trong public list/detail. HIDDEN đã sửa không publish được nếu proof nội dung/phí không khớp; submit lại để xét bản mới. Dữ liệu lịch sử trước V27 không bị thu phí/thưởng hồi tố khi migrate.
 
 ## 4. Mã lỗi chuẩn hóa (Error Codes)
 
@@ -497,7 +405,7 @@ Toàn bộ phản hồi lỗi tuân thủ cấu trúc RFC 7807 / O.G Shop API Co
 | 409 Conflict | `PRODUCT_VERSION_CONFLICT` | Xung đột cập nhật đồng thời (Optimistic / Moderation Version Mismatch). Cần tải lại dữ liệu mới nhất. |
 | 409 Conflict | `COMMAND_KEY_CONFLICT` | Command key (idempotency key) đã được sử dụng với payload hoặc kết quả khác trước đó. |
 
-## 4. Media local — tên file và đường dẫn
+## 5. Media local — tên file và đường dẫn
 
 `GET /api/v1/media/{filename}` chỉ đọc file thường trong thư mục media được cấu hình. Tên hợp lệ là UUID chữ thường do server sinh với suffix `jpg`, `jpeg`, `png`, `webp`, `mp4` hoặc `webm`; giữ `jpeg` để đọc upload cũ. Tên không hợp lệ, file không tồn tại, directory hoặc symlink trả 404. Đường dẫn tuyệt đối, dấu phân cách thư mục, `..` và tên khác định dạng này không được chấp nhận.
 

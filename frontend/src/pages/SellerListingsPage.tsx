@@ -1,10 +1,12 @@
+import { Icon } from '../shared/components/Icon/Icon';
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth';
 import { listingApi, SellerListingItem, SellerProductSummary } from '../features/listing';
 import { Alert } from '../shared/components';
+import { ListingFeeDialog } from '../features/listing/components/ListingFeeDialog';
 
-type FilterTabKey = 'ALL' | 'ACTIVE' | 'PENDING' | 'DRAFT' | 'SOLD' | 'REJECTED';
+type FilterTabKey = 'ALL' | 'ACTIVE' | 'PENDING' | 'APPROVED_AWAITING_FEE' | 'DRAFT' | 'SOLD' | 'REJECTED';
 
 export const SellerListingsPage: React.FC = () => {
   const { user } = useAuth();
@@ -18,6 +20,7 @@ export const SellerListingsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [feeProductId, setFeeProductId] = useState<number | null>(null);
 
   // Filter & Search states
   const [activeTab, setActiveTab] = useState<FilterTabKey>('ALL');
@@ -100,6 +103,7 @@ export const SellerListingsPage: React.FC = () => {
       ALL: products.length,
       ACTIVE: products.filter((p) => p.status === 'ACTIVE').length,
       PENDING: products.filter((p) => p.status === 'PENDING').length,
+      APPROVED_AWAITING_FEE: products.filter((p) => p.status === 'APPROVED_AWAITING_FEE').length,
       DRAFT: products.filter((p) => p.status === 'DRAFT' || p.status === 'HIDDEN').length,
       SOLD: products.filter((p) => p.status === 'SOLD').length,
       REJECTED: products.filter((p) => p.status === 'REJECTED').length,
@@ -113,6 +117,8 @@ export const SellerListingsPage: React.FC = () => {
     // Filter by tab
     if (activeTab === 'ACTIVE') {
       result = result.filter((p) => p.status === 'ACTIVE');
+    } else if (activeTab === 'APPROVED_AWAITING_FEE') {
+      result = result.filter((p) => p.status === 'APPROVED_AWAITING_FEE');
     } else if (activeTab === 'PENDING') {
       result = result.filter((p) => p.status === 'PENDING');
     } else if (activeTab === 'DRAFT') {
@@ -149,14 +155,14 @@ export const SellerListingsPage: React.FC = () => {
   if (!isSeller) {
     return (
       <div className="og-seller-upgrade-prompt">
-        <div className="og-seller-upgrade-prompt__icon">🏪</div>
+        <div className="og-seller-upgrade-prompt__icon"><Icon name="store" style={{ width: '1em', height: '1em' }} /></div>
         <h1 className="og-seller-upgrade-prompt__title">Kích hoạt quyền Người bán</h1>
         <p className="og-seller-upgrade-prompt__desc">
           Tài khoản của bạn hiện là Người mua (Buyer). Để đăng bán món đồ cũ và quản lý tin đăng trên O.G Shop,
           bạn cần kích hoạt quyền Người bán.
         </p>
         <Link to="/seller-verification" className="og-button og-button--primary">
-          ✨ Kích hoạt quyền Người bán ngay
+           Kích hoạt quyền Người bán ngay
         </Link>
       </div>
     );
@@ -177,7 +183,7 @@ export const SellerListingsPage: React.FC = () => {
           className="og-button og-button--primary og-seller-btn-primary-cta"
           onClick={() => navigate('/seller/listings/new')}
         >
-          <span aria-hidden="true">➕</span>
+          <span aria-hidden="true"><Icon name="plus" style={{ width: '1em', height: '1em' }} /></span>
           <span>Đăng tin mới</span>
         </button>
       </div>
@@ -205,6 +211,9 @@ export const SellerListingsPage: React.FC = () => {
         >
           <span>Tất cả</span>
           <span className="og-seller-tab-count">{tabCounts.ALL}</span>
+        </button>
+        <button type="button" role="tab" aria-selected={activeTab === 'APPROVED_AWAITING_FEE'} className={`og-seller-tab-btn ${activeTab === 'APPROVED_AWAITING_FEE' ? 'og-seller-tab-btn--active' : ''}`} onClick={() => setActiveTab('APPROVED_AWAITING_FEE')}>
+          <span>Đã duyệt, chờ phí</span><span className="og-seller-tab-count">{tabCounts.APPROVED_AWAITING_FEE}</span>
         </button>
         <button
           type="button"
@@ -262,9 +271,7 @@ export const SellerListingsPage: React.FC = () => {
       {products.length > 0 && (
         <div className="og-seller-toolbar">
           <div className="og-seller-search-box">
-            <span className="og-seller-search-icon" aria-hidden="true">
-              🔍
-            </span>
+            <span className="og-seller-search-icon" aria-hidden="true"><Icon name="search" style={{ width: '1em', height: '1em' }} /></span>
             <input
               type="text"
               className="og-seller-search-input"
@@ -306,7 +313,7 @@ export const SellerListingsPage: React.FC = () => {
         </div>
       ) : products.length === 0 ? (
         <div className="og-empty-state">
-          <div className="og-empty-state__icon">📝</div>
+          <div className="og-empty-state__icon"><Icon name="file" style={{ width: '1em', height: '1em' }} /></div>
           <h2 className="og-empty-state__title">Bạn chưa có tin đăng nào</h2>
           <p className="og-empty-state__desc">
             Hãy bắt đầu đăng bán những món đồ bạn không còn dùng tới để kết nối với người mua trên O.G Shop!
@@ -316,13 +323,13 @@ export const SellerListingsPage: React.FC = () => {
             className="og-button og-button--primary og-seller-btn-primary-cta"
             onClick={() => navigate('/seller/listings/new')}
           >
-            <span aria-hidden="true">➕</span>
+            <span aria-hidden="true"><Icon name="plus" style={{ width: '1em', height: '1em' }} /></span>
             <span>Đăng tin đầu tiên</span>
           </button>
         </div>
       ) : filteredProducts.length === 0 ? (
         <div className="og-empty-state" style={{ padding: '40px 20px' }}>
-          <div className="og-empty-state__icon" style={{ fontSize: '2.5rem' }}>🔍</div>
+          <div className="og-empty-state__icon" style={{ fontSize: '2.5rem' }}><Icon name="search" style={{ width: '1em', height: '1em' }} /></div>
           <h2 className="og-empty-state__title" style={{ fontSize: '1.1rem' }}>Không tìm thấy tin đăng phù hợp</h2>
           <p className="og-empty-state__desc">
             Thử thay đổi từ khóa tìm kiếm hoặc chọn tab trạng thái khác.
@@ -342,6 +349,7 @@ export const SellerListingsPage: React.FC = () => {
         <div className="og-seller-listings-list">
           {filteredProducts.map((p) => (
             <SellerListingItem
+              onPayFee={setFeeProductId}
               key={p.productId}
               product={p}
               onPublish={handlePublish}
@@ -352,6 +360,9 @@ export const SellerListingsPage: React.FC = () => {
           ))}
         </div>
       )}
-    </div>
+      {feeProductId !== null && <ListingFeeDialog productId={feeProductId} onClose={() => setFeeProductId(null)} onPaid={() => {
+        setFeeProductId(null); setSuccessMessage('Đã xác nhận phí mô phỏng. Tin đăng đã mở bán.'); setRefreshKey(n => n + 1);
+      }} />}
+    </div> 
   );
 };

@@ -60,12 +60,38 @@ public class CatalogService {
             int size,
             String sort
     ) {
+        return searchProductsMulti(
+                query,
+                categoryId != null ? List.of(categoryId) : null,
+                condition != null ? List.of(condition) : null,
+                minPrice,
+                maxPrice,
+                page,
+                size,
+                sort
+        );
+    }
+
+    public CatalogDtos.PageResponse<CatalogDtos.ProductSummaryResponse> searchProductsMulti(
+            String query,
+            List<Long> filterCategoryIds,
+            List<String> filterConditions,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            int page,
+            int size,
+            String sort
+    ) {
         if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
             throw new IllegalArgumentException("Giá tối thiểu (minPrice) không được lớn hơn giá tối đa (maxPrice).");
         }
 
-        if (condition != null && !condition.isBlank() && !ProductEntity.ALLOWED_CONDITIONS.contains(condition.trim())) {
-            throw new IllegalArgumentException("Tình trạng sản phẩm không hợp lệ: " + condition);
+        if (filterConditions != null) {
+            for (String cond : filterConditions) {
+                if (cond != null && !cond.isBlank() && !ProductEntity.ALLOWED_CONDITIONS.contains(cond.trim())) {
+                    throw new IllegalArgumentException("Tình trạng sản phẩm không hợp lệ: " + cond);
+                }
+            }
         }
 
         String sortKey = (sort == null || sort.isBlank()) ? "newest" : sort.trim().toLowerCase();
@@ -91,11 +117,21 @@ public class CatalogService {
             if (query != null && !query.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("title")), "%" + query.trim().toLowerCase() + "%"));
             }
-            if (categoryId != null) {
-                predicates.add(cb.isMember(categoryId, root.<Set<Long>>get("categoryIds")));
+            if (filterCategoryIds != null && !filterCategoryIds.isEmpty()) {
+                predicates.add(cb.or(
+                        filterCategoryIds.stream()
+                                .map(cid -> cb.isMember(cid, root.<Set<Long>>get("categoryIds")))
+                                .toArray(Predicate[]::new)
+                ));
             }
-            if (condition != null && !condition.isBlank()) {
-                predicates.add(cb.equal(root.get("condition"), condition.trim()));
+            if (filterConditions != null && !filterConditions.isEmpty()) {
+                List<String> validConds = filterConditions.stream()
+                        .filter(c -> c != null && !c.isBlank())
+                        .map(String::trim)
+                        .toList();
+                if (!validConds.isEmpty()) {
+                    predicates.add(root.get("condition").in(validConds));
+                }
             }
             if (minPrice != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("listedPrice"), minPrice));

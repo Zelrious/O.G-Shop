@@ -4,7 +4,7 @@ O.G Shop là nền tảng C2C hỗ trợ mua bán đồ cũ theo hướng đáng
 
 ## Trạng thái
 
-Dự án đã hoàn thành **Identity/eKYC Security Baseline** và **Database Pricing/Negotiation Baseline V3**. Ưu tiên hiện tại là hoàn thiện core flow trên PostgreSQL: catalog → chat/offer → checkout/order → payment/fulfillment mô phỏng. Email/OTP, Google OIDC, Cloudinary, WebSocket, outbox worker và Redis được triển khai sau core acceptance gate hoặc khi thật sự cần cho một luồng cơ bản.
+Checkpoint auth hiện hành là **V25**: đăng ký email hai bước OTP, Buyer/Seller draft và thưởng 3.000 xu một lần sau xác nhận; mật khẩu mới thống nhất, đăng nhập giữ thời hạn cố định. [Cấu hình SMTP/Gmail](docs/setup/EMAIL_OTP.md), [hợp đồng API](docs/api/IDENTITY_API.md), [schema V25](database/docs/EMAIL_REGISTRATION_V25.md). Google, reset OTP, 2FA và eKYC/KTV là các đợt tiếp nối. Các baseline core flow bên dưới được giữ để đối chiếu, không đồng nghĩa nghiệm thu toàn bộ 83 UC.
 
 Theo dõi trạng thái tại [docs/progress/STATUS.md](docs/progress/STATUS.md).
 
@@ -46,7 +46,7 @@ Image PostgreSQL có `pgvector` vì migration V1 tạo extension `vector`. Với
 
 ### 2. Chạy Backend
 
-Dùng Java 21. Cấu hình secret và VNPAY theo [hướng dẫn backend](backend/README.md): `.env` dùng cho Docker Compose, Spring Boot không tự nạp file này.
+Dùng Java 21. Cấu hình secret và VNPAY theo [hướng dẫn backend](backend/README.md). `OgShopApplication` nạp tệp `.env` local đầu tiên tìm thấy; biến môi trường/system properties có ưu tiên cao hơn. [Thứ tự nạp và cấu hình SMTP](docs/setup/EMAIL_OTP.md).
 
 ```powershell
 cd backend
@@ -65,7 +65,7 @@ npm run dev
 
 Dùng Node.js 24 trở lên và npm 11 trở lên, cùng phiên bản với quality gate. Console Admin/KTV đã có giao diện sơ bộ; nhiều chức năng vẫn dùng dữ liệu demo. Xem phạm vi bản tích hợp và việc còn mở trong [hướng dẫn backend](backend/README.md#bản-tích-hợp-sơ-bộ).
 
-Frontend mặc định: `http://localhost:5173`.
+Frontend mặc định: `http://localhost:5174`. Vite dùng strictPort; backend cần `APP_FRONTEND_ORIGIN=http://localhost:5174` trong `.env` đang nạp rồi restart để đồng bộ CORS. Nếu cổng bận, dừng đúng phiên frontend cũ trước khi chạy lại.
 
 ### 4. Chạy eKYC AI Microservice
 

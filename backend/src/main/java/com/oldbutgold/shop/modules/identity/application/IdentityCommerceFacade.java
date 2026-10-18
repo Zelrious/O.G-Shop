@@ -6,6 +6,7 @@ import java.util.Optional;
 
 public interface IdentityCommerceFacade {
     boolean isUserVerified(long userId);
+    void requirePurchaseAllowed(long buyerId,long sellerId,boolean requiresEkyc);
 
     Optional<UserSummary> getUserSummary(long userId);
 

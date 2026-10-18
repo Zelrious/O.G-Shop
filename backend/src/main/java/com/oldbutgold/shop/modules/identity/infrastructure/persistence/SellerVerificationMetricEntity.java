@@ -14,7 +14,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "seller_verification_metrics")
+@Table(name = "seller_verification_metrics", schema = "og_compat")
 public class SellerVerificationMetricEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

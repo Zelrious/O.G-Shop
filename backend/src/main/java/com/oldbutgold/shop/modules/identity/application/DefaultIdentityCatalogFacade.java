@@ -20,13 +20,16 @@ import java.util.stream.Collectors;
 public class DefaultIdentityCatalogFacade implements IdentityCatalogFacade {
     private final UserRepository userRepository;
     private final SellerVerificationRepository verificationRepository;
+    private final AccountAccessService accountAccess;
 
     public DefaultIdentityCatalogFacade(UserRepository userRepository,
-                                        SellerVerificationRepository verificationRepository) {
+                                        SellerVerificationRepository verificationRepository,AccountAccessService accountAccess) {
         this.userRepository = userRepository;
         this.verificationRepository = verificationRepository;
+        this.accountAccess=accountAccess;
     }
 
+    @Override public void requireListingAllowed(long userId) { accountAccess.requireAllowed(userId,"NEW_LISTINGS"); }
     @Override
     public boolean isSellerActive(long userId) {
         return userRepository.findById(userId)
@@ -43,6 +46,8 @@ public class DefaultIdentityCatalogFacade implements IdentityCatalogFacade {
                         "ADMIN".equals(role.getRoleName()) || "KTV".equals(role.getRoleName())))
                 .orElse(false);
     }
+
+    @Override public java.util.List<Long> getActiveKtvIds() { return userRepository.findActiveKtvIds(); }
 
     @Override
     public Optional<SellerPublicSummary> getSellerSummary(long userId) {

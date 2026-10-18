@@ -58,10 +58,12 @@ class MultipleCategoriesPostgresTest {
             return (p != null && !p.isBlank()) ? p : "root";
         });
         properties.add("spring.flyway.enabled", () -> true);
+        properties.add("spring.datasource.hikari.connection-init-sql", () -> "SET search_path TO og_compat,public");
         properties.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
     }
 
     @Autowired SellerProductService sellerProducts;
+    @Autowired ListingWorkflowService listingWorkflow;
     @Autowired CatalogService catalog;
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc http;
@@ -99,6 +101,8 @@ class MultipleCategoriesPostgresTest {
         sellerProducts.submitProduct(sellerId, productId);
         long version = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, productId);
         sellerProducts.approveProduct(reviewerId, productId, version, "ck-cat-" + productId + "-" + UUID.randomUUID());
+        var fee = listingWorkflow.getFee(sellerId, productId);
+        listingWorkflow.payMock(sellerId, productId, fee.chargeId(), fee.version(), "test-cat-pay-" + UUID.randomUUID());
     }
 
     @Test

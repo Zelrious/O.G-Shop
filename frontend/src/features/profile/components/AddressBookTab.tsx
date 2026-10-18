@@ -55,7 +55,7 @@ export const AddressBookTab: React.FC = () => {
       const list = await profileApi.getProvinces();
       setProvinces(list);
       return list;
-    } catch (err: unknown) {
+    } catch {
       setErrorMsg('Không thể tải danh mục Tỉnh/Thành phố từ GHN. Vui lòng thử lại.');
       return [];
     } finally {

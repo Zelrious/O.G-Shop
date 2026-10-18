@@ -55,8 +55,8 @@ const createMockAuth = (user: UserPrincipal | null): AuthContextType => ({
   isLoading: false,
   login: vi.fn(),
   register: vi.fn(),
+  verifyRegistration: vi.fn(),
   logout: vi.fn(),
-  refreshSession: vi.fn().mockResolvedValue(true),
   reloadCurrentUser: vi.fn().mockResolvedValue(undefined),
 });
 
@@ -401,7 +401,7 @@ describe('SellerListingsPage Component', () => {
     );
 
     expect(screen.getByText('Chờ kiểm duyệt')).toBeInTheDocument();
-    expect(screen.getByText('🛡️ Yêu cầu eKYC')).toBeInTheDocument();
+    expect(screen.getByText('Yêu cầu eKYC')).toBeInTheDocument();
     expect(screen.getByText(/Tin đang được KTV kiểm duyệt nội dung/i)).toBeInTheDocument();
   });
 

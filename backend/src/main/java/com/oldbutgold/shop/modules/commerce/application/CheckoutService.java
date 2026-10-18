@@ -4,6 +4,8 @@ import com.oldbutgold.shop.modules.catalog.application.CatalogCommerceFacade;
 import com.oldbutgold.shop.modules.catalog.application.ProductNotFoundException;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.*;
 import com.oldbutgold.shop.modules.identity.application.IdentityCommerceFacade;
+import com.oldbutgold.shop.modules.communication.application.NegotiatedCheckoutFacade;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import com.oldbutgold.shop.modules.commerce.api.VoucherDtos;
 
 @Service
 @Transactional
@@ -28,6 +31,9 @@ public class CheckoutService {
     private final OrderItemRepository orderItemRepository;
     private final OrderVoucherRepository orderVoucherRepository;
     private final Clock clock;
+    private final NegotiatedCheckoutFacade negotiated;
+    private final ObjectMapper json;
+    private final VoucherService wallet;
 
     public CheckoutService(CatalogCommerceFacade catalogCommerceFacade,
                            IdentityCommerceFacade identityCommerceFacade,
@@ -36,7 +42,7 @@ public class CheckoutService {
                            OrderRepository orderRepository,
                            OrderItemRepository orderItemRepository,
                            OrderVoucherRepository orderVoucherRepository,
-                           Clock clock) {
+                           Clock clock,NegotiatedCheckoutFacade negotiated,ObjectMapper json,VoucherService wallet) {
         this.catalogCommerceFacade = catalogCommerceFacade;
         this.identityCommerceFacade = identityCommerceFacade;
         this.systemFeePolicyRepository = systemFeePolicyRepository;
@@ -45,13 +51,21 @@ public class CheckoutService {
         this.orderItemRepository = orderItemRepository;
         this.orderVoucherRepository = orderVoucherRepository;
         this.clock = clock;
+        this.negotiated=negotiated;this.json=json;this.wallet=wallet;
     }
 
     @Transactional(readOnly = true)
     public CheckoutDtos.CheckoutPreviewResponse getCheckoutPreview(long buyerId, long productId, String voucherCode) {
+        return getCheckoutPreview(buyerId,productId,voucherCode,null);
+    }
+    @Transactional(readOnly=true)
+    public CheckoutDtos.CheckoutPreviewResponse getCheckoutPreview(long buyerId,long productId,String voucherCode,Long offerId) {
         CatalogCommerceFacade.CommerceProductSummary product = catalogCommerceFacade.getActiveProduct(productId)
                 .orElseThrow(() -> new ProductNotFoundException("Sản phẩm không tồn tại hoặc không ở trạng thái mở bán."));
 
+        identityCommerceFacade.requirePurchaseAllowed(buyerId,product.sellerId(),product.requiresBuyerEkyc());
+        negotiated.requireNotBlocked(buyerId,product.sellerId());
+        var agreement=offerId==null?null:negotiated.preview(buyerId,productId,offerId);
         if (product.sellerId() == buyerId) {
             throw new IllegalArgumentException("Bạn không thể tự mua sản phẩm của chính mình.");
         }
@@ -70,28 +84,21 @@ public class CheckoutService {
                 .orElse(!addressDtos.isEmpty() ? addressDtos.get(0) : null);
 
         Instant now = clock.instant();
-        List<VoucherEntity> activeVouchers = voucherRepository.findByIsActiveTrueAndStartTimeLessThanEqualAndEndTimeGreaterThanEqual(now, now);
-        List<CheckoutDtos.VoucherSummaryResponse> voucherDtos = activeVouchers.stream()
-                .filter(v -> v.getSellerId() == null || v.getSellerId().equals(product.sellerId()))
-                .filter(v -> v.getTotalUsageLimit() == null || v.getCurrentUsageCount() < v.getTotalUsageLimit())
-                .map(this::toVoucherSummary)
-                .toList();
-
-        BigDecimal subtotal = product.listedPrice();
+        BigDecimal subtotal = agreement==null?product.listedPrice():agreement.price();
+        List<CheckoutDtos.VoucherSummaryResponse> voucherDtos = wallet.usable(buyerId,productId,subtotal).stream().map(g->toVoucherSummary(g.campaign())).toList();
         BigDecimal shippingFee = STANDARD_SHIPPING_FEE;
-        BigDecimal buyerSystemFee = BigDecimal.ZERO;
+        BigDecimal buyerSystemFee = agreement==null?BigDecimal.ZERO:agreement.buyerFee();
 
         BigDecimal voucherDiscount = BigDecimal.ZERO;
         BigDecimal shippingDiscount = BigDecimal.ZERO;
         CheckoutDtos.VoucherSummaryResponse appliedVoucher = null;
 
         if (voucherCode != null && !voucherCode.isBlank()) {
-            VoucherEntity voucher = voucherRepository.findByCodeAndIsActiveTrue(voucherCode.trim().toUpperCase())
-                    .orElse(null);
-
-            if (voucher != null && isValidVoucher(voucher, product.sellerId(), subtotal, now)) {
+            var voucher = wallet.usable(buyerId,productId,subtotal).stream().map(VoucherDtos.Grant::campaign)
+                .filter(c->c.code().equalsIgnoreCase(voucherCode.trim())).findFirst().orElse(null);
+            if(voucher!=null) {
                 appliedVoucher = toVoucherSummary(voucher);
-                if ("SHIPPING_DISCOUNT".equalsIgnoreCase(voucher.getVoucherType())) {
+                if ("SHIPPING_DISCOUNT".equalsIgnoreCase(voucher.voucherType())) {
                     shippingDiscount = calculateDiscount(voucher, shippingFee);
                 } else {
                     voucherDiscount = calculateDiscount(voucher, subtotal);
@@ -108,7 +115,7 @@ public class CheckoutService {
                 product.thumbnailUrl(),
                 seller.userId(),
                 seller.fullName(),
-                subtotal,
+                product.listedPrice(),
                 shippingFee,
                 buyerSystemFee,
                 voucherDiscount,
@@ -117,15 +124,20 @@ public class CheckoutService {
                 addressDtos,
                 selectedAddress,
                 voucherDtos,
-                appliedVoucher
+                appliedVoucher,subtotal,offerId
         );
     }
 
     public CheckoutDtos.OrderCreatedResponse buyNow(long buyerId, CheckoutDtos.BuyNowRequest request) {
         Instant now = clock.instant();
+        String requestFingerprint=fingerprint(request);
+        if(request.offerId()!=null){var prior=negotiated.existingCheckout(buyerId,request.productId(),request.offerId(),requestFingerprint);if(prior.isPresent())return getOrder(buyerId,prior.get());}
 
         // 1. Pessimistic Row Lock on product to prevent double selling
         CatalogCommerceFacade.CommerceProductDetail product = catalogCommerceFacade.getProductForCheckoutLock(request.productId());
+        identityCommerceFacade.requirePurchaseAllowed(buyerId,product.sellerId(),product.requiresBuyerEkyc());
+        negotiated.requireNotBlocked(buyerId,product.sellerId());
+        var agreement=request.offerId()==null?null:negotiated.bind(buyerId,product.productId(),request.offerId(),requestFingerprint);
 
         if (product.sellerId() == buyerId) {
             throw new IllegalArgumentException("Bạn không thể tự mua sản phẩm của chính mình.");
@@ -177,37 +189,30 @@ public class CheckoutService {
         SystemFeePolicyEntity feePolicy = systemFeePolicyRepository.findFirstByStatusOrderByEffectiveFromDesc("ACTIVE")
                 .orElseThrow(() -> new IllegalStateException("Hệ thống chưa thiết lập chính sách phí hợp lệ."));
 
-        BigDecimal subtotal = product.listedPrice();
+        BigDecimal subtotal = agreement==null?product.listedPrice():agreement.price();
         BigDecimal shippingFee = STANDARD_SHIPPING_FEE;
-        BigDecimal buyerFee = BigDecimal.ZERO; // Phí sàn Buyer = 0 theo policy V3 0%
-        BigDecimal sellerFee = feePolicy.getSellerFixedFee().add(
+        BigDecimal buyerFee = agreement==null?BigDecimal.ZERO:agreement.buyerFee(); // Accepted offers preserve the fee snapshot.
+        BigDecimal sellerFee = agreement==null?feePolicy.getSellerFixedFee().add(
                 subtotal.multiply(feePolicy.getSellerFeeRate()).setScale(0, RoundingMode.HALF_UP)
-        );
+        ):agreement.sellerFee();
 
         // 4. Voucher Resolution
         BigDecimal voucherDiscount = BigDecimal.ZERO;
         BigDecimal shippingDiscount = BigDecimal.ZERO;
         String sponsorType = "PLATFORM";
-        VoucherEntity voucher = null;
+        VoucherDtos.Grant ownedGrant = null;
+        VoucherDtos.Campaign voucher = null;
 
         if (request.voucherCode() != null && !request.voucherCode().isBlank()) {
-            voucher = voucherRepository.findByCodeAndIsActiveTrue(request.voucherCode().trim().toUpperCase())
-                    .orElseThrow(() -> new IllegalArgumentException("Mã giảm giá không tồn tại hoặc đã hết hạn."));
-
-            if (!isValidVoucher(voucher, product.sellerId(), subtotal, now)) {
-                throw new IllegalArgumentException("Mã giảm giá không đủ điều kiện áp dụng cho đơn hàng này.");
-            }
-
-            sponsorType = voucher.getSponsorType();
-            if ("SHIPPING_DISCOUNT".equalsIgnoreCase(voucher.getVoucherType())) {
+            wallet.lockCheckout(buyerId,product.sellerId());
+            ownedGrant = wallet.resolve(buyerId,request.voucherCode(),product.productId(),subtotal,true);
+            voucher = ownedGrant.campaign();
+            if ("SHIPPING_DISCOUNT".equalsIgnoreCase(voucher.voucherType())) {
                 shippingDiscount = calculateDiscount(voucher, shippingFee);
             } else {
                 voucherDiscount = calculateDiscount(voucher, subtotal);
             }
 
-            // Atomic usage count increment
-            voucher.incrementUsage();
-            voucherRepository.save(voucher);
         }
 
         // 5. Calculate Final Totals
@@ -258,30 +263,32 @@ public class CheckoutService {
                 product.title(),
                 (short) 1,
                 product.listedPrice(),
-                product.listedPrice(),
+                subtotal,
                 buyerFee,
                 sellerFee,
                 subtotal.add(buyerFee),
                 sellerProceeds,
-                feePolicy.getId(),
-                null,
-                "LIST_PRICE"
+                agreement==null?feePolicy.getId():agreement.feePolicyId(),
+                request.offerId(),
+                agreement==null?"LIST_PRICE":"OFFER"
         );
-        orderItemRepository.save(orderItem);
+        orderItemRepository.saveAndFlush(orderItem);
+        if (request.offerId()!=null) negotiated.linkOrder(buyerId,request.offerId(),savedOrder.getId());
 
         // 8. Snapshot Order Voucher if applied
         if (voucher != null) {
             BigDecimal totalDiscount = voucherDiscount.add(shippingDiscount);
             OrderVoucherEntity orderVoucher = new OrderVoucherEntity(
                     savedOrder.getId(),
-                    voucher.getId(),
-                    voucher.getCode(),
-                    voucher.getVoucherType(),
-                    voucher.getSponsorType(),
+                    voucher.id(),
+                    voucher.code(),
+                    voucher.voucherType(),
+                    "PLATFORM",
                     totalDiscount,
                     now
             );
-            orderVoucherRepository.save(orderVoucher);
+            orderVoucherRepository.saveAndFlush(orderVoucher);
+            wallet.bindOrder(savedOrder.getId(),ownedGrant);
         }
 
         // 9. Reserve Product
@@ -309,6 +316,7 @@ public class CheckoutService {
                 savedOrder.getCreatedAt()
         );
     }
+    private String fingerprint(CheckoutDtos.BuyNowRequest request){try{return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(json.writeValueAsBytes(request)));}catch(Exception e){throw new IllegalStateException("Cannot fingerprint checkout request",e);}}
 
     @Transactional(readOnly = true)
     public CheckoutDtos.OrderCreatedResponse getOrder(long buyerId, long orderId) {
@@ -343,27 +351,18 @@ public class CheckoutService {
         );
     }
 
-    private boolean isValidVoucher(VoucherEntity voucher, Long sellerId, BigDecimal subtotal, Instant now) {
-        if (!voucher.isActive()) return false;
-        if (now.isBefore(voucher.getStartTime()) || now.isAfter(voucher.getEndTime())) return false;
-        if (voucher.getTotalUsageLimit() != null && voucher.getCurrentUsageCount() >= voucher.getTotalUsageLimit()) return false;
-        if (subtotal.compareTo(voucher.getMinOrderAmount()) < 0) return false;
-        if (voucher.getSellerId() != null && !voucher.getSellerId().equals(sellerId)) return false;
-        return true;
-    }
-
-    private BigDecimal calculateDiscount(VoucherEntity voucher, BigDecimal baseAmount) {
+    private BigDecimal calculateDiscount(VoucherDtos.Campaign voucher, BigDecimal baseAmount) {
         BigDecimal discount;
-        if ("PERCENTAGE".equalsIgnoreCase(voucher.getDiscountType())) {
-            discount = baseAmount.multiply(voucher.getDiscountValue())
+        if ("PERCENTAGE".equalsIgnoreCase(voucher.discountType())) {
+            discount = baseAmount.multiply(voucher.discountValue())
                     .divide(new BigDecimal("100"), 0, RoundingMode.HALF_UP);
-            if (voucher.getMaxDiscountAmount() != null && discount.compareTo(voucher.getMaxDiscountAmount()) > 0) {
-                discount = voucher.getMaxDiscountAmount();
+            if (voucher.maxDiscountAmount() != null && discount.compareTo(voucher.maxDiscountAmount()) > 0) {
+                discount = voucher.maxDiscountAmount();
             }
         } else {
-            discount = voucher.getDiscountValue();
+            discount = voucher.discountValue();
         }
-        return discount.min(baseAmount);
+        return discount.min(baseAmount).min(voucher.maxDiscountAmount()==null?baseAmount:voucher.maxDiscountAmount());
     }
 
     private CheckoutDtos.AddressSummaryResponse toAddressSummary(IdentityCommerceFacade.AddressDto a) {
@@ -375,12 +374,12 @@ public class CheckoutService {
         );
     }
 
-    private CheckoutDtos.VoucherSummaryResponse toVoucherSummary(VoucherEntity v) {
+    private CheckoutDtos.VoucherSummaryResponse toVoucherSummary(VoucherDtos.Campaign v) {
         return new CheckoutDtos.VoucherSummaryResponse(
-                v.getId(), v.getCode(), v.getTitle(),
-                v.getVoucherType(), v.getDiscountType(),
-                v.getDiscountValue(), v.getMaxDiscountAmount(),
-                v.getMinOrderAmount(), v.getSponsorType()
+                v.id(), v.code(), v.title(),
+                v.voucherType(), v.discountType(),
+                v.discountValue(), v.maxDiscountAmount(),
+                v.minOrderAmount(), "PLATFORM"
         );
     }
 }

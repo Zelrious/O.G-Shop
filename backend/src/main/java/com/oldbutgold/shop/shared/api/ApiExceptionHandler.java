@@ -2,7 +2,6 @@ package com.oldbutgold.shop.shared.api;
 
 import com.oldbutgold.shop.modules.identity.application.DuplicateEmailException;
 import com.oldbutgold.shop.modules.identity.application.EkycUnavailableException;
-import com.oldbutgold.shop.modules.identity.application.InvalidRefreshTokenException;
 import com.oldbutgold.shop.modules.identity.application.SellerActivationDisabledException;
 import com.oldbutgold.shop.modules.identity.application.InvalidAvatarException;
 import com.oldbutgold.shop.modules.identity.application.AvatarStorageUnavailableException;
@@ -13,6 +12,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.dao.DataIntegrityViolationException;
+import com.oldbutgold.shop.modules.identity.application.RegistrationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -22,7 +22,25 @@ import java.util.UUID;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
-    @ExceptionHandler({BadCredentialsException.class, InvalidRefreshTokenException.class})
+    @ExceptionHandler(com.oldbutgold.shop.modules.communication.application.CommunicationException.class)
+    ResponseEntity<ApiError> communicationFailure(com.oldbutgold.shop.modules.communication.application.CommunicationException error,HttpServletRequest request){return response(HttpStatus.valueOf(error.status()),error.code(),error.getMessage(),request,List.of());}
+    @ExceptionHandler(com.oldbutgold.shop.modules.identity.application.AccountRestrictedException.class)
+    ResponseEntity<?> accountRestricted(com.oldbutgold.shop.modules.identity.application.AccountRestrictedException error) {
+        return ResponseEntity.status(403).header("Cache-Control","no-store").body(java.util.Map.of(
+                "code","ACCOUNT_RESTRICTED","message",error.getMessage(),"accountStatus",error.accountStatus(),
+                "supportInstruction","Liên hệ bộ phận hỗ trợ O.G Shop để kiểm tra tình trạng tài khoản.",
+                "allowedFunctions",List.of("CONTACT_SUPPORT")));
+    }
+    @ExceptionHandler(RegistrationException.class)
+    ResponseEntity<ApiError> registrationFailure(RegistrationException exception, HttpServletRequest request) {
+        var result = response(HttpStatus.valueOf(exception.status()), exception.code(), exception.getMessage(), request, List.of());
+        var headers = new org.springframework.http.HttpHeaders();
+        headers.putAll(result.getHeaders());
+        headers.setCacheControl("no-store");
+        if (exception.retryAfter() > 0) headers.set("Retry-After", Long.toString(exception.retryAfter()));
+        return new ResponseEntity<>(result.getBody(), headers, result.getStatusCode());
+    }
+    @ExceptionHandler(BadCredentialsException.class)
     ResponseEntity<ApiError> unauthorized(RuntimeException exception, HttpServletRequest request) {
         return response(HttpStatus.UNAUTHORIZED, "AUTHENTICATION_FAILED", "Phiên đăng nhập không hợp lệ.", request, List.of());
     }

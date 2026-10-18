@@ -10,7 +10,7 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "order_items")
+@Table(name = "order_items", schema = "og_compat")
 public class OrderItemEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,7 +27,7 @@ public class OrderItemEntity {
     private String productTitle;
 
     @Column(nullable = false)
-    private short quantity = 1;
+    private int quantity = 1;
 
     @Column(name = "listed_price", nullable = false, precision = 19, scale = 2)
     private BigDecimal listedPrice;
@@ -47,7 +47,7 @@ public class OrderItemEntity {
     @Column(name = "seller_line_proceeds", nullable = false, precision = 19, scale = 2)
     private BigDecimal sellerLineProceeds;
 
-    @Column(name = "fee_policy_id", nullable = false)
+    @Column(name = "fee_policy_id")
     private Long feePolicyId;
 
     @Column(name = "accepted_offer_id")
@@ -58,7 +58,7 @@ public class OrderItemEntity {
 
     protected OrderItemEntity() {}
 
-    public OrderItemEntity(Long orderId, Long productId, String productTitle, short quantity,
+    public OrderItemEntity(Long orderId, Long productId, String productTitle, int quantity,
                            BigDecimal listedPrice, BigDecimal agreedPrice, BigDecimal buyerSystemFee,
                            BigDecimal sellerSystemFee, BigDecimal buyerLineTotal, BigDecimal sellerLineProceeds,
                            Long feePolicyId, Long acceptedOfferId, String pricingSource) {
@@ -81,7 +81,7 @@ public class OrderItemEntity {
     public Long getOrderId() { return orderId; }
     public Long getProductId() { return productId; }
     public String getProductTitle() { return productTitle; }
-    public short getQuantity() { return quantity; }
+    public int getQuantity() { return quantity; }
     public BigDecimal getListedPrice() { return listedPrice; }
     public BigDecimal getAgreedPrice() { return agreedPrice; }
     public BigDecimal getBuyerSystemFee() { return buyerSystemFee; }

@@ -72,10 +72,10 @@ export const AdminSystemFeesPage: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Header */}
       <div>
-        <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: '#0f172a', fontWeight: 800 }}>
+        <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: 'var(--og-color-text-primary)', fontWeight: 800 }}>
           Quản lý biểu phí hệ thống & Escrow
         </h1>
-        <p style={{ margin: 0, color: '#64748b', fontSize: '0.92rem' }}>
+        <p style={{ margin: 0, color: 'var(--og-color-text-secondary)', fontSize: '0.92rem' }}>
           Cấu hình tỷ lệ phí sàn, phí bảo vệ người mua và phí dịch vụ rút tiền áp dụng cho mọi giao dịch.
         </p>
       </div>
@@ -83,8 +83,8 @@ export const AdminSystemFeesPage: React.FC = () => {
       {successMessage && (
         <div
           style={{
-            background: '#ecfdf5',
-            border: '1px solid #a7f3d0',
+            background: 'var(--og-color-primary-light)',
+            border: '1px solid var(--og-color-border)',
             borderRadius: '8px',
             padding: '12px 16px',
             color: '#065f46',
@@ -107,8 +107,8 @@ export const AdminSystemFeesPage: React.FC = () => {
           <form onSubmit={handleSave}>
             <div
               style={{
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                background: 'var(--og-color-surface)',
+                border: '1px solid var(--og-color-border)',
                 borderRadius: '12px',
                 padding: '24px',
                 display: 'flex',
@@ -118,11 +118,11 @@ export const AdminSystemFeesPage: React.FC = () => {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ fontSize: '1.15rem', color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
+                <h2 style={{ fontSize: '1.15rem', color: 'var(--og-color-text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
                   <ConsoleIcons.Sliders size={18} />
                   <span>Biểu phí giao dịch ký quỹ & Escrow</span>
                 </h2>
-                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--og-color-text-secondary)' }}>
                   Áp dụng toàn hệ thống O.G Shop
                 </span>
               </div>
@@ -136,7 +136,7 @@ export const AdminSystemFeesPage: React.FC = () => {
                       minHeight: '44px',
                       display: 'flex',
                       alignItems: 'flex-end',
-                      color: '#334155',
+                      color: 'var(--og-color-text-secondary)',
                       fontSize: '0.88rem',
                       fontWeight: 600,
                       marginBottom: '8px',
@@ -155,20 +155,20 @@ export const AdminSystemFeesPage: React.FC = () => {
                       style={{
                         width: '100%',
                         padding: '10px 36px 10px 12px',
-                        background: '#ffffff',
-                        border: '1px solid #cbd5e1',
+                        background: 'var(--og-color-surface)',
+                        border: '1px solid var(--og-color-border-strong)',
                         borderRadius: '8px',
-                        color: '#0f172a',
+                        color: 'var(--og-color-text-primary)',
                         fontSize: '1rem',
                         fontWeight: 700,
                         boxSizing: 'border-box',
                       }}
                     />
-                    <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontWeight: 700 }}>
+                    <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--og-color-text-secondary)', fontWeight: 700 }}>
                       %
                     </span>
                   </div>
-                  <p style={{ minHeight: '34px', margin: '6px 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                  <p style={{ minHeight: '34px', margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--og-color-text-secondary)' }}>
                     Mặc định sàn: 2.5% cho mỗi đơn thanh toán thành công qua escrow.
                   </p>
                 </div>
@@ -180,7 +180,7 @@ export const AdminSystemFeesPage: React.FC = () => {
                       minHeight: '44px',
                       display: 'flex',
                       alignItems: 'flex-end',
-                      color: '#334155',
+                      color: 'var(--og-color-text-secondary)',
                       fontSize: '0.88rem',
                       fontWeight: 600,
                       marginBottom: '8px',
@@ -198,10 +198,10 @@ export const AdminSystemFeesPage: React.FC = () => {
                       style={{
                         width: '100%',
                         padding: '10px 12px',
-                        background: '#ffffff',
-                        border: '1px solid #cbd5e1',
+                        background: 'var(--og-color-surface)',
+                        border: '1px solid var(--og-color-border-strong)',
                         borderRadius: '8px',
-                        color: '#0f172a',
+                        color: 'var(--og-color-text-primary)',
                         fontSize: '1rem',
                         fontWeight: 700,
                         boxSizing: 'border-box',
@@ -215,8 +215,8 @@ export const AdminSystemFeesPage: React.FC = () => {
                         transform: 'translateY(-50%)',
                         fontSize: '0.75rem',
                         fontWeight: 600,
-                        color: '#059669',
-                        background: '#ecfdf5',
+                        color: 'var(--og-color-primary)',
+                        background: 'var(--og-color-primary-light)',
                         padding: '2px 6px',
                         borderRadius: '4px',
                       }}
@@ -224,7 +224,7 @@ export const AdminSystemFeesPage: React.FC = () => {
                       {formatVnd(fees.minTransactionFee)}
                     </span>
                   </div>
-                  <p style={{ minHeight: '34px', margin: '6px 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                  <p style={{ minHeight: '34px', margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--og-color-text-secondary)' }}>
                     Mức phí thấp nhất để chi trả vận hành máy chủ đối với đơn hàng giá trị nhỏ.
                   </p>
                 </div>
@@ -236,7 +236,7 @@ export const AdminSystemFeesPage: React.FC = () => {
                       minHeight: '44px',
                       display: 'flex',
                       alignItems: 'flex-end',
-                      color: '#334155',
+                      color: 'var(--og-color-text-secondary)',
                       fontSize: '0.88rem',
                       fontWeight: 600,
                       marginBottom: '8px',
@@ -254,10 +254,10 @@ export const AdminSystemFeesPage: React.FC = () => {
                       style={{
                         width: '100%',
                         padding: '10px 12px',
-                        background: '#ffffff',
-                        border: '1px solid #cbd5e1',
+                        background: 'var(--og-color-surface)',
+                        border: '1px solid var(--og-color-border-strong)',
                         borderRadius: '8px',
-                        color: '#0f172a',
+                        color: 'var(--og-color-text-primary)',
                         fontSize: '1rem',
                         fontWeight: 700,
                         boxSizing: 'border-box',
@@ -271,8 +271,8 @@ export const AdminSystemFeesPage: React.FC = () => {
                         transform: 'translateY(-50%)',
                         fontSize: '0.75rem',
                         fontWeight: 600,
-                        color: '#059669',
-                        background: '#ecfdf5',
+                        color: 'var(--og-color-primary)',
+                        background: 'var(--og-color-primary-light)',
                         padding: '2px 6px',
                         borderRadius: '4px',
                       }}
@@ -280,7 +280,7 @@ export const AdminSystemFeesPage: React.FC = () => {
                       {formatVnd(fees.withdrawalFeeVnd)}
                     </span>
                   </div>
-                  <p style={{ minHeight: '34px', margin: '6px 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                  <p style={{ minHeight: '34px', margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--og-color-text-secondary)' }}>
                     Chi trả phí giao dịch liên ngân hàng NAPAS khi người bán rút ví Escrow.
                   </p>
                 </div>
@@ -292,7 +292,7 @@ export const AdminSystemFeesPage: React.FC = () => {
                       minHeight: '44px',
                       display: 'flex',
                       alignItems: 'flex-end',
-                      color: '#334155',
+                      color: 'var(--og-color-text-secondary)',
                       fontSize: '0.88rem',
                       fontWeight: 600,
                       marginBottom: '8px',
@@ -310,10 +310,10 @@ export const AdminSystemFeesPage: React.FC = () => {
                       style={{
                         width: '100%',
                         padding: '10px 12px',
-                        background: '#ffffff',
-                        border: '1px solid #cbd5e1',
+                        background: 'var(--og-color-surface)',
+                        border: '1px solid var(--og-color-border-strong)',
                         borderRadius: '8px',
-                        color: '#0f172a',
+                        color: 'var(--og-color-text-primary)',
                         fontSize: '1rem',
                         fontWeight: 700,
                         boxSizing: 'border-box',
@@ -327,8 +327,8 @@ export const AdminSystemFeesPage: React.FC = () => {
                         transform: 'translateY(-50%)',
                         fontSize: '0.75rem',
                         fontWeight: 600,
-                        color: '#059669',
-                        background: '#ecfdf5',
+                        color: 'var(--og-color-primary)',
+                        background: 'var(--og-color-primary-light)',
                         padding: '2px 6px',
                         borderRadius: '4px',
                       }}
@@ -336,18 +336,18 @@ export const AdminSystemFeesPage: React.FC = () => {
                       {formatVnd(fees.buyerProtectionFixedFee)}
                     </span>
                   </div>
-                  <p style={{ minHeight: '34px', margin: '6px 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                  <p style={{ minHeight: '34px', margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--og-color-text-secondary)' }}>
                     Quỹ dự phòng bồi thường khi phát sinh kiện tụng tranh chấp cần giám định KTV.
                   </p>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '10px', borderTop: '1px solid var(--og-color-border)' }}>
                 <button
                   type="submit"
                   style={{
                     padding: '10px 24px',
-                    background: '#059669',
+                    background: 'var(--og-color-primary-fill)',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: '8px',
@@ -360,8 +360,8 @@ export const AdminSystemFeesPage: React.FC = () => {
                     boxShadow: '0 1px 2px rgba(5, 150, 105, 0.2)',
                     transition: 'background-color 0.15s ease',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = '#047857')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = '#059669')}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--og-color-primary)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--og-color-primary)')}
                 >
                   <ConsoleIcons.Sliders size={16} />
                   <span>Lưu cấu hình biểu phí</span>
@@ -373,18 +373,18 @@ export const AdminSystemFeesPage: React.FC = () => {
           {/* Simulated Fee Impact Table */}
           <div
             style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              background: 'var(--og-color-surface)',
+              border: '1px solid var(--og-color-border)',
               borderRadius: '12px',
               padding: '24px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
             }}
           >
             <div style={{ marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '1.15rem', color: '#0f172a', margin: '0 0 4px', fontWeight: 700 }}>
+              <h2 style={{ fontSize: '1.15rem', color: 'var(--og-color-text-primary)', margin: '0 0 4px', fontWeight: 700 }}>
                 Mô phỏng doanh thu phí theo hạn mức giao dịch
               </h2>
-              <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748b' }}>
+              <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--og-color-text-secondary)' }}>
                 Bảng tính thử nghiệm doanh thu phí sàn thu được dựa trên cấu hình đang thiết lập.
               </p>
             </div>
@@ -404,10 +404,10 @@ export const AdminSystemFeesPage: React.FC = () => {
               ]}
             />
 
-            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+            <div style={{ overflowX: 'auto', border: '1px solid var(--og-color-border)', borderRadius: '8px' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', background: '#f8fafc' }}>
+                  <tr style={{ borderBottom: '1px solid var(--og-color-border)', color: 'var(--og-color-text-secondary)', background: 'var(--og-color-bg)' }}>
                     <th style={{ padding: '12px 14px', width: '40px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <TableCheckbox
                         checked={isAllTiersSelected}
@@ -436,8 +436,8 @@ export const AdminSystemFeesPage: React.FC = () => {
                       <tr
                         key={tier.id}
                         style={{
-                          borderBottom: '1px solid #f1f5f9',
-                          background: isSelected ? '#f0fdf4' : 'transparent',
+                          borderBottom: '1px solid var(--og-color-surface-subtle)',
+                          background: isSelected ? 'var(--og-color-primary-light)' : 'transparent',
                         }}
                       >
                         <td style={{ padding: '12px 14px', textAlign: 'center' }}>
@@ -448,14 +448,14 @@ export const AdminSystemFeesPage: React.FC = () => {
                           />
                         </td>
                         <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
-                          <div style={{ fontWeight: 600, color: '#0f172a' }}>{tier.name}</div>
-                          <div style={{ fontSize: '0.74rem', color: '#64748b' }}>{tier.desc}</div>
+                          <div style={{ fontWeight: 600, color: 'var(--og-color-text-primary)' }}>{tier.name}</div>
+                          <div style={{ fontSize: '0.74rem', color: 'var(--og-color-text-secondary)' }}>{tier.desc}</div>
                         </td>
                         {/* Values formatted without VNĐ because VNĐ is already in the column header */}
-                        <td style={{ padding: '12px 14px', color: '#334155', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        <td style={{ padding: '12px 14px', color: 'var(--og-color-text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                           {formatVnd(tier.orderValue, false)}
                         </td>
-                        <td style={{ padding: '12px 14px', color: '#059669', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        <td style={{ padding: '12px 14px', color: 'var(--og-color-primary)', fontWeight: 700, whiteSpace: 'nowrap' }}>
                           {formatVnd(calculatedFee, false)}
                         </td>
                         <td style={{ padding: '12px 14px', color: '#2563eb', fontWeight: 700, whiteSpace: 'nowrap' }}>
@@ -492,8 +492,8 @@ export const AdminSystemFeesPage: React.FC = () => {
           {/* Quick Fee Calculator Widget */}
           <div
             style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              background: 'var(--og-color-surface)',
+              border: '1px solid var(--og-color-border)',
               borderRadius: '12px',
               padding: '20px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
@@ -505,8 +505,8 @@ export const AdminSystemFeesPage: React.FC = () => {
                   width: '32px',
                   height: '32px',
                   borderRadius: '6px',
-                  background: '#ecfdf5',
-                  color: '#059669',
+                  background: 'var(--og-color-primary-light)',
+                  color: 'var(--og-color-primary)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -515,17 +515,17 @@ export const AdminSystemFeesPage: React.FC = () => {
                 <ConsoleIcons.CreditCard size={18} />
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--og-color-text-primary)' }}>
                   Công cụ tính nhanh phí đơn hàng
                 </h3>
-                <span style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                <span style={{ fontSize: '0.74rem', color: 'var(--og-color-text-secondary)' }}>
                   Thử nghiệm số tiền bất kỳ theo biểu phí hiện tại
                 </span>
               </div>
             </div>
 
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--og-color-text-secondary)', marginBottom: '6px' }}>
                 Nhập giá trị đơn hàng mẫu (VNĐ):
               </label>
               <input
@@ -537,12 +537,12 @@ export const AdminSystemFeesPage: React.FC = () => {
                 style={{
                   width: '100%',
                   padding: '9px 12px',
-                  background: '#f8fafc',
-                  border: '1px solid #cbd5e1',
+                  background: 'var(--og-color-bg)',
+                  border: '1px solid var(--og-color-border-strong)',
                   borderRadius: '8px',
                   fontSize: '1rem',
                   fontWeight: 700,
-                  color: '#0f172a',
+                  color: 'var(--og-color-text-primary)',
                   boxSizing: 'border-box',
                 }}
               />
@@ -555,9 +555,9 @@ export const AdminSystemFeesPage: React.FC = () => {
                     style={{
                       padding: '3px 8px',
                       borderRadius: '4px',
-                      background: calcOrderValue === val ? '#ecfdf5' : '#f1f5f9',
-                      color: calcOrderValue === val ? '#059669' : '#475569',
-                      border: `1px solid ${calcOrderValue === val ? '#a7f3d0' : '#e2e8f0'}`,
+                      background: calcOrderValue === val ? 'var(--og-color-primary-light)' : 'var(--og-color-surface-subtle)',
+                      color: calcOrderValue === val ? 'var(--og-color-primary)' : 'var(--og-color-text-secondary)',
+                      border: `1px solid ${calcOrderValue === val ? 'var(--og-color-border)' : 'var(--og-color-border)'}`,
                       fontSize: '0.74rem',
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -572,8 +572,8 @@ export const AdminSystemFeesPage: React.FC = () => {
             {/* Breakdown summary */}
             <div
               style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
+                background: 'var(--og-color-bg)',
+                border: '1px solid var(--og-color-border)',
                 borderRadius: '8px',
                 padding: '14px',
                 display: 'flex',
@@ -582,38 +582,38 @@ export const AdminSystemFeesPage: React.FC = () => {
                 fontSize: '0.84rem',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--og-color-text-secondary)' }}>
                 <span>Giá trị đơn hàng:</span>
-                <strong style={{ color: '#0f172a' }}>{formatVnd(calcOrderValue)}</strong>
+                <strong style={{ color: 'var(--og-color-text-primary)' }}>{formatVnd(calcOrderValue)}</strong>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--og-color-text-secondary)' }}>
                 <span>Phí Escrow ({fees.escrowFeePercent}%):</span>
                 <span>{formatVnd(calcEscrowPart)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--og-color-text-secondary)' }}>
                 <span>Phí bảo hiểm kiện tụng:</span>
                 <span>{formatVnd(fees.buyerProtectionFixedFee)}</span>
               </div>
               {isMinFeeTriggered && (
                 <div style={{ fontSize: '0.75rem', color: '#b45309', background: '#fef3c7', padding: '4px 8px', borderRadius: '4px' }}>
-                  ⚠️ Áp dụng mức phí sàn tối thiểu {formatVnd(fees.minTransactionFee)} do tổng phí nhỏ hơn ngưỡng.
+                   Áp dụng mức phí sàn tối thiểu {formatVnd(fees.minTransactionFee)} do tổng phí nhỏ hơn ngưỡng.
                 </div>
               )}
               <div
                 style={{
-                  borderTop: '1px solid #e2e8f0',
+                  borderTop: '1px solid var(--og-color-border)',
                   paddingTop: '8px',
                   display: 'flex',
                   justifyContent: 'space-between',
                   fontWeight: 700,
                 }}
               >
-                <span style={{ color: '#0f172a' }}>Tổng phí sàn thu:</span>
-                <span style={{ color: '#059669' }}>{formatVnd(calcTotalFee)}</span>
+                <span style={{ color: 'var(--og-color-text-primary)' }}>Tổng phí sàn thu:</span>
+                <span style={{ color: 'var(--og-color-primary)' }}>{formatVnd(calcTotalFee)}</span>
               </div>
               <div
                 style={{
-                  background: '#ecfdf5',
+                  background: 'var(--og-color-primary-light)',
                   padding: '8px 10px',
                   borderRadius: '6px',
                   display: 'flex',
@@ -623,7 +623,7 @@ export const AdminSystemFeesPage: React.FC = () => {
                 }}
               >
                 <span style={{ fontWeight: 700, color: '#065f46', fontSize: '0.86rem' }}>Người bán nhận:</span>
-                <span style={{ fontWeight: 800, color: '#047857', fontSize: '1rem' }}>{formatVnd(calcSellerPayout)}</span>
+                <span style={{ fontWeight: 800, color: 'var(--og-color-primary)', fontSize: '1rem' }}>{formatVnd(calcSellerPayout)}</span>
               </div>
             </div>
           </div>
@@ -631,31 +631,31 @@ export const AdminSystemFeesPage: React.FC = () => {
           {/* Fee Policy & Operating Rules Card */}
           <div
             style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              background: 'var(--og-color-surface)',
+              border: '1px solid var(--og-color-border)',
               borderRadius: '12px',
               padding: '20px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
             }}
           >
-            <h3 style={{ margin: '0 0 10px 0', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <h3 style={{ margin: '0 0 10px 0', fontSize: '0.95rem', fontWeight: 700, color: 'var(--og-color-text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <ConsoleIcons.ShieldCheck size={17} />
               <span>Chính sách áp dụng biểu phí</span>
             </h3>
-            <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.8rem', color: '#64748b', display: 'flex', flexDirection: 'column', gap: '6px', lineHeight: 1.45 }}>
+            <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.8rem', color: 'var(--og-color-text-secondary)', display: 'flex', flexDirection: 'column', gap: '6px', lineHeight: 1.45 }}>
               <li>
-                <strong style={{ color: '#334155' }}>Thời hạn kiểm tra hàng 3 ngày:</strong> Tính từ giao hàng thành công. Khi có khiếu nại hoặc yêu cầu trả hàng đang mở, tiền tiếp tục được giữ; SLA KTV xét khiếu nại là 48 giờ từ đủ bằng chứng.
+                <strong style={{ color: 'var(--og-color-text-secondary)' }}>Thời hạn kiểm tra hàng 3 ngày:</strong> Tính từ giao hàng thành công. Khi có khiếu nại hoặc yêu cầu trả hàng đang mở, tiền tiếp tục được giữ; SLA KTV xét khiếu nại là 48 giờ từ đủ bằng chứng.
               </li>
               <li>
-                <strong style={{ color: '#334155' }}>Bảo hiểm kiện tụng:</strong> Phí cố định {formatVnd(fees.buyerProtectionFixedFee)} tài trợ chi phí kiểm định chuyên sâu của đội ngũ KTV khi có tranh chấp.
+                <strong style={{ color: 'var(--og-color-text-secondary)' }}>Bảo hiểm kiện tụng:</strong> Phí cố định {formatVnd(fees.buyerProtectionFixedFee)} tài trợ chi phí kiểm định chuyên sâu của đội ngũ KTV khi có tranh chấp.
               </li>
               <li>
-                <strong style={{ color: '#334155' }}>Rút ví Escrow:</strong> Phí rút tiền NAPAS {formatVnd(fees.withdrawalFeeVnd)} khấu trừ trực tiếp khi lệnh rút về ngân hàng thực hiện thành công.
+                <strong style={{ color: 'var(--og-color-text-secondary)' }}>Rút ví Escrow:</strong> Phí rút tiền NAPAS {formatVnd(fees.withdrawalFeeVnd)} khấu trừ trực tiếp khi lệnh rút về ngân hàng thực hiện thành công.
               </li>
             </ul>
 
-            <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #f1f5f9', fontSize: '0.76rem', color: '#94a3b8' }}>
-              Lần cập nhật gần nhất: <strong style={{ color: '#475569' }}>{systemFees.updatedAt}</strong> bởi <strong style={{ color: '#475569' }}>{systemFees.updatedBy}</strong>
+            <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--og-color-surface-subtle)', fontSize: '0.76rem', color: 'var(--og-color-text-muted)' }}>
+              Lần cập nhật gần nhất: <strong style={{ color: 'var(--og-color-text-secondary)' }}>{systemFees.updatedAt}</strong> bởi <strong style={{ color: 'var(--og-color-text-secondary)' }}>{systemFees.updatedBy}</strong>
             </div>
           </div>
         </div>

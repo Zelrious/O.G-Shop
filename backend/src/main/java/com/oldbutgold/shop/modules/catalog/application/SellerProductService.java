@@ -38,6 +38,7 @@ public class SellerProductService {
     private final ProductModerationDecisionRepository productModerationDecisionRepository;
     private final PlatformAuditFacade platformAuditFacade;
     private final Clock clock;
+    private final ListingWorkflowService listingWorkflow;
 
     public SellerProductService(ProductRepository productRepository,
                                 CategoryRepository categoryRepository,
@@ -46,7 +47,7 @@ public class SellerProductService {
                                 MediaStorageService mediaStorageService,
                                 ProductModerationDecisionRepository productModerationDecisionRepository,
                                 PlatformAuditFacade platformAuditFacade,
-                                Clock clock) {
+                                Clock clock, ListingWorkflowService listingWorkflow) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.productMediaRepository = productMediaRepository;
@@ -55,6 +56,7 @@ public class SellerProductService {
         this.productModerationDecisionRepository = productModerationDecisionRepository;
         this.platformAuditFacade = platformAuditFacade;
         this.clock = clock;
+        this.listingWorkflow = listingWorkflow;
     }
 
     @Transactional(readOnly = true)
@@ -144,6 +146,7 @@ public class SellerProductService {
             long sellerId, CatalogDtos.CreateOrUpdateProductRequest request
     ) {
         ensureSellerActive(sellerId);
+        identityCatalogFacade.requireListingAllowed(sellerId);
         List<CategoryEntity> categories = resolveSelectedCategories(request);
 
         Instant now = clock.instant();
@@ -174,6 +177,7 @@ public class SellerProductService {
             long sellerId, long productId, CatalogDtos.CreateOrUpdateProductRequest request
     ) {
         ensureSellerActive(sellerId);
+        identityCatalogFacade.requireListingAllowed(sellerId);
         ProductEntity product = productRepository.findByIdAndSellerIdAndDeletedAtIsNull(productId, sellerId)
                 .orElseThrow(ProductNotFoundException::new);
 
@@ -214,9 +218,11 @@ public class SellerProductService {
             long sellerId, long productId, org.springframework.web.multipart.MultipartFile file, String mediaType
     ) {
         ensureSellerActive(sellerId);
+        identityCatalogFacade.requireListingAllowed(sellerId);
         ProductEntity product = productRepository.findByIdAndSellerIdAndDeletedAtIsNull(productId, sellerId)
                 .orElseThrow(ProductNotFoundException::new);
 
+        prepareMediaEdit(product);
         String upperType = mediaType != null ? mediaType.toUpperCase().trim() : "IMAGE";
         if (!"IMAGE".equals(upperType) && !"VIDEO".equals(upperType)) {
             throw new IllegalArgumentException("Loại media chỉ chấp nhận IMAGE hoặc VIDEO.");
@@ -258,12 +264,14 @@ public class SellerProductService {
 
     public void deleteMedia(long sellerId, long productId, long mediaId) {
         ensureSellerActive(sellerId);
+        identityCatalogFacade.requireListingAllowed(sellerId);
         ProductEntity product = productRepository.findByIdAndSellerIdAndDeletedAtIsNull(productId, sellerId)
                 .orElseThrow(ProductNotFoundException::new);
 
         ProductMediaEntity media = productMediaRepository.findByIdAndProductId(mediaId, productId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy media ID: " + mediaId + " cho sản phẩm: " + productId));
 
+        prepareMediaEdit(product);
         productMediaRepository.delete(media);
         product.bumpContentRevision();
         product.touch(clock.instant());
@@ -272,6 +280,7 @@ public class SellerProductService {
 
     public CatalogDtos.SellerProductDetailResponse submitProduct(long sellerId, long productId) {
         ensureSellerActive(sellerId);
+        identityCatalogFacade.requireListingAllowed(sellerId);
         ProductEntity product = productRepository.findByIdAndSellerIdAndDeletedAtIsNull(productId, sellerId)
                 .orElseThrow(ProductNotFoundException::new);
 
@@ -289,12 +298,15 @@ public class SellerProductService {
 
         product.submitForReview(clock.instant());
         ProductEntity saved = productRepository.save(product);
+        productRepository.flush();
+        listingWorkflow.submitted(saved);
         List<ProductMediaEntity> mediaList = productMediaRepository.findByProductIdOrderByDisplayOrderAscIdAsc(productId);
         return CatalogDtos.SellerProductDetailResponse.from(saved, categories, mediaList);
     }
 
     public CatalogDtos.SellerProductDetailResponse publishProduct(long sellerId, long productId) {
         ensureSellerActive(sellerId);
+        identityCatalogFacade.requireListingAllowed(sellerId);
         ProductEntity product = productRepository.findByIdAndSellerIdAndDeletedAtIsNull(productId, sellerId)
                 .orElseThrow(ProductNotFoundException::new);
 
@@ -330,6 +342,7 @@ public class SellerProductService {
 
         List<CategoryEntity> categories = categoryRepository.findForProduct(product);
 
+        listingWorkflow.ensurePublishable(product);
         product.publish(clock.instant());
         ProductEntity saved = productRepository.save(product);
         List<ProductMediaEntity> mediaList = productMediaRepository.findByProductIdOrderByDisplayOrderAscIdAsc(productId);
@@ -372,6 +385,8 @@ public class SellerProductService {
         Map<Long, List<ProductMediaEntity>> mediaMap = productMediaRepository.findByProductIdInOrderByDisplayOrderAscIdAsc(productIds).stream()
                 .collect(Collectors.groupingBy(ProductMediaEntity::getProductId));
 
+        Map<Long, IdentityCatalogFacade.SellerPublicSummary> sellers = identityCatalogFacade.getSellerSummaries(
+                products.stream().map(ProductEntity::getSellerId).collect(Collectors.toSet()));
         List<CatalogDtos.ModerationProductResponse> items = products.stream().map(p -> {
             CategoryEntity cat = categoryMap.get(p.getCategoryId());
             List<ProductMediaEntity> media = mediaMap.getOrDefault(p.getId(), List.of());
@@ -389,7 +404,9 @@ public class SellerProductService {
                     p.getCreatedAt(),
                     CategoryRepository.orderedForProduct(p, categoryMap).stream().map(CatalogDtos.CategoryResponse::from).toList(),
                     p.getVersion(),
-                    p.getUpdatedAt()
+                    p.getUpdatedAt(), p.getCurrency(), p.getUsageDuration(), p.getDefects(),
+                    p.getRepairHistory(), p.getIncludedAccessories(), p.getLocation(), p.getQuantityTotal(),
+                    sellers.containsKey(p.getSellerId()) ? sellers.get(p.getSellerId()).displayName() : "Người bán #" + p.getSellerId(), List.of()
             );
         }).toList();
 
@@ -427,7 +444,13 @@ public class SellerProductService {
                 product.getCreatedAt(),
                 categories.stream().map(CatalogDtos.CategoryResponse::from).toList(),
                 product.getVersion(),
-                product.getUpdatedAt()
+                product.getUpdatedAt(), product.getCurrency(), product.getUsageDuration(), product.getDefects(),
+                product.getRepairHistory(), product.getIncludedAccessories(), product.getLocation(), product.getQuantityTotal(),
+                identityCatalogFacade.getSellerSummary(product.getSellerId()).map(IdentityCatalogFacade.SellerPublicSummary::displayName)
+                        .orElse("Người bán #" + product.getSellerId()),
+                productModerationDecisionRepository.findByProductIdOrderByCreatedAtDescIdDesc(productId).stream()
+                        .map(d -> new CatalogDtos.ModerationHistory(d.getId(), d.getReviewerId(), d.getDecision(),
+                                d.getReason(), d.getDecisionContentRevision(), d.getCreatedAt())).toList()
         );
     }
 
@@ -454,15 +477,16 @@ public class SellerProductService {
             boolean sameVersion = prev.getProductVersion().equals(expectedVersion);
 
             if (sameReviewer && sameProduct && sameDecision && sameReason && sameVersion) {
-                return new CatalogDtos.ActionResponse(productId, ProductEntity.STATUS_ACTIVE, "Phê duyệt tin đăng thành công.");
+                return listingWorkflow.replayApproval(prev);
             } else {
                 throw new CommandKeyConflictException("Command key '" + trimmedKey + "' đã được sử dụng với thông tin khác.");
             }
         }
 
-        ProductEntity product = productRepository.findById(productId)
-                .filter(p -> p.getDeletedAt() == null)
+        ProductEntity product = productRepository.findByIdForUpdate(productId)
                 .orElseThrow(ProductNotFoundException::new);
+        var concurrentReplay = productModerationDecisionRepository.findByCommandKey(trimmedKey);
+        if (concurrentReplay.isPresent()) return approveProduct(reviewerId,productId,expectedVersion,trimmedKey);
 
         if (!ProductEntity.STATUS_PENDING.equals(product.getStatus())) {
             throw new ProductStateConflictException(
@@ -483,25 +507,26 @@ public class SellerProductService {
         }
 
         long oldVersion = product.getVersion();
-        product.approve(clock.instant());
-        ProductEntity saved = productRepository.save(product);
-        // Acquire the row write lock before decision INSERT takes a foreign-key share lock.
-        productRepository.flush();
+        long revisionId = listingWorkflow.captureReview(product,
+                productMediaRepository.findByProductIdOrderByDisplayOrderAscIdAsc(productId).stream()
+                        .map(CatalogDtos.ProductMediaResponse::from).toList());
 
         ProductModerationDecisionEntity decision = new ProductModerationDecisionEntity(
                 productId, reviewerId, ProductModerationDecisionEntity.DECISION_APPROVED,
                 null, expectedVersion, trimmedKey, clock.instant(), product.getContentRevision()
         );
-        productModerationDecisionRepository.save(decision);
+        decision.referenceRevision(revisionId);
+        productModerationDecisionRepository.saveAndFlush(decision);
+        CatalogDtos.ActionResponse result = listingWorkflow.approved(product, decision);
 
         platformAuditFacade.recordAudit(
                 reviewerId, "APPROVE_PRODUCT", "PRODUCT", productId,
                 Map.of("status", ProductEntity.STATUS_PENDING, "version", oldVersion, "contentRevision", product.getContentRevision()),
-                Map.of("status", saved.getStatus(), "version", saved.getVersion(), "contentRevision", saved.getContentRevision()),
+                Map.of("status", product.getStatus(), "version", product.getVersion(), "contentRevision", product.getContentRevision()),
                 null, null
         );
 
-        return new CatalogDtos.ActionResponse(productId, saved.getStatus(), "Phê duyệt tin đăng thành công.");
+        return result;
     }
 
     public CatalogDtos.ActionResponse rejectProduct(long reviewerId, long productId, String reason, Long expectedVersion, String commandKey) {
@@ -540,9 +565,10 @@ public class SellerProductService {
             }
         }
 
-        ProductEntity product = productRepository.findById(productId)
-                .filter(p -> p.getDeletedAt() == null)
+        ProductEntity product = productRepository.findByIdForUpdate(productId)
                 .orElseThrow(ProductNotFoundException::new);
+        var concurrentReplay = productModerationDecisionRepository.findByCommandKey(trimmedKey);
+        if (concurrentReplay.isPresent()) return rejectProduct(reviewerId,productId,trimmedReason,expectedVersion,trimmedKey);
 
         if (!ProductEntity.STATUS_PENDING.equals(product.getStatus())) {
             throw new ProductStateConflictException(
@@ -557,15 +583,20 @@ public class SellerProductService {
         }
 
         long oldVersion = product.getVersion();
-        product.reject(clock.instant());
-        ProductEntity saved = productRepository.save(product);
-        productRepository.flush();
+        long revisionId = listingWorkflow.captureReview(product,
+                productMediaRepository.findByProductIdOrderByDisplayOrderAscIdAsc(productId).stream()
+                        .map(CatalogDtos.ProductMediaResponse::from).toList());
 
         ProductModerationDecisionEntity decision = new ProductModerationDecisionEntity(
                 productId, reviewerId, ProductModerationDecisionEntity.DECISION_REJECTED,
                 trimmedReason, expectedVersion, trimmedKey, clock.instant(), product.getContentRevision()
         );
-        productModerationDecisionRepository.save(decision);
+        decision.referenceRevision(revisionId);
+        productModerationDecisionRepository.saveAndFlush(decision);
+        product.reject(clock.instant());
+        ProductEntity saved = productRepository.save(product);
+        productRepository.flush();
+        listingWorkflow.rejected(saved, decision);
 
         platformAuditFacade.recordAudit(
                 reviewerId, "REJECT_PRODUCT", "PRODUCT", productId,
@@ -580,6 +611,15 @@ public class SellerProductService {
     private void ensureSellerActive(long sellerId) {
         if (!identityCatalogFacade.isSellerActive(sellerId)) {
             throw new SellerRequiredException("Bạn cần kích hoạt quyền Người bán để quản lý tin đăng.");
+        }
+    }
+
+    private void prepareMediaEdit(ProductEntity product) {
+        if (!ProductEntity.EDITABLE_STATUSES.contains(product.getStatus()))
+            throw new ProductStateConflictException("Không thể thay media khi tin đang chờ xử lý hoặc giao dịch.");
+        if (ProductEntity.STATUS_ACTIVE.equals(product.getStatus())) {
+            product.hide(clock.instant());
+            productRepository.flush();
         }
     }
 

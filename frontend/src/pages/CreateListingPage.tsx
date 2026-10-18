@@ -1,3 +1,4 @@
+import { Icon } from '../shared/components/Icon/Icon';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../features/auth';
@@ -36,13 +37,13 @@ export const CreateListingPage: React.FC = () => {
   if (!isSeller) {
     return (
       <div className="og-seller-upgrade-prompt">
-        <div className="og-seller-upgrade-prompt__icon">🏪</div>
+        <div className="og-seller-upgrade-prompt__icon"><Icon name="store" style={{ width: '1em', height: '1em' }} /></div>
         <h1 className="og-seller-upgrade-prompt__title">Kích hoạt quyền Người bán</h1>
         <p className="og-seller-upgrade-prompt__desc">
           Bạn cần kích hoạt quyền Người bán trước khi đăng tin sản phẩm.
         </p>
         <Link to="/seller-verification" className="og-button og-button--primary">
-          ✨ Kích hoạt quyền Người bán ngay
+           Kích hoạt quyền Người bán ngay
         </Link>
       </div>
     );

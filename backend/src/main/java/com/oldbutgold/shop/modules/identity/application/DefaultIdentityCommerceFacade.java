@@ -20,20 +20,28 @@ public class DefaultIdentityCommerceFacade implements IdentityCommerceFacade {
     private final AddressRepository addressRepository;
     private final SellerVerificationRepository sellerVerificationRepository;
     private final Clock clock;
+    private final AccountAccessService accountAccess;
 
     public DefaultIdentityCommerceFacade(UserRepository userRepository,
                                         AddressRepository addressRepository,
                                         SellerVerificationRepository sellerVerificationRepository,
-                                        Clock clock) {
+                                        Clock clock,AccountAccessService accountAccess) {
         this.userRepository = userRepository;
         this.addressRepository = addressRepository;
         this.sellerVerificationRepository = sellerVerificationRepository;
         this.clock = clock;
+        this.accountAccess=accountAccess;
     }
 
     @Override
     public boolean isUserVerified(long userId) {
         return sellerVerificationRepository.findFirstByUserIdAndStatus(userId, "VERIFIED").isPresent();
+    }
+    @Override @Transactional(readOnly=true,noRollbackFor=RegistrationException.class)
+    public void requirePurchaseAllowed(long buyerId,long sellerId,boolean requiresEkyc) {
+        accountAccess.requireAllowed(buyerId,"BUY_ALL");
+        if(accountAccess.restricted(sellerId,"NEW_TRANSACTIONS")) throw new RegistrationException("SELLER_UNAVAILABLE","Người bán hiện không nhận giao dịch mới. Vui lòng chọn sản phẩm khác.",409);
+        if(requiresEkyc) accountAccess.requireAllowed(buyerId,"BUY_EKYC");
     }
 
     @Override

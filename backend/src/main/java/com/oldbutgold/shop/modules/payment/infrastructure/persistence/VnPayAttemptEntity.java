@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 @Entity
-@Table(name = "vnpay_payment_attempts")
+@Table(name = "vnpay_payment_attempts", schema = "og_compat")
 public class VnPayAttemptEntity {
     @Id @Column(name = "transaction_ref", length = 100) private String reference;
     @Column(name = "order_id", nullable = false) private Long orderId;

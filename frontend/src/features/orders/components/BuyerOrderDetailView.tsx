@@ -1,3 +1,5 @@
+import { Icon } from '../../../shared/components/Icon/Icon';
+import { ChatLink } from '../../chat-offer/ChatLink';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ordersApi } from '../ordersApi';
@@ -152,7 +154,7 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
                   fontWeight: 700,
                   fontSize: 14,
                 }}>
-                  {step.done ? '✓' : idx + 1}
+                  {step.done ? '' : idx + 1}
                 </div>
                 <div style={{ fontSize: '0.82rem', fontWeight: step.done ? 600 : 400, color: step.done ? 'var(--og-color-text-primary)' : 'var(--og-color-text-secondary)' }}>
                   {step.label}
@@ -189,13 +191,14 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
                 />
               ) : (
                 <div style={{ width: 84, height: 84, borderRadius: 8, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>
-                  📦
+
                 </div>
               )}
               <div style={{ flex: 1 }}>
                 <h4 style={{ margin: '0 0 6px', fontSize: '1.05rem', color: 'var(--og-color-text-primary)' }}>
                   {order.productTitle}
                 </h4>
+                {order.productId && <ChatLink className="og-button og-button--outline" to={`/messages?productId=${order.productId}&orderId=${order.orderId}`}>Trao đổi về đơn hàng</ChatLink>}
                 <div style={{ fontSize: '0.88rem', color: 'var(--og-color-text-secondary)', marginBottom: 8 }}>
                   Số lượng: x{order.quantity}
                 </div>
@@ -225,7 +228,7 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
             padding: 20,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 24 }}>🛡️</span>
+              <span style={{ fontSize: 24 }}><Icon name="shield" /></span>
               <strong style={{ color: '#166534', fontSize: '1rem' }}>Bảo Vệ Ký Quỹ Escrow (O.G Shield)</strong>
             </div>
             <p style={{ margin: '0 0 12px', fontSize: '0.85rem', color: '#14532d', lineHeight: 1.5 }}>
@@ -299,7 +302,7 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
                     style={{ width: '100%', padding: '12px 16px', fontWeight: 600 }}
                     onClick={() => navigate(`/checkout/payment?orderId=${order.orderId}`)}
                   >
-                    ⚡ Thanh toán ngay
+                    Thanh toán ngay
                   </button>
                   <button
                     type="button"
@@ -384,7 +387,7 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
               color: '#92400e',
               marginBottom: 16,
             }}>
-              ⚠️ <strong>Lưu ý:</strong> Voucher giảm giá đã áp dụng sẽ <strong>không được hoàn lại</strong> lượt dùng.
+              <strong>Lưu ý:</strong> Voucher giảm giá đã áp dụng sẽ <strong>không được hoàn lại</strong> lượt dùng.
             </div>
 
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>

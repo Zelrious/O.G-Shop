@@ -44,6 +44,8 @@ export interface CheckoutPreview {
   sellerId: number;
   sellerName: string;
   listedPrice: number;
+  agreedPrice?: number;
+  acceptedOfferId?: number | null;
   shippingFee: number;
   buyerSystemFee: number;
   voucherDiscount: number;
@@ -57,6 +59,7 @@ export interface CheckoutPreview {
 
 export interface BuyNowInput {
   productId: number;
+  offerId?: number;
   addressId?: number;
   newAddress?: CreateAddressInput;
   voucherCode?: string;

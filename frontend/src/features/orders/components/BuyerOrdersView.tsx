@@ -1,3 +1,4 @@
+import { Icon } from '../../../shared/components/Icon/Icon';
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ordersApi } from '../ordersApi';
@@ -11,6 +12,7 @@ export const BuyerOrdersView: React.FC = () => {
   const [totalPages, setTotalPages] = useState<number>(0);
   const [totalElements, setTotalElements] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [showCancelModal, setShowCancelModal] = useState<number | null>(null);
@@ -41,6 +43,7 @@ export const BuyerOrdersView: React.FC = () => {
         const totalE = res.totalElements || 0;
         setTotalPages(totalP);
         setTotalElements(totalE);
+        setHasLoaded(true);
 
         // Clamp if page is beyond new totalPages
         if (totalP > 0 && pageIndex >= totalP) {
@@ -51,6 +54,7 @@ export const BuyerOrdersView: React.FC = () => {
         if (seq !== reqSeqRef.current) return;
         setOrders([]);
         setErrorMsg(err.message || 'Không thể tải danh sách đơn hàng.');
+        setHasLoaded(true);
       })
       .finally(() => {
         if (seq === reqSeqRef.current) {
@@ -99,25 +103,25 @@ export const BuyerOrdersView: React.FC = () => {
       case 'PAID_HELD':
         return (
           <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
-            🪙 Đã giữ tiền (Ký quỹ)
+             Đã giữ tiền (Ký quỹ)
           </span>
         );
       case 'SELLER_CONFIRMED':
         return (
           <span style={{ background: '#f3e8ff', color: '#6b21a8', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
-            📦 Người bán đang chuẩn bị
+             Người bán đang chuẩn bị
           </span>
         );
       case 'SHIPPED':
         return (
           <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
-            🚚 Đang vận chuyển
+             Đang vận chuyển
           </span>
         );
       case 'DELIVERED':
         return (
           <span style={{ background: '#ccfbf1', color: '#0f766e', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
-            📬 Đã giao hàng
+             Đã giao hàng
           </span>
         );
       case 'COMPLETED':
@@ -134,7 +138,7 @@ export const BuyerOrdersView: React.FC = () => {
         );
       default:
         return (
-          <span style={{ background: '#f3f4f6', color: '#4b5563', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
+          <span style={{ background: 'var(--og-color-surface-subtle)', color: 'var(--og-color-text-secondary)', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
             {status}
           </span>
         );
@@ -145,7 +149,7 @@ export const BuyerOrdersView: React.FC = () => {
     <div style={{ maxWidth: 960, margin: '24px auto', padding: '0 16px 60px' }}>
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: '0 0 6px', color: 'var(--og-color-text-primary)' }}>
-          📦 Đơn Mua Của Bạn (OR-01)
+           Đơn Mua Của Bạn (OR-01)
         </h1>
         <p style={{ color: 'var(--og-color-text-secondary)', fontSize: '0.9rem', margin: 0 }}>
           Theo dõi trạng thái ký quỹ, tiến độ giao hàng và xác nhận nhận hàng an toàn.
@@ -153,27 +157,14 @@ export const BuyerOrdersView: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div style={{
-        display: 'flex',
-        borderBottom: '1px solid var(--og-color-border)',
-        overflowX: 'auto',
-        marginBottom: 24,
-        gap: 8,
-      }}>
+      <div className="og-seller-tabs-bar" aria-label="Bộ lọc trạng thái đơn mua">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
+            className={`og-seller-tab-btn-line ${activeTab === tab.id ? 'og-seller-tab-btn-line--active' : ''}`}
             style={{
-              padding: '12px 18px',
-              border: 'none',
-              background: 'transparent',
-              borderBottom: activeTab === tab.id ? '2px solid var(--og-color-primary)' : '2px solid transparent',
-              color: activeTab === tab.id ? 'var(--og-color-primary)' : 'var(--og-color-text-secondary)',
-              fontWeight: activeTab === tab.id ? 700 : 500,
-              fontSize: '0.92rem',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
+              fontWeight: activeTab === tab.id ? 700 : 600,
             }}
             onClick={() => handleTabChange(tab.id)}
           >
@@ -208,31 +199,51 @@ export const BuyerOrdersView: React.FC = () => {
         </div>
       )}
 
-      {/* Loading state */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '48px 0' }}>
-          <div className="og-spinner" style={{ margin: '0 auto 12px' }} />
-          <p style={{ color: 'var(--og-color-text-secondary)', fontSize: '0.9rem' }}>Đang tải danh sách đơn mua...</p>
-        </div>
-      ) : orders.length === 0 ? (
-        <div style={{
-          background: 'var(--og-color-surface)',
-          border: '1px dashed var(--og-color-border)',
-          borderRadius: 12,
-          padding: '48px 16px',
-          textAlign: 'center',
-        }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🛒</div>
-          <h3 style={{ margin: '0 0 8px', color: 'var(--og-color-text-primary)' }}>Chưa có đơn hàng nào</h3>
-          <p style={{ color: 'var(--og-color-text-secondary)', fontSize: '0.9rem', marginBottom: 20 }}>
-            Bạn chưa có đơn hàng nào trong mục này. Hãy khám phá chợ đồ cũ để săn món đồ yêu thích!
-          </p>
-          <Link to="/marketplace" className="og-button og-button--primary">
-            Khám phá Chợ Đồ Cũ
-          </Link>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Main Content Area with Stable Min-Height & Anti-Jitter Loading */}
+      <div
+        className="og-seller-orders-container"
+        style={{
+          opacity: loading && hasLoaded ? 0.5 : 1,
+          pointerEvents: loading && hasLoaded ? 'none' : 'auto',
+          transition: 'opacity 0.2s ease',
+        }}
+      >
+        {/* Sleek top loading progress bar when refetching / switching tabs */}
+        {loading && hasLoaded && (
+          <div className="og-seller-tab-loader" role="progressbar" aria-label="Đang cập nhật danh sách đơn mua...">
+            <div className="og-seller-tab-loader__bar" />
+          </div>
+        )}
+
+        {loading && !hasLoaded ? (
+          <div style={{ textAlign: 'center', padding: '64px 0', minHeight: 460, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="og-spinner" style={{ margin: '0 auto 12px' }} />
+            <p style={{ color: 'var(--og-color-text-secondary)', fontSize: '0.9rem' }}>Đang tải danh sách đơn mua...</p>
+          </div>
+        ) : orders.length === 0 ? (
+          <div style={{
+            background: 'var(--og-color-surface)',
+            border: '1px dashed var(--og-color-border)',
+            borderRadius: 12,
+            padding: '56px 16px',
+            textAlign: 'center',
+            minHeight: 380,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}><Icon name="cart" style={{ width: '1em', height: '1em' }} /></div>
+            <h3 style={{ margin: '0 0 8px', color: 'var(--og-color-text-primary)' }}>Chưa có đơn hàng nào</h3>
+            <p style={{ color: 'var(--og-color-text-secondary)', fontSize: '0.9rem', marginBottom: 20 }}>
+              Bạn chưa có đơn hàng nào trong mục này. Hãy khám phá chợ đồ cũ để săn món đồ yêu thích!
+            </p>
+            <Link to="/marketplace" className="og-button og-button--primary">
+              Khám phá Chợ Đồ Cũ
+            </Link>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {orders.map((order) => (
             <div
               key={order.orderId}
@@ -249,7 +260,7 @@ export const BuyerOrdersView: React.FC = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                borderBottom: '1px solid var(--og-color-border-subtle, #f3f4f6)',
+                borderBottom: '1px solid var(--og-color-border-subtle, var(--og-color-surface-subtle))',
                 paddingBottom: 12,
                 marginBottom: 16,
                 fontSize: '0.88rem',
@@ -279,14 +290,12 @@ export const BuyerOrdersView: React.FC = () => {
                     width: 80,
                     height: 80,
                     borderRadius: 8,
-                    background: '#f3f4f6',
+                    background: 'var(--og-color-surface-subtle)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: 28,
-                  }}>
-                    📦
-                  </div>
+                  }}><Icon name="package" style={{ width: '1em', height: '1em' }} /></div>
                 )}
 
                 <div style={{ flex: 1 }}>
@@ -314,7 +323,7 @@ export const BuyerOrdersView: React.FC = () => {
                 justifyContent: 'flex-end',
                 alignItems: 'center',
                 gap: 12,
-                borderTop: '1px solid var(--og-color-border-subtle, #f3f4f6)',
+                borderTop: '1px solid var(--og-color-border-subtle, var(--og-color-surface-subtle))',
                 paddingTop: 14,
                 marginTop: 16,
               }}>
@@ -326,7 +335,7 @@ export const BuyerOrdersView: React.FC = () => {
                       style={{ padding: '8px 16px', fontSize: '0.88rem', fontWeight: 600 }}
                       onClick={() => navigate(`/checkout/payment?orderId=${order.orderId}`)}
                     >
-                      ⚡ Thanh toán ngay
+                       Thanh toán ngay
                     </button>
                     <button
                       type="button"
@@ -419,6 +428,7 @@ export const BuyerOrdersView: React.FC = () => {
           )}
         </div>
       )}
+      </div>
 
       {/* Cancel Order Modal */}
       {showCancelModal && (
@@ -458,8 +468,7 @@ export const BuyerOrdersView: React.FC = () => {
               fontSize: '0.82rem',
               color: '#92400e',
               marginBottom: 16,
-            }}>
-              ⚠️ <strong>Lưu ý:</strong> Voucher giảm giá đã áp dụng cho đơn hàng này sẽ <strong>không được hoàn lại</strong> lượt dùng.
+            }}><Icon name="alert" style={{ width: '1em', height: '1em' }} /><strong>Lưu ý:</strong> Voucher giảm giá đã áp dụng cho đơn hàng này sẽ <strong>không được hoàn lại</strong> lượt dùng.
             </div>
 
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>

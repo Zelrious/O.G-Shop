@@ -107,8 +107,16 @@ export const profileApi = {
   },
 
   async getProvinces(): Promise<GhnProvince[]> {
+    interface RawProvince {
+      provinceId?: number | string;
+      ProvinceID?: number | string;
+      provinceName?: string;
+      ProvinceName?: string;
+      code?: string;
+      Code?: string;
+    }
     const res = await authApi.authorizedFetch('/shipping/master-data/provinces');
-    const raw = await parseResponse<any[]>(res);
+    const raw = await parseResponse<RawProvince[]>(res);
     return (raw || []).map((item) => ({
       provinceId: Number(item.provinceId ?? item.ProvinceID),
       provinceName: String(item.provinceName ?? item.ProvinceName ?? ''),
@@ -117,8 +125,18 @@ export const profileApi = {
   },
 
   async getDistricts(provinceId: number): Promise<GhnDistrict[]> {
+    interface RawDistrict {
+      districtId?: number | string;
+      DistrictID?: number | string;
+      provinceId?: number | string;
+      ProvinceID?: number | string;
+      districtName?: string;
+      DistrictName?: string;
+      code?: string;
+      Code?: string;
+    }
     const res = await authApi.authorizedFetch(`/shipping/master-data/districts?provinceId=${provinceId}`);
-    const raw = await parseResponse<any[]>(res);
+    const raw = await parseResponse<RawDistrict[]>(res);
     return (raw || []).map((item) => ({
       districtId: Number(item.districtId ?? item.DistrictID),
       provinceId: Number(item.provinceId ?? item.ProvinceID ?? provinceId),
@@ -128,8 +146,16 @@ export const profileApi = {
   },
 
   async getWards(districtId: number): Promise<GhnWard[]> {
+    interface RawWard {
+      wardCode?: string;
+      WardCode?: string;
+      districtId?: number | string;
+      DistrictID?: number | string;
+      wardName?: string;
+      WardName?: string;
+    }
     const res = await authApi.authorizedFetch(`/shipping/master-data/wards?districtId=${districtId}`);
-    const raw = await parseResponse<any[]>(res);
+    const raw = await parseResponse<RawWard[]>(res);
     return (raw || []).map((item) => ({
       wardCode: String(item.wardCode ?? item.WardCode ?? ''),
       districtId: Number(item.districtId ?? item.DistrictID ?? districtId),

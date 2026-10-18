@@ -8,7 +8,7 @@ export const SellerDashboardPage: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: 'var(--og-color-text-primary)' }}>
-            Trung Tâm Bán Hàng (SL-01)
+            Trung Tâm Bán Hàng
           </h1>
           <p style={{ margin: 0, color: 'var(--og-color-text-secondary)' }}>
             Theo dõi dòng tiền ký quỹ, đơn hàng cần đóng gói và tình trạng các món đồ đang niêm yết.
@@ -16,7 +16,7 @@ export const SellerDashboardPage: React.FC = () => {
         </div>
         <Link to="/seller/products/new">
           <Button variant="gold" size="md">
-            ➕ Đăng tin bán mới (SL-02)
+             Đăng tin bán mới
           </Button>
         </Link>
       </div>
@@ -25,7 +25,7 @@ export const SellerDashboardPage: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
         <Card>
           <div style={{ fontSize: '0.85rem', color: 'var(--og-color-text-muted)', marginBottom: '6px' }}>
-            🔒 Tiền đang bảo vệ tại Escrow (Held)
+             Tiền đang bảo vệ tại Escrow (Held)
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--og-color-primary)' }}>
             14.850.000₫
@@ -37,7 +37,7 @@ export const SellerDashboardPage: React.FC = () => {
 
         <Card>
           <div style={{ fontSize: '0.85rem', color: 'var(--og-color-text-muted)', marginBottom: '6px' }}>
-            📦 Đơn hàng cần đóng gói
+             Đơn hàng cần đóng gói
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--og-color-warning)' }}>
             2 đơn
@@ -49,7 +49,7 @@ export const SellerDashboardPage: React.FC = () => {
 
         <Card>
           <div style={{ fontSize: '0.85rem', color: 'var(--og-color-text-muted)', marginBottom: '6px' }}>
-            🏷️ Tin đang hiển thị trên sàn
+             Tin đang hiển thị trên sàn
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--og-color-text-primary)' }}>
             5 tin
@@ -95,7 +95,7 @@ export const SellerDashboardPage: React.FC = () => {
                 </td>
                 <td style={{ padding: '12px 8px' }}>
                   <Link to="/seller/orders" className="og-button og-button--outline og-button--sm">
-                    In phiếu gửi hàng (SL-11)
+                    In phiếu gửi hàng
                   </Link>
                 </td>
               </tr>

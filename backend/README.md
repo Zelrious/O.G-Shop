@@ -4,7 +4,7 @@ Spring Boot modular monolith cho Old but Gold. Dự án dùng Maven Wrapper 3.3.
 
 ## Chạy ứng dụng
 
-Thiết lập tối thiểu `JWT_SIGNING_KEY` (32 byte trở lên), `EKYC_INTERNAL_TOKEN`, `VNPAY_TMN_CODE` và `VNPAY_HASH_SECRET` trước khi chạy. Các secret chỉ được đọc từ biến môi trường. Spring Boot không tự nạp `.env`; file ở repository root là mẫu tên biến và dùng cho Docker Compose.
+Thiết lập tối thiểu `JWT_SIGNING_KEY` (32 byte trở lên), `EKYC_INTERNAL_TOKEN`, `VNPAY_TMN_CODE` và `VNPAY_HASH_SECRET` trước khi chạy. `OgShopApplication` nạp tệp local đầu tiên trong `.env`, `../.env`, `backend/.env` tính từ thư mục chạy; biến môi trường/system properties có ưu tiên cao hơn. Đăng ký email cần cấu hình SMTP theo [EMAIL_OTP](../docs/setup/EMAIL_OTP.md); khi chưa bật gửi mail, API trả 503 và không tạo tài khoản.
 
 Ví dụ trong PowerShell 7, cùng cửa sổ sẽ chạy backend:
 
@@ -33,7 +33,7 @@ Từ repository root có thể chạy quality gate chuẩn; script tự phát hi
 
 Database phải có extension `pgvector`; Compose dùng `pgvector/pgvector:pg17` tương ứng PostgreSQL 17. Backend tự chạy Flyway khi khởi động, vì vậy hãy sao lưu và kiểm chứng tuyến V9–V13 trên bản sao trước khi dùng database có dữ liệu. Migrations V1–V13 đã chia sẻ phải giữ nguyên; sửa tiếp bằng migration mới. Callback bảo toàn lý do kiểm duyệt trước V10 chỉ cứu được dữ liệu còn tồn tại; lịch sử đã mất cần backup gốc.
 
-Identity API dùng access JWT 15 phút và refresh token opaque 30 ngày trong cookie HttpOnly. Browser chỉ gọi eKYC qua `/api/v1/ekyc/**`; backend gọi FastAPI bằng internal credential.
+Identity API dùng access JWT có thời hạn cố định, mặc định 15 phút; cookie HttpOnly chỉ khôi phục trong deadline gốc, không gia hạn. V24 đã bỏ refresh token và bảng refresh_sessions. V25 đăng ký trả challenge OTP trước, chỉ sau xác nhận mới tạo user/3.000 xu và phiên. Seller mới lưu PENDING_EKYC để chờ xác minh/phê duyệt. [Hợp đồng API](../docs/api/IDENTITY_API.md). Browser chỉ gọi eKYC qua `/api/v1/ekyc/**`; backend gọi FastAPI bằng internal credential; luồng eKYC/KTV mới thuộc đợt tiếp nối.
 
 ## Kiểm thử
 

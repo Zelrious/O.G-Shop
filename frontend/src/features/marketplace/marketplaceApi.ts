@@ -73,9 +73,17 @@ export const marketplaceApi = {
   async getProducts(params: ProductFilterParams = {}): Promise<PageResponse<ProductSummary>> {
     try {
       const queryParams = new URLSearchParams();
-      if (params.query) queryParams.set('query', params.query);
-      if (params.categoryId) queryParams.set('categoryId', String(params.categoryId));
-      if (params.condition) queryParams.set('condition', params.condition);
+      if (params.categoryIds && params.categoryIds.length > 0) {
+        params.categoryIds.forEach((id) => queryParams.append('categoryIds', String(id)));
+      } else if (params.categoryId) {
+        queryParams.set('categoryId', String(params.categoryId));
+      }
+
+      if (params.conditions && params.conditions.length > 0) {
+        params.conditions.forEach((c) => queryParams.append('conditions', c));
+      } else if (params.condition) {
+        queryParams.set('condition', params.condition);
+      }
       if (params.minPrice !== undefined && params.minPrice !== null && !isNaN(params.minPrice)) {
         queryParams.set('minPrice', String(params.minPrice));
       }
@@ -108,12 +116,21 @@ export const marketplaceApi = {
       );
     }
 
-    if (params.categoryId) {
-      items = items.filter((p) => (p.categories?.length ? p.categories : [p.category])
-        .some((category) => category.categoryId === Number(params.categoryId)));
+    if (params.categoryIds && params.categoryIds.length > 0) {
+      const idSet = new Set(params.categoryIds.map(Number));
+      items = items.filter((p) =>
+        (p.categories?.length ? p.categories : [p.category]).some((cat) => idSet.has(cat.categoryId))
+      );
+    } else if (params.categoryId) {
+      items = items.filter((p) =>
+        (p.categories?.length ? p.categories : [p.category]).some((cat) => cat.categoryId === Number(params.categoryId))
+      );
     }
 
-    if (params.condition && params.condition !== 'ALL') {
+    if (params.conditions && params.conditions.length > 0) {
+      const condSet = new Set(params.conditions.map((c) => c.toUpperCase()));
+      items = items.filter((p) => condSet.has(p.condition.toUpperCase()));
+    } else if (params.condition && params.condition !== 'ALL') {
       items = items.filter(
         (p) => p.condition.toUpperCase() === params.condition?.toUpperCase()
       );
@@ -134,8 +151,16 @@ export const marketplaceApi = {
       items.sort((a, b) => b.listedPrice - a.listedPrice);
     }
 
+    const page = params.page || 0;
+    const size = params.size || 12;
+    const totalElements = items.length;
+    const totalPages = Math.ceil(totalElements / size);
+    const startIdx = page * size;
+    const pagedItems = items.slice(startIdx, startIdx + size);
+    const hasNext = (page + 1) * size < totalElements;
+
     return {
-      items: items.map((p) => ({
+      items: pagedItems.map((p) => ({
         productId: p.productId,
         title: p.title,
         listedPrice: p.listedPrice,
@@ -147,11 +172,11 @@ export const marketplaceApi = {
         seller: p.seller,
         createdAt: p.createdAt,
       })),
-      page: params.page || 0,
-      size: params.size || 12,
-      totalElements: items.length,
-      totalPages: Math.ceil(items.length / (params.size || 12)),
-      hasNext: false,
+      page,
+      size,
+      totalElements,
+      totalPages,
+      hasNext,
     };
   },
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './AuthContext';
@@ -7,7 +7,7 @@ import { authApi } from './authApi';
 import { ProtectedRoute } from '../../app/ProtectedRoute';
 import type { AuthResponse, UserPrincipal } from './types';
 
-vi.mock('./authApi', () => ({ authApi: { refresh: vi.fn(), login: vi.fn(), logout: vi.fn(), clearAccessToken: vi.fn() } }));
+vi.mock('./authApi', () => ({ SESSION_EXPIRED_EVENT: 'og:session-expired', authApi: { restoreSession: vi.fn(), login: vi.fn(), register: vi.fn(), verifyRegistration: vi.fn(), logout: vi.fn(), clearAccessToken: vi.fn() } }));
 const admin: UserPrincipal = { userId: 1, fullName: 'Fixture Admin', email: 'fixture@example.test', roles: ['ADMIN'], createdAt: '2026-10-05T00:00:00Z' };
 const session = (user: UserPrincipal): AuthResponse => ({ user, accessToken: 'fixture', expiresIn: 900 });
 
@@ -18,9 +18,68 @@ function SessionProbe({ email = 'admin@example.test' }: { email?: string }) {
     <button onClick={() => { void login({ email, password: 'wrong' }).catch(() => {}); }}>Login probe</button>
   </>;
 }
-beforeEach(() => { vi.resetAllMocks(); localStorage.clear(); vi.mocked(authApi.refresh).mockRejectedValue(new Error('Unauthorized')); });
+beforeEach(() => { vi.resetAllMocks(); localStorage.clear(); vi.mocked(authApi.restoreSession).mockRejectedValue(new Error('Unauthorized')); });
+
+function RegistrationProbe() {
+  const { user, isLoading, register, verifyRegistration } = useAuth();
+  return <>
+    <output aria-label="registration session">{isLoading ? 'loading' : user?.roles.join(',') || 'anonymous'}</output>
+    <button onClick={() => { void register({ email: 'fixture@example.invalid', fullName: 'Buyer', password: 'Password123@', accountType: 'BUYER' }); }}>Start registration</button>
+    <button onClick={() => { void verifyRegistration('draft', '123456').catch(() => {}); }}>Verify registration</button>
+  </>;
+}
 
 describe('server authenticated sessions', () => {
+  it('keeps login OTP pending anonymous', async () => {
+    vi.mocked(authApi.login).mockResolvedValue({ status: 'OTP_REQUIRED', purpose: 'LOGIN_EMAIL_2FA', challengeId: 'login',
+      email: 'fixture@example.invalid', expiresAt: '2026-10-11', resendAt: '2026-10-11', attemptsRemaining: 5 });
+    render(<AuthProvider><SessionProbe /></AuthProvider>);
+    await waitFor(() => expect(screen.getByLabelText('session')).toHaveTextContent('anonymous'));
+    fireEvent.click(screen.getByText('Login probe'));
+    await waitFor(() => expect(authApi.login).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByLabelText('session')).toHaveTextContent('anonymous'));
+  });
+  it('does not clear an existing login after an incorrect registration code', async () => {
+    vi.mocked(authApi.restoreSession).mockResolvedValue(session(admin));
+    vi.mocked(authApi.verifyRegistration).mockRejectedValue(new Error('Incorrect OTP'));
+    render(<AuthProvider><RegistrationProbe /></AuthProvider>);
+    await waitFor(() => expect(screen.getByLabelText('registration session')).toHaveTextContent('ADMIN'));
+    fireEvent.click(screen.getByText('Verify registration'));
+    await waitFor(() => expect(authApi.verifyRegistration).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByLabelText('registration session')).toHaveTextContent('ADMIN'));
+    expect(authApi.clearAccessToken).not.toHaveBeenCalled();
+  });
+  it('keeps pending registration anonymous and accepts only the verified session', async () => {
+    vi.mocked(authApi.register).mockResolvedValue({ status: 'OTP_REQUIRED', challengeId: 'draft', email: 'fixture@example.invalid', expiresAt: '2026-10-10', resendAt: '2026-10-10', attemptsRemaining: 5 });
+    vi.mocked(authApi.verifyRegistration).mockResolvedValue({ ...session({ ...admin, roles: ['BUYER'] }), nextStep: 'PROFILE', awardedCoins: 3000 });
+    render(<AuthProvider><RegistrationProbe /></AuthProvider>);
+    await waitFor(() => expect(screen.getByLabelText('registration session')).toHaveTextContent('anonymous'));
+    fireEvent.click(screen.getByText('Start registration'));
+    await waitFor(() => expect(authApi.register).toHaveBeenCalled());
+    expect(screen.getByLabelText('registration session')).toHaveTextContent('anonymous');
+    fireEvent.click(screen.getByText('Verify registration'));
+    await waitFor(() => expect(screen.getByLabelText('registration session')).toHaveTextContent('BUYER'));
+  });
+  it('clears the principal when the fixed deadline is reached', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(authApi.restoreSession).mockResolvedValue({ ...session(admin), expiresIn: 2 });
+      render(<AuthProvider><SessionProbe /></AuthProvider>);
+      await act(async () => { await Promise.resolve(); });
+      expect(screen.getByLabelText('session')).toHaveTextContent('ADMIN');
+      await act(async () => { vi.advanceTimersByTime(2000); });
+      expect(screen.getByLabelText('session')).toHaveTextContent('anonymous');
+      expect(authApi.restoreSession).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('clears the principal after the server reports expiry', async () => {
+    vi.mocked(authApi.restoreSession).mockResolvedValue(session(admin));
+    render(<AuthProvider><SessionProbe /></AuthProvider>);
+    await waitFor(() => expect(screen.getByLabelText('session')).toHaveTextContent('ADMIN'));
+    act(() => window.dispatchEvent(new Event('og:session-expired')));
+    expect(screen.getByLabelText('session')).toHaveTextContent('anonymous');
+  });
   it.each(['admin@example.test', 'ktv@example.test'])('does not create a role on offline login for %s', async email => {
     vi.mocked(authApi.login).mockRejectedValue(new TypeError('Failed to fetch'));
     render(<AuthProvider><SessionProbe email={email} /></AuthProvider>);
@@ -30,9 +89,9 @@ describe('server authenticated sessions', () => {
     await waitFor(() => expect(screen.getByLabelText('session')).toHaveTextContent('anonymous'));
     expect(localStorage.getItem('og_dev_user')).toBeNull();
   });
-  it.each([new Error('Unauthorized'), new TypeError('Failed to fetch')])('never restores an injected principal after refresh failure', async error => {
+  it.each([new Error('Unauthorized'), new TypeError('Failed to fetch')])('never restores an injected principal after session restoration failure', async error => {
     localStorage.setItem('og_dev_user', JSON.stringify(admin));
-    vi.mocked(authApi.refresh).mockRejectedValue(error);
+    vi.mocked(authApi.restoreSession).mockRejectedValue(error);
     render(<AuthProvider><SessionProbe /></AuthProvider>);
     await waitFor(() => expect(screen.getByLabelText('session')).toHaveTextContent('anonymous'));
     expect(localStorage.getItem('og_dev_user')).toBeNull();
@@ -55,7 +114,7 @@ describe('server authenticated sessions', () => {
     expect(localStorage.getItem('og_dev_user')).toBeNull();
   });
   it('denies the admin route to a server authenticated buyer', async () => {
-    vi.mocked(authApi.refresh).mockResolvedValue(session({ ...admin, roles: ['BUYER'] }));
+    vi.mocked(authApi.restoreSession).mockResolvedValue(session({ ...admin, roles: ['BUYER'] }));
     render(<MemoryRouter initialEntries={['/admin']}><AuthProvider><Routes>
       <Route path="/admin" element={<ProtectedRoute allowedRoles={['ADMIN']}><div>Private admin</div></ProtectedRoute>} />
       <Route path="/" element={<div>Marketplace</div>} />

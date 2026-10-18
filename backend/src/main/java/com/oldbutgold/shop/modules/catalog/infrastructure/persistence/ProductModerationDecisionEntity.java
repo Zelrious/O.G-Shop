@@ -10,7 +10,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 @Entity
-@Table(name = "product_moderation_decisions")
+@Table(name = "product_moderation_decisions", schema = "og_compat")
 public class ProductModerationDecisionEntity {
     public static final String DECISION_APPROVED = "APPROVED";
     public static final String DECISION_REJECTED = "REJECTED";
@@ -37,6 +37,12 @@ public class ProductModerationDecisionEntity {
 
     @Column(name = "decision_content_revision")
     private Long decisionContentRevision;
+
+    @Column(name = "revision_id")
+    private Long revisionId;
+
+    public Long getRevisionId() { return revisionId; }
+    public void referenceRevision(long id) { revisionId = id; }
 
     @Column(name = "command_key", length = 100)
     private String commandKey;

@@ -1,3 +1,4 @@
+import { Select } from '../../shared/components/Select/Select';
 import React, { useState } from 'react';
 import { useManagementStore } from '../../features/management/useManagementStore';
 import { ConsoleIcons } from '../../shared/layout/ConsoleIcons';
@@ -69,10 +70,10 @@ export const AdminBroadcastsPage: React.FC = () => {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: '#0f172a', fontWeight: 800 }}>
+          <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: 'var(--og-color-text-primary)', fontWeight: 800 }}>
             Điều hướng & Phát thông báo hệ thống
           </h1>
-          <p style={{ margin: 0, color: '#64748b', fontSize: '0.92rem' }}>
+          <p style={{ margin: 0, color: 'var(--og-color-text-secondary)', fontSize: '0.92rem' }}>
             Soạn thảo và điều hướng thông báo đẩy tới Toàn bộ thành viên, Riêng đội ngũ KTV hoặc Riêng Kênh Người Bán.
           </p>
         </div>
@@ -86,7 +87,7 @@ export const AdminBroadcastsPage: React.FC = () => {
                 onChange={handleToggleAll}
                 ariaLabel="Chọn tất cả thông báo"
               />
-              <span style={{ fontSize: '0.84rem', color: '#64748b' }}>Chọn tất cả</span>
+              <span style={{ fontSize: '0.84rem', color: 'var(--og-color-text-secondary)' }}>Chọn tất cả</span>
             </div>
           )}
 
@@ -100,7 +101,7 @@ export const AdminBroadcastsPage: React.FC = () => {
             }}
             style={{
               padding: '10px 18px',
-              background: '#059669',
+              background: 'var(--og-color-primary-fill)',
               color: '#ffffff',
               border: 'none',
               borderRadius: '8px',
@@ -112,8 +113,8 @@ export const AdminBroadcastsPage: React.FC = () => {
               gap: '8px',
               boxShadow: '0 1px 3px rgba(5, 150, 105, 0.2)',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = '#047857')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = '#059669')}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--og-color-primary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--og-color-primary)')}
           >
             <ConsoleIcons.Plus size={18} />
             <span>Soạn thông báo điều hướng</span>
@@ -124,8 +125,8 @@ export const AdminBroadcastsPage: React.FC = () => {
       {successMessage && (
         <div
           style={{
-            background: '#ecfdf5',
-            border: '1px solid #a7f3d0',
+            background: 'var(--og-color-primary-light)',
+            border: '1px solid var(--og-color-border)',
             borderRadius: '8px',
             padding: '12px 16px',
             color: '#065f46',
@@ -166,8 +167,8 @@ export const AdminBroadcastsPage: React.FC = () => {
             <div
               key={item.id}
               style={{
-                background: isSelected ? '#f0fdf4' : '#ffffff',
-                border: '1px solid #e2e8f0',
+                background: isSelected ? 'var(--og-color-primary-light)' : 'var(--og-color-surface)',
+                border: '1px solid var(--og-color-border)',
                 borderRadius: '12px',
                 padding: '20px',
                 display: 'flex',
@@ -228,9 +229,9 @@ export const AdminBroadcastsPage: React.FC = () => {
                           borderRadius: '4px',
                           fontSize: '0.72rem',
                           fontWeight: 700,
-                          background: '#f1f5f9',
-                          color: '#475569',
-                          border: '1px solid #cbd5e1',
+                          background: 'var(--og-color-surface-subtle)',
+                          color: 'var(--og-color-text-secondary)',
+                          border: '1px solid var(--og-color-border-strong)',
                         }}
                       >
                         ĐỐI TƯỢNG:{' '}
@@ -241,12 +242,12 @@ export const AdminBroadcastsPage: React.FC = () => {
                           : 'NGƯỜI BÁN'}
                       </span>
 
-                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--og-color-text-secondary)' }}>
                         Phát lúc: {item.sentAt} · Người gửi: {item.author}
                       </span>
                     </div>
 
-                    <h3 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', color: '#0f172a', fontWeight: 700 }}>
+                    <h3 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', color: 'var(--og-color-text-primary)', fontWeight: 700 }}>
                       {item.title}
                     </h3>
                   </div>
@@ -276,7 +277,7 @@ export const AdminBroadcastsPage: React.FC = () => {
                 </div>
               </div>
 
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '14px', borderRadius: '8px', color: '#334155', fontSize: '0.9rem', lineHeight: '1.5' }}>
+              <div style={{ background: 'var(--og-color-bg)', border: '1px solid var(--og-color-border)', padding: '14px', borderRadius: '8px', color: 'var(--og-color-text-secondary)', fontSize: '0.9rem', lineHeight: '1.5' }}>
                 {item.content}
               </div>
             </div>
@@ -301,9 +302,9 @@ export const AdminBroadcastsPage: React.FC = () => {
         >
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--og-color-surface)',
               borderRadius: '14px',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--og-color-border)',
               padding: '24px',
               width: '100%',
               maxWidth: '560px',
@@ -311,13 +312,13 @@ export const AdminBroadcastsPage: React.FC = () => {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#0f172a', fontWeight: 700 }}>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--og-color-text-primary)', fontWeight: 700 }}>
                 Soạn thảo thông báo điều hướng hệ thống
               </h2>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '1.2rem', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: 'none', color: 'var(--og-color-text-muted)', fontSize: '1.2rem', cursor: 'pointer' }}
               >
                 ✕
               </button>
@@ -331,7 +332,7 @@ export const AdminBroadcastsPage: React.FC = () => {
 
             <form onSubmit={handleSend} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.84rem', color: '#475569', marginBottom: '6px', fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                   Tiêu đề thông báo *
                 </label>
                 <input
@@ -343,10 +344,10 @@ export const AdminBroadcastsPage: React.FC = () => {
                   style={{
                     width: '100%',
                     padding: '9px 12px',
-                    background: '#ffffff',
-                    border: '1px solid #cbd5e1',
+                    background: 'var(--og-color-surface)',
+                    border: '1px solid var(--og-color-border-strong)',
                     borderRadius: '8px',
-                    color: '#0f172a',
+                    color: 'var(--og-color-text-primary)',
                     fontSize: '0.88rem',
                     boxSizing: 'border-box',
                   }}
@@ -355,56 +356,22 @@ export const AdminBroadcastsPage: React.FC = () => {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.84rem', color: '#475569', marginBottom: '6px', fontWeight: 600 }}>
+                  <label style={{ display: 'block', fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                     Đối tượng điều hướng
                   </label>
-                  <select
-                    value={targetAudience}
-                    onChange={(e) => setTargetAudience(e.target.value as 'ALL' | 'KTV_ONLY' | 'SELLER_ONLY')}
-                    style={{
-                      width: '100%',
-                      padding: '9px 12px',
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '8px',
-                      color: '#0f172a',
-                      fontSize: '0.88rem',
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    <option value="ALL">Toàn bộ sàn (Tất cả người dùng)</option>
-                    <option value="KTV_ONLY">Chỉ đội ngũ Kỹ Thuật Viên (KTV)</option>
-                    <option value="SELLER_ONLY">Chỉ kênh Người Bán (Sellers)</option>
-                  </select>
+                  <Select hideLabel label="Đối tượng điều hướng" value={String(targetAudience)} onChange={(value) => setTargetAudience(value as 'ALL' | 'KTV_ONLY' | 'SELLER_ONLY')} options={[({ value: "ALL", label: "Toàn bộ sàn (Tất cả người dùng)" }), ({ value: "KTV_ONLY", label: "Chỉ đội ngũ Kỹ Thuật Viên (KTV)" }), ({ value: "SELLER_ONLY", label: "Chỉ kênh Người Bán (Sellers)" })]} />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.84rem', color: '#475569', marginBottom: '6px', fontWeight: 600 }}>
+                  <label style={{ display: 'block', fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                     Mức độ ưu tiên
                   </label>
-                  <select
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value as 'NORMAL' | 'HIGH' | 'URGENT')}
-                    style={{
-                      width: '100%',
-                      padding: '9px 12px',
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '8px',
-                      color: '#0f172a',
-                      fontSize: '0.88rem',
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    <option value="NORMAL">Tiêu chuẩn (Normal)</option>
-                    <option value="HIGH">Ưu tiên cao (High)</option>
-                    <option value="URGENT">Khẩn cấp (Urgent Pop-up)</option>
-                  </select>
+                  <Select hideLabel label="Mức độ ưu tiên" value={String(priority)} onChange={(value) => setPriority(value as 'NORMAL' | 'HIGH' | 'URGENT')} options={[({ value: "NORMAL", label: "Tiêu chuẩn (Normal)" }), ({ value: "HIGH", label: "Ưu tiên cao (High)" }), ({ value: "URGENT", label: "Khẩn cấp (Urgent Pop-up)" })]} />
                 </div>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.84rem', color: '#475569', marginBottom: '6px', fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: '0.84rem', color: 'var(--og-color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
                   Nội dung chi tiết thông báo *
                 </label>
                 <textarea
@@ -416,10 +383,10 @@ export const AdminBroadcastsPage: React.FC = () => {
                   style={{
                     width: '100%',
                     padding: '9px 12px',
-                    background: '#ffffff',
-                    border: '1px solid #cbd5e1',
+                    background: 'var(--og-color-surface)',
+                    border: '1px solid var(--og-color-border-strong)',
                     borderRadius: '8px',
-                    color: '#0f172a',
+                    color: 'var(--og-color-text-primary)',
                     fontSize: '0.88rem',
                     boxSizing: 'border-box',
                   }}
@@ -432,9 +399,9 @@ export const AdminBroadcastsPage: React.FC = () => {
                   onClick={() => setIsModalOpen(false)}
                   style={{
                     padding: '9px 16px',
-                    background: '#f1f5f9',
-                    border: '1px solid #cbd5e1',
-                    color: '#475569',
+                    background: 'var(--og-color-surface-subtle)',
+                    border: '1px solid var(--og-color-border-strong)',
+                    color: 'var(--og-color-text-secondary)',
                     borderRadius: '8px',
                     fontSize: '0.88rem',
                     fontWeight: 600,
@@ -447,7 +414,7 @@ export const AdminBroadcastsPage: React.FC = () => {
                   type="submit"
                   style={{
                     padding: '9px 18px',
-                    background: '#059669',
+                    background: 'var(--og-color-primary-fill)',
                     border: 'none',
                     color: '#ffffff',
                     borderRadius: '8px',

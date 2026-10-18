@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "payment_ipn_events")
+@Table(name = "payment_ipn_events", schema = "og_compat")
 public class PaymentIpnEventEntity {
 
     public static final String OUTCOME_APPLIED_SUCCESS = "APPLIED_SUCCESS";

@@ -1,3 +1,4 @@
+import { Badge, Button } from '../../shared/components';
 import React, { useState } from 'react';
 import { useManagementStore } from '../../features/management/useManagementStore';
 import { ConsoleIcons } from '../../shared/layout/ConsoleIcons';
@@ -96,147 +97,49 @@ export const AdminDashboardPage: React.FC = () => {
   };
 
   const maxRevenue = Math.max(...monthlyRevenue.map((d) => d.revenue));
+  const latestRevenue = monthlyRevenue.at(-1)!;
+  const previousRevenue = monthlyRevenue.at(-2)!;
+  const revenueChange = (latestRevenue.revenue - previousRevenue.revenue) / previousRevenue.revenue * 100;
+  const trendLabel = `${revenueChange < 0 ? 'Giảm' : 'Tăng'} ${Math.abs(revenueChange).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`;
   const maxUserTotal = Math.max(...userGrowth.map((d) => d.totalUsers));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div className="og-admin-reports">
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: '#0f172a', fontWeight: 800 }}>
+          <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px', color: 'var(--og-color-text-primary)', fontWeight: 800 }}>
             Tổng quan doanh thu & Báo cáo quản trị
           </h1>
-          <p style={{ margin: 0, color: '#64748b', fontSize: '0.92rem' }}>
+          <p style={{ margin: 0, color: 'var(--og-color-text-secondary)', fontSize: '0.92rem' }}>
             Báo cáo tăng trưởng người dùng, doanh thu phí sàn, phân tích xu hướng mua sắm và tỷ lệ hàng hoàn trả.
           </p>
         </div>
       </div>
 
-      {/* KPI Overview Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-        <div style={{ background: '#ffffff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>Tổng doanh thu phí sàn (Năm 2026)</div>
-          <div style={{ fontSize: '1.65rem', fontWeight: 800, color: '#059669', margin: '6px 0' }}>
-            254,750,000 VNĐ
-          </div>
-          <div style={{ fontSize: '0.78rem', color: '#16a34a', fontWeight: 600 }}>+18.4% so với cùng kỳ quý trước</div>
+      <section className="og-report-overview" aria-label="Tổng quan báo cáo">
+        <article className="og-report-revenue" aria-labelledby="revenue-title">
+          <header><div><span className="og-report-caption">DOANH THU PHÍ SÀN</span><h2 id="revenue-title">Tổng doanh thu phí sàn (Năm 2026)</h2></div><Button variant="outline" size="sm" onClick={exportRevenueDataCsv}><ConsoleIcons.Download size={16} />Kết xuất báo cáo doanh thu (CSV)</Button></header>
+          <strong className="og-report-revenue__value">254,750,000 <small>VNĐ</small></strong>
+          <div className="og-report-revenue__insight"><Badge variant={revenueChange < 0 ? 'danger' : 'success'}>{trendLabel}</Badge><span>{latestRevenue.month}: {latestRevenue.revenue.toLocaleString('vi-VN')} triệu đồng, so với {previousRevenue.revenue.toLocaleString('vi-VN')} triệu đồng ở {previousRevenue.month}.</span></div>
+          <figure className="og-report-chart" aria-label="Doanh thu phí sàn theo tháng, đơn vị triệu đồng">
+            <div className="og-report-chart__columns">{monthlyRevenue.map(item => <div className="og-report-chart__column" key={item.month}><span>{item.revenue.toLocaleString('vi-VN')}</span><div className="og-report-chart__track"><div className="og-report-chart__bar" style={{ height: `${item.revenue / maxRevenue * 100}%` }} title={`${item.month}: ${item.revenue} triệu đồng doanh thu, GMV ${item.gmv} triệu đồng`} /></div><small>{item.month}</small></div>)}</div>
+            <figcaption>Doanh thu theo tháng · Triệu đồng</figcaption>
+          </figure>
+          <p className="og-report-note">Dữ liệu minh họa hiện có · 10 tháng năm 2026 · Phí trung bình 2,5%. Tháng 10 chưa kết thúc; mức giảm chưa phản ánh kết quả cả tháng.</p>
+        </article>
+        <div className="og-report-secondary">
+          <article><span>Tổng giá trị hàng hóa (GMV)</span><strong>10,190,000,000 <small>VNĐ</small></strong><p>Ký quỹ an toàn qua Escrow</p></article>
+          <article><span>Tổng tài khoản người dùng</span><strong>3,890</strong><p>+210 tài khoản mới trong tháng 10</p></article>
+          <article><span>Tỷ lệ đơn hàng bị khiếu nại</span><strong>2.7%</strong><p>Giảm 0,8 điểm phần trăm · Dữ liệu minh họa</p></article>
         </div>
-
-        <div style={{ background: '#ffffff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>Tổng giá trị hàng hóa (GMV)</div>
-          <div style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0f172a', margin: '6px 0' }}>
-            10,190,000,000 VNĐ
-          </div>
-          <div style={{ fontSize: '0.78rem', color: '#64748b' }}>Ký quỹ an toàn qua Escrow</div>
-        </div>
-
-        <div style={{ background: '#ffffff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>Tổng tài khoản người dùng</div>
-          <div style={{ fontSize: '1.65rem', fontWeight: 800, color: '#2563eb', margin: '6px 0' }}>
-            3,890
-          </div>
-          <div style={{ fontSize: '0.78rem', color: '#2563eb', fontWeight: 600 }}>+210 tài khoản mới trong tháng 10</div>
-        </div>
-
-        <div style={{ background: '#ffffff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>Tỷ lệ đơn hàng bị khiếu nại</div>
-          <div style={{ fontSize: '1.65rem', fontWeight: 800, color: '#dc2626', margin: '6px 0' }}>
-            2.7%
-          </div>
-          <div style={{ fontSize: '0.78rem', color: '#16a34a', fontWeight: 600 }}>Giảm 0.8% nhờ siết video cận cảnh KTV</div>
-        </div>
-      </div>
-
-      {/* SECTION 1: Biểu đồ & Kết xuất báo cáo doanh thu */}
-      <div
-        style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: '12px',
-          padding: '24px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
-          <div>
-            <h2 style={{ fontSize: '1.18rem', color: '#0f172a', margin: '0 0 4px 0', fontWeight: 700 }}>
-              Báo cáo doanh thu phí sàn & GMV theo tháng
-            </h2>
-            <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748b' }}>
-              Dữ liệu chu kỳ 10 tháng năm 2026 (Phí thu trung bình: 2.5% giá trị giao dịch thành công)
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={exportRevenueDataCsv}
-            style={{
-              padding: '8px 16px',
-              background: '#ecfdf5',
-              color: '#047857',
-              border: '1px solid #a7f3d0',
-              borderRadius: '6px',
-              fontSize: '0.84rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'background-color 0.15s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = '#d1fae5')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = '#ecfdf5')}
-          >
-            <ConsoleIcons.Download size={16} />
-            <span>Kết xuất báo cáo doanh thu (CSV)</span>
-          </button>
-        </div>
-
-        {/* Bar Chart Visualization */}
-        <div style={{ height: '220px', display: 'flex', alignItems: 'flex-end', gap: '12px', paddingTop: '30px' }}>
-          {monthlyRevenue.map((item, idx) => {
-            const heightPercent = Math.round((item.revenue / maxRevenue) * 100);
-            return (
-              <div
-                key={idx}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  height: '100%',
-                  justifyContent: 'flex-end',
-                  gap: '6px',
-                }}
-              >
-                <div style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 700 }}>
-                  {item.revenue}tr
-                </div>
-                <div
-                  title={`Tháng ${item.month}: Doanh thu ${item.revenue}tr (GMV ${item.gmv}tr)`}
-                  style={{
-                    width: '100%',
-                    maxWidth: '44px',
-                    height: `${heightPercent}%`,
-                    background: 'linear-gradient(180deg, #10b981 0%, #059669 100%)',
-                    borderRadius: '6px 6px 0 0',
-                    transition: 'all 0.3s ease',
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.1)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.filter = 'none')}
-                />
-                <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>{item.month}</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      </section>
 
       {/* SECTION 2: Biểu đồ & Kết xuất báo cáo số lượng người dùng */}
       <div
         style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
+          background: 'var(--og-color-surface)',
+          border: '1px solid var(--og-color-border)',
           borderRadius: '12px',
           padding: '24px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
@@ -244,36 +147,17 @@ export const AdminDashboardPage: React.FC = () => {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
           <div>
-            <h2 style={{ fontSize: '1.18rem', color: '#0f172a', margin: '0 0 4px 0', fontWeight: 700 }}>
+            <h2 style={{ fontSize: '1.18rem', color: 'var(--og-color-text-primary)', margin: '0 0 4px 0', fontWeight: 700 }}>
               Báo cáo tăng trưởng người dùng nền tảng
             </h2>
-            <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748b' }}>
+            <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--og-color-text-secondary)' }}>
               Theo dõi tốc độ mở rộng người mua & người bán C2C toàn hệ thống
             </p>
           </div>
-          <button
-            type="button"
-            onClick={exportUserDataCsv}
-            style={{
-              padding: '8px 16px',
-              background: '#eff6ff',
-              color: '#1d4ed8',
-              border: '1px solid #bfdbfe',
-              borderRadius: '6px',
-              fontSize: '0.84rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'background-color 0.15s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = '#dbeafe')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = '#eff6ff')}
-          >
+          <Button variant="outline" onClick={exportUserDataCsv}>
             <ConsoleIcons.Download size={16} />
             <span>Kết xuất báo cáo người dùng (CSV)</span>
-          </button>
+          </Button>
         </div>
 
         {/* User Growth Bar Chart */}
@@ -293,7 +177,7 @@ export const AdminDashboardPage: React.FC = () => {
                   gap: '6px',
                 }}
               >
-                <div style={{ fontSize: '0.72rem', color: '#2563eb', fontWeight: 700 }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--og-color-text-secondary)', fontWeight: 700 }}>
                   +{item.newUsers}
                 </div>
                 <div
@@ -302,7 +186,7 @@ export const AdminDashboardPage: React.FC = () => {
                     width: '100%',
                     maxWidth: '44px',
                     height: `${heightPercent}%`,
-                    background: 'linear-gradient(180deg, #60a5fa 0%, #2563eb 100%)',
+                    background: 'var(--og-color-chart-secondary)',
                     borderRadius: '6px 6px 0 0',
                     transition: 'all 0.3s ease',
                     cursor: 'pointer',
@@ -310,7 +194,7 @@ export const AdminDashboardPage: React.FC = () => {
                   onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.1)')}
                   onMouseLeave={(e) => (e.currentTarget.style.filter = 'none')}
                 />
-                <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>{item.month}</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--og-color-text-secondary)', fontWeight: 600 }}>{item.month}</div>
               </div>
             );
           })}
@@ -320,8 +204,8 @@ export const AdminDashboardPage: React.FC = () => {
       {/* SECTION 3: Thống kê tìm kiếm nhiều nhất & ít nhất */}
       <div
         style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
+          background: 'var(--og-color-surface)',
+          border: '1px solid var(--og-color-border)',
           borderRadius: '12px',
           padding: '24px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
@@ -329,54 +213,38 @@ export const AdminDashboardPage: React.FC = () => {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
           <div>
-            <h2 style={{ fontSize: '1.18rem', color: '#0f172a', margin: '0 0 4px 0', fontWeight: 700 }}>
+            <h2 style={{ fontSize: '1.18rem', color: 'var(--og-color-text-primary)', margin: '0 0 4px 0', fontWeight: 700 }}>
               Thống kê xu hướng tìm kiếm mặt hàng (Search Trends)
             </h2>
-            <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748b' }}>
+            <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--og-color-text-secondary)' }}>
               Phát hiện thị hiếu người mua đồ cũ để định hướng chiến dịch voucher và marketing
             </p>
           </div>
-          <button
-            type="button"
-            onClick={exportTopSearchCsv}
-            style={{
-              padding: '8px 16px',
-              background: '#f8fafc',
-              color: '#334155',
-              border: '1px solid #cbd5e1',
-              borderRadius: '6px',
-              fontSize: '0.84rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
+          <Button variant="outline" onClick={exportTopSearchCsv}>
             <ConsoleIcons.Download size={16} />
             <span>Kết xuất dữ liệu tìm kiếm (CSV)</span>
-          </button>
+          </Button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '20px' }}>
           {/* Top 5 Most Searched */}
-          <div style={{ background: '#f8fafc', padding: '18px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#059669', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ background: 'var(--og-color-bg)', padding: '18px', borderRadius: '10px', border: '1px solid var(--og-color-border)' }}>
+            <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--og-color-primary)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <ConsoleIcons.TrendingUp size={18} />
               <span>Top 5 mặt hàng được tìm kiếm nhiều nhất</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {topSearchedItems.map((item, index) => (
-                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #e2e8f0' }}>
+                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--og-color-border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#dcfce7', color: '#15803d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 800 }}>
+                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'var(--og-color-surface-subtle)', color: 'var(--og-color-text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 800 }}>
                       {index + 1}
                     </span>
-                    <span style={{ fontSize: '0.88rem', color: '#0f172a', fontWeight: 600 }}>{item.name}</span>
+                    <span style={{ fontSize: '0.88rem', color: 'var(--og-color-text-primary)', fontWeight: 600 }}>{item.name}</span>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#047857' }}>{item.searches.toLocaleString()} lượt</div>
-                    <div style={{ fontSize: '0.74rem', color: '#64748b' }}>{item.orders} đơn (CR: {item.rate})</div>
+                    <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--og-color-primary)' }}>{item.searches.toLocaleString()} lượt</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--og-color-text-secondary)' }}>{item.orders} đơn (CR: {item.rate})</div>
                   </div>
                 </div>
               ))}
@@ -384,23 +252,23 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
 
           {/* Top 5 Least Searched */}
-          <div style={{ background: '#f8fafc', padding: '18px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#dc2626', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ background: 'var(--og-color-bg)', padding: '18px', borderRadius: '10px', border: '1px solid var(--og-color-border)' }}>
+            <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--og-color-text-secondary)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <ConsoleIcons.AlertTriangle size={18} />
               <span>Top 5 mặt hàng ít được tìm kiếm nhất</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {leastSearchedItems.map((item, index) => (
-                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #e2e8f0' }}>
+                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--og-color-border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 800 }}>
+                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'var(--og-color-surface-subtle)', color: 'var(--og-color-text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 800 }}>
                       {index + 1}
                     </span>
-                    <span style={{ fontSize: '0.88rem', color: '#334155' }}>{item.name}</span>
+                    <span style={{ fontSize: '0.88rem', color: 'var(--og-color-text-secondary)' }}>{item.name}</span>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '0.86rem', fontWeight: 600, color: '#dc2626' }}>{item.searches} lượt</div>
-                    <div style={{ fontSize: '0.74rem', color: '#64748b' }}>{item.note}</div>
+                    <div style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--og-color-text-secondary)' }}>{item.searches} lượt</div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--og-color-text-secondary)' }}>{item.note}</div>
                   </div>
                 </div>
               ))}
@@ -412,8 +280,8 @@ export const AdminDashboardPage: React.FC = () => {
       {/* SECTION 4: Thống kê số lượng hàng bị trả và khiếu nại (With Multi-select and 3-dots action) */}
       <div
         style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
+          background: 'var(--og-color-surface)',
+          border: '1px solid var(--og-color-border)',
           borderRadius: '12px',
           padding: '24px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
@@ -421,33 +289,17 @@ export const AdminDashboardPage: React.FC = () => {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '18px' }}>
           <div>
-            <h2 style={{ fontSize: '1.18rem', color: '#0f172a', margin: '0 0 4px 0', fontWeight: 700 }}>
+            <h2 style={{ fontSize: '1.18rem', color: 'var(--og-color-text-primary)', margin: '0 0 4px 0', fontWeight: 700 }}>
               Thống kê số lượng hàng bị trả & Khiếu nại theo danh mục
             </h2>
-            <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748b' }}>
+            <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--og-color-text-secondary)' }}>
               Giúp quản trị viên theo dõi tỷ lệ tranh chấp và chất lượng hàng hóa được kiểm duyệt
             </p>
           </div>
-          <button
-            type="button"
-            onClick={exportReturnComplaintCsv}
-            style={{
-              padding: '8px 16px',
-              background: '#fef2f2',
-              color: '#dc2626',
-              border: '1px solid #fecaca',
-              borderRadius: '6px',
-              fontSize: '0.84rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
+          <Button variant="outline" onClick={exportReturnComplaintCsv}>
             <ConsoleIcons.Download size={16} />
             <span>Kết xuất báo cáo khiếu nại (CSV)</span>
-          </button>
+          </Button>
         </div>
 
         {/* Bulk action bar for selected categories */}
@@ -465,10 +317,10 @@ export const AdminDashboardPage: React.FC = () => {
           ]}
         />
 
-        <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+        <div style={{ overflowX: 'auto', border: '1px solid var(--og-color-border)', borderRadius: '8px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', background: '#f8fafc' }}>
+              <tr style={{ borderBottom: '1px solid var(--og-color-border)', color: 'var(--og-color-text-secondary)', background: 'var(--og-color-bg)' }}>
                 <th style={{ padding: '12px 14px', width: '40px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                   <TableCheckbox
                     checked={isAllCategoriesSelected}
@@ -493,8 +345,8 @@ export const AdminDashboardPage: React.FC = () => {
                   <tr
                     key={idx}
                     style={{
-                      borderBottom: '1px solid #f1f5f9',
-                      background: isSelected ? '#f0fdf4' : 'transparent',
+                      borderBottom: '1px solid var(--og-color-surface-subtle)',
+                      background: isSelected ? 'var(--og-color-primary-light)' : 'transparent',
                     }}
                   >
                     <td style={{ padding: '12px 14px', textAlign: 'center' }}>
@@ -504,14 +356,14 @@ export const AdminDashboardPage: React.FC = () => {
                         ariaLabel={`Chọn ngành hàng ${row.category}`}
                       />
                     </td>
-                    <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0f172a' }}>
+                    <td style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--og-color-text-primary)' }}>
                       {row.category}
                     </td>
-                    <td style={{ padding: '12px 14px', color: '#334155' }}>{row.totalOrders} đơn</td>
-                    <td style={{ padding: '12px 14px', color: '#d97706', fontWeight: 700 }}>
+                    <td style={{ padding: '12px 14px', color: 'var(--og-color-text-secondary)' }}>{row.totalOrders} đơn</td>
+                    <td style={{ padding: '12px 14px', color: 'var(--og-color-text-secondary)', fontWeight: 700 }}>
                       {row.returnCount} đơn
                     </td>
-                    <td style={{ padding: '12px 14px', color: '#dc2626', fontWeight: 700 }}>
+                    <td style={{ padding: '12px 14px', color: 'var(--og-color-text-secondary)', fontWeight: 700 }}>
                       {row.complaintCount} vụ
                     </td>
                     <td style={{ padding: '12px 14px' }}>
@@ -521,15 +373,15 @@ export const AdminDashboardPage: React.FC = () => {
                           borderRadius: '12px',
                           fontSize: '0.75rem',
                           fontWeight: 700,
-                          background: '#fef2f2',
-                          color: '#dc2626',
-                          border: '1px solid #fecaca',
+                          background: 'var(--og-color-surface-subtle)',
+                          color: 'var(--og-color-text-secondary)',
+                          border: '1px solid var(--og-color-border)',
                         }}
                       >
                         {row.returnRate}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 14px', color: '#64748b', fontSize: '0.84rem' }}>
+                    <td style={{ padding: '12px 14px', color: 'var(--og-color-text-secondary)', fontSize: '0.84rem' }}>
                       {row.primaryIssue}
                     </td>
                     <td style={{ padding: '12px 14px', textAlign: 'right' }}>

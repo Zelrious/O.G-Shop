@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "payment_reconciliation_cases")
+@Table(name = "payment_reconciliation_cases", schema = "og_compat")
 public class PaymentReconciliationCaseEntity {
 
     public static final String CASE_EXPIRED_ORDER = "EXPIRED_ORDER";

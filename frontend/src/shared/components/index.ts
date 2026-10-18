@@ -10,3 +10,7 @@ export * from './Feedback/LoadingSkeleton';
 export * from './Feedback/EmptyState';
 export * from './Feedback/ErrorState';
 export * from './Dialog/ConfirmDialog';
+
+export * from './Select/Select';
+export * from './Pagination/Pagination';
+export * from './PageHeader/PageHeader';

@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "payments")
+@Table(name = "payments", schema = "og_compat")
 public class PaymentEntity {
     public static final String METHOD_BANK_TRANSFER = "BANK_TRANSFER_MOCK";
     public static final String METHOD_E_WALLET = "E_WALLET_MOCK";

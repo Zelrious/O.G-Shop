@@ -75,11 +75,14 @@ class ProductModerationPostgresTest {
             return (p != null && !p.isBlank()) ? p : "root";
         });
         properties.add("spring.flyway.enabled", () -> true);
+        properties.add("spring.datasource.hikari.connection-init-sql", () -> "SET search_path TO og_compat,public");
         properties.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
     }
 
     @Autowired
     private SellerProductService sellerProductService;
+
+    @Autowired private ListingWorkflowService listingWorkflow;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -135,6 +138,11 @@ class ProductModerationPostgresTest {
         jdbc.update("INSERT INTO product_media(product_id, media_type, media_url, display_order) VALUES (?, 'IMAGE', 'https://example.com/img1.jpg', 1)", productId);
         jdbc.update("INSERT INTO product_media(product_id, media_type, media_url, display_order) VALUES (?, 'VIDEO', 'https://example.com/vid1.mp4', 2)", productId);
         return productId;
+    }
+
+    private void payListingFee(long productId) {
+        var fee = listingWorkflow.getFee(sellerId, productId);
+        listingWorkflow.payMock(sellerId, productId, fee.chargeId(), fee.version(), "test-pay-" + UUID.randomUUID());
     }
 
     private long createPendingProduct() {
@@ -263,6 +271,7 @@ class ProductModerationPostgresTest {
 
         // 1. Approve product -> ACTIVE
         sellerProductService.approveProduct(reviewerId, productId, jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, productId), "ck-app-pub-" + productId);
+        payListingFee(productId);
         assertThat(jdbc.queryForObject("SELECT status FROM products WHERE product_id=?", String.class, productId)).isEqualTo("ACTIVE");
 
         // 2. Seller hides product -> HIDDEN
@@ -309,11 +318,11 @@ class ProductModerationPostgresTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("ACTIVE"));
+                .andExpect(jsonPath("$.status").value("APPROVED_AWAITING_FEE"));
 
         // Verify product status in Postgres is ACTIVE
         String status = jdbc.queryForObject("SELECT status FROM products WHERE product_id=?", String.class, productId);
-        assertThat(status).isEqualTo("ACTIVE");
+        assertThat(status).isEqualTo("APPROVED_AWAITING_FEE");
 
         // Verify decision persisted in Postgres
         var decisionCount = jdbc.queryForObject(
@@ -437,11 +446,11 @@ class ProductModerationPostgresTest {
 
         // 1. First call: approves with key
         var res1 = sellerProductService.approveProduct(reviewerId, productId, rev, key);
-        assertThat(res1.status()).isEqualTo("ACTIVE");
+        assertThat(res1.status()).isEqualTo("APPROVED_AWAITING_FEE");
 
         // 2. Second call with exact same parameters: idempotent replay (returns original status ACTIVE)
         var res2 = sellerProductService.approveProduct(reviewerId, productId, rev, key);
-        assertThat(res2.status()).isEqualTo("ACTIVE");
+        assertThat(res2.status()).isEqualTo("APPROVED_AWAITING_FEE");
 
         // 3. Same key with different reviewerId -> CommandKeyConflictException
         long otherReviewerId = jdbc.queryForObject(
@@ -572,6 +581,7 @@ class ProductModerationPostgresTest {
         sellerProductService.submitProduct(sellerId, id);
         long version = jdbc.queryForObject("SELECT version FROM products WHERE product_id=?", Long.class, id);
         sellerProductService.approveProduct(reviewerId, id, version, "renewed-proof-" + id);
+        payListingFee(id);
         assertThat(jdbc.queryForObject("SELECT status FROM products WHERE product_id=?", String.class, id)).isEqualTo("ACTIVE");
     }
 
@@ -681,7 +691,7 @@ class ProductModerationPostgresTest {
 
         // Inject persistence error during decision save
         doThrow(new DataIntegrityViolationException("Simulated decision persistence failure"))
-                .when(productModerationDecisionRepository).save(any(ProductModerationDecisionEntity.class));
+                .when(productModerationDecisionRepository).saveAndFlush(any(ProductModerationDecisionEntity.class));
 
         assertThatThrownBy(() -> sellerProductService.approveProduct(reviewerId, productId, rev, key))
                 .isInstanceOf(DataIntegrityViolationException.class);

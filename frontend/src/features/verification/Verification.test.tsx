@@ -17,12 +17,20 @@ const createAuthContextValue = (
   isLoading: false,
   login: vi.fn(),
   register: vi.fn(),
+  verifyRegistration: vi.fn(),
   logout: vi.fn(),
-  refreshSession: vi.fn().mockResolvedValue(true),
   reloadCurrentUser,
 });
 
 describe('VerificationStatusCard Component', () => {
+  it('requires approval for a newly registered buyer instead of offering immediate activation', () => {
+    const user: UserPrincipal = { userId: 8, email: 'new@example.invalid', fullName: 'New Buyer',
+      roles: ['BUYER'], createdAt: '2026-10-10', sellerApprovalRequired: true };
+    render(<MemoryRouter><AuthContext.Provider value={createAuthContextValue(user)}><SellerVerificationPage /></AuthContext.Provider></MemoryRouter>);
+    expect(screen.getByRole('heading', { name: 'Xác minh hồ sơ Người bán' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Kích hoạt quyền Người bán' })).not.toBeInTheDocument();
+    expect(screen.getByText(/sau eKYC và kiểm duyệt/)).toBeInTheDocument();
+  });
   it('renders call to action when no verification record exists', () => {
     render(<VerificationStatusCard record={null} />);
 

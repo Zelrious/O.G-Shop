@@ -40,6 +40,9 @@ public class SellerActivationService {
 
         UserEntity user = users.findById(userId)
                 .orElseThrow(() -> new BadCredentialsException("Account is unavailable"));
+        if ("UC83".equals(user.getIdentityWorkflow())) {
+            throw new SellerActivationDisabledException("Hồ sơ Người bán cần hoàn tất eKYC và được KTV duyệt.");
+        }
 
         Instant now = clock.instant();
         grantSellerRole(user);

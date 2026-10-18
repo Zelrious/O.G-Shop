@@ -7,6 +7,7 @@ import {
   RejectProductPayload,
   SellerProductDetail,
   SellerProductSummary,
+  ListingFeeSummary,
 } from './types';
 
 export class ApiError extends Error {
@@ -37,6 +38,14 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export const listingApi = {
+  async getListingFee(productId: number): Promise<ListingFeeSummary> {
+    return handleResponse<ListingFeeSummary>(await authApi.authorizedFetch(`/seller/products/${productId}/listing-fee`));
+  },
+  async payListingFee(productId: number, payload: { chargeId: string; expectedVersion: number; commandKey: string }): Promise<ListingFeeSummary> {
+    return handleResponse<ListingFeeSummary>(await authApi.authorizedFetch(`/seller/products/${productId}/listing-fee/mock-pay`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    }));
+  },
   async getSellerProducts(page = 0, size = 20): Promise<PageResponse<SellerProductSummary>> {
     const res = await authApi.authorizedFetch(`/seller/products?page=${page}&size=${size}`);
     return handleResponse<PageResponse<SellerProductSummary>>(res);
@@ -112,7 +121,7 @@ export const listingApi = {
     return handleResponse<SellerProductDetail>(res);
   },
 
-  // UC70 Moderation
+  // UC73 Moderation
   async getPendingProducts(page = 0, size = 20): Promise<PageResponse<ModerationProduct>> {
     const res = await authApi.authorizedFetch(`/moderation/products?page=${page}&size=${size}`);
     return handleResponse<PageResponse<ModerationProduct>>(res);

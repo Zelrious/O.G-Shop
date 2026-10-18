@@ -1,3 +1,4 @@
+import { Icon } from '../../../shared/components/Icon/Icon';
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { CONDITION_LABELS } from '../../marketplace/types';
@@ -9,6 +10,7 @@ interface SellerListingItemProps {
   onPublish: (productId: number) => Promise<void>;
   onHide: (productId: number) => Promise<void>;
   onSubmitForReview?: (productId: number) => Promise<void>;
+  onPayFee?: (productId: number) => void;
   isActionLoading: boolean;
 }
 
@@ -17,6 +19,7 @@ export const SellerListingItem: React.FC<SellerListingItemProps> = ({
   onPublish,
   onHide,
   onSubmitForReview,
+  onPayFee,
   isActionLoading,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -72,9 +75,7 @@ export const SellerListingItem: React.FC<SellerListingItemProps> = ({
             loading="lazy"
           />
         ) : (
-          <div className="og-seller-listing-item__thumb-placeholder" aria-hidden="true">
-            📦
-          </div>
+          <div className="og-seller-listing-item__thumb-placeholder" aria-hidden="true"><Icon name="package" style={{ width: '1em', height: '1em' }} /></div>
         )}
       </div>
 
@@ -93,7 +94,7 @@ export const SellerListingItem: React.FC<SellerListingItemProps> = ({
                 border: '1px solid #bae6fd',
               }}
             >
-              🛡️ Yêu cầu eKYC
+               Yêu cầu eKYC
             </span>
           )}
           <span className="og-seller-listing-item__category">{categoriesList}</span>
@@ -108,7 +109,7 @@ export const SellerListingItem: React.FC<SellerListingItemProps> = ({
           <span className="og-seller-listing-item__price">{formattedPrice}</span>
           <span className="og-seller-listing-item__price-note">Giá niêm yết</span>
           {product.location && (
-            <span className="og-seller-listing-item__location">📍 {product.location}</span>
+            <span className="og-seller-listing-item__location"> {product.location}</span>
           )}
         </div>
 
@@ -121,7 +122,7 @@ export const SellerListingItem: React.FC<SellerListingItemProps> = ({
 
         {product.status === 'REJECTED' && (
           <div className="og-seller-listing-item__alert og-seller-listing-item__alert--rejected">
-            <span aria-hidden="true">⚠️</span>
+            <span aria-hidden="true"><Icon name="alert" style={{ width: '1em', height: '1em' }} /></span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <div>
                 <strong>Lý do từ chối kiểm duyệt: </strong>
@@ -145,12 +146,14 @@ export const SellerListingItem: React.FC<SellerListingItemProps> = ({
       </div>
 
       <div className="og-seller-listing-item__actions">
+        <Link to={`/seller/listings/${product.productId}/review`} className="og-button og-button--ghost og-button--sm">Kết quả kiểm duyệt</Link>
+        {product.status === 'APPROVED_AWAITING_FEE' && <button className="og-button og-button--primary og-button--sm" onClick={() => onPayFee?.(product.productId)} disabled={isActionLoading}>Xem và trả phí</button>}
         {canEdit && (
           <Link
             to={`/seller/listings/${product.productId}/edit`}
             className="og-button og-button--outline og-button--sm"
           >
-            ✏️ Sửa
+             Sửa
           </Link>
         )}
 
@@ -161,7 +164,7 @@ export const SellerListingItem: React.FC<SellerListingItemProps> = ({
             target="_blank"
             rel="noopener noreferrer"
           >
-            👁️ Xem
+             Xem
           </Link>
         )}
 
@@ -172,7 +175,7 @@ export const SellerListingItem: React.FC<SellerListingItemProps> = ({
             onClick={() => onSubmitForReview(product.productId)}
             disabled={isActionLoading}
           >
-            📤 Gửi duyệt
+             Gửi duyệt
           </button>
         )}
 
@@ -183,7 +186,7 @@ export const SellerListingItem: React.FC<SellerListingItemProps> = ({
             onClick={() => onPublish(product.productId)}
             disabled={isActionLoading}
           >
-            🚀 Đăng lại
+             Đăng lại
           </button>
         )}
 
@@ -211,7 +214,7 @@ export const SellerListingItem: React.FC<SellerListingItemProps> = ({
                   onClick={handleHideClick}
                   disabled={isActionLoading}
                 >
-                  <span>👁️</span>
+                  <span><Icon name="eye" style={{ width: '1em', height: '1em' }} /></span>
                   <span>Ẩn tin đăng</span>
                 </button>
               </div>

@@ -1,8 +1,9 @@
+import { Icon } from '../Icon/Icon';
 import React from 'react';
 import { Button } from '../Button/Button';
 
 export interface EmptyStateProps {
-  icon?: string;
+  icon?: React.ReactNode;
   title: string;
   description?: string;
   actionText?: string;
@@ -11,7 +12,7 @@ export interface EmptyStateProps {
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
-  icon = '📦',
+  icon = <Icon name="package" size={40} />,
   title,
   description,
   actionText,
