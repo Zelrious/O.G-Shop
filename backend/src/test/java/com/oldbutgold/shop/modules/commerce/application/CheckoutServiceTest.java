@@ -36,6 +36,7 @@ class CheckoutServiceTest {
     private CatalogCommerceFacade.CommerceProductDetail productDetail;
     private IdentityCommerceFacade.UserSummary sellerSummary;
     private IdentityCommerceFacade.AddressDto addressDto;
+    private IdentityCommerceFacade.AddressDto sellerAddressDto;
     private SystemFeePolicyEntity feePolicy;
     private VoucherEntity voucher;
     private Instant now;
@@ -77,7 +78,14 @@ class CheckoutServiceTest {
 
         addressDto = new IdentityCommerceFacade.AddressDto(
                 501L, 300L, "Trần Người Mua", "0918123456",
-                "TP.HCM", "Quận 1", "Bến Nghé", "456 Nguyễn Huệ", true, now
+                "TP.HCM", "Quận 1", "Bến Nghé", "456 Nguyễn Huệ",
+                202, 1442, "20101", true, now
+        );
+
+        sellerAddressDto = new IdentityCommerceFacade.AddressDto(
+                601L, 200L, "Nguyễn Văn Bán", "0909123456",
+                "TP.HCM", "Quận 7", "Tân Phú", "123 Nguyễn Thị Thập",
+                202, 1447, "20601", true, now
         );
 
         feePolicy = new SystemFeePolicyEntity();
@@ -147,6 +155,7 @@ class CheckoutServiceTest {
     void buyNow_succeedsAndReservesProductFor1Hour() {
         when(catalogCommerceFacade.getProductForCheckoutLock(1001L)).thenReturn(productDetail);
         when(identityCommerceFacade.getAddressById(300L, 501L)).thenReturn(Optional.of(addressDto));
+        when(identityCommerceFacade.getDefaultAddress(200L)).thenReturn(Optional.of(sellerAddressDto));
         when(systemFeePolicyRepository.findFirstByStatusOrderByEffectiveFromDesc("ACTIVE")).thenReturn(Optional.of(feePolicy));
         when(orderRepository.save(any(OrderEntity.class))).thenAnswer(invocation -> {
             OrderEntity o = invocation.getArgument(0);
@@ -164,7 +173,100 @@ class CheckoutServiceTest {
         // DP-02 & User input: 1 hour timeout (3600 seconds)
         assertThat(response.paymentDueAt()).isEqualTo(now.plusSeconds(3600));
 
+        org.mockito.ArgumentCaptor<OrderEntity> orderCaptor = org.mockito.ArgumentCaptor.forClass(OrderEntity.class);
+        verify(orderRepository).save(orderCaptor.capture());
+        OrderEntity savedOrder = orderCaptor.getValue();
+        // ADDR-02: verify sourceAddressId is seller's address, and GHN codes are snapshotted
+        assertThat(savedOrder.getSourceAddressId()).isEqualTo(601L);
+        assertThat(savedOrder.getShippingGhnProvinceId()).isEqualTo(202);
+        assertThat(savedOrder.getShippingGhnDistrictId()).isEqualTo(1442);
+        assertThat(savedOrder.getShippingGhnWardCode()).isEqualTo("20101");
+
         verify(catalogCommerceFacade).reserveProduct(1001L, 9901L, now.plusSeconds(3600), now);
+    }
+
+    @Test
+    void buyNow_failsWhenBuyerAddressMissingGhnCodes() {
+        IdentityCommerceFacade.AddressDto invalidBuyerAddress = new IdentityCommerceFacade.AddressDto(
+                501L, 300L, "Trần Người Mua", "0918123456",
+                "TP.HCM", "Quận 1", "Bến Nghé", "456 Nguyễn Huệ",
+                null, null, null, true, now
+        );
+        when(catalogCommerceFacade.getProductForCheckoutLock(1001L)).thenReturn(productDetail);
+        when(identityCommerceFacade.getAddressById(300L, 501L)).thenReturn(Optional.of(invalidBuyerAddress));
+
+        CheckoutDtos.BuyNowRequest request = new CheckoutDtos.BuyNowRequest(1001L, 501L, null, null);
+
+        assertThatThrownBy(() -> checkoutService.buyNow(300L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("chưa được chuẩn hóa theo mã bưu chính GHN");
+    }
+
+    @Test
+    void buyNow_failsWhenSellerHasNoDefaultAddress() {
+        when(catalogCommerceFacade.getProductForCheckoutLock(1001L)).thenReturn(productDetail);
+        when(identityCommerceFacade.getAddressById(300L, 501L)).thenReturn(Optional.of(addressDto));
+        when(identityCommerceFacade.getDefaultAddress(200L)).thenReturn(Optional.empty());
+
+        CheckoutDtos.BuyNowRequest request = new CheckoutDtos.BuyNowRequest(1001L, 501L, null, null);
+
+        assertThatThrownBy(() -> checkoutService.buyNow(300L, request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("người bán chưa thiết lập địa chỉ lấy hàng chuẩn hóa GHN");
+    }
+
+    @Test
+    void buyNow_failsWhenSellerAddressMissingGhnCodes() {
+        IdentityCommerceFacade.AddressDto invalidSellerAddress = new IdentityCommerceFacade.AddressDto(
+                601L, 200L, "Nguyễn Văn Bán", "0909123456",
+                "TP.HCM", "Quận 7", "Tân Phú", "123 Nguyễn Thị Thập",
+                202, null, null, true, now
+        );
+        when(catalogCommerceFacade.getProductForCheckoutLock(1001L)).thenReturn(productDetail);
+        when(identityCommerceFacade.getAddressById(300L, 501L)).thenReturn(Optional.of(addressDto));
+        when(identityCommerceFacade.getDefaultAddress(200L)).thenReturn(Optional.of(invalidSellerAddress));
+
+        CheckoutDtos.BuyNowRequest request = new CheckoutDtos.BuyNowRequest(1001L, 501L, null, null);
+
+        assertThatThrownBy(() -> checkoutService.buyNow(300L, request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("người bán chưa thiết lập địa chỉ lấy hàng chuẩn hóa GHN");
+    }
+
+    @Test
+    void buyNow_withNewAddress_succeedsWhenGhnCodesProvided() {
+        CheckoutDtos.CreateAddressRequest newAddrRequest = new CheckoutDtos.CreateAddressRequest(
+                "Người Nhận Mới", "0988776655", "TP.HCM", "Quận 3", "Võ Thị Sáu", "12 Hai Bà Trưng",
+                202, 1444, "20301", false
+        );
+        IdentityCommerceFacade.AddressDto createdAddress = new IdentityCommerceFacade.AddressDto(
+                502L, 300L, "Người Nhận Mới", "0988776655", "TP.HCM", "Quận 3", "Võ Thị Sáu", "12 Hai Bà Trưng",
+                202, 1444, "20301", false, now
+        );
+        when(catalogCommerceFacade.getProductForCheckoutLock(1001L)).thenReturn(productDetail);
+        when(identityCommerceFacade.createAddress(eq(300L), any(IdentityCommerceFacade.CreateAddressRequest.class)))
+                .thenReturn(createdAddress);
+        when(identityCommerceFacade.getDefaultAddress(200L)).thenReturn(Optional.of(sellerAddressDto));
+        when(systemFeePolicyRepository.findFirstByStatusOrderByEffectiveFromDesc("ACTIVE")).thenReturn(Optional.of(feePolicy));
+        when(orderRepository.save(any(OrderEntity.class))).thenAnswer(invocation -> {
+            OrderEntity o = invocation.getArgument(0);
+            setField(o, "id", 9902L);
+            return o;
+        });
+        when(orderItemRepository.save(any(OrderItemEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CheckoutDtos.BuyNowRequest request = new CheckoutDtos.BuyNowRequest(1001L, null, newAddrRequest, null);
+        CheckoutDtos.OrderCreatedResponse response = checkoutService.buyNow(300L, request);
+
+        assertThat(response.orderId()).isEqualTo(9902L);
+
+        org.mockito.ArgumentCaptor<OrderEntity> orderCaptor = org.mockito.ArgumentCaptor.forClass(OrderEntity.class);
+        verify(orderRepository).save(orderCaptor.capture());
+        OrderEntity savedOrder = orderCaptor.getValue();
+        assertThat(savedOrder.getSourceAddressId()).isEqualTo(601L);
+        assertThat(savedOrder.getShippingGhnProvinceId()).isEqualTo(202);
+        assertThat(savedOrder.getShippingGhnDistrictId()).isEqualTo(1444);
+        assertThat(savedOrder.getShippingGhnWardCode()).isEqualTo("20301");
     }
 
     @Test

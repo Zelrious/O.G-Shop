@@ -49,14 +49,17 @@ public class SecurityConfig {
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",
-                                "/api/v1/auth/refresh/logout").permitAll()
+                                "/api/v1/auth/refresh/logout",
+                                "/api/v1/fulfillment/webhook").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/categories",
                                 "/api/v1/products",
                                 "/api/v1/products/**",
                                 "/api/v1/media/**",
-                                "/api/v1/payments/vnpay-ipn").permitAll()
+                                "/api/v1/payments/vnpay-ipn",
+                                "/api/v1/shipping/master-data/**").permitAll()
                         .requestMatchers("/api/v1/admin/payments/**").hasAnyRole("ADMIN", "KTV")
+                        .requestMatchers("/api/v1/admin/fulfillment/**").hasRole("ADMIN")
                         .requestMatchers(
                                 "/api/v1/auth/me",
                                 "/api/v1/profile/**",
@@ -65,7 +68,8 @@ public class SecurityConfig {
                                 "/api/v1/seller/products/**",
                                 "/api/v1/moderation/**",
                                 "/api/v1/commerce/**",
-                                "/api/v1/payments/**").authenticated()
+                                "/api/v1/payments/**",
+                                "/api/v1/fulfillment/**").authenticated()
 
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2

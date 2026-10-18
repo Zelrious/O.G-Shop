@@ -20,6 +20,7 @@ spring:
       max-request-size: ${MAX_REQUEST_SIZE:60MB}
 
 app:
+  environment: ${APP_ENVIRONMENT}
   auth:
     jwt-signing-key: ${JWT_SIGNING_KEY:replace-with-at-least-32-random-bytes}
     access-token-ttl: ${AUTH_ACCESS_TOKEN_TTL:PT15M}
@@ -46,7 +47,17 @@ app:
     hash-secret: ${VNPAY_HASH_SECRET}
     ipn-url: ${VNPAY_IPN_URL:http://localhost:8080/api/v1/payments/vnpay-ipn}
     return-url: ${VNPAY_RETURN_URL:http://localhost:5173/payment/vnpay-return}
-
+  ghn:
+    base-url: ${GHN_BASE_URL:https://dev-online-gateway.ghn.vn/shiip/public-api/}
+    api-token: ${GHN_API_TOKEN}
+    shop-id: ${GHN_SHOP_ID}
+    connect-timeout: ${GHN_CONNECT_TIMEOUT:PT5S}
+    read-timeout: ${GHN_READ_TIMEOUT:PT10S}
+    webhook-secret: ${GHN_WEBHOOK_SECRET:}
+    reconciliation:
+      enabled: ${GHN_RECONCILIATION_ENABLED:true}
+      cron: ${GHN_RECONCILIATION_CRON:0 */30 * * * *}
+      batch-size: ${GHN_RECONCILIATION_BATCH_SIZE:50}
 server:
   port: ${BACKEND_PORT:8080}
   error:

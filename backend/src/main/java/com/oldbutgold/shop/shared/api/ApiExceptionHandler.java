@@ -51,12 +51,41 @@ public class ApiExceptionHandler {
                     .map(error -> new FieldError(error.getField(), error.getDefaultMessage()))
                     .toList()
                 : List.of();
-        return response(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "Dữ liệu gửi lên không hợp lệ.", request, fields);
+        String message = (exception instanceof IllegalArgumentException iae && iae.getMessage() != null && !iae.getMessage().isBlank())
+                ? iae.getMessage()
+                : "Dữ liệu gửi lên không hợp lệ.";
+        return response(HttpStatus.BAD_REQUEST, "INVALID_INPUT", message, request, fields);
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    ResponseEntity<ApiError> illegalState(IllegalStateException exception, HttpServletRequest request) {
+        return response(HttpStatus.BAD_REQUEST, "ILLEGAL_STATE", exception.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler(com.oldbutgold.shop.modules.fulfillment.infrastructure.client.GhnApiException.class)
+    ResponseEntity<ApiError> ghnApiError(com.oldbutgold.shop.modules.fulfillment.infrastructure.client.GhnApiException exception, HttpServletRequest request) {
+        return response(HttpStatus.BAD_REQUEST, "GHN_API_ERROR", exception.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler(com.oldbutgold.shop.modules.fulfillment.application.FulfillmentFeatureLockedException.class)
+    ResponseEntity<ApiError> fulfillmentFeatureLocked(
+            com.oldbutgold.shop.modules.fulfillment.application.FulfillmentFeatureLockedException exception,
+            HttpServletRequest request
+    ) {
+        return response(HttpStatus.CONFLICT, "FULFILLMENT_FEATURE_LOCKED", exception.getMessage(), request, List.of());
     }
 
     @ExceptionHandler(InvalidAvatarException.class)
     ResponseEntity<ApiError> invalidAvatar(InvalidAvatarException exception, HttpServletRequest request) {
         return response(HttpStatus.BAD_REQUEST, "INVALID_AVATAR", exception.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    ResponseEntity<ApiError> responseStatus(org.springframework.web.server.ResponseStatusException exception, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.valueOf(exception.getStatusCode().value());
+        String code = status.name();
+        String message = exception.getReason() != null ? exception.getReason() : exception.getMessage();
+        return response(status, code, message, request, List.of());
     }
 
     @ExceptionHandler(AvatarStorageUnavailableException.class)

@@ -1,5 +1,6 @@
 package com.oldbutgold.shop.modules.platform.infrastructure;
 
+import com.oldbutgold.shop.shared.PostgresTestSafetyGuard;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -11,7 +12,8 @@ import static org.assertj.core.api.Assertions.*;
 @EnabledIfEnvironmentVariable(named = "OGSHOP_UPGRADE_TEST_DB_URL", matches = ".+")
 class ModerationMigrationUpgradeTest {
     @Test void preservesPreV10HistoryWithoutInventingContentProof() {
-        var ds = new DriverManagerDataSource(System.getenv("OGSHOP_UPGRADE_TEST_DB_URL"),
+        String url = PostgresTestSafetyGuard.resolveAndAssertSafeFromEnv("OGSHOP_UPGRADE_TEST_DB_URL");
+        var ds = new DriverManagerDataSource(url,
                 System.getenv("OGSHOP_TEST_DB_USER"), System.getenv("OGSHOP_TEST_DB_PASSWORD"));
         var jdbc = new JdbcTemplate(ds);
         String schema = "task59_upgrade_" + UUID.randomUUID().toString().replace("-", "");

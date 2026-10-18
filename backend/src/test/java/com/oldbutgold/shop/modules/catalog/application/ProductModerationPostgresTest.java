@@ -7,6 +7,7 @@ import com.oldbutgold.shop.modules.catalog.infrastructure.persistence.ProductMod
 import com.oldbutgold.shop.modules.catalog.infrastructure.persistence.ProductModerationDecisionRepository;
 import com.oldbutgold.shop.modules.platform.application.PlatformAuditFacade;
 import com.oldbutgold.shop.modules.platform.infrastructure.persistence.AuditLogRepository;
+import com.oldbutgold.shop.shared.PostgresTestSafetyGuard;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,10 +59,11 @@ class ProductModerationPostgresTest {
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry properties) {
-        properties.add("spring.datasource.url", () -> {
-            String url = System.getenv("OGSHOP_MODERATION_TEST_DB_URL");
-            return (url != null && !url.isBlank()) ? url : System.getenv("OGSHOP_TEST_DB_URL");
-        });
+        String url = PostgresTestSafetyGuard.resolveAndAssertSafeFromEnv(
+                "OGSHOP_MODERATION_TEST_DB_URL",
+                "OGSHOP_TEST_DB_URL"
+        );
+        properties.add("spring.datasource.url", () -> url);
         properties.add("spring.datasource.username", () -> {
             String u = System.getenv("OGSHOP_MODERATION_TEST_DB_USER");
             if (u == null || u.isBlank()) u = System.getenv("OGSHOP_TEST_DB_USER");

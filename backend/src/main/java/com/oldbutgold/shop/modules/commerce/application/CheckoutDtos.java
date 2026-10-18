@@ -17,8 +17,21 @@ public final class CheckoutDtos {
             String district,
             String ward,
             String detailAddress,
+            Integer ghnProvinceId,
+            Integer ghnDistrictId,
+            String ghnWardCode,
             boolean isDefault
-    ) {}
+    ) {
+        public AddressSummaryResponse(Long addressId, String recipientName, String phoneNumber,
+                                      String province, String district, String ward,
+                                      String detailAddress, boolean isDefault) {
+            this(addressId, recipientName, phoneNumber, province, district, ward, detailAddress, null, null, null, isDefault);
+        }
+
+        public boolean hasValidGhnCodes() {
+            return ghnDistrictId != null && ghnWardCode != null && !ghnWardCode.isBlank();
+        }
+    }
 
     public record CreateAddressRequest(
             @NotBlank(message = "Tên người nhận không được để trống")
@@ -33,8 +46,16 @@ public final class CheckoutDtos {
             String ward,
             @NotBlank(message = "Địa chỉ chi tiết không được để trống")
             String detailAddress,
+            Integer ghnProvinceId,
+            Integer ghnDistrictId,
+            String ghnWardCode,
             boolean isDefault
-    ) {}
+    ) {
+        public CreateAddressRequest(String recipientName, String phoneNumber, String province,
+                                    String district, String ward, String detailAddress, boolean isDefault) {
+            this(recipientName, phoneNumber, province, district, ward, detailAddress, null, null, null, isDefault);
+        }
+    }
 
     public record VoucherSummaryResponse(
             Long voucherId,

@@ -41,6 +41,15 @@ public class AddressEntity {
     @Column(name = "is_default", nullable = false)
     private boolean isDefault = false;
 
+    @Column(name = "ghn_province_id")
+    private Integer ghnProvinceId;
+
+    @Column(name = "ghn_district_id")
+    private Integer ghnDistrictId;
+
+    @Column(name = "ghn_ward_code", length = 20)
+    private String ghnWardCode;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -55,6 +64,13 @@ public class AddressEntity {
     public AddressEntity(Long userId, String recipientName, String phoneNumber,
                          String province, String district, String ward,
                          String detailAddress, boolean isDefault, Instant now) {
+        this(userId, recipientName, phoneNumber, province, district, ward, detailAddress, null, null, null, isDefault, now);
+    }
+
+    public AddressEntity(Long userId, String recipientName, String phoneNumber,
+                         String province, String district, String ward,
+                         String detailAddress, Integer ghnProvinceId, Integer ghnDistrictId,
+                         String ghnWardCode, boolean isDefault, Instant now) {
         this.userId = userId;
         this.recipientName = recipientName;
         this.phoneNumber = phoneNumber;
@@ -62,19 +78,35 @@ public class AddressEntity {
         this.district = district;
         this.ward = ward;
         this.detailAddress = detailAddress;
+        this.ghnProvinceId = ghnProvinceId;
+        this.ghnDistrictId = ghnDistrictId;
+        this.ghnWardCode = ghnWardCode != null ? ghnWardCode.trim() : null;
         this.isDefault = isDefault;
         this.createdAt = now;
     }
 
     public void update(String recipientName, String phoneNumber, String province,
                        String district, String ward, String detailAddress, Instant now) {
+        update(recipientName, phoneNumber, province, district, ward, detailAddress, this.ghnProvinceId, this.ghnDistrictId, this.ghnWardCode, now);
+    }
+
+    public void update(String recipientName, String phoneNumber, String province,
+                       String district, String ward, String detailAddress,
+                       Integer ghnProvinceId, Integer ghnDistrictId, String ghnWardCode, Instant now) {
         this.recipientName = recipientName.trim();
         this.phoneNumber = phoneNumber.trim();
         this.province = province.trim();
         this.district = district.trim();
         this.ward = ward.trim();
         this.detailAddress = detailAddress.trim();
+        this.ghnProvinceId = ghnProvinceId;
+        this.ghnDistrictId = ghnDistrictId;
+        this.ghnWardCode = ghnWardCode != null ? ghnWardCode.trim() : null;
         this.updatedAt = now;
+    }
+
+    public boolean hasValidGhnCodes() {
+        return ghnProvinceId != null && ghnDistrictId != null && ghnWardCode != null && !ghnWardCode.isBlank();
     }
 
     public void softDelete(Instant now) {
@@ -91,6 +123,12 @@ public class AddressEntity {
     public String getDistrict() { return district; }
     public String getWard() { return ward; }
     public String getDetailAddress() { return detailAddress; }
+    public Integer getGhnProvinceId() { return ghnProvinceId; }
+    public void setGhnProvinceId(Integer ghnProvinceId) { this.ghnProvinceId = ghnProvinceId; }
+    public Integer getGhnDistrictId() { return ghnDistrictId; }
+    public void setGhnDistrictId(Integer ghnDistrictId) { this.ghnDistrictId = ghnDistrictId; }
+    public String getGhnWardCode() { return ghnWardCode; }
+    public void setGhnWardCode(String ghnWardCode) { this.ghnWardCode = ghnWardCode != null ? ghnWardCode.trim() : null; }
     public boolean isDefault() { return isDefault; }
     public void setDefault(boolean isDefault) { this.isDefault = isDefault; }
     public Instant getCreatedAt() { return createdAt; }

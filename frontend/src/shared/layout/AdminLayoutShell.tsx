@@ -250,6 +250,18 @@ export const AdminLayoutShell: React.FC = () => {
             <ConsoleIcons.Megaphone size={19} />
             <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Điều hướng thông báo</span>
           </NavLink>
+
+          {/* 8. Quản lý sự cố vận đơn GHN */}
+          <NavLink
+            to="/admin/fulfillment-incidents"
+            title="Sự cố vận đơn GHN"
+            className={({ isActive }) =>
+              `og-admin-sidebar__item ${isActive ? 'og-admin-sidebar__item--active' : ''}`
+            }
+          >
+            <ConsoleIcons.AlertTriangle size={19} />
+            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Sự cố vận đơn GHN</span>
+          </NavLink>
         </nav>
 
         {/* Sidebar Footer with Logout (NO 'Về sàn mua sắm') */}

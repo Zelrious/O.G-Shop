@@ -2,6 +2,7 @@ package com.oldbutgold.shop.modules.catalog.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oldbutgold.shop.modules.catalog.api.CatalogDtos;
+import com.oldbutgold.shop.shared.PostgresTestSafetyGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -41,10 +42,11 @@ class MultipleCategoriesPostgresTest {
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry properties) {
-        properties.add("spring.datasource.url", () -> {
-            String url = System.getenv("OGSHOP_CATEGORY_TEST_DB_URL");
-            return (url != null && !url.isBlank()) ? url : System.getenv("OGSHOP_TEST_DB_URL");
-        });
+        String url = PostgresTestSafetyGuard.resolveAndAssertSafeFromEnv(
+                "OGSHOP_CATEGORY_TEST_DB_URL",
+                "OGSHOP_TEST_DB_URL"
+        );
+        properties.add("spring.datasource.url", () -> url);
         properties.add("spring.datasource.username", () -> {
             String u = System.getenv("OGSHOP_CATEGORY_TEST_DB_USER");
             if (u == null || u.isBlank()) u = System.getenv("OGSHOP_TEST_DB_USER");

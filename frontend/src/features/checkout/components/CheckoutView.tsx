@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { checkoutApi, CheckoutApiError } from '../checkoutApi';
 import { CheckoutPreview, CreateAddressInput, OrderCreated } from '../types';
+import { profileApi, GhnProvince, GhnDistrict, GhnWard } from '../../profile';
 
 interface CheckoutViewProps {
   productId: number;
@@ -22,12 +23,26 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId }) => {
   const [newAddress, setNewAddress] = useState<CreateAddressInput>({
     recipientName: '',
     phoneNumber: '',
-    province: 'TP. Hồ Chí Minh',
-    district: 'Quận 1',
-    ward: 'Phường Bến Nghé',
+    province: '',
+    district: '',
+    ward: '',
     detailAddress: '',
+    ghnProvinceId: null,
+    ghnDistrictId: null,
+    ghnWardCode: null,
     isDefault: true,
   });
+
+  // GHN Cascading Select State for Checkout New Address
+  const [provinces, setProvinces] = useState<GhnProvince[]>([]);
+  const [districts, setDistricts] = useState<GhnDistrict[]>([]);
+  const [wards, setWards] = useState<GhnWard[]>([]);
+  const [selectedProvinceId, setSelectedProvinceId] = useState<number | ''>('');
+  const [selectedDistrictId, setSelectedDistrictId] = useState<number | ''>('');
+  const [selectedWardCode, setSelectedWardCode] = useState<string>('');
+  const [isLoadingProvinces, setIsLoadingProvinces] = useState(false);
+  const [isLoadingDistricts, setIsLoadingDistricts] = useState(false);
+  const [isLoadingWards, setIsLoadingWards] = useState(false);
 
   // Voucher State
   const [voucherInput, setVoucherInput] = useState('');
@@ -92,6 +107,146 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId }) => {
     loadPreview();
   };
 
+  const loadProvinces = async () => {
+    if (provinces.length > 0) return provinces;
+    setIsLoadingProvinces(true);
+    try {
+      const list = await profileApi.getProvinces();
+      setProvinces(list);
+      return list;
+    } catch {
+      setErrorMsg('Không thể tải danh mục Tỉnh/Thành phố từ GHN. Vui lòng thử lại.');
+      return [];
+    } finally {
+      setIsLoadingProvinces(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAddingNewAddress && provinces.length === 0) {
+      loadProvinces();
+    }
+  }, [isAddingNewAddress, provinces.length]);
+
+  const handleProvinceChange = async (provId: number | '') => {
+    setSelectedProvinceId(provId);
+    setSelectedDistrictId('');
+    setSelectedWardCode('');
+    setDistricts([]);
+    setWards([]);
+
+    if (provId === '') {
+      setNewAddress((prev) => ({
+        ...prev,
+        province: '',
+        district: '',
+        ward: '',
+        ghnProvinceId: null,
+        ghnDistrictId: null,
+        ghnWardCode: null,
+      }));
+      return;
+    }
+
+    const p = provinces.find((item) => item.provinceId === provId);
+    setNewAddress((prev) => ({
+      ...prev,
+      province: p ? p.provinceName : '',
+      district: '',
+      ward: '',
+      ghnProvinceId: Number(provId),
+      ghnDistrictId: null,
+      ghnWardCode: null,
+    }));
+
+    setIsLoadingDistricts(true);
+    try {
+      const distList = await profileApi.getDistricts(provId);
+      setDistricts(distList);
+    } catch {
+      setErrorMsg('Không thể tải danh mục Quận/Huyện từ GHN.');
+    } finally {
+      setIsLoadingDistricts(false);
+    }
+  };
+
+  const handleDistrictChange = async (distId: number | '') => {
+    setSelectedDistrictId(distId);
+    setSelectedWardCode('');
+    setWards([]);
+
+    if (distId === '') {
+      setNewAddress((prev) => ({
+        ...prev,
+        district: '',
+        ward: '',
+        ghnDistrictId: null,
+        ghnWardCode: null,
+      }));
+      return;
+    }
+
+    const d = districts.find((item) => item.districtId === distId);
+    setNewAddress((prev) => ({
+      ...prev,
+      district: d ? d.districtName : '',
+      ward: '',
+      ghnDistrictId: Number(distId),
+      ghnWardCode: null,
+    }));
+
+    setIsLoadingWards(true);
+    try {
+      const wardList = await profileApi.getWards(distId);
+      setWards(wardList);
+    } catch {
+      setErrorMsg('Không thể tải danh mục Phường/Xã từ GHN.');
+    } finally {
+      setIsLoadingWards(false);
+    }
+  };
+
+  const handleWardChange = (wardCode: string) => {
+    setSelectedWardCode(wardCode);
+    if (!wardCode) {
+      setNewAddress((prev) => ({
+        ...prev,
+        ward: '',
+        ghnWardCode: null,
+      }));
+      return;
+    }
+
+    const w = wards.find((item) => item.wardCode === wardCode);
+    setNewAddress((prev) => ({
+      ...prev,
+      ward: w ? w.wardName : '',
+      ghnWardCode: wardCode,
+    }));
+  };
+
+  const selectedAddress = !isAddingNewAddress
+    ? preview?.addresses.find((a) => a.addressId === selectedAddressId) || preview?.selectedAddress || null
+    : null;
+
+  const isSelectedAddressGhnValid = Boolean(
+    selectedAddress &&
+    selectedAddress.ghnDistrictId &&
+    selectedAddress.ghnWardCode &&
+    selectedAddress.ghnWardCode.trim() !== ''
+  );
+
+  const isNewAddressGhnValid = Boolean(
+    isAddingNewAddress &&
+    newAddress.ghnDistrictId &&
+    newAddress.ghnWardCode &&
+    newAddress.ghnWardCode.trim() !== ''
+  );
+
+  const isCheckoutAddressValid = isAddingNewAddress
+    ? isNewAddressGhnValid
+    : isSelectedAddressGhnValid;
+
   const handleConfirmOrder = async () => {
     if (!preview) return;
 
@@ -104,9 +259,26 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId }) => {
       if (
         !newAddress.recipientName.trim() ||
         !newAddress.phoneNumber.trim() ||
-        !newAddress.detailAddress.trim()
+        !newAddress.detailAddress.trim() ||
+        !newAddress.province.trim() ||
+        !newAddress.district.trim() ||
+        !newAddress.ward.trim()
       ) {
         setErrorMsg('Vui lòng điền đầy đủ họ tên, số điện thoại và địa chỉ nhận hàng.');
+        return;
+      }
+
+      if (!newAddress.ghnDistrictId || !newAddress.ghnWardCode) {
+        setErrorMsg('Vui lòng chọn đầy đủ Tỉnh/Thành, Quận/Huyện, Phường/Xã theo chuẩn GHN.');
+        return;
+      }
+    } else {
+      if (!selectedAddress) {
+        setErrorMsg('Vui lòng chọn hoặc thêm địa chỉ nhận hàng.');
+        return;
+      }
+      if (!isSelectedAddressGhnValid) {
+        setErrorMsg('Địa chỉ đang chọn chưa chuẩn hóa theo mã bưu chính GHN. Vui lòng thêm địa chỉ mới hoặc cập nhật tại Sổ địa chỉ.');
         return;
       }
     }
@@ -341,6 +513,8 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId }) => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {preview.addresses.map((addr) => {
                   const isSelected = selectedAddressId === addr.addressId;
+                  const isGhnValid = Boolean(addr.ghnDistrictId && addr.ghnWardCode && addr.ghnWardCode.trim() !== '');
+
                   return (
                     <label
                       key={addr.addressId}
@@ -363,12 +537,47 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId }) => {
                         style={{ marginTop: 3, accentColor: '#e25b29' }}
                       />
                       <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                           <strong style={{ fontSize: 14, color: '#111827' }}>{addr.recipientName}</strong>
                           <span style={{ fontSize: 13, color: '#6b7280' }}>({addr.phoneNumber})</span>
                           {addr.isDefault && (
                             <span style={{ fontSize: 11, background: '#e5e7eb', color: '#374151', padding: '1px 6px', borderRadius: 4 }}>
                               Mặc định
+                            </span>
+                          )}
+                          {isGhnValid ? (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                                padding: '1px 6px',
+                                borderRadius: 4,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                background: '#def7ec',
+                                color: '#03543f',
+                                border: '1px solid #bcf0da',
+                              }}
+                            >
+                              ✓ Chuẩn GHN
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                                padding: '1px 6px',
+                                borderRadius: 4,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                background: '#fef2f2',
+                                color: '#991b1b',
+                                border: '1px solid #fecaca',
+                              }}
+                            >
+                              ⚠️ Chưa chuẩn GHN
                             </span>
                           )}
                         </div>
@@ -379,9 +588,56 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId }) => {
                     </label>
                   );
                 })}
+
+                {/* Legacy Address Warning Banner */}
+                {selectedAddress && !isSelectedAddressGhnValid && (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      padding: '12px 16px',
+                      borderRadius: 8,
+                      background: '#fffbeb',
+                      border: '1px solid #fde68a',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 10,
+                      color: '#92400e',
+                      fontSize: 13,
+                    }}
+                  >
+                    <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+                    <div>
+                      <strong style={{ display: 'block', marginBottom: 2 }}>
+                        Địa chỉ nhận hàng đang chọn chưa chuẩn hóa theo mã bưu chính GHN
+                      </strong>
+                      <span>
+                        Hệ thống cần mã Quận/Huyện và Phường/Xã GHN để tự động tính phí vận chuyển và xuất mã vận đơn. Vui lòng{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAddingNewAddress(true);
+                            loadProvinces();
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            color: '#d97706',
+                            fontWeight: 700,
+                            textDecoration: 'underline',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          thêm địa chỉ mới chuẩn GHN
+                        </button>{' '}
+                        hoặc cập nhật tại Sổ địa chỉ cá nhân trước khi hoàn tất đặt mua.
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
-              /* New Address Input Form */
+              /* New Address Input Form with Cascading 3-tier GHN select */
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
@@ -410,39 +666,97 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId }) => {
                   </div>
                 </div>
 
+                {/* Cascading Select: Province -> District -> Ward */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 4 }}>
                       Tỉnh/Thành phố *
                     </label>
-                    <input
-                      type="text"
-                      value={newAddress.province}
-                      onChange={(e) => setNewAddress({ ...newAddress, province: e.target.value })}
-                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, boxSizing: 'border-box' }}
-                    />
+                    <select
+                      value={selectedProvinceId}
+                      onChange={(e) => handleProvinceChange(e.target.value ? Number(e.target.value) : '')}
+                      disabled={isLoadingProvinces}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 6,
+                        fontSize: 14,
+                        background: '#fff',
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      <option value="">{isLoadingProvinces ? 'Đang tải...' : '-- Chọn Tỉnh/Thành --'}</option>
+                      {provinces.map((p) => (
+                        <option key={p.provinceId} value={p.provinceId}>
+                          {p.provinceName}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 4 }}>
                       Quận/Huyện *
                     </label>
-                    <input
-                      type="text"
-                      value={newAddress.district}
-                      onChange={(e) => setNewAddress({ ...newAddress, district: e.target.value })}
-                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, boxSizing: 'border-box' }}
-                    />
+                    <select
+                      value={selectedDistrictId}
+                      onChange={(e) => handleDistrictChange(e.target.value ? Number(e.target.value) : '')}
+                      disabled={!selectedProvinceId || isLoadingDistricts}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 6,
+                        fontSize: 14,
+                        background: !selectedProvinceId ? '#f9fafb' : '#fff',
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      <option value="">
+                        {isLoadingDistricts
+                          ? 'Đang tải...'
+                          : !selectedProvinceId
+                          ? '-- Chọn Tỉnh trước --'
+                          : '-- Chọn Quận/Huyện --'}
+                      </option>
+                      {districts.map((d) => (
+                        <option key={d.districtId} value={d.districtId}>
+                          {d.districtName}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 4 }}>
                       Phường/Xã *
                     </label>
-                    <input
-                      type="text"
-                      value={newAddress.ward}
-                      onChange={(e) => setNewAddress({ ...newAddress, ward: e.target.value })}
-                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, boxSizing: 'border-box' }}
-                    />
+                    <select
+                      value={selectedWardCode}
+                      onChange={(e) => handleWardChange(e.target.value)}
+                      disabled={!selectedDistrictId || isLoadingWards}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 6,
+                        fontSize: 14,
+                        background: !selectedDistrictId ? '#f9fafb' : '#fff',
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      <option value="">
+                        {isLoadingWards
+                          ? 'Đang tải...'
+                          : !selectedDistrictId
+                          ? '-- Chọn Huyện trước --'
+                          : '-- Chọn Phường/Xã --'}
+                      </option>
+                      {wards.map((w) => (
+                        <option key={w.wardCode} value={w.wardCode}>
+                          {w.wardName}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -457,6 +771,45 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId }) => {
                     onChange={(e) => setNewAddress({ ...newAddress, detailAddress: e.target.value })}
                     style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, boxSizing: 'border-box' }}
                   />
+                </div>
+
+                {/* GHN Validation Feedback */}
+                <div>
+                  {newAddress.ghnDistrictId && newAddress.ghnWardCode ? (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '4px 10px',
+                        borderRadius: 6,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        background: '#def7ec',
+                        color: '#03543f',
+                        border: '1px solid #bcf0da',
+                      }}
+                    >
+                      ✓ Đã chuẩn hóa mã bưu chính GHN (Quận: {newAddress.ghnDistrictId}, Phường: {newAddress.ghnWardCode})
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '4px 10px',
+                        borderRadius: 6,
+                        fontSize: 12,
+                        fontWeight: 500,
+                        background: '#fef3c7',
+                        color: '#92400e',
+                        border: '1px solid #fde68a',
+                      }}
+                    >
+                      ℹ️ Vui lòng chọn đủ 3 cấp Tỉnh/Thành → Quận/Huyện → Phường/Xã để lấy mã bưu chính GHN
+                    </span>
+                  )}
                 </div>
               </div>
             )}
@@ -690,28 +1043,37 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId }) => {
 
             <button
               type="button"
-              disabled={submitting}
+              disabled={submitting || !isCheckoutAddressValid}
               onClick={handleConfirmOrder}
               style={{
                 width: '100%',
                 padding: '14px 16px',
-                background: submitting ? '#9ca3af' : '#e25b29',
+                background: submitting || !isCheckoutAddressValid ? '#9ca3af' : '#e25b29',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 8,
                 fontSize: 16,
                 fontWeight: 700,
                 marginTop: 20,
-                cursor: submitting ? 'not-allowed' : 'pointer',
+                cursor: submitting || !isCheckoutAddressValid ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 8,
-                boxShadow: '0 2px 8px rgba(226, 91, 41, 0.3)',
+                boxShadow: submitting || !isCheckoutAddressValid ? 'none' : '0 2px 8px rgba(226, 91, 41, 0.3)',
               }}
             >
-              {submitting ? 'Đang xử lý đặt hàng...' : '⚡ Xác nhận Mua ngay & Giữ hàng'}
+              {submitting
+                ? 'Đang xử lý đặt hàng...'
+                : !isCheckoutAddressValid
+                ? '⚠️ Cần chọn địa chỉ chuẩn hóa GHN'
+                : '⚡ Xác nhận Mua ngay & Giữ hàng'}
             </button>
+            {!isCheckoutAddressValid && (
+              <p style={{ color: '#b91c1c', fontSize: 12, textAlign: 'center', margin: '8px 0 0', lineHeight: 1.4 }}>
+                Địa chỉ nhận hàng chưa chuẩn hóa GHN. Vui lòng chọn địa chỉ hợp lệ hoặc thêm địa chỉ mới để tiếp tục.
+              </p>
+            )}
           </div>
 
           {/* Trust Guarantees Badge */}

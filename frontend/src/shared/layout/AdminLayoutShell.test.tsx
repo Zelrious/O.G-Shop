@@ -39,6 +39,7 @@ describe('AdminLayoutShell Component', () => {
     expect(screen.getByRole('link', { name: /Quản lý phí hệ thống/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Tạo & Quản lý Voucher/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Điều hướng thông báo/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Sự cố vận đơn GHN/i })).toBeInTheDocument();
 
     // Verify NO "Về sàn mua sắm" link exists
     expect(screen.queryByText(/Về sàn mua sắm/i)).toBeNull();
