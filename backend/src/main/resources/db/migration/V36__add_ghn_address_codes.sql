@@ -138,8 +138,8 @@ BEGIN
     -- addresses INSERT
     prev := def;
     def := replace(def,
-        'deleted_at,record_type) SELECT r.address_id,r.user_id,r.recipient_name,r.phone_number,r.province,r.district,r.ward,r.detail_address,r.is_default,r.created_at,r.updated_at,r.deleted_at,''addresses'' FROM',
-        'deleted_at,record_type,ghn_province_id,ghn_district_id,ghn_ward_code) SELECT r.address_id,r.user_id,r.recipient_name,r.phone_number,r.province,r.district,r.ward,r.detail_address,r.is_default,r.created_at,r.updated_at,r.deleted_at,''addresses'',r.ghn_province_id,r.ghn_district_id,r.ghn_ward_code FROM'
+        $s$deleted_at,record_type) SELECT r.address_id,r.user_id,r.recipient_name,r.phone_number,r.province,r.district,r.ward,r.detail_address,r.is_default,r.created_at,r.updated_at,r.deleted_at,''addresses'' FROM$s$,
+        $s$deleted_at,record_type,ghn_province_id,ghn_district_id,ghn_ward_code) SELECT r.address_id,r.user_id,r.recipient_name,r.phone_number,r.province,r.district,r.ward,r.detail_address,r.is_default,r.created_at,r.updated_at,r.deleted_at,''addresses'',r.ghn_province_id,r.ghn_district_id,r.ghn_ward_code FROM$s$
     );
     IF def = prev THEN
         RAISE EXCEPTION 'Migration V36 failed: anchor "addresses INSERT" not found in og70_write_view()';
@@ -148,8 +148,8 @@ BEGIN
     -- addresses UPDATE SET
     prev := def;
     def := replace(def,
-        'deleted_at=r.deleted_at FROM jsonb_populate_record(NULL::og_compat.addresses,$1) r',
-        'deleted_at=r.deleted_at,ghn_province_id=r.ghn_province_id,ghn_district_id=r.ghn_district_id,ghn_ward_code=r.ghn_ward_code FROM jsonb_populate_record(NULL::og_compat.addresses,$1) r'
+        $s$deleted_at=r.deleted_at FROM jsonb_populate_record(NULL::og_compat.addresses,$1) r$s$,
+        $s$deleted_at=r.deleted_at,ghn_province_id=r.ghn_province_id,ghn_district_id=r.ghn_district_id,ghn_ward_code=r.ghn_ward_code FROM jsonb_populate_record(NULL::og_compat.addresses,$1) r$s$
     );
     IF def = prev THEN
         RAISE EXCEPTION 'Migration V36 failed: anchor "addresses UPDATE SET" not found in og70_write_view()';
@@ -158,8 +158,8 @@ BEGIN
     -- addresses build_object in UPDATE and DELETE
     prev := def;
     def := replace(def,
-        $a$''deleted_at'',to_jsonb(t)->''deleted_at'')$a$,
-        $a$''deleted_at'',to_jsonb(t)->''deleted_at'',''ghn_province_id'',to_jsonb(t)->''ghn_province_id'',''ghn_district_id'',to_jsonb(t)->''ghn_district_id'',''ghn_ward_code'',to_jsonb(t)->''ghn_ward_code'')$a$
+        $s$''deleted_at'',to_jsonb(t)->''deleted_at'')$s$,
+        $s$''deleted_at'',to_jsonb(t)->''deleted_at'',''ghn_province_id'',to_jsonb(t)->''ghn_province_id'',''ghn_district_id'',to_jsonb(t)->''ghn_district_id'',''ghn_ward_code'',to_jsonb(t)->''ghn_ward_code'')$s$
     );
     IF def = prev THEN
         RAISE EXCEPTION 'Migration V36 failed: anchor "addresses build_object" not found in og70_write_view()';
@@ -168,8 +168,8 @@ BEGIN
     -- addresses result
     prev := def;
     def := replace(def,
-        $a$''deleted_at'',stored->''deleted_at'');$a$,
-        $a$''deleted_at'',stored->''deleted_at'',''ghn_province_id'',stored->''ghn_province_id'',''ghn_district_id'',stored->''ghn_district_id'',''ghn_ward_code'',stored->''ghn_ward_code'');$a$
+        $s$'deleted_at',stored->'deleted_at');$s$,
+        $s$'deleted_at',stored->'deleted_at','ghn_province_id',stored->'ghn_province_id','ghn_district_id',stored->'ghn_district_id','ghn_ward_code',stored->'ghn_ward_code');$s$
     );
     IF def = prev THEN
         RAISE EXCEPTION 'Migration V36 failed: anchor "addresses result" not found in og70_write_view()';
@@ -178,8 +178,8 @@ BEGIN
     -- orders INSERT
     prev := def;
     def := replace(def,
-        'purchase_shipping_used_at,record_type) SELECT r.order_id,r.checkout_group_id,r.buyer_id,r.seller_id,r.source_address_id,r.shipping_recipient_name,r.shipping_phone_number,r.shipping_province,r.shipping_district,r.shipping_ward,r.shipping_detail_address,r.subtotal,r.shipping_fee,r.total_amount,r.currency,r.status,r.payment_due_at,r.version,r.created_at,r.updated_at,r.completed_at,r.cancelled_at,r.cancellation_reason,r.buyer_system_fee,r.seller_system_fee,r.seller_proceeds,r.voucher_discount_amount,r.shipping_discount_amount,r.sponsor_type,r.workflow_model,r.group_id,r.return_allowed,r.delivery_method,r.carrier_snapshot,r.handover_day,r.points_discount_amount,r.paid_confirmed_at,r.seller_accept_due_at,r.valid_delivered_at,r.received_at,r.return_due_at,r.early_completed_at,r.early_completion_warning_version,r.purchase_shipping_used_at,''orders'' FROM',
-        'purchase_shipping_used_at,record_type,shipping_ghn_province_id,shipping_ghn_district_id,shipping_ghn_ward_code) SELECT r.order_id,r.checkout_group_id,r.buyer_id,r.seller_id,r.source_address_id,r.shipping_recipient_name,r.shipping_phone_number,r.shipping_province,r.shipping_district,r.shipping_ward,r.shipping_detail_address,r.subtotal,r.shipping_fee,r.total_amount,r.currency,r.status,r.payment_due_at,r.version,r.created_at,r.updated_at,r.completed_at,r.cancelled_at,r.cancellation_reason,r.buyer_system_fee,r.seller_system_fee,r.seller_proceeds,r.voucher_discount_amount,r.shipping_discount_amount,r.sponsor_type,r.workflow_model,r.group_id,r.return_allowed,r.delivery_method,r.carrier_snapshot,r.handover_day,r.points_discount_amount,r.paid_confirmed_at,r.seller_accept_due_at,r.valid_delivered_at,r.received_at,r.return_due_at,r.early_completed_at,r.early_completion_warning_version,r.purchase_shipping_used_at,''orders'',r.shipping_ghn_province_id,r.shipping_ghn_district_id,r.shipping_ghn_ward_code FROM'
+        $s$purchase_shipping_used_at,record_type) SELECT r.order_id,r.checkout_group_id,r.buyer_id,r.seller_id,r.source_address_id,r.shipping_recipient_name,r.shipping_phone_number,r.shipping_province,r.shipping_district,r.shipping_ward,r.shipping_detail_address,r.subtotal,r.shipping_fee,r.total_amount,r.currency,r.status,r.payment_due_at,r.version,r.created_at,r.updated_at,r.completed_at,r.cancelled_at,r.cancellation_reason,r.buyer_system_fee,r.seller_system_fee,r.seller_proceeds,r.voucher_discount_amount,r.shipping_discount_amount,r.sponsor_type,r.workflow_model,r.group_id,r.return_allowed,r.delivery_method,r.carrier_snapshot,r.handover_day,r.points_discount_amount,r.paid_confirmed_at,r.seller_accept_due_at,r.valid_delivered_at,r.received_at,r.return_due_at,r.early_completed_at,r.early_completion_warning_version,r.purchase_shipping_used_at,''orders'' FROM$s$,
+        $s$purchase_shipping_used_at,record_type,shipping_ghn_province_id,shipping_ghn_district_id,shipping_ghn_ward_code) SELECT r.order_id,r.checkout_group_id,r.buyer_id,r.seller_id,r.source_address_id,r.shipping_recipient_name,r.shipping_phone_number,r.shipping_province,r.shipping_district,r.shipping_ward,r.shipping_detail_address,r.subtotal,r.shipping_fee,r.total_amount,r.currency,r.status,r.payment_due_at,r.version,r.created_at,r.updated_at,r.completed_at,r.cancelled_at,r.cancellation_reason,r.buyer_system_fee,r.seller_system_fee,r.seller_proceeds,r.voucher_discount_amount,r.shipping_discount_amount,r.sponsor_type,r.workflow_model,r.group_id,r.return_allowed,r.delivery_method,r.carrier_snapshot,r.handover_day,r.points_discount_amount,r.paid_confirmed_at,r.seller_accept_due_at,r.valid_delivered_at,r.received_at,r.return_due_at,r.early_completed_at,r.early_completion_warning_version,r.purchase_shipping_used_at,''orders'',r.shipping_ghn_province_id,r.shipping_ghn_district_id,r.shipping_ghn_ward_code FROM$s$
     );
     IF def = prev THEN
         RAISE EXCEPTION 'Migration V36 failed: anchor "orders INSERT" not found in og70_write_view()';
@@ -188,8 +188,8 @@ BEGIN
     -- orders UPDATE SET
     prev := def;
     def := replace(def,
-        'purchase_shipping_used_at=r.purchase_shipping_used_at FROM jsonb_populate_record(NULL::og_compat.orders,$1) r',
-        'purchase_shipping_used_at=r.purchase_shipping_used_at,shipping_ghn_province_id=r.shipping_ghn_province_id,shipping_ghn_district_id=r.shipping_ghn_district_id,shipping_ghn_ward_code=r.shipping_ghn_ward_code FROM jsonb_populate_record(NULL::og_compat.orders,$1) r'
+        $s$purchase_shipping_used_at=r.purchase_shipping_used_at FROM jsonb_populate_record(NULL::og_compat.orders,$1) r$s$,
+        $s$purchase_shipping_used_at=r.purchase_shipping_used_at,shipping_ghn_province_id=r.shipping_ghn_province_id,shipping_ghn_district_id=r.shipping_ghn_district_id,shipping_ghn_ward_code=r.shipping_ghn_ward_code FROM jsonb_populate_record(NULL::og_compat.orders,$1) r$s$
     );
     IF def = prev THEN
         RAISE EXCEPTION 'Migration V36 failed: anchor "orders UPDATE SET" not found in og70_write_view()';
@@ -198,8 +198,8 @@ BEGIN
     -- orders build_object in UPDATE and DELETE
     prev := def;
     def := replace(def,
-        $o$''purchase_shipping_used_at'',to_jsonb(t)->''purchase_shipping_used_at'')$o$,
-        $o$''purchase_shipping_used_at'',to_jsonb(t)->''purchase_shipping_used_at'',''shipping_ghn_province_id'',to_jsonb(t)->''shipping_ghn_province_id'',''shipping_ghn_district_id'',to_jsonb(t)->''shipping_ghn_district_id'',''shipping_ghn_ward_code'',to_jsonb(t)->''shipping_ghn_ward_code'')$o$
+        $s$''purchase_shipping_used_at'',to_jsonb(t)->''purchase_shipping_used_at'')$s$,
+        $s$''purchase_shipping_used_at'',to_jsonb(t)->''purchase_shipping_used_at'',''shipping_ghn_province_id'',to_jsonb(t)->''shipping_ghn_province_id'',''shipping_ghn_district_id'',to_jsonb(t)->''shipping_ghn_district_id'',''shipping_ghn_ward_code'',to_jsonb(t)->''shipping_ghn_ward_code'')$s$
     );
     IF def = prev THEN
         RAISE EXCEPTION 'Migration V36 failed: anchor "orders build_object" not found in og70_write_view()';
@@ -208,8 +208,8 @@ BEGIN
     -- orders result
     prev := def;
     def := replace(def,
-        $o$''purchase_shipping_used_at'',stored->''purchase_shipping_used_at'');$o$,
-        $o$''purchase_shipping_used_at'',stored->''purchase_shipping_used_at'',''shipping_ghn_province_id'',stored->''shipping_ghn_province_id'',''shipping_ghn_district_id'',stored->''shipping_ghn_district_id'',''shipping_ghn_ward_code'',stored->''shipping_ghn_ward_code'');$o$
+        $s$'purchase_shipping_used_at',stored->'purchase_shipping_used_at');$s$,
+        $s$'purchase_shipping_used_at',stored->'purchase_shipping_used_at','shipping_ghn_province_id',stored->'shipping_ghn_province_id','shipping_ghn_district_id',stored->'shipping_ghn_district_id','shipping_ghn_ward_code',stored->'shipping_ghn_ward_code');$s$
     );
     IF def = prev THEN
         RAISE EXCEPTION 'Migration V36 failed: anchor "orders result" not found in og70_write_view()';
@@ -218,8 +218,8 @@ BEGIN
     -- shipments INSERT
     prev := def;
     def := replace(def,
-        'otp_consumed_at,''shipments'') SELECT r.shipment_id,r.order_id,r.carrier,r.tracking_number,r.status,r.shipped_at,r.delivered_at,r.updated_at,r.leg,r.workflow_model,r.return_case_id,r.delivery_method,r.fee_snapshot,r.fee_payer,r.initiated_at,r.pickup_expected_at,r.pickup_deadline,r.first_failure_at,r.delivery_retry_due_at,r.valid_delivery_at,r.otp_digest,r.otp_expires_at,r.otp_attempt_count,r.otp_consumed_at FROM',
-        'otp_consumed_at,''shipments'',client_order_code,shipping_fee,expected_delivery_at,raw_ghn_status,created_at,claim_token,claim_expires_at,incident_notes,admin_review_required,next_reconciliation_at,reconciliation_attempts) SELECT r.shipment_id,r.order_id,r.carrier,r.tracking_number,r.status,r.shipped_at,r.delivered_at,r.updated_at,r.leg,r.workflow_model,r.return_case_id,r.delivery_method,r.fee_snapshot,r.fee_payer,r.initiated_at,r.pickup_expected_at,r.pickup_deadline,r.first_failure_at,r.delivery_retry_due_at,r.valid_delivery_at,r.otp_digest,r.otp_expires_at,r.otp_attempt_count,r.otp_consumed_at,r.client_order_code,r.shipping_fee,r.expected_delivery_at,r.raw_ghn_status,r.created_at,r.claim_token,r.claim_expires_at,r.incident_notes,r.admin_review_required,r.next_reconciliation_at,r.reconciliation_attempts FROM'
+        $s$otp_consumed_at,record_type) SELECT r.shipment_id,r.order_id,r.carrier,r.tracking_number,r.status,r.shipped_at,r.delivered_at,r.updated_at,r.leg,r.workflow_model,r.return_case_id,r.delivery_method,r.fee_snapshot,r.fee_payer,r.initiated_at,r.pickup_expected_at,r.pickup_deadline,r.first_failure_at,r.delivery_retry_due_at,r.valid_delivery_at,r.otp_digest,r.otp_expires_at,r.otp_attempt_count,r.otp_consumed_at,''shipments'' FROM$s$,
+        $s$otp_consumed_at,record_type,client_order_code,shipping_fee,expected_delivery_at,raw_ghn_status,created_at,claim_token,claim_expires_at,incident_notes,admin_review_required,next_reconciliation_at,reconciliation_attempts) SELECT r.shipment_id,r.order_id,r.carrier,r.tracking_number,r.status,r.shipped_at,r.delivered_at,r.updated_at,r.leg,r.workflow_model,r.return_case_id,r.delivery_method,r.fee_snapshot,r.fee_payer,r.initiated_at,r.pickup_expected_at,r.pickup_deadline,r.first_failure_at,r.delivery_retry_due_at,r.valid_delivery_at,r.otp_digest,r.otp_expires_at,r.otp_attempt_count,r.otp_consumed_at,''shipments'',r.client_order_code,r.shipping_fee,r.expected_delivery_at,r.raw_ghn_status,r.created_at,r.claim_token,r.claim_expires_at,r.incident_notes,r.admin_review_required,r.next_reconciliation_at,r.reconciliation_attempts FROM$s$
     );
     IF def = prev THEN
         RAISE EXCEPTION 'Migration V36 failed: anchor "shipments INSERT" not found in og70_write_view()';
@@ -228,8 +228,8 @@ BEGIN
     -- shipments UPDATE SET
     prev := def;
     def := replace(def,
-        'otp_consumed_at=r.otp_consumed_at FROM jsonb_populate_record(NULL::og_compat.shipments,$1) r',
-        'otp_consumed_at=r.otp_consumed_at,client_order_code=r.client_order_code,shipping_fee=r.shipping_fee,expected_delivery_at=r.expected_delivery_at,raw_ghn_status=r.raw_ghn_status,created_at=r.created_at,claim_token=r.claim_token,claim_expires_at=r.claim_expires_at,incident_notes=r.incident_notes,admin_review_required=r.admin_review_required,next_reconciliation_at=r.next_reconciliation_at,reconciliation_attempts=r.reconciliation_attempts FROM jsonb_populate_record(NULL::og_compat.shipments,$1) r'
+        $s$otp_consumed_at=r.otp_consumed_at FROM jsonb_populate_record(NULL::og_compat.shipments,$1) r$s$,
+        $s$otp_consumed_at=r.otp_consumed_at,client_order_code=r.client_order_code,shipping_fee=r.shipping_fee,expected_delivery_at=r.expected_delivery_at,raw_ghn_status=r.raw_ghn_status,created_at=r.created_at,claim_token=r.claim_token,claim_expires_at=r.claim_expires_at,incident_notes=r.incident_notes,admin_review_required=r.admin_review_required,next_reconciliation_at=r.next_reconciliation_at,reconciliation_attempts=r.reconciliation_attempts FROM jsonb_populate_record(NULL::og_compat.shipments,$1) r$s$
     );
     IF def = prev THEN
         RAISE EXCEPTION 'Migration V36 failed: anchor "shipments UPDATE SET" not found in og70_write_view()';
@@ -248,8 +248,8 @@ BEGIN
     -- shipments result
     prev := def;
     def := replace(def,
-        $s$''otp_consumed_at'',stored->''otp_consumed_at'');$s$,
-        $s$''otp_consumed_at'',stored->''otp_consumed_at'',''client_order_code'',stored->''client_order_code'',''shipping_fee'',stored->''shipping_fee'',''expected_delivery_at'',stored->''expected_delivery_at'',''raw_ghn_status'',stored->''raw_ghn_status'',''created_at'',stored->''created_at'',''claim_token'',stored->''claim_token'',''claim_expires_at'',stored->''claim_expires_at'',''incident_notes'',stored->''incident_notes'',''admin_review_required'',stored->''admin_review_required'',''next_reconciliation_at'',stored->''next_reconciliation_at'',''reconciliation_attempts'',stored->''reconciliation_attempts'');$s$
+        $s$'otp_consumed_at',stored->'otp_consumed_at');$s$,
+        $s$'otp_consumed_at',stored->'otp_consumed_at','client_order_code',stored->'client_order_code','shipping_fee',stored->'shipping_fee','expected_delivery_at',stored->'expected_delivery_at','raw_ghn_status',stored->'raw_ghn_status','created_at',stored->'created_at','claim_token',stored->'claim_token','claim_expires_at',stored->'claim_expires_at','incident_notes',stored->'incident_notes','admin_review_required',stored->'admin_review_required','next_reconciliation_at',stored->'next_reconciliation_at','reconciliation_attempts',stored->'reconciliation_attempts');$s$
     );
     IF def = prev THEN
         RAISE EXCEPTION 'Migration V36 failed: anchor "shipments result" not found in og70_write_view()';
