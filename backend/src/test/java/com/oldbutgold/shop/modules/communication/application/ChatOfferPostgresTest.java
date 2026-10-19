@@ -49,7 +49,7 @@ class ChatOfferPostgresTest {
     long user(String... roles){long id=id("INSERT INTO og_compat.users(email,password_hash,full_name) VALUES(?,'{noop}chat-test-1234','Chat QA') RETURNING user_id",UUID.randomUUID()+"@example.invalid");for(String role:roles)j.update("INSERT INTO og_compat.user_roles(user_id,role_id) SELECT ?,role_id FROM og_compat.roles WHERE role_name=?",id,role);return id;}
     @BeforeEach void setup(){reset(outbox,storage);buyer=user("BUYER");seller=user("SELLER");other=user("BUYER");ktv=user("KTV");
         product=new TransactionTemplate(manager).execute(s->{long p=id("INSERT INTO og_compat.products(seller_id,category_id,title,description,listed_price,condition,status,workflow_model) VALUES(?,(SELECT min(category_id) FROM og_compat.categories),'Chat camera','QA fixture',100000,'GOOD','ACTIVE','LEGACY_V14') RETURNING product_id",seller);j.update("INSERT INTO og_compat.product_categories(product_id,category_id) SELECT ?,min(category_id) FROM og_compat.categories",p);return p;});
-        address=id("INSERT INTO og_compat.addresses(user_id,recipient_name,phone_number,province,district,ward,detail_address,is_default) VALUES(?,'QA','0900000000','P','D','W','A',true) RETURNING address_id",buyer);
+        address=id("INSERT INTO og_compat.addresses(user_id,recipient_name,phone_number,province,district,ward,detail_address,is_default,ghn_province_id,ghn_district_id,ghn_ward_code) VALUES(?,'QA','0900000000','P','D','W','A',true,201,1442,'20101') RETURNING address_id",buyer);
         conversation=chat.start(buyer,new Start(product,null)).conversation().id();
     }
     @AfterEach void finish(){reset(outbox,storage);}

@@ -278,7 +278,7 @@ class EmailRegistrationPostgresTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"legacy@example.invalid\",\"password\":\"short6\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.user.sellerApprovalRequired").value(false));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM public.reward_ledger WHERE user_id=?",Long.class,legacyId)).isZero();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name<>'flyway_schema_history'",Integer.class)).isEqualTo(47);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name<>'flyway_schema_history'",Integer.class)).isEqualTo(48);
     }
     @Test void maliciousOriginOrInvalidSellerCannotSendEmail() throws Exception {
         http.perform(post("/api/v1/auth/register").header("Origin","https://untrusted.example.invalid")

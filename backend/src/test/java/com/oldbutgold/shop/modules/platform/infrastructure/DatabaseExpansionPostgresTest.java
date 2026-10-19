@@ -156,7 +156,7 @@ class DatabaseExpansionPostgresTest {
         var start=new CountDownLatch(1);
         try(var pool=Executors.newFixedThreadPool(2)){Callable<Boolean> task=()->{start.await();try{action.run();return true;}catch(DataAccessException e){return false;}};var a=pool.submit(task);var b=pool.submit(task);start.countDown();return(a.get(20,TimeUnit.SECONDS)?1:0)+(b.get(20,TimeUnit.SECONDS)?1:0);}
     }
-    @Test void cleanMigrationsValidate() {flyway(ds,null).validate();assertThat(id("SELECT max(version::int) FROM public.flyway_schema_history WHERE success")).isEqualTo(32);assertThat(id("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history'")).isEqualTo(47);}
+    @Test void cleanMigrationsValidate() {flyway(ds,null).validate();assertThat(id("SELECT max(version::int) FROM public.flyway_schema_history WHERE success")).isEqualTo(36);assertThat(id("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history'")).isEqualTo(48);}
     @Test void accountDeadlineCompensationRequiresCanonicalOrderAndConfirmedExactOutage() {
         Checkout checkout=checkout(listing(2,50000),1);paid(checkout);deliver(checkout);
         long target=returnCase(checkout);
@@ -369,15 +369,22 @@ class DatabaseExpansionPostgresTest {
             var properties=new java.util.Properties();properties.setProperty("currentSchema","og_compat,public");ds.setConnectionProperties(properties);
             assertThat(names).hasSize(103); // V24 intentionally retires refresh credentials.
             for(String table:names) {
-                // V26 extends the users compatibility projection with a new
-                // credential counter. Compare every original source field.
-                String row = table.equals("users") ? "(to_jsonb(t)-'credential_version')" : "to_jsonb(t)";
+                // V26 extends users with credential_version.
+                // V33-V36 extend shipments, orders, addresses with GHN/reconciliation columns.
+                // Compare every original source field preserved from V21.
+                String row = switch (table) {
+                    case "users" -> "(to_jsonb(t)-'credential_version')";
+                    case "addresses" -> "(to_jsonb(t)-'ghn_province_id'-'ghn_district_id'-'ghn_ward_code')";
+                    case "orders" -> "(to_jsonb(t)-'shipping_ghn_province_id'-'shipping_ghn_district_id'-'shipping_ghn_ward_code')";
+                    case "shipments" -> "(to_jsonb(t)-'client_order_code'-'shipping_fee'-'expected_delivery_at'-'raw_ghn_status'-'created_at'-'claim_token'-'claim_expires_at'-'incident_notes'-'admin_review_required'-'next_reconciliation_at'-'reconciliation_attempts')";
+                    default -> "to_jsonb(t)";
+                };
                 assertThat(j.queryForMap("SELECT count(*) AS rows,md5(coalesce(string_agg(md5("+row+"::text),'' ORDER BY md5("+row+"::text)),'')) AS fingerprint FROM og_compat."+table+" t")).as(table).isEqualTo(before.get(table));
             }
             assertThat(id("SELECT count(*) FROM public.users WHERE credential_version<>0")).isZero();
             assertThat(j.queryForObject("SELECT u.google_subject=e.provider_subject FROM public.users u JOIN og_compat.external_identities e ON e.user_id=u.user_id AND e.provider='GOOGLE' WHERE u.user_id=?",Boolean.class,buyer)).isTrue();
             assertThat(j.queryForList("SELECT version,checksum FROM public.flyway_schema_history WHERE version::int<=21 ORDER BY installed_rank")).isEqualTo(checksums);
-            assertThat(id("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history'")).isEqualTo(47);
+            assertThat(id("SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename<>'flyway_schema_history'")).isEqualTo(48);
             assertThat(id("SELECT count(*) FROM pg_namespace WHERE nspname='_og70_v21'")).isZero();
             assertThat(id("SELECT reward_balance FROM public.users WHERE user_id=?",buyer)).isEqualTo(10);
             assertThat(j.queryForObject("SELECT email_2fa_enabled FROM public.users WHERE user_id=?",Boolean.class,buyer)).isTrue();
