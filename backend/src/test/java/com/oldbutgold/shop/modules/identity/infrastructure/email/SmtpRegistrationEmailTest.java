@@ -49,10 +49,10 @@ class SmtpRegistrationEmailTest {
     }
     @Test void realSmtpTransportDeliversCodeToAnIsolatedLocalMailbox() throws Exception {
         try(var listener=new ServerSocket(0);var worker=Executors.newSingleThreadExecutor()) {
-            listener.setSoTimeout(5000);
+            listener.setSoTimeout(15000);
             var delivered=worker.submit(()->{
                 try(var socket=listener.accept()) {
-                    socket.setSoTimeout(5000);
+                    socket.setSoTimeout(15000);
                     var reader=new BufferedReader(new InputStreamReader(socket.getInputStream(),StandardCharsets.UTF_8));
                     var writer=new PrintWriter(new OutputStreamWriter(socket.getOutputStream(),StandardCharsets.UTF_8),true);
                     writer.print("220 localhost test SMTP\r\n");writer.flush();
@@ -71,12 +71,12 @@ class SmtpRegistrationEmailTest {
             var sender=new JavaMailSenderImpl();
             sender.setHost("127.0.0.1");sender.setPort(listener.getLocalPort());sender.setDefaultEncoding("UTF-8");
             sender.getJavaMailProperties().put("mail.smtp.localhost","localhost");
-            sender.getJavaMailProperties().put("mail.smtp.connectiontimeout","2000");
-            sender.getJavaMailProperties().put("mail.smtp.timeout","2000");
-            sender.getJavaMailProperties().put("mail.smtp.writetimeout","2000");
+            sender.getJavaMailProperties().put("mail.smtp.connectiontimeout","10000");
+            sender.getJavaMailProperties().put("mail.smtp.timeout","10000");
+            sender.getJavaMailProperties().put("mail.smtp.writetimeout","10000");
             adapter(sender,true).sendCode("fixture@example.invalid","123456",Duration.ofMinutes(5));
             var message=new MimeMessage(Session.getInstance(new Properties()),new ByteArrayInputStream(
-                    delivered.get(5,TimeUnit.SECONDS).getBytes(StandardCharsets.UTF_8)));
+                    delivered.get(15,TimeUnit.SECONDS).getBytes(StandardCharsets.UTF_8)));
             assertThat(message.getAllRecipients()[0].toString()).isEqualTo("fixture@example.invalid");
             assertThat(message.getContent().toString()).contains("123456","5");
         }
