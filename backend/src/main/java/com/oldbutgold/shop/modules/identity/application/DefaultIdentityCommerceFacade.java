@@ -73,6 +73,8 @@ public class DefaultIdentityCommerceFacade implements IdentityCommerceFacade {
     @Override
     @Transactional
     public AddressDto createAddress(long userId, CreateAddressRequest request) {
+        validateGhnCodes(request.ghnProvinceId(), request.ghnDistrictId(), request.ghnWardCode());
+
         Instant now = clock.instant();
         List<AddressEntity> existing = addressRepository.findByUserIdAndDeletedAtIsNullOrderByIsDefaultDescCreatedAtDesc(userId);
         boolean shouldBeDefault = request.isDefault() || existing.isEmpty();
@@ -93,6 +95,9 @@ public class DefaultIdentityCommerceFacade implements IdentityCommerceFacade {
                 request.district().trim(),
                 request.ward().trim(),
                 request.detailAddress().trim(),
+                request.ghnProvinceId(),
+                request.ghnDistrictId(),
+                request.ghnWardCode() != null ? request.ghnWardCode().trim() : null,
                 shouldBeDefault,
                 now
         );
@@ -100,9 +105,25 @@ public class DefaultIdentityCommerceFacade implements IdentityCommerceFacade {
         return toDto(saved);
     }
 
+    private static void validateGhnCodes(Integer provinceId, Integer districtId, String wardCode) {
+        boolean anyProvided = provinceId != null || districtId != null || wardCode != null;
+        if (!anyProvided) {
+            return;
+        }
+        if (provinceId == null || provinceId <= 0) {
+            throw new IllegalArgumentException("Mã tỉnh/thành GHN (ghnProvinceId) không hợp lệ.");
+        }
+        if (districtId == null || districtId <= 0) {
+            throw new IllegalArgumentException("Mã quận/huyện GHN (ghnDistrictId) không hợp lệ.");
+        }
+        if (wardCode == null || wardCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("Mã phường/xã GHN (ghnWardCode) không được để trống.");
+        }
+    }
+
     private AddressDto toDto(AddressEntity e) {
         return new AddressDto(
-                e.getId(),
+                e.getId() != null ? e.getId() : 0L,
                 e.getUserId(),
                 e.getRecipientName(),
                 e.getPhoneNumber(),
@@ -110,6 +131,9 @@ public class DefaultIdentityCommerceFacade implements IdentityCommerceFacade {
                 e.getDistrict(),
                 e.getWard(),
                 e.getDetailAddress(),
+                e.getGhnProvinceId(),
+                e.getGhnDistrictId(),
+                e.getGhnWardCode(),
                 e.isDefault(),
                 e.getCreatedAt()
         );

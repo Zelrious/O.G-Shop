@@ -42,6 +42,9 @@ export interface UserAddress {
   district: string;
   ward: string;
   detailAddress: string;
+  ghnProvinceId?: number | null;
+  ghnDistrictId?: number | null;
+  ghnWardCode?: string | null;
   isDefault: boolean;
   createdAt: string;
 }
@@ -53,6 +56,9 @@ export interface CreateAddressPayload {
   district: string;
   ward: string;
   detailAddress: string;
+  ghnProvinceId?: number | null;
+  ghnDistrictId?: number | null;
+  ghnWardCode?: string | null;
   isDefault?: boolean;
 }
 
@@ -63,5 +69,27 @@ export interface UpdateAddressPayload {
   district: string;
   ward: string;
   detailAddress: string;
+  ghnProvinceId?: number | null;
+  ghnDistrictId?: number | null;
+  ghnWardCode?: string | null;
   isDefault?: boolean;
+}
+
+export interface GhnProvince {
+  provinceId: number;
+  provinceName: string;
+  code?: string;
+}
+
+export interface GhnDistrict {
+  districtId: number;
+  provinceId: number;
+  districtName: string;
+  code?: string;
+}
+
+export interface GhnWard {
+  wardCode: string;
+  districtId: number;
+  wardName: string;
 }

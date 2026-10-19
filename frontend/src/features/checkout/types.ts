@@ -6,6 +6,9 @@ export interface AddressSummary {
   district: string;
   ward: string;
   detailAddress: string;
+  ghnProvinceId?: number | null;
+  ghnDistrictId?: number | null;
+  ghnWardCode?: string | null;
   isDefault: boolean;
 }
 
@@ -16,6 +19,9 @@ export interface CreateAddressInput {
   district: string;
   ward: string;
   detailAddress: string;
+  ghnProvinceId?: number | null;
+  ghnDistrictId?: number | null;
+  ghnWardCode?: string | null;
   isDefault: boolean;
 }
 

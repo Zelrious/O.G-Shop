@@ -78,7 +78,7 @@ class AuthFlowsPostgresTest {
         String clean="ogshop_auth_clean_test_"+UUID.randomUUID().toString().replace("-","");root.execute("CREATE DATABASE "+clean);
         try {
             Flyway.configure().dataSource(source(clean)).schemas("public").defaultSchema("public").callbacks(new LegacyModerationHistoryCallback()).load().migrate();
-            assertThat(new JdbcTemplate(source(clean)).queryForObject("SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'",Integer.class)).isEqualTo(48);
+            assertThat(new JdbcTemplate(source(clean)).queryForObject("SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'",Integer.class)).isEqualTo(49);
         } finally {root.execute("DROP DATABASE "+clean+" WITH (FORCE)");}
     }
     @Test void password2faCannotIssueTokenCookieUntilOtpAndWrongAttemptsCommit() throws Exception {

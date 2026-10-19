@@ -1,6 +1,7 @@
 package com.oldbutgold.shop.modules.payment.application;
 
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.VnPayAttemptRepository;
+import com.oldbutgold.shop.shared.PostgresTestSafetyGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -30,7 +31,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class VnPayPaymentPostgresTest {
     @DynamicPropertySource static void properties(DynamicPropertyRegistry p) {
         p.add("spring.datasource.hikari.connection-init-sql", () -> "SET search_path TO og_compat,public");
-        p.add("spring.datasource.url", () -> System.getenv("OGSHOP_TEST_DB_URL"));
+        String url = PostgresTestSafetyGuard.resolveAndAssertSafeFromEnv("OGSHOP_TEST_DB_URL");
+        p.add("spring.datasource.url", () -> url);
         p.add("spring.datasource.username", () -> System.getenv("OGSHOP_TEST_DB_USER"));
         p.add("spring.datasource.password", () -> System.getenv("OGSHOP_TEST_DB_PASSWORD"));
         p.add("spring.flyway.enabled", () -> true);

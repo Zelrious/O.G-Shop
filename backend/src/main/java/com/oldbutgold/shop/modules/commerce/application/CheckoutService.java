@@ -162,12 +162,28 @@ public class CheckoutService {
                     newAddr.district().trim(),
                     newAddr.ward().trim(),
                     newAddr.detailAddress().trim(),
+                    newAddr.ghnProvinceId(),
+                    newAddr.ghnDistrictId(),
+                    newAddr.ghnWardCode(),
                     newAddr.isDefault()
             ));
         } else {
             address = identityCommerceFacade.getDefaultAddress(buyerId)
                     .orElseThrow(() -> new IllegalArgumentException("Vui lòng chọn hoặc nhập địa chỉ nhận hàng."));
         }
+
+        // ADDR-03: Kiểm tra địa chỉ nhận hàng của Buyer có đủ mã chuẩn hóa GHN
+        if (!address.hasValidGhnCodes()) {
+            throw new IllegalArgumentException("Địa chỉ nhận hàng chưa được chuẩn hóa theo mã bưu chính GHN. Vui lòng cập nhật hoặc thêm địa chỉ chuẩn GHN để tiếp tục.");
+        }
+
+        // ADDR-02 & ADDR-03: Lấy địa chỉ lấy hàng mặc định của Seller và kiểm tra chuẩn hóa GHN
+        IdentityCommerceFacade.AddressDto sellerAddress = identityCommerceFacade.getDefaultAddress(product.sellerId())
+                .orElse(null);
+        if (sellerAddress == null || !sellerAddress.hasValidGhnCodes()) {
+            throw new IllegalStateException("Sản phẩm hiện chưa thể đặt mua do người bán chưa thiết lập địa chỉ lấy hàng chuẩn hóa GHN. Vui lòng liên hệ người bán.");
+        }
+        Long sourceAddressId = sellerAddress.id();
 
         // 3. Fee Policy
         SystemFeePolicyEntity feePolicy = systemFeePolicyRepository.findFirstByStatusOrderByEffectiveFromDesc("ACTIVE")
@@ -216,13 +232,16 @@ public class CheckoutService {
                 checkoutGroupId,
                 buyerId,
                 product.sellerId(),
-                address.id(),
+                sourceAddressId,
                 address.recipientName(),
                 address.phoneNumber(),
                 address.province(),
                 address.district(),
                 address.ward(),
                 address.detailAddress(),
+                address.ghnProvinceId(),
+                address.ghnDistrictId(),
+                address.ghnWardCode(),
                 subtotal,
                 shippingFee,
                 buyerFee,
@@ -350,7 +369,8 @@ public class CheckoutService {
         return new CheckoutDtos.AddressSummaryResponse(
                 a.id(), a.recipientName(), a.phoneNumber(),
                 a.province(), a.district(), a.ward(),
-                a.detailAddress(), a.isDefault()
+                a.detailAddress(), a.ghnProvinceId(), a.ghnDistrictId(), a.ghnWardCode(),
+                a.isDefault()
         );
     }
 

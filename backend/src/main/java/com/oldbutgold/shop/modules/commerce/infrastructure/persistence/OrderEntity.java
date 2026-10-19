@@ -61,6 +61,15 @@ public class OrderEntity {
     @Column(name = "shipping_detail_address", nullable = false, length = 255)
     private String shippingDetailAddress;
 
+    @Column(name = "shipping_ghn_province_id")
+    private Integer shippingGhnProvinceId;
+
+    @Column(name = "shipping_ghn_district_id")
+    private Integer shippingGhnDistrictId;
+
+    @Column(name = "shipping_ghn_ward_code", length = 20)
+    private String shippingGhnWardCode;
+
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal subtotal;
 
@@ -126,6 +135,21 @@ public class OrderEntity {
                        BigDecimal buyerSystemFee, BigDecimal sellerSystemFee, BigDecimal sellerProceeds,
                        BigDecimal voucherDiscountAmount, BigDecimal shippingDiscountAmount,
                        String sponsorType, BigDecimal totalAmount, Instant paymentDueAt, Instant now) {
+        this(checkoutGroupId, buyerId, sellerId, sourceAddressId, shippingRecipientName, shippingPhoneNumber,
+                shippingProvince, shippingDistrict, shippingWard, shippingDetailAddress, null, null, null,
+                subtotal, shippingFee, buyerSystemFee, sellerSystemFee, sellerProceeds, voucherDiscountAmount,
+                shippingDiscountAmount, sponsorType, totalAmount, paymentDueAt, now);
+    }
+
+    public OrderEntity(UUID checkoutGroupId, Long buyerId, Long sellerId, Long sourceAddressId,
+                       String shippingRecipientName, String shippingPhoneNumber,
+                       String shippingProvince, String shippingDistrict, String shippingWard,
+                       String shippingDetailAddress, Integer shippingGhnProvinceId,
+                       Integer shippingGhnDistrictId, String shippingGhnWardCode,
+                       BigDecimal subtotal, BigDecimal shippingFee,
+                       BigDecimal buyerSystemFee, BigDecimal sellerSystemFee, BigDecimal sellerProceeds,
+                       BigDecimal voucherDiscountAmount, BigDecimal shippingDiscountAmount,
+                       String sponsorType, BigDecimal totalAmount, Instant paymentDueAt, Instant now) {
         this.checkoutGroupId = checkoutGroupId;
         this.buyerId = buyerId;
         this.sellerId = sellerId;
@@ -136,6 +160,9 @@ public class OrderEntity {
         this.shippingDistrict = shippingDistrict;
         this.shippingWard = shippingWard;
         this.shippingDetailAddress = shippingDetailAddress;
+        this.shippingGhnProvinceId = shippingGhnProvinceId;
+        this.shippingGhnDistrictId = shippingGhnDistrictId;
+        this.shippingGhnWardCode = shippingGhnWardCode;
         this.subtotal = subtotal;
         this.shippingFee = shippingFee;
         this.buyerSystemFee = buyerSystemFee;
@@ -161,6 +188,12 @@ public class OrderEntity {
     public String getShippingDistrict() { return shippingDistrict; }
     public String getShippingWard() { return shippingWard; }
     public String getShippingDetailAddress() { return shippingDetailAddress; }
+    public Integer getShippingGhnProvinceId() { return shippingGhnProvinceId; }
+    public Integer getShippingGhnDistrictId() { return shippingGhnDistrictId; }
+    public String getShippingGhnWardCode() { return shippingGhnWardCode; }
+    public boolean hasValidShippingGhnCodes() {
+        return shippingGhnDistrictId != null && shippingGhnWardCode != null && !shippingGhnWardCode.isBlank();
+    }
     public BigDecimal getSubtotal() { return subtotal; }
     public BigDecimal getShippingFee() { return shippingFee; }
     public BigDecimal getBuyerSystemFee() { return buyerSystemFee; }
@@ -232,6 +265,51 @@ public class OrderEntity {
         this.status = STATUS_CANCELLED;
         this.cancellationReason = (reason != null && !reason.isBlank()) ? reason : "Đã hủy do rà soát gian lận";
         this.cancelledAt = now;
+        this.updatedAt = now;
+    }
+
+    public void markShipped(Instant now) {
+        if (STATUS_SHIPPED.equals(this.status) || STATUS_DELIVERED.equals(this.status) || STATUS_COMPLETED.equals(this.status)) {
+            return; // idempotent
+        }
+        if (!STATUS_SELLER_CONFIRMED.equals(this.status)) {
+            throw new IllegalStateException("Chỉ có thể chuyển sang SHIPPED khi đơn hàng đang ở trạng thái SELLER_CONFIRMED. Trạng thái hiện tại: " + this.status);
+        }
+        this.status = STATUS_SHIPPED;
+        this.updatedAt = now;
+    }
+
+    public void markDelivered(Instant now) {
+        if (STATUS_DELIVERED.equals(this.status) || STATUS_COMPLETED.equals(this.status)) {
+            return; // idempotent
+        }
+        if (!STATUS_SHIPPED.equals(this.status)) {
+            throw new IllegalStateException("Chỉ có thể chuyển sang DELIVERED khi đơn hàng đang ở trạng thái SHIPPED. Trạng thái hiện tại: " + this.status);
+        }
+        this.status = STATUS_DELIVERED;
+        this.updatedAt = now;
+    }
+
+    public void markDeliveredDirectFromCarrier(Instant now) {
+        if (STATUS_DELIVERED.equals(this.status) || STATUS_COMPLETED.equals(this.status)) {
+            return; // idempotent
+        }
+        if (!STATUS_SELLER_CONFIRMED.equals(this.status) && !STATUS_SHIPPED.equals(this.status)) {
+            throw new IllegalStateException("Chỉ có thể chuyển trực tiếp sang DELIVERED từ carrier khi đơn hàng đang ở trạng thái SELLER_CONFIRMED hoặc SHIPPED. Trạng thái hiện tại: " + this.status);
+        }
+        this.status = STATUS_DELIVERED;
+        this.updatedAt = now;
+    }
+
+    public void markCompleted(Instant now) {
+        if (STATUS_COMPLETED.equals(this.status)) {
+            return; // idempotent
+        }
+        if (!STATUS_DELIVERED.equals(this.status)) {
+            throw new IllegalStateException("Chỉ có thể hoàn thành đơn hàng khi đang ở trạng thái DELIVERED. Trạng thái hiện tại: " + this.status);
+        }
+        this.status = STATUS_COMPLETED;
+        this.completedAt = now;
         this.updatedAt = now;
     }
 }

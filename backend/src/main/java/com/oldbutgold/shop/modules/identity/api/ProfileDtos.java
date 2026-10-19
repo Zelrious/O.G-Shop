@@ -76,9 +76,18 @@ public final class ProfileDtos {
             String district,
             String ward,
             String detailAddress,
+            Integer ghnProvinceId,
+            Integer ghnDistrictId,
+            String ghnWardCode,
             boolean isDefault,
             Instant createdAt
-    ) {}
+    ) {
+        public AddressResponse(Long id, String recipientName, String phoneNumber,
+                               String province, String district, String ward,
+                               String detailAddress, boolean isDefault, Instant createdAt) {
+            this(id, recipientName, phoneNumber, province, district, ward, detailAddress, null, null, null, isDefault, createdAt);
+        }
+    }
 
     public record CreateAddressRequest(
             @NotBlank(message = "Tên người nhận không được để trống")
@@ -102,8 +111,17 @@ public final class ProfileDtos {
             @Size(max = 255, message = "Địa chỉ chi tiết tối đa 255 ký tự")
             String detailAddress,
 
+            Integer ghnProvinceId,
+            Integer ghnDistrictId,
+            String ghnWardCode,
+
             boolean isDefault
-    ) {}
+    ) {
+        public CreateAddressRequest(String recipientName, String phoneNumber, String province,
+                                    String district, String ward, String detailAddress, boolean isDefault) {
+            this(recipientName, phoneNumber, province, district, ward, detailAddress, null, null, null, isDefault);
+        }
+    }
 
     public record UpdateAddressRequest(
             @NotBlank(message = "Tên người nhận không được để trống")
@@ -127,6 +145,15 @@ public final class ProfileDtos {
             @Size(max = 255, message = "Địa chỉ chi tiết tối đa 255 ký tự")
             String detailAddress,
 
+            Integer ghnProvinceId,
+            Integer ghnDistrictId,
+            String ghnWardCode,
+
             boolean isDefault
-    ) {}
+    ) {
+        public UpdateAddressRequest(String recipientName, String phoneNumber, String province,
+                                    String district, String ward, String detailAddress, boolean isDefault) {
+            this(recipientName, phoneNumber, province, district, ward, detailAddress, null, null, null, isDefault);
+        }
+    }
 }

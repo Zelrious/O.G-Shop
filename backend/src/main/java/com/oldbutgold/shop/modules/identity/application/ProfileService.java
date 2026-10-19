@@ -117,6 +117,8 @@ public class ProfileService {
     }
 
     public ProfileDtos.AddressResponse createAddress(long userId, ProfileDtos.CreateAddressRequest request) {
+        validateGhnCodes(request.ghnProvinceId(), request.ghnDistrictId(), request.ghnWardCode());
+
         Instant now = clock.instant();
         List<AddressEntity> existingList = addressRepository.findByUserIdAndDeletedAtIsNullOrderByIsDefaultDescCreatedAtDesc(userId);
         boolean shouldBeDefault = request.isDefault() || existingList.isEmpty();
@@ -137,6 +139,9 @@ public class ProfileService {
                 request.district().trim(),
                 request.ward().trim(),
                 request.detailAddress().trim(),
+                request.ghnProvinceId(),
+                request.ghnDistrictId(),
+                request.ghnWardCode() != null ? request.ghnWardCode().trim() : null,
                 shouldBeDefault,
                 now
         );
@@ -145,6 +150,8 @@ public class ProfileService {
     }
 
     public ProfileDtos.AddressResponse updateAddress(long userId, long addressId, ProfileDtos.UpdateAddressRequest request) {
+        validateGhnCodes(request.ghnProvinceId(), request.ghnDistrictId(), request.ghnWardCode());
+
         Instant now = clock.instant();
         AddressEntity address = addressRepository.findByIdAndUserIdAndDeletedAtIsNull(addressId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy địa chỉ với ID: " + addressId));
@@ -165,10 +172,29 @@ public class ProfileService {
                 request.district(),
                 request.ward(),
                 request.detailAddress(),
+                request.ghnProvinceId(),
+                request.ghnDistrictId(),
+                request.ghnWardCode() != null ? request.ghnWardCode().trim() : null,
                 now
         );
         AddressEntity saved = addressRepository.save(address);
         return toAddressResponse(saved);
+    }
+
+    private static void validateGhnCodes(Integer provinceId, Integer districtId, String wardCode) {
+        boolean anyProvided = provinceId != null || districtId != null || wardCode != null;
+        if (!anyProvided) {
+            return;
+        }
+        if (provinceId == null || provinceId <= 0) {
+            throw new IllegalArgumentException("Mã tỉnh/thành GHN (ghnProvinceId) không hợp lệ.");
+        }
+        if (districtId == null || districtId <= 0) {
+            throw new IllegalArgumentException("Mã quận/huyện GHN (ghnDistrictId) không hợp lệ.");
+        }
+        if (wardCode == null || wardCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("Mã phường/xã GHN (ghnWardCode) không được để trống.");
+        }
     }
 
     public void deleteAddress(long userId, long addressId) {
@@ -222,6 +248,9 @@ public class ProfileService {
                 entity.getDistrict(),
                 entity.getWard(),
                 entity.getDetailAddress(),
+                entity.getGhnProvinceId(),
+                entity.getGhnDistrictId(),
+                entity.getGhnWardCode(),
                 entity.isDefault(),
                 entity.getCreatedAt()
         );

@@ -155,4 +155,99 @@ class ProfileServiceTest {
         assertThat(response.avatarUrl()).isEqualTo(avatarUrl);
         verify(userRepository).save(user);
     }
+
+    @Test
+    @DisplayName("createAddress thành công khi có đầy đủ mã GHN chuẩn hóa")
+    void createAddress_SuccessWithGhnCodes() {
+        when(addressRepository.findByUserIdAndDeletedAtIsNullOrderByIsDefaultDescCreatedAtDesc(1L))
+                .thenReturn(new ArrayList<>());
+        when(addressRepository.save(any(AddressEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ProfileDtos.CreateAddressRequest request = new ProfileDtos.CreateAddressRequest(
+                "Trần Văn B", "0912345678", "TP. Hồ Chí Minh", "Quận 1", "Phường Bến Nghé",
+                "123 Đồng Khởi", 202, 1442, "20101", true
+        );
+
+        ProfileDtos.AddressResponse response = profileService.createAddress(1L, request);
+
+        assertThat(response.recipientName()).isEqualTo("Trần Văn B");
+        assertThat(response.ghnProvinceId()).isEqualTo(202);
+        assertThat(response.ghnDistrictId()).isEqualTo(1442);
+        assertThat(response.ghnWardCode()).isEqualTo("20101");
+        assertThat(response.isDefault()).isTrue();
+    }
+
+    @Test
+    @DisplayName("createAddress thành công với địa chỉ legacy (không truyền mã GHN)")
+    void createAddress_SuccessWithoutGhnCodes() {
+        when(addressRepository.findByUserIdAndDeletedAtIsNullOrderByIsDefaultDescCreatedAtDesc(1L))
+                .thenReturn(new ArrayList<>());
+        when(addressRepository.save(any(AddressEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ProfileDtos.CreateAddressRequest request = new ProfileDtos.CreateAddressRequest(
+                "Trần Văn B", "0912345678", "TP. Hồ Chí Minh", "Quận 1", "Phường Bến Nghé",
+                "123 Đồng Khởi", null, null, null, false
+        );
+
+        ProfileDtos.AddressResponse response = profileService.createAddress(1L, request);
+
+        assertThat(response.recipientName()).isEqualTo("Trần Văn B");
+        assertThat(response.ghnProvinceId()).isNull();
+        assertThat(response.ghnDistrictId()).isNull();
+        assertThat(response.ghnWardCode()).isNull();
+    }
+
+    @Test
+    @DisplayName("createAddress ném IllegalArgumentException khi truyền mã GHN thiếu nhất quán")
+    void createAddress_ThrowsWhenGhnCodesInconsistent() {
+        // Chỉ truyền provinceId
+        ProfileDtos.CreateAddressRequest req1 = new ProfileDtos.CreateAddressRequest(
+                "Trần Văn B", "0912345678", "TP. Hồ Chí Minh", "Quận 1", "Phường Bến Nghé",
+                "123 Đồng Khởi", 202, null, null, false
+        );
+        assertThatThrownBy(() -> profileService.createAddress(1L, req1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ghnDistrictId");
+
+        // Thiếu wardCode
+        ProfileDtos.CreateAddressRequest req2 = new ProfileDtos.CreateAddressRequest(
+                "Trần Văn B", "0912345678", "TP. Hồ Chí Minh", "Quận 1", "Phường Bến Nghé",
+                "123 Đồng Khởi", 202, 1442, "", false
+        );
+        assertThatThrownBy(() -> profileService.createAddress(1L, req2))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ghnWardCode");
+
+        // provinceId âm
+        ProfileDtos.CreateAddressRequest req3 = new ProfileDtos.CreateAddressRequest(
+                "Trần Văn B", "0912345678", "TP. Hồ Chí Minh", "Quận 1", "Phường Bến Nghé",
+                "123 Đồng Khởi", -1, 1442, "20101", false
+        );
+        assertThatThrownBy(() -> profileService.createAddress(1L, req3))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ghnProvinceId");
+    }
+
+    @Test
+    @DisplayName("updateAddress cập nhật thành công các mã GHN")
+    void updateAddress_SuccessWithGhnCodes() {
+        AddressEntity existing = new AddressEntity(
+                1L, "Người cũ", "0901234567", "Tỉnh cũ", "Huyện cũ", "Xã cũ", "Nhà cũ", false, clock.instant()
+        );
+        when(addressRepository.findByIdAndUserIdAndDeletedAtIsNull(10L, 1L)).thenReturn(Optional.of(existing));
+        when(addressRepository.save(any(AddressEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ProfileDtos.UpdateAddressRequest request = new ProfileDtos.UpdateAddressRequest(
+                "Người Mới", "0919999888", "Hà Nội", "Hoàn Kiếm", "Tràng Tiền",
+                "1 Tràng Tiền", 201, 1441, "10001", false
+        );
+
+        ProfileDtos.AddressResponse response = profileService.updateAddress(1L, 10L, request);
+
+        assertThat(response.recipientName()).isEqualTo("Người Mới");
+        assertThat(response.ghnProvinceId()).isEqualTo(201);
+        assertThat(response.ghnDistrictId()).isEqualTo(1441);
+        assertThat(response.ghnWardCode()).isEqualTo("10001");
+        assertThat(existing.hasValidGhnCodes()).isTrue();
+    }
 }

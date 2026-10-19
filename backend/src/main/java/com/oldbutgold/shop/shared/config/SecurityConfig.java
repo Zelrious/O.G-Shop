@@ -65,15 +65,18 @@ public class SecurityConfig {
                                 "/api/v1/auth/google",
                                 "/api/v1/auth/google/**",
                                 "/api/v1/auth/session",
-                                "/api/v1/auth/logout").permitAll()
+                                "/api/v1/auth/logout",
+                                "/api/v1/fulfillment/webhook").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/auth/google/config",
                                 "/api/v1/categories",
                                 "/api/v1/products",
                                 "/api/v1/products/**",
                                 "/api/v1/media/**",
-                                "/api/v1/payments/vnpay-ipn").permitAll()
+                                "/api/v1/payments/vnpay-ipn",
+                                "/api/v1/shipping/master-data/**").permitAll()
                         .requestMatchers("/api/v1/admin/payments/**").hasAnyRole("ADMIN", "KTV")
+                        .requestMatchers("/api/v1/admin/fulfillment/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/ktv/users/**").hasRole("KTV")
                         .requestMatchers("/api/v1/admin/vouchers/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/ktv/vouchers/**").hasRole("KTV")
@@ -89,7 +92,8 @@ public class SecurityConfig {
                                 "/api/v1/moderation/**",
                                 "/api/v1/notifications/**",
                                 "/api/v1/commerce/**",
-                                "/api/v1/payments/**").authenticated()
+                                "/api/v1/payments/**",
+                                "/api/v1/fulfillment/**").authenticated()
 
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2

@@ -2,6 +2,9 @@ import { authApi } from '../auth';
 import {
   ChangePasswordPayload,
   CreateAddressPayload,
+  GhnDistrict,
+  GhnProvince,
+  GhnWard,
   UpdateAddressPayload,
   UpdateBankPayload,
   UpdateProfilePayload,
@@ -101,5 +104,62 @@ export const profileApi = {
       method: 'PUT',
     });
     return parseResponse<UserAddress>(res);
+  },
+
+  async getProvinces(): Promise<GhnProvince[]> {
+    interface RawProvince {
+      provinceId?: number | string;
+      ProvinceID?: number | string;
+      provinceName?: string;
+      ProvinceName?: string;
+      code?: string;
+      Code?: string;
+    }
+    const res = await authApi.authorizedFetch('/shipping/master-data/provinces');
+    const raw = await parseResponse<RawProvince[]>(res);
+    return (raw || []).map((item) => ({
+      provinceId: Number(item.provinceId ?? item.ProvinceID),
+      provinceName: String(item.provinceName ?? item.ProvinceName ?? ''),
+      code: item.code ?? item.Code,
+    }));
+  },
+
+  async getDistricts(provinceId: number): Promise<GhnDistrict[]> {
+    interface RawDistrict {
+      districtId?: number | string;
+      DistrictID?: number | string;
+      provinceId?: number | string;
+      ProvinceID?: number | string;
+      districtName?: string;
+      DistrictName?: string;
+      code?: string;
+      Code?: string;
+    }
+    const res = await authApi.authorizedFetch(`/shipping/master-data/districts?provinceId=${provinceId}`);
+    const raw = await parseResponse<RawDistrict[]>(res);
+    return (raw || []).map((item) => ({
+      districtId: Number(item.districtId ?? item.DistrictID),
+      provinceId: Number(item.provinceId ?? item.ProvinceID ?? provinceId),
+      districtName: String(item.districtName ?? item.DistrictName ?? ''),
+      code: item.code ?? item.Code,
+    }));
+  },
+
+  async getWards(districtId: number): Promise<GhnWard[]> {
+    interface RawWard {
+      wardCode?: string;
+      WardCode?: string;
+      districtId?: number | string;
+      DistrictID?: number | string;
+      wardName?: string;
+      WardName?: string;
+    }
+    const res = await authApi.authorizedFetch(`/shipping/master-data/wards?districtId=${districtId}`);
+    const raw = await parseResponse<RawWard[]>(res);
+    return (raw || []).map((item) => ({
+      wardCode: String(item.wardCode ?? item.WardCode ?? ''),
+      districtId: Number(item.districtId ?? item.DistrictID ?? districtId),
+      wardName: String(item.wardName ?? item.WardName ?? ''),
+    }));
   },
 };

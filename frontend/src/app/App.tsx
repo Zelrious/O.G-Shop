@@ -50,6 +50,7 @@ import {
   AdminSystemFeesPage,
   AdminVouchersPage,
   AdminBroadcastsPage,
+  AdminFulfillmentIncidentsPage,
 } from '../pages';
 import { SellerDashboardPage } from '../pages/seller/SellerDashboardPage';
 import './styles.css';
@@ -228,6 +229,7 @@ export function App() {
                   <Route path="/admin/system-fees" element={<AdminSystemFeesPage />} />
                   <Route path="/admin/vouchers" element={<AdminVouchersPage />} />
                   <Route path="/admin/broadcasts" element={<AdminBroadcastsPage />} />
+                  <Route path="/admin/fulfillment-incidents" element={<AdminFulfillmentIncidentsPage />} />
                 </Route>
 
                 {/* 404 Fallback */}
