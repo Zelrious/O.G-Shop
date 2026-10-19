@@ -288,7 +288,7 @@ class ShipmentPostgresTest {
 
         // Giả lập Webhook đến trước và cập nhật status sang PICKED_UP
         jdbcTemplate.update(
-                "UPDATE shipments SET status = 'PICKED_UP', raw_ghn_status = 'picking', updated_at = NOW() WHERE order_id = ?",
+                "UPDATE shipments SET status = 'PICKED_UP', shipped_at = NOW(), raw_ghn_status = 'picking', updated_at = NOW() WHERE order_id = ?",
                 orderId
         );
 
