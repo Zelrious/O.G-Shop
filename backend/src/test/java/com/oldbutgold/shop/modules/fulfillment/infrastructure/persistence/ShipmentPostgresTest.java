@@ -14,6 +14,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -21,6 +24,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -45,6 +53,9 @@ class ShipmentPostgresTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     private final List<Long> createdOrderIds = new CopyOnWriteArrayList<>();
     private final List<Long> createdUserIds = new CopyOnWriteArrayList<>();
@@ -195,4 +206,149 @@ class ShipmentPostgresTest {
         )).isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("ck_shipments_status");
     }
+
+    @Test
+    @DisplayName("Việc 1: Tranh chấp claim giữa nhiều worker và release có token-safe fencing")
+    void testConcurrentClaimAcquisitionAndTokenSafeRelease() throws InterruptedException {
+        Long orderId = createTestOrder();
+        jdbcTemplate.update(
+                "INSERT INTO shipments (order_id, status, created_at) VALUES (?, 'PENDING', NOW())",
+                orderId
+        );
+
+        int threadCount = 10;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+        List<String> winningTokens = new CopyOnWriteArrayList<>();
+
+        Instant now = Instant.now();
+        Instant expiry = now.plus(30, ChronoUnit.SECONDS);
+
+        for (int i = 0; i < threadCount; i++) {
+            final String token = UUID.randomUUID().toString();
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    int updated = shipmentRepository.acquireClaim(orderId, token, expiry, Instant.now());
+                    if (updated == 1) {
+                        successCount.incrementAndGet();
+                        winningTokens.add(token);
+                    }
+                } catch (Exception ignored) {
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        assertThat(doneLatch.await(10, TimeUnit.SECONDS)).isTrue();
+        executor.shutdown();
+
+        // Đúng 1 worker acquire thành công
+        assertThat(successCount.get()).isEqualTo(1);
+        assertThat(winningTokens).hasSize(1);
+        String activeToken = winningTokens.get(0);
+
+        // Worker giả mạo / worker cũ với token khác không thể release claim
+        String staleToken = UUID.randomUUID().toString();
+        int fakeRelease = shipmentRepository.releaseClaim(orderId, staleToken, Instant.now());
+        assertThat(fakeRelease).isEqualTo(0);
+
+        // Claim trong DB vẫn thuộc về activeToken
+        String tokenInDb = jdbcTemplate.queryForObject(
+                "SELECT claim_token FROM shipments WHERE order_id = ?",
+                String.class,
+                orderId
+        );
+        assertThat(tokenInDb).isEqualTo(activeToken);
+
+        // Worker sở hữu token giải phóng thành công
+        int realRelease = shipmentRepository.releaseClaim(orderId, activeToken, Instant.now());
+        assertThat(realRelease).isEqualTo(1);
+
+        String releasedToken = jdbcTemplate.queryForObject(
+                "SELECT claim_token FROM shipments WHERE order_id = ?",
+                String.class,
+                orderId
+        );
+        assertThat(releasedToken).isNull();
+    }
+
+    @Test
+    @DisplayName("Việc 2: Phòng chống TOCTOU khi webhook tiến triển trạng thái xen giữa reconciliation")
+    void testToctouDefenseOnPostgresWebhookConcurrentStateTransition() {
+        Long orderId = createTestOrder();
+        jdbcTemplate.update(
+                "INSERT INTO shipments (order_id, status, raw_ghn_status, created_at) VALUES (?, 'PENDING', 'ready_to_pick', NOW())",
+                orderId
+        );
+
+        // Giả lập Webhook đến trước và cập nhật status sang PICKED_UP
+        jdbcTemplate.update(
+                "UPDATE shipments SET status = 'PICKED_UP', raw_ghn_status = 'picking', updated_at = NOW() WHERE order_id = ?",
+                orderId
+        );
+
+        // Scheduler cố cập nhật raw_ghn_status bằng câu lệnh có guard WHERE status = 'PENDING'
+        int affected = shipmentRepository.updateRawGhnStatusIfPending(orderId, "ready_to_pick", Instant.now());
+
+        // Phải trả về 0 vì status đã là PICKED_UP
+        assertThat(affected).isEqualTo(0);
+
+        // Trạng thái trong DB không bị lùi hay ghi đè
+        String currentStatus = jdbcTemplate.queryForObject(
+                "SELECT status FROM shipments WHERE order_id = ?",
+                String.class,
+                orderId
+        );
+        assertThat(currentStatus).isEqualTo("PICKED_UP");
+
+        String rawStatus = jdbcTemplate.queryForObject(
+                "SELECT raw_ghn_status FROM shipments WHERE order_id = ?",
+                String.class,
+                orderId
+        );
+        assertThat(rawStatus).isEqualTo("picking");
+    }
+
+    @Test
+    @DisplayName("Việc 3: Cache persistence context được xoá tự động sau recordReconciledTracking")
+    void testStalePersistenceContextClearedAfterRecordReconciledTracking() {
+        Long orderId = createTestOrder();
+        String claimToken = UUID.randomUUID().toString();
+        Instant now = Instant.now();
+        Instant expiry = now.plus(30, ChronoUnit.SECONDS);
+
+        jdbcTemplate.update(
+                "INSERT INTO shipments (order_id, status, claim_token, claim_expires_at, created_at) VALUES (?, 'PENDING', ?, ?, NOW())",
+                orderId, claimToken, java.sql.Timestamp.from(expiry)
+        );
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            // Đọc entity vào Persistence Context cấp 1
+            ShipmentEntity initial = shipmentRepository.findByOrderId(orderId).orElseThrow();
+            assertThat(initial.getTrackingNumber()).isNull();
+            assertThat(initial.getClaimToken()).isEqualTo(claimToken);
+
+            // Cập nhật qua @Modifying(clearAutomatically = true, flushAutomatically = true)
+            int updated = shipmentRepository.recordReconciledTracking(
+                    orderId,
+                    claimToken,
+                    "GHN_RECON_888",
+                    "ready_to_pick",
+                    Instant.now()
+            );
+            assertThat(updated).isEqualTo(1);
+
+            // Đọc lại trong cùng transaction -> không được trả về entity stale từ cache L1
+            ShipmentEntity refreshed = shipmentRepository.findByOrderId(orderId).orElseThrow();
+            assertThat(refreshed.getTrackingNumber()).isEqualTo("GHN_RECON_888");
+            assertThat(refreshed.getRawGhnStatus()).isEqualTo("ready_to_pick");
+            assertThat(refreshed.getClaimToken()).isNull();
+        });
+    }
 }
+
