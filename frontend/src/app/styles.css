@@ -1740,13 +1740,15 @@ textarea {
 /* --- Seller Center Line Tabs & Anti-Jitter Architecture --- */
 .og-seller-tabs-bar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   border-bottom: 2px solid var(--og-color-border-subtle);
   overflow-x: auto;
+  overflow-y: hidden !important;
   margin-bottom: 20px;
   gap: 4px;
   scrollbar-width: thin;
   position: relative;
+  box-sizing: border-box;
 }
 
 .og-seller-tab-btn-line {
@@ -1767,6 +1769,8 @@ textarea {
   outline: none;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .og-seller-tab-btn-line:hover {

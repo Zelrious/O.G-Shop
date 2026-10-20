@@ -86,8 +86,24 @@ public final class CheckoutDtos {
             List<VoucherSummaryResponse> availableVouchers,
             VoucherSummaryResponse appliedVoucher,
             BigDecimal agreedPrice,
-            Long acceptedOfferId
-    ) {}
+            Long acceptedOfferId,
+            Long eligibleOfferId,
+            BigDecimal eligibleOfferPrice,
+            String voucherRejectionReason
+    ) {
+        public CheckoutPreviewResponse(
+                Long productId, String productTitle, String thumbnailUrl,
+                Long sellerId, String sellerName, BigDecimal listedPrice,
+                BigDecimal shippingFee, BigDecimal buyerSystemFee, BigDecimal voucherDiscount,
+                BigDecimal shippingDiscount, BigDecimal totalAmount, List<AddressSummaryResponse> addresses,
+                AddressSummaryResponse selectedAddress, List<VoucherSummaryResponse> availableVouchers,
+                VoucherSummaryResponse appliedVoucher, BigDecimal agreedPrice, Long acceptedOfferId
+        ) {
+            this(productId, productTitle, thumbnailUrl, sellerId, sellerName, listedPrice, shippingFee,
+                 buyerSystemFee, voucherDiscount, shippingDiscount, totalAmount, addresses, selectedAddress,
+                 availableVouchers, appliedVoucher, agreedPrice, acceptedOfferId, null, null, null);
+        }
+    }
 
     public record BuyNowRequest(
             @NotNull(message = "Mã sản phẩm là bắt buộc")

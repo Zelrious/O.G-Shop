@@ -67,8 +67,8 @@ describe('ModerationPage Component (UC73)', () => {
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn tin #101' }));
     const button = screen.getByRole('button', { name: /Duyệt nhanh các tin đã chọn/ });
     fireEvent.click(button);
-    fireEvent.click(button);
-    expect(button).toBeDisabled();
+    const confirmBtn = screen.getByRole('button', { name: /Xác nhận duyệt/ });
+    fireEvent.click(confirmBtn);
     expect(listingApi.approveProduct).toHaveBeenCalledTimes(1);
     finish({ productId: 101, status: 'ACTIVE', message: 'Success' });
     await screen.findByText(/Đã duyệt 1\/1 tin/);
@@ -87,6 +87,7 @@ describe('ModerationPage Component (UC73)', () => {
     render(<ModerationPage />);
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn tất cả tin' }));
     fireEvent.click(screen.getByRole('button', { name: /Duyệt nhanh các tin đã chọn/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Xác nhận duyệt/ }));
     await screen.findByText(/Đã duyệt 1\/2 tin/);
     expect(screen.getAllByText('Another product')[0]).toBeInTheDocument();
     expect(listingApi.approveProduct).toHaveBeenCalledTimes(2);
@@ -115,9 +116,34 @@ describe('ModerationPage Component (UC73)', () => {
     await screen.findAllByText(last.title);
     fireEvent.click(screen.getByRole('checkbox',{name:'Chọn tin #103'}));
     fireEvent.click(screen.getByRole('button',{name:/Duyệt nhanh các tin đã chọn/}));
+    fireEvent.click(screen.getByRole('button',{name:/Xác nhận duyệt/}));
     await screen.findAllByText(mockModerationProduct.title);
     expect(listingApi.getPendingProducts).toHaveBeenLastCalledWith(0,20);
     expect(screen.getByText(/Tổng/)).toHaveTextContent('Tổng 20 tin chờ duyệt');
+  });
+
+  it('allows removing an item and shows uninspected warnings in bulk confirm modal', async () => {
+    const another = { ...mockModerationProduct, productId: 102, title: 'Another product' };
+    vi.mocked(listingApi.getPendingProducts).mockResolvedValue({ items: [mockModerationProduct, another], page: 0, size: 20, totalElements: 2, totalPages: 1, hasNext: false });
+    vi.mocked(listingApi.approveProduct).mockResolvedValue({ productId: 101, status: 'ACTIVE', message: 'Success' });
+    render(<ModerationPage />);
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn tất cả tin' }));
+    fireEvent.click(screen.getByRole('button', { name: /Duyệt nhanh các tin đã chọn/ }));
+
+    // Modal is opened with title and warning
+    expect(screen.getByRole('heading', { name: 'Xác nhận duyệt hàng loạt' })).toBeInTheDocument();
+    expect(screen.getByText(/Chưa xem chi tiết\/media/)).toBeInTheDocument();
+
+    // Remove item #102 from list
+    const removeBtn = screen.getByRole('button', { name: 'Gỡ tin #102 khỏi danh sách' });
+    fireEvent.click(removeBtn);
+
+    // Confirm button now targets 1 item
+    const confirmBtn = screen.getByRole('button', { name: /Xác nhận duyệt 1 tin/ });
+    fireEvent.click(confirmBtn);
+
+    expect(listingApi.approveProduct).toHaveBeenCalledTimes(1);
+    expect(listingApi.approveProduct).toHaveBeenCalledWith(101, expect.any(Object));
   });
 
   it('renders empty state when there are no pending listings', async () => {

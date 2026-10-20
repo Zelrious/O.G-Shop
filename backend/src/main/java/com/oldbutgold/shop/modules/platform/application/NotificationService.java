@@ -26,4 +26,7 @@ public class NotificationService implements PlatformNotificationFacade {
     @Transactional public void markRead(long userId,long id) {
         if(!repository.markRead(userId,id)) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy thông báo.");
     }
+    @Transactional public void markAllRead(long userId) {
+        repository.markAllRead(userId);
+    }
 }

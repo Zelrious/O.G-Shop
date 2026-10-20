@@ -1,6 +1,6 @@
 import { Select } from '../../shared/components/Select/Select';
 import { useCallback, useRef, useState } from 'react';
-import { voucherApi, benefit, dateTime, type Campaign, type Save } from './voucherApi';
+import { voucherApi, benefit, dateTime, money, type Campaign, type Save } from './voucherApi';
 import { useVoucherData, useVoucherClock } from './useVoucherData';
 import './vouchers.css';
 const localDate = (iso: string) => { const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
@@ -18,6 +18,42 @@ export function AdminVoucherWorkbench() {
   function field<K extends keyof Save>(key: K, value: Save[K]) { setEditor(v => v ? { ...v, body: { ...v.body, [key]: value, commandId: crypto.randomUUID() } } : v); }
   async function save() {
     if (!editor || pending.current) return;
+    const body = editor.body;
+
+    if (new Date(body.endTime).getTime() <= new Date(body.startTime).getTime()) {
+      setFeedback('Ngày kết thúc phải sau ngày bắt đầu.');
+      return;
+    }
+    if (body.active && new Date(body.endTime).getTime() <= Date.now()) {
+      setFeedback('Ngày kết thúc phải ở tương lai khi bật chương trình.');
+      return;
+    }
+    if (body.discountType === 'PERCENTAGE') {
+      if (body.discountValue < 1 || body.discountValue > 100) {
+        setFeedback('Giảm theo phần trăm cần giá trị từ 1% đến 100%.');
+        return;
+      }
+      if (!body.maxDiscountAmount || body.maxDiscountAmount <= 0) {
+        setFeedback('Giảm theo phần trăm bắt buộc phải nhập mức giảm tối đa lớn hơn 0.');
+        return;
+      }
+    } else if (body.discountValue <= 0) {
+      setFeedback('Số tiền giảm cố định phải lớn hơn 0.');
+      return;
+    }
+    if (body.minOrderAmount < 0) {
+      setFeedback('Giá trị đơn tối thiểu không thể âm.');
+      return;
+    }
+    if (body.scope === 'PRODUCTS' && (!body.productIds || body.productIds.length === 0)) {
+      setFeedback('Phạm vi sản phẩm cụ thể yêu cầu nhập ít nhất 1 mã ID sản phẩm.');
+      return;
+    }
+    if (body.scope === 'PRODUCTS' && body.voucherType === 'SHIPPING_DISCOUNT') {
+      setFeedback('Voucher giảm phí vận chuyển chỉ áp dụng cho phạm vi Toàn đơn.');
+      return;
+    }
+
     pending.current = true; setBusy(true); setFeedback('');
     try { const c = await voucherApi.save(editor.id, editor.body); setFeedback(`Đã lưu ${c.code}. Chương trình ${c.active ? 'đang được bật' : 'đang dừng phát'}.`); setEditor(null); data.reload(); }
     catch (e) { setFeedback(e instanceof Error ? e.message : 'Chưa lưu được voucher.'); }
@@ -35,9 +71,33 @@ export function AdminVoucherWorkbench() {
         <label className="wide">Mô tả<textarea maxLength={2000} value={body.description || ''} onChange={e => field('description', e.target.value)} /></label>
         <label>Loại ưu đãi<Select hideLabel label="Loại ưu đãi" value={String(body.voucherType)} onChange={value => { field('voucherType', value as Save['voucherType']); if (value === 'SHIPPING_DISCOUNT') { field('scope', 'CHECKOUT'); field('productIds', []); } }} options={[({ value: "ORDER_DISCOUNT", label: "Giảm tiền hàng" }), ({ value: "SHIPPING_DISCOUNT", label: "Giảm phí vận chuyển" })]} /></label>
         <label>Cách giảm<Select hideLabel label="Cách giảm" value={String(body.discountType)} onChange={value => field('discountType', value as Save['discountType'])} options={[({ value: "FIXED_AMOUNT", label: "Số tiền cố định" }), ({ value: "PERCENTAGE", label: "Phần trăm" })]} /></label>
-        <label>{body.discountType === 'PERCENTAGE' ? 'Giá trị giảm (%)' : 'Giá trị giảm (đ)'}<input type="number" required min={1} max={body.discountType === 'PERCENTAGE' ? 100 : undefined} step="1" value={body.discountValue} onChange={e => field('discountValue', Number(e.target.value))} /></label>
-        <label>Giảm tối đa (đ)<input type="number" required={body.discountType === 'PERCENTAGE'} min={1} step="1" value={body.maxDiscountAmount ?? ''} onChange={e => field('maxDiscountAmount', e.target.value ? Number(e.target.value) : null)} /></label>
-        <label>Đơn tối thiểu (đ)<input type="number" required min={0} step="1" value={body.minOrderAmount} onChange={e => field('minOrderAmount', Number(e.target.value))} /></label>
+        <label>
+          {body.discountType === 'PERCENTAGE' ? 'Giá trị giảm (%)' : 'Giá trị giảm (đ)'}
+          <input type="number" required min={1} max={body.discountType === 'PERCENTAGE' ? 100 : undefined} step="1" value={body.discountValue} onChange={e => field('discountValue', Number(e.target.value))} />
+          {body.discountType === 'FIXED_AMOUNT' && body.discountValue > 0 && (
+            <span style={{ fontSize: '0.8rem', color: 'var(--og-color-primary, #047857)', fontWeight: 600, display: 'block', marginTop: '2px' }}>
+              {money(body.discountValue)}
+            </span>
+          )}
+        </label>
+        <label>
+          Giảm tối đa (đ)
+          <input type="number" required={body.discountType === 'PERCENTAGE'} min={1} step="1" value={body.maxDiscountAmount ?? ''} onChange={e => field('maxDiscountAmount', e.target.value ? Number(e.target.value) : null)} />
+          {body.maxDiscountAmount && body.maxDiscountAmount > 0 && (
+            <span style={{ fontSize: '0.8rem', color: 'var(--og-color-primary, #047857)', fontWeight: 600, display: 'block', marginTop: '2px' }}>
+              {money(body.maxDiscountAmount)}
+            </span>
+          )}
+        </label>
+        <label>
+          Đơn tối thiểu (đ)
+          <input type="number" required min={0} step="1" value={body.minOrderAmount} onChange={e => field('minOrderAmount', Number(e.target.value))} />
+          {body.minOrderAmount > 0 && (
+            <span style={{ fontSize: '0.8rem', color: 'var(--og-color-primary, #047857)', fontWeight: 600, display: 'block', marginTop: '2px' }}>
+              {money(body.minOrderAmount)}
+            </span>
+          )}
+        </label>
         <label>Số lượt phát<input type="number" required min={1} max={1000000} step="1" value={body.quantity} onChange={e => field('quantity', Number(e.target.value))} /></label>
         <label>Phạm vi<Select hideLabel label="Phạm vi" value={String(body.scope)} onChange={value => { field('scope', value as Save['scope']); if (value === 'CHECKOUT') field('productIds', []); }} options={[({ value: "CHECKOUT", label: "Toàn đơn" }), ({ value: "PRODUCTS", label: "Sản phẩm cụ thể" })]} disabled={body.voucherType === 'SHIPPING_DISCOUNT'} /></label>
         {body.scope === 'PRODUCTS' && <label>ID sản phẩm, cách nhau bằng dấu phẩy<input required pattern="\d+(\s*,\s*\d+)*" value={products} onChange={e => { setProducts(e.target.value); field('productIds', e.target.value.split(',').map(v => Number(v.trim())).filter(v => v > 0)); }} /><small>Server kiểm tra sản phẩm đang mở bán.</small></label>}

@@ -17,6 +17,7 @@ public class ChatRepository {
     private Thread mapThread(ResultSet r,int n)throws SQLException{return new Thread(r.getLong("conversation_id"),r.getLong("buyer_id"),r.getLong("seller_id"),r.getLong("product_id"),r.getString("product_title_snapshot"),r.getString("product_thumbnail_snapshot"),r.getTimestamp("last_activity_at").toInstant(),r.getString("status"));}
     public Optional<Thread> owned(long actor,long id,boolean lock){return jdbc.query("SELECT * FROM public.conversations WHERE record_type='conversations' AND conversation_id=? AND ? IN(buyer_id,seller_id)"+(lock?" FOR UPDATE":""),this::mapThread,id,actor).stream().findFirst();}
     public Optional<Thread> byProduct(long buyer,long seller,long product){return jdbc.query("SELECT * FROM public.conversations WHERE record_type='conversations' AND buyer_id=? AND seller_id=? AND product_id=?",this::mapThread,buyer,seller,product).stream().findFirst();}
+    public Optional<Thread> findBuyerProductConversation(long buyer,long product){return jdbc.query("SELECT * FROM public.conversations WHERE record_type='conversations' AND buyer_id=? AND product_id=? ORDER BY conversation_id DESC LIMIT 1",this::mapThread,buyer,product).stream().findFirst();}
     public Optional<Thread> thread(long id){return jdbc.query("SELECT * FROM public.conversations WHERE record_type='conversations' AND conversation_id=?",this::mapThread,id).stream().findFirst();}
     public List<Thread> list(long actor,String query,int page,int size){
         return jdbc.query("""

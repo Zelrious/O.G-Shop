@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ordersApi } from '../ordersApi';
 import { OrderDetail } from '../types';
+import { TrackingResponse, formatGhnStatus } from '../../fulfillment/fulfillmentApi';
 
 interface BuyerOrderDetailViewProps {
   orderId: number;
@@ -17,6 +18,7 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('Tôi đổi ý, không muốn mua nữa');
   const [cancelling, setCancelling] = useState(false);
+  const [tracking, setTracking] = useState<TrackingResponse | null>(null);
 
   const loadOrder = useCallback(() => {
     setLoading(true);
@@ -24,6 +26,9 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
     ordersApi.getBuyerOrderDetail(orderId)
       .then((data) => {
         setOrder(data);
+        ordersApi.getTracking(orderId)
+          .then((res) => setTracking(res))
+          .catch(() => setTracking(null));
       })
       .catch((err) => {
         setErrorMsg(err.message || 'Không thể tải chi tiết đơn hàng.');
@@ -32,6 +37,7 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
         setLoading(false);
       });
   }, [orderId]);
+
 
   useEffect(() => {
     loadOrder();
@@ -87,10 +93,11 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
   const steps = [
     { key: 'CREATED', label: 'Đặt hàng', done: true, time: order.createdAt },
     { key: 'PAID', label: 'Ký quỹ Escrow', done: order.status !== 'PAYMENT_PENDING' && order.status !== 'CANCELLED', time: order.heldAt || order.paidAt },
-    { key: 'CONFIRMED', label: 'Người bán xác nhận', done: ['SELLER_CONFIRMED', 'SHIPPED', 'DELIVERED', 'COMPLETED'].includes(order.status) },
-    { key: 'SHIPPED', label: 'Đang vận chuyển', done: ['SHIPPED', 'DELIVERED', 'COMPLETED'].includes(order.status) },
+    { key: 'CONFIRMED', label: 'Người bán xác nhận', done: ['SELLER_CONFIRMED', 'SHIPPED', 'DELIVERED', 'COMPLETED'].includes(order.status) || Boolean(tracking?.trackingNumber) },
+    { key: 'SHIPPED', label: 'Đang vận chuyển', done: ['SHIPPED', 'DELIVERED', 'COMPLETED'].includes(order.status) || (Boolean(tracking?.rawGhnStatus) && tracking?.rawGhnStatus !== 'ready_to_pick') },
     { key: 'DELIVERED', label: 'Hoàn tất giao dịch', done: order.status === 'COMPLETED', time: order.completedAt },
   ];
+
 
   return (
     <div style={{ maxWidth: 900, margin: '24px auto', padding: '0 16px 60px' }}>
@@ -219,6 +226,56 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
               <div style={{ color: 'var(--og-color-text-secondary)' }}>{order.fullShippingAddress}</div>
             </div>
           </div>
+
+          {/* GHN Shipping Information Card */}
+          {tracking && tracking.trackingNumber && (
+            <div style={{
+              background: 'var(--og-color-surface)',
+              border: '1px solid var(--og-color-border)',
+              borderRadius: 12,
+              padding: 20,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: 'var(--og-color-text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>🚚</span> Thông tin vận chuyển (GHN)
+                </h3>
+                {tracking.rawGhnStatus && (
+                  <span style={{
+                    background: formatGhnStatus(tracking.rawGhnStatus).bg,
+                    color: formatGhnStatus(tracking.rawGhnStatus).color,
+                    padding: '4px 12px',
+                    borderRadius: 12,
+                    fontWeight: 600,
+                    fontSize: '0.82rem',
+                  }}>
+                    {formatGhnStatus(tracking.rawGhnStatus).label}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: '0.88rem' }}>
+                <div>
+                  <span style={{ color: 'var(--og-color-text-secondary)' }}>Mã vận đơn: </span>
+                  <strong style={{ color: 'var(--og-color-primary)', fontSize: '1rem' }}>{tracking.trackingNumber}</strong>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--og-color-text-secondary)' }}>Đơn vị vận chuyển: </span>
+                  <strong>{tracking.carrier || 'Giao Hàng Nhanh (GHN)'}</strong>
+                </div>
+                {tracking.expectedDeliveryAt && (
+                  <div>
+                    <span style={{ color: 'var(--og-color-text-secondary)' }}>Dự kiến giao hàng: </span>
+                    <strong>{formatDate(tracking.expectedDeliveryAt)}</strong>
+                  </div>
+                )}
+                {tracking.fromAddress && (
+                  <div style={{ fontSize: '0.82rem', color: 'var(--og-color-text-secondary)', marginTop: 4 }}>
+                    Gửi từ: {tracking.fromAddress}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Escrow Status Card */}
           <div style={{

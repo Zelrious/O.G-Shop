@@ -16,6 +16,8 @@ public class NotificationController {
         @RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size) {
         return service.list(Long.parseLong(jwt.getSubject()),page,size);
     }
+    @PostMapping("/read-all") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    public void markAllRead(@AuthenticationPrincipal Jwt jwt) { service.markAllRead(Long.parseLong(jwt.getSubject())); }
     @PostMapping("/{id}/read") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
     public void markRead(@AuthenticationPrincipal Jwt jwt,@PathVariable long id) { service.markRead(Long.parseLong(jwt.getSubject()),id); }
 }

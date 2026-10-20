@@ -1,6 +1,22 @@
 # Project Status
 
+## Hoàn thiện Marketplace và Tích hợp Vận chuyển GHN — TASK-0098 / 2026-10-20
+
+- **Nghiệp vụ hoàn thành (7/7 mục)**:
+  1. *Kiểm duyệt bài đăng (UC73)*: Modal xác nhận duyệt hàng loạt, hiển thị danh sách & gỡ tin, theo dõi tin đã xem xét media (`inspectedIds`), cảnh báo trực quan tin chưa xem, bảo toàn optimistic locking và báo kết quả một phần khi conflict.
+  2. *Quản lý tài khoản KTV (UC67)*: Phân định rõ ràng `RESTRICT` vs `LOCK` vs `DEACTIVATE`; thông báo rõ tài khoản bị khóa vẫn đăng nhập và xử lý nghĩa vụ cũ được; tính thời hạn theo `serverTime` từ API và cố định khi retry.
+  3. *Chat trực tiếp (UC18)*: Nhãn tự động cập nhật định kỳ (2.5 giây/lần), bảo đảm quyền riêng tư, draft, chống gửi lặp bằng `client_message_id`, hiển thị rõ trạng thái gửi/lỗi/ngoại tuyến.
+  4. *Offer trả giá (UC19)*: Giữ nguyên giá niêm yết trên Mall/Marketplace; bổ sung lựa chọn rõ ràng giữa Giá niêm yết và Giá thương lượng đã chấp nhận khi vào checkout từ luồng thường (chỉ server xác thực offer hợp lệ); format tiền tệ `xxx.xxx.xxx ₫`, chặn chọn ngày quá khứ, báo lỗi tại từng trường nhập.
+  5. *Nhận & áp dụng voucher*: Trả về lý do từ chối cụ thể từ server (chưa đủ min order kèm số tiền, hết hạn, không áp dụng sản phẩm, chưa đến giờ, chưa có trong ví); chọn voucher sở hữu trong checkout; giữ ngữ cảnh sản phẩm + offer + voucherCode khi mở ví từ checkout.
+  6. *Tạo & phát voucher (UC69/UC70)*: Form Admin format tiền VND dễ đọc (`50.000 ₫`, `200.000 ₫`), kiểm tra ràng buộc ngày (`startTime < endTime`), % giảm (1-100%, max discount bắt buộc), scope sản phẩm; giữ luồng KTV phát 1-100 người; **giữ nguyên phân quyền hiện tại** (Admin tạo chương trình, KTV phát voucher).
+  7. *Tích hợp GHN*: Cước vận chuyển thực tế tính động qua `FulfillmentShippingFacade.calculateShippingFee()` gọi GHN `/v2/shipping-order/fee`, tự động fallback 30k khi timeout/offline, snapshot vào `OrderEntity.shippingFee`; giao diện Người bán tạo vận đơn modal, in mã A5 link token; giao diện Người mua/Người bán xem tracking GHN; cập nhật tài liệu `docs/modules/fulfillment.md`.
+- **Kiểm thử & Chất lượng**:
+  - Backend: `CheckoutServiceTest` (10/10 PASS), `Fulfillment*Test` (71 PASS), `mvn test-compile` BUILD SUCCESS.
+  - Frontend: 46 test files / 218 unit tests PASS (100%), `npm run typecheck` PASS (0 errors), `npm run lint` PASS (0 warnings).
+  - Không thay đổi phân quyền; không tác động schema database ngoài kế hoạch; không push/commit/deploy production.
+
 ## Commit delivery — TASK-0097 / 2026-10-13
+
 
 Đóng gói260 file thay đổi ban đầu thành14 commit trên `feat/marketplace-console-refactor-20261013`, từ HEAD `2061aa8` của nhánh auth (kế thừa14 commit so với main). Backend snapshots của commits2–7 biên dịch main/test đạt; frontend snapshots8–13 typecheck đạt. Hồi quy bản đã commit:204 frontend tests/43 files, lint và TypeScript/Vite build đạt; backend387 discovered,226 passed,161 skipped theo điều kiện môi trường,0 failure/error. Không chạy migration trên database ứng dụng, không push/merge. Logic giữ nguyên; chỉ chuẩn hóa EOF/EOL và thêm metadata bàn giao. Các nhật ký/ảnh QA và liên kết tới output/task trong tài liệu là bằng chứng local, không được force-add vào Git.
 

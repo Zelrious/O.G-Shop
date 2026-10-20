@@ -31,14 +31,22 @@ export function AccountCommandDialog({ detail, initialAction, onClose, onDone }:
     const data: Omit<AccountCommand, 'commandKey'> = { action, reason: reason.trim(), expectedVersion: detail.user.version };
     if (action === 'RESTRICT') { data.scope = scope; data.durationWeeks = weeks; }
     if (action === 'LIFT') data.restrictionId = restrictionId;
-    if (action === 'LOCK' && temporary) data.expiresAt = new Date(Date.now() + weeks * 7 * 86400000).toISOString();
+    // The expiry chosen for a lock remains stable across an uncertain retry and is based on serverTime.
+    const signature = JSON.stringify({ ...data, expiresAt: action === 'LOCK' ? { temporary, weeks } : undefined });
+    if (action === 'LOCK' && temporary) {
+      const stored = retryPayload.current;
+      if (stored?.signature === signature && stored.data.expiresAt) {
+        data.expiresAt = stored.data.expiresAt;
+      } else {
+        const baseTime = Date.parse(detail.serverTime) || Date.now();
+        data.expiresAt = new Date(baseTime + weeks * 7 * 86400000).toISOString();
+      }
+    }
     if (action === 'COMPENSATE') {
       const outage = detail.outages[outageIndex];
       if (!outage) return;
       data.targetCaseId = caseId; data.systemCaseId = outage.systemCaseId; data.affectedFrom = outage.affectedFrom; data.affectedUntil = outage.affectedUntil;
     }
-    // The expiry chosen for a lock remains stable across an uncertain retry.
-    const signature = JSON.stringify({ ...data, expiresAt: action === 'LOCK' ? { temporary, weeks } : data.expiresAt });
     if (command.current?.signature !== signature) command.current = { signature, key: crypto.randomUUID() };
     const stored = retryPayload.current;
     if (stored?.signature === signature) Object.assign(data, stored.data);
@@ -49,6 +57,26 @@ export function AccountCommandDialog({ detail, initialAction, onClose, onDone }:
     finally { inFlight.current = false; setBusy(false); }
   };
   const retryPayload = useRef<{ signature: string; data: Omit<AccountCommand, 'commandKey'> } | null>(null);
+
+  const getActionExplanation = (act: AccountAction) => {
+    switch (act) {
+      case 'RESTRICT':
+        return 'Hạn chế chức năng (RESTRICT): Chỉ giới hạn phạm vi tính năng được chọn (Đăng tin, Mua hàng, Nhắn tin, v.v.). Tài khoản vẫn hoạt động ở các phần khác, vẫn đăng nhập và tiếp tục xử lý các đơn hàng/nghĩa vụ cũ.';
+      case 'LOCK':
+        return 'Khóa hoạt động mới (LOCK): Chặn toàn bộ giao dịch hoặc hoạt động tạo mới. Tài khoản bị khóa vẫn đăng nhập vào hệ thống để tra cứu và hoàn tất các đơn hàng, khiếu nại hoặc nghĩa vụ cũ còn dang dở.';
+      case 'DEACTIVATE':
+        return 'Ngừng mềm (DEACTIVATE): Ngừng toàn bộ hoạt động mới. Dữ liệu tài khoản và lịch sử giao dịch được bảo toàn nguyên vẹn để phục vụ nghĩa vụ cũ và đối soát.';
+      case 'ACTIVATE':
+        return 'Kích hoạt lại (ACTIVATE): Khôi phục trạng thái hoạt động bình thường của tài khoản. Các hạn chế tính năng riêng biệt (nếu có) vẫn được giữ cho đến khi được gỡ bỏ hoặc hết hạn.';
+      case 'LIFT':
+        return 'Gỡ bỏ hạn chế (LIFT): Hủy bỏ hạn chế chức năng cụ thể đã áp dụng trước đó.';
+      case 'COMPENSATE':
+        return 'Bù hạn thời gian (COMPENSATE): Chỉ bù đúng khoảng thời gian hệ thống gián đoạn đã xác nhận cho hạn phản hồi hồ sơ khiếu nại. Không thay đổi thời hạn hạn chế tài khoản.';
+      default:
+        return 'Biện pháp chỉ chặn chức năng tương ứng. Không tự hủy đơn, hoàn tiền hoặc trừ điểm uy tín.';
+    }
+  };
+
   return <div className="og-modal-backdrop" onClick={() => { if (!busy) onClose(); }}><div className="og-fee-dialog og-account-dialog" role="dialog" aria-modal="true" aria-labelledby="account-command-title" ref={dialog} tabIndex={-1}
     onClick={e => e.stopPropagation()} onKeyDown={e => {
       if (e.key === 'Escape' && !busy) onClose();
@@ -71,7 +99,12 @@ export function AccountCommandDialog({ detail, initialAction, onClose, onDone }:
       {action === 'COMPENSATE' && <><label>Hồ sơ đơn cũ cần bù hạn<Select hideLabel label="Hồ sơ đơn cũ cần bù hạn" value={String(caseId)} onChange={value => setCaseId(Number(value))} options={[...detail.cases.filter(c => c.canCompensate).map(c => ({ value: String(c.caseId), label: `Hồ sơ #${c.caseId} · Đơn #${c.orderId}` }))]} disabled={busy} /></label>
         <label>Khoảng gián đoạn đã được xác nhận<Select hideLabel label="Khoảng gián đoạn đã được xác nhận" value={String(outageIndex)} onChange={value => setOutageIndex(Number(value))} options={[...detail.outages.map((o, i) => ({ value: String(i), label: `Lỗi #${o.systemCaseId} · ${new Date(o.affectedFrom).toLocaleString('vi-VN')} → ${new Date(o.affectedUntil).toLocaleString('vi-VN')}` }))]} disabled={busy} /></label></>}
       <label>Lý do quyết định<textarea rows={4} maxLength={500} value={reason} onChange={e => setReason(e.target.value)} disabled={busy} placeholder="Nêu căn cứ, phần đã kiểm tra và lý do áp dụng..." required /></label>
-      <Alert type="warning">{action === 'DEACTIVATE' ? 'Ngừng hoạt động mới và giữ tài khoản cùng lịch sử để phục vụ nghĩa vụ cũ.' : action === 'ACTIVATE' ? 'Kích hoạt lại trạng thái tài khoản; các hạn chế riêng vẫn giữ cho đến khi được gỡ hoặc hết hạn.' : action === 'COMPENSATE' ? 'Chỉ bù đúng thời gian gián đoạn đã xác nhận cho hạn phản hồi hồ sơ. Không thay thời hạn hạn chế tài khoản.' : 'Biện pháp chỉ chặn chức năng tương ứng. Không tự hủy đơn, hoàn tiền hoặc trừ điểm uy tín.'}</Alert>
+      <Alert type="warning">
+        <p style={{ margin: 0 }}>{getActionExplanation(action)}</p>
+        <p style={{ margin: '6px 0 0', fontSize: '0.82rem' }}>
+          Lưu ý: Biện pháp không tự hủy đơn, hoàn tiền hoặc trừ điểm uy tín. Tài khoản bị hạn chế hoặc khóa vẫn đăng nhập và xử lý nghĩa vụ cũ được.
+        </p>
+      </Alert>
       {error && <div role="alert"><Alert type="danger">{error}</Alert><p>Chưa xác nhận hoàn tất. Nếu dữ liệu đã thay đổi, đóng hộp này và làm mới hồ sơ.</p></div>}
       <footer><button type="button" className="og-button og-button--outline" onClick={onClose} disabled={busy}>Hủy</button><button className="og-button og-button--primary" disabled={busy || !reason.trim()}>{busy ? 'Đang ghi nhận...' : 'Xác nhận quyết định'}</button></footer>
     </form>
