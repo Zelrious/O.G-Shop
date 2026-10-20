@@ -87,6 +87,14 @@ public class DefaultFulfillmentCommerceFacade implements FulfillmentCommerceFaca
     }
 
     @Override
+    public void markDelivered(long orderId, Instant deliveredAt) {
+        OrderEntity order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn hàng #" + orderId));
+        order.markDelivered(deliveredAt);
+        orderRepository.save(order);
+    }
+
+    @Override
     public void markDeliveredDirectFromCarrier(long orderId, Instant deliveredAt) {
         OrderEntity order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn hàng #" + orderId));

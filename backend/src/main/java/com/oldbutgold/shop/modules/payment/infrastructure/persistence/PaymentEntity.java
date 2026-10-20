@@ -106,6 +106,18 @@ public class PaymentEntity {
         this.updatedAt = now;
     }
 
+    public void markReleased(Instant now) {
+        if (STATUS_RELEASED.equals(this.status)) {
+            return; // idempotent
+        }
+        if (!STATUS_HELD.equals(this.status)) {
+            throw new IllegalStateException("Chỉ có thể giải ngân tiền khi giao dịch đang ở trạng thái Ký quỹ giữ an toàn (HELD). Trạng thái hiện tại: " + this.status);
+        }
+        this.status = STATUS_RELEASED;
+        this.releasedAt = (now != null) ? now : Instant.now();
+        this.updatedAt = this.releasedAt;
+    }
+
     public void markFailed(String reason, Instant now) {
         this.status = STATUS_FAILED;
         this.paidAt = null;

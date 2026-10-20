@@ -57,6 +57,15 @@ public class OrderController {
         return ResponseEntity.ok(orderManagementService.cancelBuyerOrder(buyerId, orderId, reason));
     }
 
+    @PostMapping("/orders/{orderId}/complete")
+    public ResponseEntity<OrderManagementDtos.OrderActionResponse> completeBuyerOrder(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long orderId
+    ) {
+        long buyerId = extractUserId(jwt);
+        return ResponseEntity.ok(orderManagementService.completeBuyerOrder(buyerId, orderId));
+    }
+
     // --- Seller Endpoints ---
 
     @GetMapping("/seller/orders")
@@ -86,6 +95,24 @@ public class OrderController {
     ) {
         long sellerId = extractUserId(jwt);
         return ResponseEntity.ok(orderManagementService.confirmSellerOrder(sellerId, orderId));
+    }
+
+    @PostMapping("/seller/orders/{orderId}/ship")
+    public ResponseEntity<OrderManagementDtos.OrderShipmentActionResponse> shipSellerOrder(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long orderId
+    ) {
+        long sellerId = extractUserId(jwt);
+        return ResponseEntity.ok(orderManagementService.shipSellerOrder(sellerId, orderId));
+    }
+
+    @PostMapping("/seller/orders/{orderId}/deliver")
+    public ResponseEntity<OrderManagementDtos.OrderActionResponse> deliverSellerOrder(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long orderId
+    ) {
+        long sellerId = extractUserId(jwt);
+        return ResponseEntity.ok(orderManagementService.deliverSellerOrder(sellerId, orderId));
     }
 
     private static long extractUserId(Jwt jwt) {
