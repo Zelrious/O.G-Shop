@@ -27,8 +27,10 @@ export const BuyerOrdersView: React.FC = () => {
     { id: 'PAYMENT_PENDING', label: 'Chờ thanh toán' },
     { id: 'PAID_HELD', label: 'Đã giữ tiền (Ký quỹ)' },
     { id: 'SELLER_CONFIRMED', label: 'Người bán chuẩn bị' },
+    { id: 'SHIPPED', label: 'Đang giao' },
     { id: 'COMPLETED', label: 'Hoàn thành' },
     { id: 'CANCELLED', label: 'Đã hủy' },
+    { id: 'REFUNDED', label: 'Trả hàng' },
   ];
 
   const loadOrders = (statusTab: string, pageIndex: number) => {
@@ -134,6 +136,18 @@ export const BuyerOrdersView: React.FC = () => {
         return (
           <span style={{ background: '#fee2e2', color: '#b91c1c', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
             ✕ Đã hủy
+          </span>
+        );
+      case 'REFUNDED':
+        return (
+          <span style={{ background: '#fef3c7', color: '#b45309', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
+            ↩️ Trả hàng / Hoàn tiền
+          </span>
+        );
+      case 'DISPUTED':
+        return (
+          <span style={{ background: '#fee2e2', color: '#991b1b', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
+            ⚠️ Khiếu nại
           </span>
         );
       default:

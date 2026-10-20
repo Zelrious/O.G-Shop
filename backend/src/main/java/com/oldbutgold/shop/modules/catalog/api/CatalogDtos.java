@@ -79,12 +79,23 @@ public final class CatalogDtos {
             SellerSummary seller,
             boolean requiresBuyerEkyc,
             Instant createdAt,
-            List<CategoryResponse> categories
+            List<CategoryResponse> categories,
+            BigDecimal agreedPrice,
+            Long acceptedOfferId
     ) {
         public static ProductSummaryResponse from(ProductEntity product,
                                                   List<CategoryEntity> categories,
                                                   IdentityCatalogFacade.SellerPublicSummary seller,
                                                   String thumbnailUrl) {
+            return from(product, categories, seller, thumbnailUrl, null, null);
+        }
+
+        public static ProductSummaryResponse from(ProductEntity product,
+                                                  List<CategoryEntity> categories,
+                                                  IdentityCatalogFacade.SellerPublicSummary seller,
+                                                  String thumbnailUrl,
+                                                  BigDecimal agreedPrice,
+                                                  Long acceptedOfferId) {
             return new ProductSummaryResponse(
                     product.getId(),
                     product.getTitle(),
@@ -97,7 +108,9 @@ public final class CatalogDtos {
                     SellerSummary.from(seller),
                     product.isRequiresBuyerEkyc(),
                     product.getCreatedAt(),
-                    categories.stream().map(CategoryResponse::from).toList()
+                    categories.stream().map(CategoryResponse::from).toList(),
+                    agreedPrice,
+                    acceptedOfferId
             );
         }
     }
@@ -120,12 +133,23 @@ public final class CatalogDtos {
             List<ProductMediaResponse> media,
             boolean requiresBuyerEkyc,
             Instant createdAt,
-            List<CategoryResponse> categories
+            List<CategoryResponse> categories,
+            BigDecimal agreedPrice,
+            Long acceptedOfferId
     ) {
         public static ProductDetailResponse from(ProductEntity product,
                                                  List<CategoryEntity> categories,
                                                  IdentityCatalogFacade.SellerPublicSummary seller,
                                                  List<ProductMediaEntity> mediaList) {
+            return from(product, categories, seller, mediaList, null, null);
+        }
+
+        public static ProductDetailResponse from(ProductEntity product,
+                                                 List<CategoryEntity> categories,
+                                                 IdentityCatalogFacade.SellerPublicSummary seller,
+                                                 List<ProductMediaEntity> mediaList,
+                                                 BigDecimal agreedPrice,
+                                                 Long acceptedOfferId) {
             String thumbnail = mediaList.stream()
                     .filter(m -> "IMAGE".equalsIgnoreCase(m.getMediaType()))
                     .map(ProductMediaEntity::getMediaUrl)
@@ -150,7 +174,9 @@ public final class CatalogDtos {
                     mediaList.stream().map(ProductMediaResponse::from).toList(),
                     product.isRequiresBuyerEkyc(),
                     product.getCreatedAt(),
-                    categories.stream().map(CategoryResponse::from).toList()
+                    categories.stream().map(CategoryResponse::from).toList(),
+                    agreedPrice,
+                    acceptedOfferId
             );
         }
     }

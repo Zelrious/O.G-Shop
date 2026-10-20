@@ -1,5 +1,12 @@
 import { authApi } from '../auth/authApi';
 import { OrderSummary, OrderDetail, OrderActionResponse, PageResponse } from './types';
+import {
+  fulfillmentApi,
+  CreateShipmentRequest,
+  ShipmentResponse,
+  PrintWaybillResponse,
+  TrackingResponse,
+} from '../fulfillment/fulfillmentApi';
 
 interface ApiErrorBody {
   message?: string;
@@ -75,4 +82,18 @@ export const ordersApi = {
     });
     return handleResponse<OrderActionResponse>(res);
   },
+
+  // Fulfillment Integration
+  async createShipment(orderId: number, req?: CreateShipmentRequest): Promise<ShipmentResponse> {
+    return fulfillmentApi.createShipment(orderId, req);
+  },
+
+  async printWaybill(orderId: number): Promise<PrintWaybillResponse> {
+    return fulfillmentApi.printWaybill(orderId);
+  },
+
+  async getTracking(orderId: number): Promise<TrackingResponse> {
+    return fulfillmentApi.getTracking(orderId);
+  },
 };
+

@@ -1,5 +1,6 @@
 import { Category, PageResponse, ProductDetail, ProductFilterParams, ProductSummary } from './types';
 import { MOCK_CATEGORIES, MOCK_PRODUCTS } from '../../shared/data/mockData';
+import { authApi } from '../auth/authApi';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
 
@@ -95,8 +96,7 @@ export const marketplaceApi = {
       if (params.sort) queryParams.set('sort', params.sort);
 
       const qs = queryParams.toString();
-      const url = `${API_BASE}/products${qs ? `?${qs}` : ''}`;
-      const res = await fetch(url);
+      const res = await authApi.authorizedFetch(`/products${qs ? `?${qs}` : ''}`);
       if (res.ok) {
         return await res.json();
       }
@@ -171,6 +171,8 @@ export const marketplaceApi = {
         category: p.category,
         seller: p.seller,
         createdAt: p.createdAt,
+        agreedPrice: p.agreedPrice,
+        acceptedOfferId: p.acceptedOfferId,
       })),
       page,
       size,
@@ -182,7 +184,7 @@ export const marketplaceApi = {
 
   async getProductDetail(productId: number | string): Promise<ProductDetail> {
     try {
-      const res = await fetch(`${API_BASE}/products/${productId}`);
+      const res = await authApi.authorizedFetch(`/products/${productId}`);
       if (res.status === 404) {
         throw new Error('PRODUCT_NOT_FOUND');
       }

@@ -38,6 +38,7 @@ const paths = {
   pin: 'M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0 M15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
   star: 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z',
   info: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M12 10v7 M12 7h.01',
+  chevron: 'm9 18 6-6-6-6',
 } as const;
 
 export type IconName = keyof typeof paths;

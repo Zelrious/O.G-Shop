@@ -54,7 +54,32 @@ public class VoucherService {
     /** Owned revision stays valid when Admin pauses/edits the campaign. */
     @Transactional(readOnly=true) public List<Grant> usable(long user,long product,BigDecimal subtotal){return repo.owned(user).stream().filter(g->usable(g,product,subtotal)).toList();}
     private boolean usable(Grant g,long product,BigDecimal subtotal){Campaign c=g.campaign();return revocable(g).isEmpty()&&!clock.instant().isBefore(c.startTime())&&subtotal.compareTo(c.minOrderAmount())>=0&&(c.scope().equals("CHECKOUT")||c.productIds().contains(product))&&!repo.revisionRevoked(c.revisionId());}
-    public Grant resolve(long user,String code,long product,BigDecimal subtotal,boolean lock){var candidates=repo.owned(user).stream().filter(g->g.campaign().code().equalsIgnoreCase(code.trim())).toList();for(Grant candidate:candidates){Grant g=lock?repo.grant(candidate.id(),true).orElseThrow():candidate;if(usable(g,product,subtotal))return g;}throw new IllegalArgumentException("Voucher chưa có trong ví hoặc không đủ điều kiện cho đơn này.");}
+    @Transactional(readOnly=true)
+    public String checkEligibilityReason(long user,String code,long product,BigDecimal subtotal){
+        if(code==null||code.isBlank())return "";
+        var candidates=repo.owned(user).stream().filter(g->g.campaign().code().equalsIgnoreCase(code.trim())).toList();
+        if(candidates.isEmpty())return "Voucher chưa có trong ví của bạn. Vui lòng nhận voucher vào ví trước khi sử dụng.";
+        for(Grant g:candidates){
+            String rev=revocable(g);
+            if(!rev.isEmpty())return rev;
+            Campaign c=g.campaign();
+            if(clock.instant().isBefore(c.startTime()))return "Chưa đến thời gian áp dụng voucher này.";
+            if(subtotal.compareTo(c.minOrderAmount())<0)return "Đơn hàng chưa đạt giá trị tối thiểu " + String.format(Locale.GERMANY, "%,d", c.minOrderAmount().longValue()) + " ₫ để áp dụng voucher này.";
+            if(!c.scope().equals("CHECKOUT")&&!c.productIds().contains(product))return "Voucher này không áp dụng cho sản phẩm này.";
+            if(repo.revisionRevoked(c.revisionId()))return "Chính sách voucher đã bị thu hồi.";
+            return "";
+        }
+        return "Voucher không đủ điều kiện áp dụng cho đơn hàng.";
+    }
+    public Grant resolve(long user,String code,long product,BigDecimal subtotal,boolean lock){
+        var candidates=repo.owned(user).stream().filter(g->g.campaign().code().equalsIgnoreCase(code.trim())).toList();
+        for(Grant candidate:candidates){
+            Grant g=lock?repo.grant(candidate.id(),true).orElseThrow():candidate;
+            if(usable(g,product,subtotal))return g;
+        }
+        String reason=checkEligibilityReason(user,code,product,subtotal);
+        throw new IllegalArgumentException(reason.isEmpty()?"Voucher chưa có trong ví hoặc không đủ điều kiện cho đơn này.":reason);
+    }
     public void bindOrder(long order,Grant grant){repo.bindOrder(order,grant.id());}
     public void lockCheckout(long buyer,long seller){identity.lockCustomers(new TreeSet<>(List.of(buyer,seller)));}
     private void notice(String key,long user,Destination target,long campaign,String type,String title,String content){notices.enqueue(key,campaign,List.of(new Notice(user,type,title,content,target,campaign,0)));}

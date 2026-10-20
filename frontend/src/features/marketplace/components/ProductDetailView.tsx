@@ -48,9 +48,18 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
     }
   };
 
-  const handleBuyNow = () => {
+  const hasAgreedPrice = typeof product.agreedPrice === 'number' && product.agreedPrice > 0;
+  const formattedAgreedPrice = hasAgreedPrice
+    ? `${new Intl.NumberFormat('vi-VN').format(product.agreedPrice!)} ₫`
+    : null;
+
+  const handleBuyNow = (useOffer = true) => {
     requireAuth('Mua ngay và Thanh toán Ký quỹ', () => {
-      navigate(`/checkout?productId=${product.productId}`);
+      if (useOffer && hasAgreedPrice && product.acceptedOfferId) {
+        navigate(`/checkout?productId=${product.productId}&offerId=${product.acceptedOfferId}`);
+      } else {
+        navigate(`/checkout?productId=${product.productId}`);
+      }
     });
   };
 
@@ -251,11 +260,33 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
           <h1 className="og-product-detail__title">{product.title}</h1>
 
           {/* Price */}
-          <div className="og-product-detail__price-card">
-            <div className="og-product-detail__price-value">{formattedPrice}</div>
-            <div className="og-product-detail__price-note">
-              Giá niêm yết do Người bán đưa ra (được bảo vệ bởi cơ chế Giữ tiền Escrow của O.G Shop).
-            </div>
+          <div className={`og-product-detail__price-card${hasAgreedPrice ? ' og-product-detail__price-card--agreed' : ''}`}>
+            {hasAgreedPrice ? (
+              <div className="og-product-detail__agreed-box">
+                <div className="og-product-detail__agreed-header">
+                  <div className="og-product-detail__price-value og-product-detail__price-value--agreed">
+                    {formattedAgreedPrice}
+                  </div>
+                  <span className="og-product-detail__agreed-badge">
+                    Giá đã thỏa thuận
+                  </span>
+                </div>
+                <div className="og-product-detail__agreed-original-row">
+                  <span className="og-product-detail__agreed-original-label">Giá niêm yết:</span>
+                  <del className="og-product-detail__agreed-original-val">{formattedPrice}</del>
+                </div>
+                <div className="og-product-detail__price-note og-product-detail__price-note--agreed">
+                  Đề xuất trả giá #{product.acceptedOfferId} đã được người bán chấp thuận. Mức giá này chỉ áp dụng riêng cho tài khoản của bạn.
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="og-product-detail__price-value">{formattedPrice}</div>
+                <div className="og-product-detail__price-note">
+                  Giá niêm yết do Người bán đưa ra (được bảo vệ bởi cơ chế Giữ tiền Escrow của O.G Shop).
+                </div>
+              </>
+            )}
           </div>
 
           {/* Shipping Info (Oreka style) */}
@@ -315,12 +346,34 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
 
             <button
               type="button"
-              className="og-btn-buy-now"
-              onClick={handleBuyNow}
+              className={`og-btn-buy-now${hasAgreedPrice ? ' og-btn-buy-now--agreed' : ''}`}
+              onClick={() => handleBuyNow(true)}
+              title={hasAgreedPrice ? `Mua ngay với giá thỏa thuận ${formattedAgreedPrice}` : 'Mua ngay'}
             >
-              <span>Mua ngay</span>
+              <span>{hasAgreedPrice ? `Mua ngay (${formattedAgreedPrice})` : 'Mua ngay'}</span>
             </button>
           </div>
+
+          {/* If agreed price is active, offer option to buy at listed price */}
+          {hasAgreedPrice && (
+            <div style={{ textAlign: 'center', marginTop: '6px' }}>
+              <button
+                type="button"
+                onClick={() => handleBuyNow(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--og-color-text-secondary)',
+                  fontSize: '12px',
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                }}
+              >
+                Hoặc mua theo giá niêm yết ({formattedPrice})
+              </button>
+            </div>
+          )}
 
           {/* Make Offer Button */}
           <button
@@ -329,7 +382,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
             onClick={handleOpenOffer}
           >
             <span><Icon name="tag" /></span>
-            <span>Đề xuất Trả giá (Make an Offer)</span>
+            <span>{hasAgreedPrice ? 'Thương lượng lại (Xem đề xuất)' : 'Đề xuất Trả giá (Make an Offer)'}</span>
           </button>
         </section>
       </div>

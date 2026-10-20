@@ -45,6 +45,19 @@ export function ModerationWorkbench(p: Props) {
   const canDecide = item?.status === 'PENDING' && !p.busy && !detailLoading && !detailError;
   const hasMedia = item?.media.some(m => m.mediaType === 'IMAGE') && item.media.some(m => m.mediaType === 'VIDEO');
   const choose = (id: number) => { setSelectedId(id); p.onCancelReject(); mediaFocus.current?.focus(); };
+
+  const [inspectedIds, setInspectedIds] = useState<Set<number>>(() => new Set(targetId ? [targetId] : []));
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+
+  useEffect(() => {
+    if (targetId) {
+      setInspectedIds(prev => new Set([...prev, targetId]));
+    }
+  }, [targetId]);
+
+  const selectedItems = p.items.filter(i => p.selectedIds.has(i.productId));
+  const uninspectedCount = selectedItems.filter(i => !inspectedIds.has(i.productId)).length;
+
   return (
     <section className="og-review-workspace" aria-label="Kiểm duyệt tin đăng">
       <PageHeader eyebrow="KÊNH KỸ THUẬT VIÊN" title="Kiểm duyệt tin đăng" description="Đối chiếu nội dung và media. Tin được duyệt chỉ mở bán khi đủ phí và quyền bán." actions={<button className="og-button og-button--outline" onClick={p.onRefresh} disabled={p.isLoading || p.busy}>Làm mới danh sách</button>} />
@@ -57,7 +70,7 @@ export function ModerationWorkbench(p: Props) {
               indeterminate={p.items.some(i => p.selectedIds.has(i.productId)) && !p.items.every(i => p.selectedIds.has(i.productId))}
               onChange={p.onToggleAll} ariaLabel="Chọn tất cả tin" /></div>
           <BulkActionBar selectedCount={p.selectedIds.size} totalCount={p.items.length} onClearSelection={p.onClear}
-            actions={[{ label: 'Duyệt nhanh các tin đã chọn', variant: 'primary', onClick: p.onBulk, disabled: p.busy || p.isLoading }]} />
+            actions={[{ label: 'Duyệt nhanh các tin đã chọn', variant: 'primary', onClick: () => setShowBulkConfirm(true), disabled: p.busy || p.isLoading || p.selectedIds.size === 0 }]} />
           {p.isLoading ? <p className="og-review-empty" aria-busy="true">Đang tải danh sách tin chờ duyệt...</p> : p.items.length === 0
             ? <EmptyState title="Không có tin nào đang chờ duyệt" description="Bạn đã xử lý tất cả tin hiện tại." actionText="Làm mới" onAction={p.onRefresh} />
             : <ul className="og-review-queue__list">{p.items.map(row => (
@@ -65,7 +78,14 @@ export function ModerationWorkbench(p: Props) {
                 <TableCheckbox checked={p.selectedIds.has(row.productId)} onChange={() => p.onToggle(row.productId)} ariaLabel={`Chọn tin #${row.productId}`} />
                 <button className="og-review-queue__item" onClick={() => choose(row.productId)} aria-current={targetId === row.productId ? 'true' : undefined}>
                   {row.media.find(m => m.mediaType === 'IMAGE') ? <ReviewImage src={row.media.find(m => m.mediaType === 'IMAGE')!.mediaUrl} alt="" /> : <span className="og-review-thumb">Ảnh</span>}
-                  <span><small>#{row.productId} · Chờ duyệt</small><strong>{row.title}</strong><span>{money(row.listedPrice)}</span><small>{row.sellerName || `Người bán #${row.sellerId}`}</small></span>
+                  <span>
+                    <small>
+                      #{row.productId} · Chờ duyệt {inspectedIds.has(row.productId) ? '· ✓ Đã xem' : '· ⚠️ Chưa xem'}
+                    </small>
+                    <strong>{row.title}</strong>
+                    <span>{money(row.listedPrice)}</span>
+                    <small>{row.sellerName || `Người bán #${row.sellerId}`}</small>
+                  </span>
                 </button>
               </li>))}</ul>}
           <div className="og-review-pagination"><Pagination total={p.total} page={p.page} totalPages={p.totalPages} size={p.size} onSize={p.onSize} onPage={p.onPage} disabled={p.busy || p.isLoading} /></div>
@@ -101,6 +121,72 @@ export function ModerationWorkbench(p: Props) {
           </> : <div className="og-review-empty"><h2>Chọn một tin để kiểm duyệt</h2><p>Ảnh, video và thông tin đối chiếu sẽ xuất hiện ở đây.</p></div>}
         </div>
       </div>
+
+      {showBulkConfirm && (
+        <div className="og-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="bulk-confirm-heading">
+          <div className="og-bulk-dialog">
+            <header>
+              <h2 id="bulk-confirm-heading">Xác nhận duyệt hàng loạt</h2>
+              <p>Danh sách bài đăng sẽ áp dụng duyệt ({selectedItems.length} tin)</p>
+            </header>
+            {uninspectedCount > 0 && (
+              <Alert type="warning">
+                Cảnh báo: Có {uninspectedCount} tin chưa được người kiểm duyệt bấm xem chi tiết/hình ảnh/nội dung trước đó.
+              </Alert>
+            )}
+            <ul className="og-bulk-list" aria-label="Danh sách tin duyệt hàng loạt">
+              {selectedItems.map(row => {
+                const inspected = inspectedIds.has(row.productId);
+                return (
+                  <li key={row.productId} className="og-bulk-item">
+                    <div className="og-bulk-item__info">
+                      <div className="og-bulk-item__title">#{row.productId} · {row.title}</div>
+                      <div className="og-bulk-item__sub">{money(row.listedPrice)} · {row.sellerName || `Người bán #${row.sellerId}`}</div>
+                      <span className={`og-bulk-item__badge ${inspected ? 'og-bulk-item__badge--inspected' : 'og-bulk-item__badge--uninspected'}`}>
+                        {inspected ? '✓ Đã xem chi tiết/media' : '⚠️ Chưa xem chi tiết/media'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="og-button og-button--outline og-button--sm"
+                      onClick={() => p.onToggle(row.productId)}
+                      aria-label={`Gỡ tin #${row.productId} khỏi danh sách`}
+                    >
+                      Gỡ khỏi danh sách
+                    </button>
+                  </li>
+                );
+              })}
+              {selectedItems.length === 0 && (
+                <p style={{ textAlign: 'center', padding: '16px', color: 'var(--og-color-text-secondary)' }}>
+                  Không còn tin nào trong danh sách duyệt.
+                </p>
+              )}
+            </ul>
+            <footer className="og-bulk-footer">
+              <button
+                type="button"
+                className="og-button og-button--outline"
+                onClick={() => setShowBulkConfirm(false)}
+                disabled={p.busy}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                className="og-button og-button--primary"
+                disabled={p.busy || selectedItems.length === 0}
+                onClick={() => {
+                  setShowBulkConfirm(false);
+                  p.onBulk();
+                }}
+              >
+                Xác nhận duyệt {selectedItems.length} tin
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

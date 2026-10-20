@@ -22,3 +22,32 @@ it('explains a stale offer without replacing it with a sold-product error', asyn
   expect(await screen.findByText('Tin đã thay đổi. Cần thương lượng lại.')).toBeInTheDocument();
   expect(screen.queryByText('Món đồ không còn khả dụng')).not.toBeInTheDocument();
 });
+
+it('allows buyer to choose between listed price and eligible accepted offer when entering checkout without offerId param', async () => {
+  const eligiblePreview: CheckoutPreview = {
+    ...preview,
+    agreedPrice: undefined,
+    acceptedOfferId: null,
+    eligibleOfferId: 9,
+    eligibleOfferPrice: 80000,
+  };
+  vi.mocked(checkoutApi.getCheckoutPreview).mockResolvedValue(eligiblePreview);
+  vi.mocked(checkoutApi.buyNow).mockRejectedValue(new Error('QA keep page'));
+
+  render(<MemoryRouter><CheckoutView productId={10} /></MemoryRouter>);
+
+  // Shows pricing choice options
+  expect(await screen.findByText(/Lựa chọn mức giá áp dụng:/)).toBeInTheDocument();
+  const listedRadio = screen.getByRole('radio', { name: /Giá niêm yết:/i });
+  const offerRadio = screen.getByRole('radio', { name: /Giá thương lượng đã chấp nhận:/i });
+  expect(listedRadio).toBeChecked();
+  expect(offerRadio).not.toBeChecked();
+
+  // Switch to Offer price
+  fireEvent.click(offerRadio);
+  expect(checkoutApi.getCheckoutPreview).toHaveBeenCalledWith(10, undefined, 9);
+
+  // Buy now submits with offerId
+  fireEvent.click(screen.getByRole('button', { name: /Xác nhận Mua ngay/i }));
+  await waitFor(() => expect(checkoutApi.buyNow).toHaveBeenCalledWith({ productId: 10, offerId: 9, addressId: 1, newAddress: undefined, voucherCode: undefined }));
+});

@@ -58,6 +58,81 @@
 .og-fee-dialog h3 { margin: 16px 0 8px; font-size: 1rem; }
 .og-fee-dialog p { color: var(--og-color-text-secondary); font-size: .86rem; }
 .og-fee-dialog header, .og-fee-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.og-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+.og-bulk-dialog {
+  width: min(640px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  background: var(--og-color-surface);
+  border-radius: 16px;
+  box-shadow: var(--og-shadow-lg);
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+}
+.og-bulk-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.og-bulk-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--og-color-bg);
+  border-radius: 8px;
+  border: 1px solid var(--og-color-border);
+}
+.og-bulk-item__info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.og-bulk-item__title {
+  font-size: .88rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.og-bulk-item__sub {
+  font-size: .76rem;
+  color: var(--og-color-text-secondary);
+}
+.og-bulk-item__badge {
+  font-size: .72rem;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.og-bulk-item__badge--inspected {
+  color: #16a34a;
+}
+.og-bulk-item__badge--uninspected {
+  color: #d97706;
+}
+.og-bulk-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--og-color-border);
+}
 .og-fee-summary { margin: 20px 0; padding: 16px; background: var(--og-color-bg); border-radius: 10px; }
 .og-fee-summary > div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; font-size: .86rem; }
 .og-fee-summary dt { color: var(--og-color-text-secondary); }

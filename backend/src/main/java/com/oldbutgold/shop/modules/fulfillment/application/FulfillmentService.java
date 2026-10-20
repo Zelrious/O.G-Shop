@@ -11,6 +11,7 @@ import com.oldbutgold.shop.modules.fulfillment.infrastructure.client.GhnApiExcep
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.client.GhnClient;
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.client.GhnProperties;
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.client.dto.GhnMasterDataDtos;
+import com.oldbutgold.shop.modules.fulfillment.infrastructure.client.dto.GhnShippingDtos;
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.client.dto.GhnShippingDtos.AvailableServiceDto;
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.client.dto.GhnShippingDtos.CreateOrderResponseDto;
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.client.dto.GhnShippingDtos.CreateShippingOrderRequest;
@@ -38,7 +39,7 @@ import java.util.UUID;
 import java.util.Optional;
 
 @Service
-public class FulfillmentService {
+public class FulfillmentService implements FulfillmentShippingFacade {
 
     private static final Logger log = LoggerFactory.getLogger(FulfillmentService.class);
     private static final int COOLDOWN_SECONDS = 10;
@@ -724,6 +725,23 @@ public class FulfillmentService {
 
     private boolean isNotBlank(String str) {
         return str != null && !str.isBlank();
+    }
+
+    @Override
+    public BigDecimal calculateShippingFee(int fromDistrictId, String fromWardCode, int toDistrictId, String toWardCode, Integer weightInGrams) {
+        int weight = (weightInGrams != null && weightInGrams > 0) ? weightInGrams : 500;
+        try {
+            GhnShippingDtos.FeeQueryRequest request = new GhnShippingDtos.FeeQueryRequest(
+                    fromDistrictId, fromWardCode, toDistrictId, toWardCode, weight);
+            GhnShippingDtos.FeeResponseDto response = ghnClient.calculateShippingFee(request);
+            if (response != null && response.total() != null) {
+                return BigDecimal.valueOf(response.total());
+            }
+        } catch (Exception e) {
+            log.warn("Không thể tính cước GHN thực tế (fromDistrict={}, toDistrict={}): {}. Dùng cước mặc định.",
+                    fromDistrictId, toDistrictId, e.getMessage());
+        }
+        return BigDecimal.valueOf(30000);
     }
 
     private sealed interface InitiationResult {

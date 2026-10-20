@@ -2,6 +2,8 @@ package com.oldbutgold.shop.modules.catalog.api;
 
 import com.oldbutgold.shop.modules.catalog.application.CatalogService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,6 +29,7 @@ public class CatalogController {
 
     @GetMapping("/products")
     public ResponseEntity<CatalogDtos.PageResponse<CatalogDtos.ProductSummaryResponse>> getProducts(
+            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) List<Long> categoryIds,
@@ -38,6 +41,7 @@ public class CatalogController {
             @RequestParam(defaultValue = "12") int size,
             @RequestParam(defaultValue = "newest") String sort
     ) {
+        Long buyerId = jwt != null ? Long.parseLong(jwt.getSubject()) : null;
         List<Long> targetCategoryIds = new java.util.ArrayList<>();
         if (categoryIds != null) {
             targetCategoryIds.addAll(categoryIds);
@@ -59,7 +63,7 @@ public class CatalogController {
                     query,
                     targetCategoryIds.isEmpty() ? null : targetCategoryIds.get(0),
                     targetConditions.isEmpty() ? null : targetConditions.get(0),
-                    minPrice, maxPrice, page, size, sort
+                    minPrice, maxPrice, page, size, sort, buyerId
             ));
         }
 
@@ -67,12 +71,16 @@ public class CatalogController {
                 query,
                 targetCategoryIds.isEmpty() ? null : targetCategoryIds,
                 targetConditions.isEmpty() ? null : targetConditions,
-                minPrice, maxPrice, page, size, sort
+                minPrice, maxPrice, page, size, sort, buyerId
         ));
     }
 
     @GetMapping("/products/{productId}")
-    public ResponseEntity<CatalogDtos.ProductDetailResponse> getProductDetail(@PathVariable long productId) {
-        return ResponseEntity.ok(catalogService.getProductDetail(productId));
+    public ResponseEntity<CatalogDtos.ProductDetailResponse> getProductDetail(
+            @PathVariable long productId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        Long buyerId = jwt != null ? Long.parseLong(jwt.getSubject()) : null;
+        return ResponseEntity.ok(catalogService.getProductDetail(productId, buyerId));
     }
 }

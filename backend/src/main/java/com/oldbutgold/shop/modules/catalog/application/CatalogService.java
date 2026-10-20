@@ -24,6 +24,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.oldbutgold.shop.modules.communication.application.NegotiatedCheckoutFacade;
+import org.springframework.beans.factory.annotation.Autowired;
+
 @Service
 @Transactional(readOnly = true)
 public class CatalogService {
@@ -33,15 +36,26 @@ public class CatalogService {
     private final ProductRepository productRepository;
     private final ProductMediaRepository productMediaRepository;
     private final IdentityCatalogFacade identityCatalogFacade;
+    private final NegotiatedCheckoutFacade negotiatedCheckoutFacade;
 
     public CatalogService(CategoryRepository categoryRepository,
                           ProductRepository productRepository,
                           ProductMediaRepository productMediaRepository,
                           IdentityCatalogFacade identityCatalogFacade) {
+        this(categoryRepository, productRepository, productMediaRepository, identityCatalogFacade, null);
+    }
+
+    @Autowired
+    public CatalogService(CategoryRepository categoryRepository,
+                          ProductRepository productRepository,
+                          ProductMediaRepository productMediaRepository,
+                          IdentityCatalogFacade identityCatalogFacade,
+                          @Autowired(required = false) NegotiatedCheckoutFacade negotiatedCheckoutFacade) {
         this.categoryRepository = categoryRepository;
         this.productRepository = productRepository;
         this.productMediaRepository = productMediaRepository;
         this.identityCatalogFacade = identityCatalogFacade;
+        this.negotiatedCheckoutFacade = negotiatedCheckoutFacade;
     }
 
     public List<CatalogDtos.CategoryResponse> getCategories() {
@@ -60,6 +74,20 @@ public class CatalogService {
             int size,
             String sort
     ) {
+        return searchProducts(query, categoryId, condition, minPrice, maxPrice, page, size, sort, null);
+    }
+
+    public CatalogDtos.PageResponse<CatalogDtos.ProductSummaryResponse> searchProducts(
+            String query,
+            Long categoryId,
+            String condition,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            int page,
+            int size,
+            String sort,
+            Long buyerId
+    ) {
         return searchProductsMulti(
                 query,
                 categoryId != null ? List.of(categoryId) : null,
@@ -68,7 +96,8 @@ public class CatalogService {
                 maxPrice,
                 page,
                 size,
-                sort
+                sort,
+                buyerId
         );
     }
 
@@ -81,6 +110,20 @@ public class CatalogService {
             int page,
             int size,
             String sort
+    ) {
+        return searchProductsMulti(query, filterCategoryIds, filterConditions, minPrice, maxPrice, page, size, sort, null);
+    }
+
+    public CatalogDtos.PageResponse<CatalogDtos.ProductSummaryResponse> searchProductsMulti(
+            String query,
+            List<Long> filterCategoryIds,
+            List<String> filterConditions,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            int page,
+            int size,
+            String sort,
+            Long buyerId
     ) {
         if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
             throw new IllegalArgumentException("Giá tối thiểu (minPrice) không được lớn hơn giá tối đa (maxPrice).");
@@ -171,13 +214,31 @@ public class CatalogService {
                         (first, replacement) -> first
                 ));
 
+        Map<Long, NegotiatedCheckoutFacade.Agreement> agreedMap = Map.of();
+        if (buyerId != null && negotiatedCheckoutFacade != null) {
+            try {
+                agreedMap = negotiatedCheckoutFacade.findActiveAcceptedOffersForBuyer(buyerId);
+            } catch (Exception ignored) {
+            }
+        }
+        Map<Long, NegotiatedCheckoutFacade.Agreement> finalAgreedMap = agreedMap;
+
         List<CatalogDtos.ProductSummaryResponse> items = products.stream().map(p -> {
             IdentityCatalogFacade.SellerPublicSummary seller = sellerMap.getOrDefault(
                     p.getSellerId(),
                     new IdentityCatalogFacade.SellerPublicSummary(p.getSellerId(), "Người bán", "Người bán")
             );
             String thumbnail = thumbnailMap.get(p.getId());
-            return CatalogDtos.ProductSummaryResponse.from(p, CategoryRepository.orderedForProduct(p, categoryMap), seller, thumbnail);
+            BigDecimal agreedPrice = null;
+            Long acceptedOfferId = null;
+            if (buyerId != null && !Long.valueOf(p.getSellerId()).equals(buyerId)) {
+                NegotiatedCheckoutFacade.Agreement agreement = finalAgreedMap.get(p.getId());
+                if (agreement != null) {
+                    agreedPrice = agreement.price();
+                    acceptedOfferId = agreement.offerId();
+                }
+            }
+            return CatalogDtos.ProductSummaryResponse.from(p, CategoryRepository.orderedForProduct(p, categoryMap), seller, thumbnail, agreedPrice, acceptedOfferId);
         }).toList();
 
         return new CatalogDtos.PageResponse<>(
@@ -191,6 +252,10 @@ public class CatalogService {
     }
 
     public CatalogDtos.ProductDetailResponse getProductDetail(long productId) {
+        return getProductDetail(productId, null);
+    }
+
+    public CatalogDtos.ProductDetailResponse getProductDetail(long productId, Long buyerId) {
         ProductEntity product = productRepository.findByIdAndStatusAndDeletedAtIsNull(productId, ProductEntity.STATUS_ACTIVE)
                 .orElseThrow(ProductNotFoundException::new);
 
@@ -202,6 +267,19 @@ public class CatalogService {
         List<ProductMediaEntity> mediaList =
                 productMediaRepository.findByProductIdOrderByDisplayOrderAscIdAsc(productId);
 
-        return CatalogDtos.ProductDetailResponse.from(product, categories, seller, mediaList);
+        BigDecimal agreedPrice = null;
+        Long acceptedOfferId = null;
+        if (buyerId != null && negotiatedCheckoutFacade != null && !Long.valueOf(product.getSellerId()).equals(buyerId)) {
+            try {
+                var agreementOpt = negotiatedCheckoutFacade.findActiveAcceptedOffer(buyerId, productId);
+                if (agreementOpt.isPresent()) {
+                    agreedPrice = agreementOpt.get().price();
+                    acceptedOfferId = agreementOpt.get().offerId();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        return CatalogDtos.ProductDetailResponse.from(product, categories, seller, mediaList, agreedPrice, acceptedOfferId);
     }
 }

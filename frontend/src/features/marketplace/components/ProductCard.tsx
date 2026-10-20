@@ -20,6 +20,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   // Format price matching Image 3: e.g. "3.000.000 đ"
   const formattedPrice = `${new Intl.NumberFormat('vi-VN').format(product.listedPrice)} đ`;
 
+  // Check if buyer has an active accepted agreed price
+  const hasAgreedPrice = typeof product.agreedPrice === 'number' && product.agreedPrice > 0;
+  const formattedAgreedPrice = hasAgreedPrice
+    ? `${new Intl.NumberFormat('vi-VN').format(product.agreedPrice!)} đ`
+    : null;
+
   // Concise condition label
   const conditionText = CONDITION_TAGS[product.condition] || 'Đã dùng';
 
@@ -33,7 +39,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   }, [product.location]);
 
   return (
-    <article className="og-product-card">
+    <article className={`og-product-card${hasAgreedPrice ? ' og-product-card--agreed' : ''}`}>
       <Link
         to={`/products/${product.productId}`}
         className="og-product-card__link"
@@ -53,6 +59,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               <span className="og-product-card__placeholder-icon"><Icon name="package" /></span>
               <span>Chưa có ảnh</span>
             </div>
+          )}
+
+          {hasAgreedPrice && (
+            <span className="og-product-card__ribbon-agreed" title="Giá đã thương lượng dành riêng cho bạn">
+              Đã thỏa thuận
+            </span>
           )}
 
           {/* Accessible Category Label */}
@@ -98,7 +110,24 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
           {/* Price */}
           <div className="og-product-card__price-row">
-            <span className="og-product-card__price">{formattedPrice}</span>
+            {hasAgreedPrice ? (
+              <div className="og-product-card__agreed-price-wrap">
+                <div className="og-product-card__agreed-main">
+                  <span className="og-product-card__price og-product-card__price--agreed">
+                    {formattedAgreedPrice}
+                  </span>
+                  <span
+                    className="og-product-card__agreed-badge"
+                    title="Giá thương lượng đã được người bán chấp thuận cho riêng bạn"
+                  >
+                    Giá của bạn
+                  </span>
+                </div>
+                <del className="og-product-card__price-original">{formattedPrice}</del>
+              </div>
+            ) : (
+              <span className="og-product-card__price">{formattedPrice}</span>
+            )}
           </div>
 
           {/* Bottom Footer: Location & Condition Pill */}

@@ -89,14 +89,52 @@ export function ConversationWorkspace({ compact = false, initialQuery = '', isAc
   };
   const refreshThread = () => { setRefresh(n => n + 1); window.dispatchEvent(new Event('og-chat-updated')); };
   const offers = new Map(detail?.offers.map(o => [o.id, o]) ?? []);
-  return <section className={"og-chat-page" + (compact ? " og-chat-page--compact" : "")}><header className="og-chat-heading" hidden={compact}><h1 className="og-chat-accessible-title">Tin nhắn</h1><Link className="og-chat-return-link" to={returnTo} state={{ restoreScroll: true }}><Icon name="back" size={17} />Trở lại trang đang xem</Link><div className="og-chat-heading-actions"><span className={'og-chat-connection' + (!online || connectionError ? ' og-chat-connection--offline' : '')}><i aria-hidden="true" />{!online ? 'Đang ngoại tuyến' : connectionError ? 'Đang kết nối lại' : 'Cập nhật tự động'}</span>{user?.roles.includes('SELLER') && <Link className="og-button og-button--outline" to="/seller/blocked">Danh sách chặn</Link>}</div></header>
+  const activeAcceptedOffer = useMemo(() => {
+    if (!detail || detail.conversation.role !== 'BUYER') return null;
+    return [...detail.offers].reverse().find(o => o.status === 'ACCEPTED' && o.orderId === null) ?? null;
+  }, [detail]);
+  return <section className={"og-chat-page" + (compact ? " og-chat-page--compact" : "")}><header className="og-chat-heading" hidden={compact}><h1 className="og-chat-accessible-title">Tin nhắn</h1><Link className="og-chat-return-link" to={returnTo} state={{ restoreScroll: true }}><Icon name="back" size={17} />Trở lại trang đang xem</Link><div className="og-chat-heading-actions"><span className={'og-chat-connection' + (!online || connectionError ? ' og-chat-connection--offline' : '')}><i aria-hidden="true" />{!online ? 'Đang ngoại tuyến' : connectionError ? 'Đang kết nối lại' : 'Tự cập nhật định kỳ (2.5 giây/lần)'}</span>{user?.roles.includes('SELLER') && <Link className="og-button og-button--outline" to="/seller/blocked">Danh sách chặn</Link>}</div></header>
     <div className={'og-chat-workspace' + (selectedId ? ' og-chat-workspace--selected' : '')}><aside className="og-chat-inbox" aria-label="Hộp thư" hidden={compact}><form className="og-chat-search" onSubmit={e => { e.preventDefault(); setFilter(query); setPage(0); }}><label htmlFor="chat-search">Tìm hội thoại</label><div><input id="chat-search" type="search" maxLength={100} placeholder="Tên món đồ..." value={query} onChange={e => setQuery(e.target.value)} /><button className="og-button og-button--outline">Tìm</button></div></form><div className="og-chat-inbox-meta"><strong>{list?.total ?? 0} hội thoại</strong><span>{list?.unread ?? 0} chưa đọc</span></div>
       {listLoading && !list ? <p role="status" className="og-chat-empty">Đang tải hộp thư...</p> : listError && !list ? <div className="og-chat-empty"><Alert type="danger">{listError}</Alert><button className="og-button og-button--outline" onClick={refreshThread}>Thử lại</button></div> : !list?.items.length ? <div className="og-chat-empty"><h3>{filter ? 'Không có hội thoại phù hợp' : 'Bắt đầu cuộc trò chuyện'}</h3><p>Mở một món đồ và chọn nhắn tin để hỏi người bán.</p><Link to="/marketplace" className="og-button og-button--outline">Khám phá món đồ</Link></div> : <ul className="og-chat-threads">{list.items.map(c => <li key={c.id}><button className={'og-chat-thread' + (selectedId === c.id ? ' og-chat-thread--selected' : '')} aria-current={selectedId === c.id} aria-label={'Mở hội thoại với ' + c.partnerName + ': ' + c.title} disabled={busy} onClick={() => setParams({ conversationId: String(c.id) })}><span className="og-chat-avatar">{c.partnerName.slice(0, 1).toUpperCase()}</span><span className="og-chat-thread-body"><strong>{c.partnerName}</strong><span>{c.title}</span><small>{c.preview || 'Chưa có tin nhắn'}{c.blocked ? ' · Có quan hệ chặn' : ''}</small></span><span className="og-chat-thread-side"><time>{new Date(c.lastActivity).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</time>{c.unread > 0 && <b aria-label={c.unread + ' tin chưa đọc'}>{c.unread > 99 ? '99+' : c.unread}</b>}</span></button></li>)}</ul>}
       {list && list.total > list.size && <nav className="og-chat-pagination" aria-label="Trang hộp thư"><button className="og-button og-button--ghost" disabled={page === 0 || listLoading} onClick={() => setPage(n => n - 1)}>Trước</button><span>{page + 1}/{Math.ceil(list.total / list.size)}</span><button className="og-button og-button--ghost" disabled={(page + 1) * list.size >= list.total || listLoading} onClick={() => setPage(n => n + 1)}>Sau</button></nav>}
     </aside><div className="og-chat-conversation" aria-label="Hội thoại được chọn" aria-busy={detailLoading || starting}>
       {starting || detailLoading && !detail ? <div role="status" className="og-chat-welcome">Đang mở hội thoại...</div> : detailError && !detail ? <div className="og-chat-welcome"><Alert type="danger">{detailError}</Alert><button className="og-button og-button--outline" onClick={refreshThread}>Thử lại</button><button className="og-button og-button--ghost" onClick={() => setParams({})}>Về hộp thư</button></div> : !detail ? <div className="og-chat-welcome"><Icon name="message" size={42} /><h2>Chọn cuộc trò chuyện</h2><p>Hỏi rõ tình trạng món đồ và thương lượng ngay trong hội thoại.</p><small>Chỉ người tham gia được xem lịch sử riêng.</small></div> : <>
         <header className="og-chat-conversation-header"><button className="og-button og-button--ghost og-chat-back" onClick={() => setParams({})} aria-label="Trở lại hộp thư"><Icon name="back" /></button><span className="og-chat-avatar">{detail.conversation.partnerName.slice(0, 1).toUpperCase()}</span><div><h2>{detail.conversation.partnerName}</h2><span>{detail.conversation.role === 'SELLER' ? 'Người mua' : 'Người bán'} · Hội thoại riêng</span></div><button className="og-button og-button--ghost" onClick={refreshThread} aria-label="Làm mới hội thoại"><Icon name="refresh" /></button></header>
-        <div className="og-chat-product">{detail.conversation.thumbnail && <img src={detail.conversation.thumbnail} alt="" />}<div><Link to={'/products/' + detail.conversation.productId}>{detail.conversation.title}</Link><span>{money(detail.product.price)} · {statusLabels[detail.product.status] || 'Không mở bán'}</span><small>{detail.product.returnAllowed ? 'Có chính sách trả hàng' : 'Đối chiếu chính sách trả hàng trước khi mua'}</small></div>{detail.conversation.role === 'BUYER' && <button className="og-button og-button--primary" disabled={!detail.canOffer || busy} onClick={() => setDialog({ conversation: detail.conversation.id })}>Trả giá</button>}</div>
+        <div className="og-chat-product">
+          {detail.conversation.thumbnail && <img src={detail.conversation.thumbnail} alt="" />}
+          <div className="og-chat-product-info">
+            <Link to={'/products/' + detail.conversation.productId}>{detail.conversation.title}</Link>
+            {activeAcceptedOffer ? (
+              <div className="og-chat-product-pricing">
+                <span className="og-chat-agreed-price">{money(activeAcceptedOffer.price)}</span>
+                <span className="og-chat-agreed-badge">Giá đã thỏa thuận</span>
+                <del className="og-chat-listed-price">{money(detail.product.price)}</del>
+              </div>
+            ) : (
+              <span>{money(detail.product.price)} · {statusLabels[detail.product.status] || 'Không mở bán'}</span>
+            )}
+            <small>{detail.product.returnAllowed ? 'Có chính sách trả hàng' : 'Đối chiếu chính sách trả hàng trước khi mua'}</small>
+          </div>
+          <div className="og-chat-product-actions">
+            {activeAcceptedOffer && detail.conversation.role === 'BUYER' && activeAcceptedOffer.canCheckout && (
+              <Link
+                to={`/checkout?productId=${detail.conversation.productId}&offerId=${activeAcceptedOffer.id}`}
+                className="og-button og-button--primary og-chat-checkout-btn"
+              >
+                Mua ngay
+              </Link>
+            )}
+            {detail.conversation.role === 'BUYER' && (
+              <button
+                className={`og-button ${activeAcceptedOffer ? 'og-button--outline' : 'og-button--primary'}`}
+                disabled={!detail.canOffer || busy}
+                onClick={() => setDialog({ conversation: detail.conversation.id })}
+              >
+                {activeAcceptedOffer ? 'Thương lượng lại' : 'Trả giá'}
+              </button>
+            )}
+          </div>
+        </div>
         {detail.restrictionReason && <div className="og-chat-restriction"><Alert type="warning">{detail.restrictionReason} {detail.canSend ? <Link to={'/products/' + detail.conversation.productId}>Xem tình trạng món đồ</Link> : <Link to="/account/status">Xem tình trạng và hồ sơ cũ</Link>}</Alert></div>}
         <div className="og-chat-log" role="log" aria-label="Lịch sử tin nhắn" aria-live="polite" ref={log} onScroll={() => { if (log.current) { atBottom.current = log.current.scrollHeight - log.current.scrollTop - log.current.clientHeight < 90; markRead(); } }}>
           {detail.messages.nextBefore && <div className="og-chat-load-older"><button className="og-button og-button--outline" disabled={olderLoading} onClick={() => void loadOlder()}>{olderLoading ? 'Đang tải...' : 'Xem tin cũ hơn'}</button></div>}

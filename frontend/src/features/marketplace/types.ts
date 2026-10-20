@@ -32,6 +32,8 @@ export interface ProductSummary {
   seller: SellerSummary;
   requiresBuyerEkyc?: boolean;
   createdAt: string;
+  agreedPrice?: number | null;
+  acceptedOfferId?: number | null;
 }
 
 export interface ProductDetail {
@@ -53,6 +55,8 @@ export interface ProductDetail {
   media: ProductMedia[];
   requiresBuyerEkyc?: boolean;
   createdAt: string;
+  agreedPrice?: number | null;
+  acceptedOfferId?: number | null;
 }
 
 export interface PageResponse<T> {
