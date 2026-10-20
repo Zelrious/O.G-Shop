@@ -59,3 +59,4 @@ app:
     webhook-secret: ${GHN_WEBHOOK_SECRET:test-webhook-secret-key-12345}
     reconciliation:
       enabled: false
+    simulation-enabled: true
