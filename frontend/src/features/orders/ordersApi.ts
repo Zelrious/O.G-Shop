@@ -1,5 +1,5 @@
 import { authApi } from '../auth/authApi';
-import { OrderSummary, OrderDetail, OrderActionResponse, PageResponse } from './types';
+import { OrderSummary, OrderDetail, OrderActionResponse, OrderShipmentActionResponse, PageResponse } from './types';
 
 interface ApiErrorBody {
   message?: string;
@@ -51,6 +51,13 @@ export const ordersApi = {
     return handleResponse<OrderActionResponse>(res);
   },
 
+  async completeBuyerOrder(orderId: number): Promise<OrderActionResponse> {
+    const res = await authApi.authorizedFetch(`/commerce/orders/${orderId}/complete`, {
+      method: 'POST',
+    });
+    return handleResponse<OrderActionResponse>(res);
+  },
+
   // Seller API
   async getSellerOrders(status?: string, page = 0, size = 10): Promise<PageResponse<OrderSummary>> {
     const params = new URLSearchParams({
@@ -74,5 +81,24 @@ export const ordersApi = {
       method: 'POST',
     });
     return handleResponse<OrderActionResponse>(res);
+  },
+
+  async shipSellerOrder(orderId: number): Promise<OrderShipmentActionResponse> {
+    const res = await authApi.authorizedFetch(`/commerce/seller/orders/${orderId}/ship`, {
+      method: 'POST',
+    });
+    return handleResponse<OrderShipmentActionResponse>(res);
+  },
+
+  async deliverSellerOrder(orderId: number): Promise<OrderActionResponse> {
+    const res = await authApi.authorizedFetch(`/commerce/seller/orders/${orderId}/deliver`, {
+      method: 'POST',
+    });
+    return handleResponse<OrderActionResponse>(res);
+  },
+
+  async getPrintWaybill(orderId: number): Promise<{ orderId: number; trackingNumber: string; printUrl: string }> {
+    const res = await authApi.authorizedFetch(`/fulfillment/orders/${orderId}/print-waybill`);
+    return handleResponse<{ orderId: number; trackingNumber: string; printUrl: string }>(res);
   },
 };

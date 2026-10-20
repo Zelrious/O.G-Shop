@@ -55,11 +55,23 @@ export interface OrderDetail {
   completedAt: string | null;
   cancelledAt: string | null;
   cancellationReason: string | null;
+  trackingNumber?: string | null;
+  carrier?: string | null;
+  shippedAt?: string | null;
+  deliveredAt?: string | null;
 }
 
 export interface OrderActionResponse {
   orderId: number;
   status: string;
+  message: string;
+}
+
+export interface OrderShipmentActionResponse {
+  orderId: number;
+  status: string;
+  trackingNumber: string;
+  carrier: string;
   message: string;
 }
 

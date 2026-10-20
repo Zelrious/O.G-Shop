@@ -13,6 +13,11 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [shipping, setShipping] = useState(false);
+  const [delivering, setDelivering] = useState(false);
+  const [printing, setPrinting] = useState(false);
+
+  const isSimulationAllowed = import.meta.env.DEV || import.meta.env.VITE_SIMULATION_ENABLED === 'true';
 
   const loadOrder = useCallback(() => {
     setLoading(true);
@@ -48,6 +53,59 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
       alert(error.message || 'Không thể xác nhận đơn hàng.');
     } finally {
       setConfirming(false);
+    }
+  };
+
+  const handleShipOrder = async () => {
+    if (!window.confirm(`Bàn giao đơn hàng #${orderId} cho GHN để tạo vận đơn chính thức?`)) {
+      return;
+    }
+
+    setShipping(true);
+    try {
+      const res = await ordersApi.shipSellerOrder(orderId);
+      alert(res.message || `Tạo vận đơn GHN thành công! Mã vận đơn: ${res.trackingNumber}`);
+      loadOrder();
+    } catch (err: unknown) {
+      const error = err as Error;
+      alert(error.message || 'Không thể tạo vận đơn GHN.');
+    } finally {
+      setShipping(false);
+    }
+  };
+
+  const handleDeliverOrder = async () => {
+    if (!window.confirm(`[TEST DEMO] Bạn muốn mô phỏng GHN xác nhận đã giao hàng thành công cho đơn #${orderId}?`)) {
+      return;
+    }
+
+    setDelivering(true);
+    try {
+      const res = await ordersApi.deliverSellerOrder(orderId);
+      alert(res.message || 'Mô phỏng GHN giao hàng thành công!');
+      loadOrder();
+    } catch (err: unknown) {
+      const error = err as Error;
+      alert(error.message || 'Không thể thực hiện mô phỏng giao hàng.');
+    } finally {
+      setDelivering(false);
+    }
+  };
+
+  const handlePrintWaybill = async () => {
+    setPrinting(true);
+    try {
+      const res = await ordersApi.getPrintWaybill(orderId);
+      if (res.printUrl) {
+        window.open(res.printUrl, '_blank');
+      } else {
+        alert('Không tìm thấy liên kết in phiếu gửi hàng.');
+      }
+    } catch (err: unknown) {
+      const error = err as Error;
+      alert(error.message || 'Không thể lấy liên kết in phiếu gửi hàng.');
+    } finally {
+      setPrinting(false);
     }
   };
 
@@ -173,6 +231,36 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
               <div style={{ color: 'var(--og-color-text-secondary)' }}>{order.fullShippingAddress}</div>
             </div>
           </div>
+
+          {/* GHN Fulfillment & Shipping Info */}
+          {order.trackingNumber && (
+            <div style={{ background: 'var(--og-color-surface)', border: '1px solid #bfdbfe', borderRadius: 12, padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#1e40af' }}>
+                  Thông tin vận chuyển GHN
+                </h3>
+                <span style={{ fontSize: '0.8rem', background: '#dbeafe', color: '#1d4ed8', padding: '3px 8px', borderRadius: 4, fontWeight: 600 }}>
+                  {order.carrier || 'GHN'}
+                </span>
+              </div>
+              <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}>
+                <div>Mã vận đơn: <strong style={{ color: '#0369a1', fontFamily: 'monospace', fontSize: '1rem' }}>{order.trackingNumber}</strong></div>
+                {order.shippedAt && <div>Thời gian gửi hàng: <span style={{ color: 'var(--og-color-text-secondary)' }}>{formatDate(order.shippedAt)}</span></div>}
+                {order.deliveredAt && <div>Thời gian phát thành công: <span style={{ color: '#15803d', fontWeight: 600 }}>{formatDate(order.deliveredAt)}</span></div>}
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="og-button og-button--outline"
+                  style={{ fontSize: '0.88rem', padding: '6px 14px' }}
+                  disabled={printing}
+                  onClick={handlePrintWaybill}
+                >
+                  {printing ? 'Đang tải phiếu in...' : 'In phiếu gửi hàng (A5)'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Column: Seller Proceeds & Action */}
@@ -220,8 +308,9 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
               <strong>Tiền đã giữ trong Escrow:</strong> Tiền được bảo vệ bởi sàn và sẽ giải ngân vào ví người bán sau khi đơn hàng hoàn tất.
             </div>
 
-            {order.status === 'PAID_HELD' && (
-              <div style={{ marginTop: 20 }}>
+            {/* Action buttons based on status */}
+            <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {order.status === 'PAID_HELD' && (
                 <button
                   type="button"
                   className="og-button og-button--primary"
@@ -231,8 +320,83 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
                 >
                   {confirming ? 'Đang xác nhận...' : 'Xác nhận Đơn hàng'}
                 </button>
-              </div>
-            )}
+              )}
+
+              {order.status === 'SELLER_CONFIRMED' && (
+                <button
+                  type="button"
+                  className="og-button og-button--primary"
+                  style={{ width: '100%', padding: '12px 16px', fontWeight: 700, fontSize: '0.95rem', background: '#2563eb', borderColor: '#2563eb' }}
+                  disabled={shipping}
+                  onClick={handleShipOrder}
+                >
+                  {shipping ? 'Đang tạo vận đơn GHN...' : 'Bàn giao cho GHN (Tạo vận đơn)'}
+                </button>
+              )}
+
+              {order.status === 'SHIPPED' && (
+                <>
+                  <button
+                    type="button"
+                    className="og-button og-button--outline"
+                    style={{ width: '100%', padding: '10px 16px', fontWeight: 600 }}
+                    disabled={printing}
+                    onClick={handlePrintWaybill}
+                  >
+                    {printing ? 'Đang mở phiếu in...' : 'In phiếu gửi hàng (A5)'}
+                  </button>
+
+                  {isSimulationAllowed && (
+                    <button
+                      type="button"
+                      style={{
+                        width: '100%',
+                        padding: '10px 16px',
+                        background: '#fef3c7',
+                        border: '1px dashed #d97706',
+                        color: '#92400e',
+                        borderRadius: 8,
+                        fontWeight: 700,
+                        fontSize: '0.88rem',
+                        cursor: 'pointer',
+                      }}
+                      disabled={delivering}
+                      onClick={handleDeliverOrder}
+                    >
+                      {delivering ? 'Đang mô phỏng giao hàng...' : '[Test] Mô phỏng GHN giao hàng (DELIVERED)'}
+                    </button>
+                  )}
+                </>
+              )}
+
+              {order.status === 'DELIVERED' && (
+                <div style={{
+                  background: '#fef9c3',
+                  border: '1px solid #fde047',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: '0.85rem',
+                  color: '#854d0e',
+                  lineHeight: 1.5,
+                }}>
+                  <strong>Đã giao hàng thành công!</strong> Đang chờ người mua xác nhận hoặc hệ thống sẽ tự động hoàn tất sau thời gian đồng kiểm.
+                </div>
+              )}
+
+              {order.status === 'COMPLETED' && (
+                <div style={{
+                  background: '#dcfce7',
+                  border: '1px solid #86efac',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: '0.85rem',
+                  color: '#166534',
+                  lineHeight: 1.5,
+                }}>
+                  <strong>Đơn hàng đã hoàn tất!</strong> Tiền bán hàng đã được giải ngân thành công.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

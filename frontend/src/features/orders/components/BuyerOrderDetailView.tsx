@@ -17,6 +17,8 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('Tôi đổi ý, không muốn mua nữa');
   const [cancelling, setCancelling] = useState(false);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [completing, setCompleting] = useState(false);
 
   const loadOrder = useCallback(() => {
     setLoading(true);
@@ -48,6 +50,21 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
       alert(error.message || 'Không thể hủy đơn hàng.');
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const handleCompleteConfirm = async () => {
+    setCompleting(true);
+    try {
+      const res = await ordersApi.completeBuyerOrder(orderId);
+      setShowCompleteModal(false);
+      loadOrder();
+      alert(res.message || 'Xác nhận nhận hàng thành công. Giao dịch đã hoàn tất và tiền ký quỹ đã được giải ngân.');
+    } catch (err: unknown) {
+      const error = err as Error;
+      alert(error.message || 'Không thể hoàn tất đơn hàng.');
+    } finally {
+      setCompleting(false);
     }
   };
 
@@ -88,8 +105,9 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
     { key: 'CREATED', label: 'Đặt hàng', done: true, time: order.createdAt },
     { key: 'PAID', label: 'Ký quỹ Escrow', done: order.status !== 'PAYMENT_PENDING' && order.status !== 'CANCELLED', time: order.heldAt || order.paidAt },
     { key: 'CONFIRMED', label: 'Người bán xác nhận', done: ['SELLER_CONFIRMED', 'SHIPPED', 'DELIVERED', 'COMPLETED'].includes(order.status) },
-    { key: 'SHIPPED', label: 'Đang vận chuyển', done: ['SHIPPED', 'DELIVERED', 'COMPLETED'].includes(order.status) },
-    { key: 'DELIVERED', label: 'Hoàn tất giao dịch', done: order.status === 'COMPLETED', time: order.completedAt },
+    { key: 'SHIPPED', label: 'Đang vận chuyển', done: ['SHIPPED', 'DELIVERED', 'COMPLETED'].includes(order.status), time: order.shippedAt },
+    { key: 'DELIVERED', label: 'Đã giao hàng', done: ['DELIVERED', 'COMPLETED'].includes(order.status), time: order.deliveredAt },
+    { key: 'COMPLETED', label: 'Hoàn tất giao dịch', done: order.status === 'COMPLETED', time: order.completedAt },
   ];
 
   return (
@@ -220,6 +238,25 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
             </div>
           </div>
 
+          {/* Tracking info */}
+          {order.trackingNumber && (
+            <div style={{ background: 'var(--og-color-surface)', border: '1px solid #bfdbfe', borderRadius: 12, padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#1e40af' }}>
+                  Thông tin giao hàng
+                </h3>
+                <span style={{ fontSize: '0.8rem', background: '#dbeafe', color: '#1d4ed8', padding: '3px 8px', borderRadius: 4, fontWeight: 600 }}>
+                  {order.carrier || 'GHN'}
+                </span>
+              </div>
+              <div style={{ fontSize: '0.9rem', lineHeight: 1.8 }}>
+                <div>Mã vận đơn: <strong style={{ color: '#0369a1', fontFamily: 'monospace', fontSize: '1rem' }}>{order.trackingNumber}</strong></div>
+                {order.shippedAt && <div>Thời gian gửi hàng: <span style={{ color: 'var(--og-color-text-secondary)' }}>{formatDate(order.shippedAt)}</span></div>}
+                {order.deliveredAt && <div>Thời gian phát thành công: <span style={{ color: '#15803d', fontWeight: 600 }}>{formatDate(order.deliveredAt)}</span></div>}
+              </div>
+            </div>
+          )}
+
           {/* Escrow Status Card */}
           <div style={{
             background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
@@ -341,6 +378,51 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
                   Hủy đơn & Hoàn tiền
                 </button>
               )}
+
+              {order.status === 'DELIVERED' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{
+                    background: '#eff6ff',
+                    border: '1px solid #bfdbfe',
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: '0.85rem',
+                    color: '#1e40af',
+                    lineHeight: 1.5,
+                  }}>
+                    <strong>Đơn hàng đã được giao!</strong> Bạn có thời gian đồng kiểm sản phẩm. Nếu sản phẩm đúng mô tả và bạn hài lòng, hãy nhấn nút dưới đây để hoàn tất và giải ngân cho người bán.
+                  </div>
+                  <button
+                    type="button"
+                    className="og-button og-button--primary"
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      fontWeight: 700,
+                      fontSize: '0.95rem',
+                      background: '#16a34a',
+                      borderColor: '#16a34a',
+                    }}
+                    onClick={() => setShowCompleteModal(true)}
+                  >
+                    Đã nhận được hàng (Hoàn tất)
+                  </button>
+                </div>
+              )}
+
+              {order.status === 'COMPLETED' && (
+                <div style={{
+                  background: '#dcfce7',
+                  border: '1px solid #86efac',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: '0.85rem',
+                  color: '#166534',
+                  lineHeight: 1.5,
+                }}>
+                  <strong>Đơn hàng đã hoàn tất!</strong> Cảm ơn bạn đã mua sắm tại O.G-Shop. Tiền ký quỹ đã được giải ngân cho người bán.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -436,6 +518,79 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
                 onClick={handleCancelConfirm}
               >
                 {cancelling ? 'Đang hủy...' : 'Đồng ý Hủy Đơn'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Complete Order Modal */}
+      {showCompleteModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: 16,
+        }}>
+          <div style={{
+            background: 'var(--og-color-surface)',
+            borderRadius: 12,
+            padding: 24,
+            maxWidth: 480,
+            width: '100%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+          }}>
+            <h3 style={{ margin: '0 0 8px', color: '#166534', fontSize: '1.2rem' }}>
+              Xác nhận Đã Nhận Hàng #{order.orderId}?
+            </h3>
+            <p style={{ color: 'var(--og-color-text-secondary)', fontSize: '0.88rem', margin: '0 0 16px', lineHeight: 1.5 }}>
+              Bạn xác nhận đã nhận được món đồ và hoàn toàn hài lòng với tình trạng sản phẩm.
+              Sau khi xác nhận, đơn hàng sẽ chuyển sang trạng thái <strong>HOÀN TẤT (COMPLETED)</strong> và số tiền ký quỹ <strong>{formatVnd(order.totalAmount)}</strong> sẽ được giải ngân ngay lập tức cho người bán.
+            </p>
+
+            <div style={{
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: 8,
+              padding: '10px 14px',
+              fontSize: '0.82rem',
+              color: '#15803d',
+              marginBottom: 20,
+            }}>
+              <strong>Bảo vệ O.G Shield:</strong> Thao tác này không thể hoàn tác sau khi đã thực hiện.
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="og-button og-button--secondary"
+                disabled={completing}
+                onClick={() => setShowCompleteModal(false)}
+              >
+                Kiểm tra lại
+              </button>
+              <button
+                type="button"
+                style={{
+                  padding: '10px 18px',
+                  background: '#16a34a',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                disabled={completing}
+                onClick={handleCompleteConfirm}
+              >
+                {completing ? 'Đang hoàn tất...' : 'Xác nhận & Giải ngân'}
               </button>
             </div>
           </div>
