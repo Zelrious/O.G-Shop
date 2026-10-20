@@ -1,5 +1,12 @@
 # Catalog Module
 
+## Hiển thị Giá Offer đã Chấp thuận trên Mall — TASK-0099 / 2026-10-20
+
+- `CatalogDtos`: Bổ sung `agreedPrice` và `acceptedOfferId` vào `ProductSummaryResponse` và `ProductDetailResponse`.
+- `CatalogService`: Tiêm `NegotiatedCheckoutFacade`, nhận `Long buyerId` từ JWT; khi `buyerId` khác `sellerId`, làm giàu `agreedPrice` và `acceptedOfferId` từ offer `ACCEPTED` còn hiệu lực. Giữ nguyên `listed_price` và thuật toán tìm kiếm/sắp xếp theo giá niêm yết.
+- `CatalogController`: Nhận `@AuthenticationPrincipal Jwt jwt` để chuyển tiếp `buyerId` xuống service.
+- UI Mall/Detail: Hiển thị giá thỏa thuận, huy hiệu "Giá của bạn", gạch ngang giá niêm yết và link trực tiếp sang checkout kèm `offerId`.
+
 ## KTV UI system — TASK-0094 / 2026-10-13
 
 Thêm shared Select/Pagination/PageHeader; token surface/popover/disabled và semantic badge/button, sửa contrast card eKYC/khiếu nại, custom voucher/filter/page-size dropdown, phân trang 0 kết quả. Giữ sidebar và tất cả API/handler nghiệp vụ. 195 full-suite pass + 2 eKYC tests mới; final focused26, lint/TypeScript/build đạt. Browser48 geometry +8 contrast +2 dropdown checks, không overflow/JS error; sampled contrast light4,65/dark5,76. [Báo cáo và giới hạn](../../output/ui-0094/README.md).

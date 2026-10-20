@@ -58,4 +58,19 @@ public class DefaultNegotiatedCheckoutFacade implements NegotiatedCheckoutFacade
         }
         return Optional.empty();
     }
+    @Transactional(readOnly=true)
+    public Map<Long, Agreement> findActiveAcceptedOffersForBuyer(long actor){
+        var storedList = offers.activeAcceptedOffersForBuyer(actor);
+        Map<Long, Agreement> result = new HashMap<>();
+        for (var stored : storedList) {
+            try {
+                var c = chat.owned(actor, stored.offer().conversationId(), false);
+                long product = c.product();
+                if (result.containsKey(product)) continue;
+                result.put(product, eligible(actor, product, stored));
+            } catch (Exception ignored) {
+            }
+        }
+        return result;
+    }
 }

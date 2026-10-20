@@ -1,5 +1,26 @@
 # Project Status
 
+## Hiển thị Giá Offer đã Chấp thuận trên Mall và Màn hình liên quan — TASK-0099 / 2026-10-20
+
+- **Mục tiêu**: Người mua có offer `ACCEPTED` hợp lệ (chưa dùng `order_id == null`, sản phẩm còn hàng, không bị block) nhìn thấy giá thỏa thuận của mình trên Mall, chi tiết sản phẩm, widget chat và checkout. Không ghi đè `products.listed_price` hay giá công khai toàn hệ thống.
+- **Backend**:
+  - `OfferRepository`: bổ sung `activeAcceptedOffersForBuyer(long buyerId)` lấy danh sách offer ACCEPTED chưa dùng của buyer.
+  - `NegotiatedCheckoutFacade`: bổ sung contract `findActiveAcceptedOffersForBuyer(long actor)`.
+  - `DefaultNegotiatedCheckoutFacade`: kiểm tra eligibility (quan hệ mua bán, sản phẩm khả dụng, version snapshot không đổi, không bị chặn).
+  - `CatalogDtos`: bổ sung `agreedPrice`, `acceptedOfferId` cho `ProductSummaryResponse` và `ProductDetailResponse`.
+  - `CatalogService`: nhận `Long buyerId` (null khi khách vãng lai hoặc unauthenticated) để enrich `agreedPrice` và `acceptedOfferId`. Không áp dụng khi người xem là người bán của sản phẩm.
+  - `CatalogController`: trích xuất JWT `@AuthenticationPrincipal Jwt jwt` truyền `buyerId` vào `CatalogService`.
+- **Frontend**:
+  - `marketplace/types.ts`: bổ sung `agreedPrice`, `acceptedOfferId` cho `ProductSummary` và `ProductDetail`.
+  - `marketplaceApi.ts`: dùng `authApi.authorizedFetch` để truyền token Bearer khi đã đăng nhập.
+  - `ProductCard.tsx`: hiển thị ribbon "Đã thỏa thuận", giá thỏa thuận nổi bật, badge "Giá của bạn", gạch ngang giá niêm yết cũ.
+  - `ProductDetailView.tsx`: hiển thị hộp giá thỏa thuận, badge "Giá đã thỏa thuận", ghi chú offer ID, nút "Mua ngay (Giá thỏa thuận)" tự động truyền `offerId` vào checkout, kèm tùy chọn mua theo giá niêm yết.
+  - `ConversationWorkspace.tsx`: widget sản phẩm hiển thị giá thỏa thuận, gạch ngang giá niêm yết và nút "Mua ngay" nhanh vào checkout.
+  - `styles.css` & `chat.css`: bổ sung style đẹp mắt, chuẩn design system O.G Shop.
+- **Kiểm thử**:
+  - Backend: `CatalogServiceTest` (10/10 PASS), `CheckoutServiceTest` (10/10 PASS).
+  - Frontend: 46 test files / 224 unit tests PASS (100%), `npm run typecheck` (0 errors).
+
 ## Hoàn thiện Marketplace và Tích hợp Vận chuyển GHN — TASK-0098 / 2026-10-20
 
 - **Nghiệp vụ hoàn thành (7/7 mục)**:

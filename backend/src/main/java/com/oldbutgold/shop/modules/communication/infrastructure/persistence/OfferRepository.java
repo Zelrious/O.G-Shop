@@ -23,6 +23,17 @@ public class OfferRepository {
     public Optional<Stored> decision(UUID key){return jdbc.query(SELECT+" AND a.decision_command=?",this::map,key).stream().findFirst();}
     public List<Offer> history(long conversation){return jdbc.query(SELECT+" AND a.conversation_id=? ORDER BY a.offer_id",this::map,conversation).stream().map(Stored::offer).toList();}
     public List<Stored> storedHistory(long conversation){return jdbc.query(SELECT+" AND a.conversation_id=? ORDER BY a.offer_id",this::map,conversation);}
+    public List<Stored> activeAcceptedOffersForBuyer(long buyerId) {
+        return jdbc.query("""
+            SELECT a.*, NULL::bigint AS order_id
+            FROM public.offers a
+            JOIN public.conversations c ON a.conversation_id = c.conversation_id
+            WHERE a.record_type='offers' AND c.record_type='conversations'
+              AND c.buyer_id = ? AND a.status = 'ACCEPTED'
+              AND NOT EXISTS (SELECT 1 FROM og_compat.order_items i WHERE i.accepted_offer_id=a.offer_id)
+            ORDER BY a.offer_id DESC
+            """, this::map, buyerId);
+    }
     public boolean pending(long conversation){return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM public.offers WHERE conversation_id=? AND status='PENDING' AND (expires_at IS NULL OR expires_at>CURRENT_TIMESTAMP))",Boolean.class,conversation));}
     public List<Offer> expire(long conversation){return jdbc.query("""
         UPDATE public.offers SET status='EXPIRED',responded_at=CURRENT_TIMESTAMP,responded_by=NULL,version=version+1

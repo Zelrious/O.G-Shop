@@ -65,6 +65,25 @@ describe('ProductCard Component', () => {
     expect(screen.getByText(/Người bán MVP/)).toBeInTheDocument();
     expect(screen.getByText(/Chưa có ảnh/)).toBeInTheDocument();
   });
+
+  it('renders agreed price, badge "Giá của bạn", and struck-through original price when agreedPrice exists', () => {
+    const agreedProduct: ProductSummary = {
+      ...mockProductSummary,
+      agreedPrice: 14000000,
+      acceptedOfferId: 88,
+    };
+
+    render(
+      <MemoryRouter>
+        <ProductCard product={agreedProduct} />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText(/14\.000\.000/)).toBeInTheDocument();
+    expect(screen.getByText('Giá của bạn')).toBeInTheDocument();
+    expect(screen.getByText('Đã thỏa thuận')).toBeInTheDocument();
+    expect(screen.getByText(/15\.500\.000/)).toBeInTheDocument();
+  });
 });
 
 describe('MarketplaceFilters Component', () => {
@@ -427,5 +446,37 @@ describe('ProductDetailPage Component', () => {
     });
 
     expect(screen.getByRole('link', { name: /Khám phá sản phẩm khác/i })).toBeInTheDocument();
+  });
+
+  it('renders agreed price and offer info when agreedPrice exists on product detail', async () => {
+    const agreedDetail: ProductDetail = {
+      ...mockProductSummary,
+      description: 'Máy dùng lướt, pin 98%, nguyên zin áp suất.',
+      usageDuration: '6 tháng',
+      defects: 'Xước nhẹ viền',
+      repairHistory: 'Chưa sửa chữa',
+      includedAccessories: 'Hộp, cáp zin',
+      media: [],
+      agreedPrice: 14000000,
+      acceptedOfferId: 88,
+    };
+
+    vi.mocked(marketplaceApi.getProductDetail).mockResolvedValue(agreedDetail);
+
+    render(
+      <MemoryRouter initialEntries={['/products/101']}>
+        <Routes>
+          <Route path="/products/:productId" element={<ProductDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Giá đã thỏa thuận')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(/14\.000\.000/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Đề xuất trả giá #88/)).toBeInTheDocument();
+    expect(screen.getAllByText(/15\.500\.000/).length).toBeGreaterThanOrEqual(1);
   });
 });
