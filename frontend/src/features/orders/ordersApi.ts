@@ -1,5 +1,12 @@
 import { authApi } from '../auth/authApi';
 import { OrderSummary, OrderDetail, OrderActionResponse, OrderShipmentActionResponse, PageResponse } from './types';
+import {
+  fulfillmentApi,
+  CreateShipmentRequest,
+  ShipmentResponse,
+  PrintWaybillResponse,
+  TrackingResponse,
+} from '../fulfillment/fulfillmentApi';
 
 interface ApiErrorBody {
   message?: string;
@@ -100,5 +107,18 @@ export const ordersApi = {
   async getPrintWaybill(orderId: number): Promise<{ orderId: number; trackingNumber: string; printUrl: string }> {
     const res = await authApi.authorizedFetch(`/fulfillment/orders/${orderId}/print-waybill`);
     return handleResponse<{ orderId: number; trackingNumber: string; printUrl: string }>(res);
+  },
+
+  // Fulfillment Integration
+  async createShipment(orderId: number, req?: CreateShipmentRequest): Promise<ShipmentResponse> {
+    return fulfillmentApi.createShipment(orderId, req);
+  },
+
+  async printWaybill(orderId: number): Promise<PrintWaybillResponse> {
+    return fulfillmentApi.printWaybill(orderId);
+  },
+
+  async getTracking(orderId: number): Promise<TrackingResponse> {
+    return fulfillmentApi.getTracking(orderId);
   },
 };

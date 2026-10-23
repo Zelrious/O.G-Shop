@@ -41,4 +41,36 @@ public class DefaultNegotiatedCheckoutFacade implements NegotiatedCheckoutFacade
         if(Set.of("CANCELLED","REFUNDED").contains(offers.orderStatus(saved.offer().orderId())))throw problem(409,"OFFER_ALREADY_USED","Đơn đã kết thúc. Muốn mua lại cần đề nghị mới.");
         return Optional.of(saved.offer().orderId());
     }
+    @Transactional(readOnly=true)
+    public Optional<Agreement> findActiveAcceptedOffer(long actor,long product){
+        var cOpt = conversations.findBuyerProductConversation(actor, product);
+        if (cOpt.isEmpty()) return Optional.empty();
+        long convId = cOpt.get().id();
+        var list = offers.storedHistory(convId);
+        for (int i = list.size() - 1; i >= 0; i--) {
+            var stored = list.get(i);
+            if ("ACCEPTED".equals(stored.offer().status()) && stored.offer().orderId() == null) {
+                try {
+                    return Optional.of(eligible(actor, product, stored));
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        return Optional.empty();
+    }
+    @Transactional(readOnly=true)
+    public Map<Long, Agreement> findActiveAcceptedOffersForBuyer(long actor){
+        var storedList = offers.activeAcceptedOffersForBuyer(actor);
+        Map<Long, Agreement> result = new HashMap<>();
+        for (var stored : storedList) {
+            try {
+                var c = chat.owned(actor, stored.offer().conversationId(), false);
+                long product = c.product();
+                if (result.containsKey(product)) continue;
+                result.put(product, eligible(actor, product, stored));
+            } catch (Exception ignored) {
+            }
+        }
+        return result;
+    }
 }

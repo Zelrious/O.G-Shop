@@ -1,6 +1,17 @@
 # Fulfillment Module
 
+## Tích hợp Vận chuyển GHN hoàn chỉnh — TASK-0098 / 2026-10-20
+
+- **Tính cước vận chuyển thực tế từ GHN**: `FulfillmentShippingFacade` và `FulfillmentService.calculateShippingFee()` gọi trực tiếp API GHN `/v2/shipping-order/fee` dựa trên mã quận/phường (`fromDistrictId`, `toDistrictId`, `toWardCode`), tự động fallback 30.000 ₫ an toàn nếu network timeout hoặc offline. Cước thực tế được snapshot trực tiếp vào `OrderEntity.shippingFee` tại Checkout Preview và Buy Now.
+- **Tạo vận đơn GHN Người bán (Seller)**: `POST /api/v1/fulfillment/orders/{orderId}/create-shipment` hỗ trợ Người bán nhập khối lượng, kích thước kiện hàng và ghi chú giao hàng. Cơ chế claim/lease nguyên tử ngăn ngừa race condition và double booking với GHN.
+- **In phiếu giao hàng A5 chuẩn GHN**: `GET /api/v1/fulfillment/orders/{orderId}/print-waybill` sinh token in động và trả về đường dẫn `https://dev-online-gateway.ghn.vn/a5/index.html?token={token}`, mở trực tiếp tab in A5 cho người bán.
+- **Theo dõi hành trình (Tracking)**: `GET /api/v1/fulfillment/orders/{orderId}/tracking` cung cấp mã vận đơn, trạng thái GHN (`ready_to_pick`, `delivering`, `delivered`, v.v.), ngày dự kiến giao hàng, và địa chỉ gửi/nhận cho cả Người mua và Người bán.
+- **Giao diện Người bán & Người mua**:
+  - `SellerOrderDetailView.tsx`: Tích hợp modal tạo vận đơn GHN khi đơn ở trạng thái `SELLER_CONFIRMED`, hiển thị card vận đơn và nút in phiếu A5.
+  - `BuyerOrderDetailView.tsx`: Hiển thị card thông tin vận chuyển GHN và đồng bộ hóa timeline giao hàng.
+
 ## Report diagrams — TASK-0079 / 2026-10-10
+
 
 [UC19–UC83 đã có đủ 130 Activity/Sequence trong báo cáo](../requirements/use-cases-83/report-from-uc19/README.md), kiểm native/PDF trọn trang. RS-02/RS-05 được chốt và đồng bộ theo xác nhận người dùng; chuẩn Activity/Sequence gọn được giữ. Đây là tài liệu, không nâng trạng thái code/database/nghiệm thu module.
 

@@ -55,6 +55,9 @@ export interface CheckoutPreview {
   selectedAddress: AddressSummary | null;
   availableVouchers: VoucherSummary[];
   appliedVoucher: VoucherSummary | null;
+  eligibleOfferId?: number | null;
+  eligibleOfferPrice?: number | null;
+  voucherRejectionReason?: string | null;
 }
 
 export interface BuyNowInput {

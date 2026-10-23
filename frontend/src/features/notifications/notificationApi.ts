@@ -12,6 +12,7 @@ async function response<T>(value: Response): Promise<T> {
 export const notificationApi = {
   async list(page = 0, size = 20) { return response<NotificationPage>(await authApi.authorizedFetch(`/notifications?page=${page}&size=${size}`)); },
   async read(id: number) { const value = await authApi.authorizedFetch(`/notifications/${id}/read`, { method: 'POST' }); if (!value.ok) throw new Error('Chưa cập nhật được trạng thái đã đọc.'); },
+  async readAll() { const value = await authApi.authorizedFetch('/notifications/read-all', { method: 'POST' }); if (!value.ok) throw new Error('Chưa cập nhật được trạng thái đã đọc toàn bộ.'); },
 };
 export function notificationTarget(item: NotificationItem, roles: string[]): string | null {
   if (item.destination === 'VOUCHER_WALLET' && roles.some(role => ['BUYER', 'SELLER'].includes(role)) && !roles.some(role => ['KTV', 'ADMIN'].includes(role))) return '/vouchers';

@@ -8,6 +8,7 @@ export const CheckoutPage: React.FC = () => {
   const productIdStr = searchParams.get('productId');
   const productId = productIdStr ? Number(productIdStr) : null;
   const offerId = Number(searchParams.get('offerId')) || undefined;
+  const voucherCode = searchParams.get('voucherCode') || undefined;
 
   if (!productId || isNaN(productId)) {
     return (
@@ -29,7 +30,7 @@ export const CheckoutPage: React.FC = () => {
     );
   }
 
-  return <CheckoutView key={`${productId}:${offerId ?? ''}`} productId={productId} offerId={offerId} />;
+  return <CheckoutView key={`${productId}:${offerId ?? ''}:${voucherCode ?? ''}`} productId={productId} offerId={offerId} initialVoucherCode={voucherCode} />;
 };
 
 export default CheckoutPage;

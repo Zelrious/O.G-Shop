@@ -1,7 +1,10 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from './AuthContext';
 import { LoginForm } from './components/LoginForm';
+import { LoginPage } from '../../pages/LoginPage';
+
 
 describe('LoginForm Component', () => {
   it('renders form fields with accessible labels and buttons', () => {
@@ -31,3 +34,19 @@ describe('LoginForm Component', () => {
     });
   });
 });
+
+describe('LoginPage Component', () => {
+  it('renders login page with visual panel and login form without crashing', () => {
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('heading', { name: 'Đăng nhập O.G Shop' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Địa chỉ Email/i)).toBeInTheDocument();
+  });
+});
+

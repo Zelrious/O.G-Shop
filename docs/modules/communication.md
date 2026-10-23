@@ -1,5 +1,12 @@
 # Communication Module
 
+## Cung cấp Giá Thương lượng đã Chấp thuận — TASK-0099 / 2026-10-20
+
+- `OfferRepository`: Bổ sung `activeAcceptedOffersForBuyer(long buyerId)` lọc các offer có `status = 'ACCEPTED'`, chưa tạo đơn (`NOT EXISTS order_items`), theo thứ tự mới nhất.
+- `NegotiatedCheckoutFacade`: Thêm `findActiveAcceptedOffersForBuyer(long actor)` trả về `Map<Long, Agreement>`.
+- `DefaultNegotiatedCheckoutFacade`: Xác thực tính hợp lệ qua `eligible()` (kiểm tra tồn tại tài khoản, quan hệ chặn, snapshot listing version/revision không đổi, sản phẩm còn hàng).
+- `ConversationWorkspace`: Widget thông tin sản phẩm trên thanh header hội thoại hiển thị trực tiếp giá đã thỏa thuận, gạch ngang giá niêm yết và nút "Mua ngay" dẫn trực tiếp đến checkout.
+
 ## Hộp thư gọn — TASK-0092 / 2026-10-13
 
 MessagesPage truyền returnTo hợp lệ vào toolbar chung của ConversationWorkspace. Bỏ eyebrow/mô tả/H1 lớn; giữ H1 cho screen reader, return/connection/blocked. Inbox root100dvh và main/workspace flex/min-height0 giữ composer trong màn hình; mobile connection chỉ hiển thị khi lỗi/offline. Compact dock và send/read/draft/owner authority không đổi.21 regression chat/theme/footer, full lint/build và browser fixture đạt; [ảnh/geometry](../../output/ui-0092/README.md).

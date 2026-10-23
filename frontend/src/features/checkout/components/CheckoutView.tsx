@@ -10,9 +10,10 @@ import '../checkout.css';
 interface CheckoutViewProps {
   productId: number;
   offerId?: number;
+  initialVoucherCode?: string;
 }
 
-export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId }) => {
+export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, initialVoucherCode }) => {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
@@ -20,6 +21,10 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId }
   const [preview, setPreview] = useState<CheckoutPreview | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isConflict, setIsConflict] = useState(false);
+
+  // Pricing Mode: 'LISTED' or 'OFFER'
+  const [pricingMode, setPricingMode] = useState<'LISTED' | 'OFFER'>(offerId ? 'OFFER' : 'LISTED');
+  const [activeOfferId, setActiveOfferId] = useState<number | undefined>(offerId);
 
   // Address State
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
@@ -49,8 +54,8 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId }
   const [isLoadingWards, setIsLoadingWards] = useState(false);
 
   // Voucher State
-  const [voucherInput, setVoucherInput] = useState('');
-  const [appliedVoucherCode, setAppliedVoucherCode] = useState<string | null>(null);
+  const [voucherInput, setVoucherInput] = useState(initialVoucherCode || '');
+  const [appliedVoucherCode, setAppliedVoucherCode] = useState<string | null>(initialVoucherCode || null);
   const [voucherError, setVoucherError] = useState<string | null>(null);
 
   // Payment Method State
@@ -60,13 +65,18 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId }
   const [createdOrder, setCreatedOrder] = useState<OrderCreated | null>(null);
 
   // Load preview data
-  const loadPreview = async (codeToApply?: string) => {
+  const loadPreview = async (codeToApply?: string, targetOfferId?: number | null) => {
     try {
       setLoading(true);
       setErrorMsg(null);
       setIsConflict(false);
-      const data = await checkoutApi.getCheckoutPreview(productId, codeToApply, offerId);
+      const effOffer = targetOfferId === null ? undefined : (targetOfferId !== undefined ? targetOfferId : activeOfferId);
+      const data = await checkoutApi.getCheckoutPreview(productId, codeToApply, effOffer);
       setPreview(data);
+      if (data.acceptedOfferId) {
+        setPricingMode('OFFER');
+        setActiveOfferId(data.acceptedOfferId);
+      }
       if (data.selectedAddress && !selectedAddressId) {
         setSelectedAddressId(data.selectedAddress.addressId);
       } else if (data.addresses.length === 0) {
@@ -75,9 +85,10 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId }
       if (data.appliedVoucher) {
         setAppliedVoucherCode(data.appliedVoucher.code);
         setVoucherInput(data.appliedVoucher.code);
+        setVoucherError(null);
       } else if (codeToApply) {
         setAppliedVoucherCode('');
-        setVoucherError('Voucher chưa có trong ví hoặc không đủ điều kiện cho đơn này.');
+        setVoucherError(data.voucherRejectionReason || 'Voucher chưa có trong ví hoặc không đủ điều kiện cho đơn này.');
       } else {
         setAppliedVoucherCode('');
       }
@@ -96,10 +107,10 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId }
 
   useEffect(() => {
     if (productId) {
-      loadPreview(appliedVoucherCode || undefined);
+      loadPreview(initialVoucherCode || appliedVoucherCode || undefined, offerId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productId, offerId]);
+  }, [productId, offerId, initialVoucherCode]);
 
   const handleApplyVoucher = (code: string) => {
     if (!code.trim()) return;
@@ -294,9 +305,10 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId }
       setSubmitting(true);
       setErrorMsg(null);
 
+      const finalOfferId = pricingMode === 'OFFER' ? (offerId ?? activeOfferId ?? preview.eligibleOfferId ?? undefined) : undefined;
       const order = await checkoutApi.buyNow({
         productId,
-        offerId,
+        offerId: finalOfferId,
         addressId: !isAddingNewAddress ? selectedAddressId! : undefined,
         newAddress: isAddingNewAddress ? newAddress : undefined,
         voucherCode: appliedVoucherCode || undefined,
@@ -493,13 +505,65 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId }
               </h2>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 20, fontWeight: 700, color: '#e25b29' }}>
-                  {formatVnd(preview.agreedPrice ?? preview.listedPrice)}
-                  {preview.acceptedOfferId && <small style={{ display: 'block', color: 'var(--og-color-primary)', fontSize: 12, fontWeight: 500, lineHeight: 1.5 }}>Giá đã thương lượng cho 1 món · Giá niêm yết {formatVnd(preview.listedPrice)}</small>}
+                  {formatVnd(pricingMode === 'OFFER' ? (preview.agreedPrice ?? preview.eligibleOfferPrice ?? preview.listedPrice) : preview.listedPrice)}
+                  {pricingMode === 'OFFER' && (preview.acceptedOfferId || preview.eligibleOfferId) && (
+                    <small style={{ display: 'block', color: 'var(--og-color-primary)', fontSize: 12, fontWeight: 500, lineHeight: 1.5 }}>
+                      Giá đã thương lượng cho 1 món · Giá niêm yết {formatVnd(preview.listedPrice)}
+                    </small>
+                  )}
                 </span>
                 <span style={{ fontSize: 12, color: 'var(--og-color-primary)', background: 'var(--og-color-primary-light)', padding: '2px 6px', borderRadius: 4, fontWeight: 500 }}>
                   ✓ Hỗ trợ Đồng kiểm tận tay
                 </span>
               </div>
+
+              {/* Option to choose between Listed Price and Negotiated Price if an eligible offer exists */}
+              {(preview.eligibleOfferId || (offerId && preview.acceptedOfferId)) && (
+                <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--og-color-bg, #f9fafb)', borderRadius: 8, border: '1px solid var(--og-color-border, #e5e7eb)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--og-color-text-primary)', marginBottom: 8 }}>
+                    Lựa chọn mức giá áp dụng:
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                      <input
+                        type="radio"
+                        name="checkoutPricingOption"
+                        checked={pricingMode === 'LISTED'}
+                        onChange={() => {
+                          setPricingMode('LISTED');
+                          setActiveOfferId(undefined);
+                          void loadPreview(appliedVoucherCode || undefined, null);
+                        }}
+                        style={{ accentColor: '#e25b29' }}
+                      />
+                      <span>
+                        <strong>Giá niêm yết:</strong> {formatVnd(preview.listedPrice)}
+                      </span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                      <input
+                        type="radio"
+                        name="checkoutPricingOption"
+                        checked={pricingMode === 'OFFER'}
+                        onChange={() => {
+                          setPricingMode('OFFER');
+                          const optId = preview.eligibleOfferId ?? preview.acceptedOfferId ?? offerId;
+                          setActiveOfferId(optId ?? undefined);
+                          void loadPreview(appliedVoucherCode || undefined, optId);
+                        }}
+                        style={{ accentColor: '#e25b29' }}
+                      />
+                      <span>
+                        <strong style={{ color: 'var(--og-color-primary, #047857)' }}>Giá thương lượng đã chấp nhận:</strong>{' '}
+                        {formatVnd(preview.eligibleOfferPrice ?? preview.agreedPrice ?? preview.listedPrice)}
+                        <span style={{ marginLeft: 6, fontSize: 11, background: '#def7ec', color: '#03543f', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>
+                          ✓ Đã duyệt
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -839,7 +903,11 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId }
             </h3>
 
             {/* Input & Apply row */}
-            <p style={{ fontSize: 14 }}><Link to={`/vouchers?productId=${productId}${offerId ? `&offerId=${offerId}` : ''}`}>Nhận ưu đãi và xem ví voucher</Link></p>
+            <p style={{ fontSize: 14 }}>
+              <Link to={`/vouchers?productId=${productId}${pricingMode === 'OFFER' && (activeOfferId ?? preview.eligibleOfferId ?? offerId) ? `&offerId=${activeOfferId ?? preview.eligibleOfferId ?? offerId}` : ''}${appliedVoucherCode ? `&voucherCode=${appliedVoucherCode}` : ''}`}>
+                Nhận ưu đãi và xem ví voucher
+              </Link>
+            </p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
               <input
                 type="text"

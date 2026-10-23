@@ -1,27 +1,37 @@
 import { Icon } from '../shared/components/Icon/Icon';
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
+
 import { Alert } from '../shared/components';
-import { LoginForm, LoginVisualPanel, useAuth } from '../features/auth';
+import { LoginForm, LoginVisualPanel, useAuth, UserPrincipal } from '../features/auth';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const notice = (location.state as { notice?: string } | null)?.notice;
+  const from = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
   const { user, isAuthenticated, isLoading } = useAuth();
 
-  // If already authenticated, redirect according to role
+  const resolveRedirectPath = useCallback((targetUser: UserPrincipal) => {
+    if (targetUser.roles.includes('ADMIN')) {
+      return '/admin';
+    }
+    if (targetUser.roles.includes('KTV')) {
+      return '/ktv';
+    }
+    if (from?.pathname && from.pathname !== '/login' && from.pathname !== '/profile') {
+      return `${from.pathname}${from.search || ''}`;
+    }
+    return '/marketplace';
+  }, [from]);
+
+  // If already authenticated, redirect according to role (regular users go to Mall / Marketplace)
   useEffect(() => {
     if (!isLoading && isAuthenticated && user) {
-      if (user.roles.includes('ADMIN')) {
-        navigate('/admin', { replace: true });
-      } else if (user.roles.includes('KTV')) {
-        navigate('/ktv', { replace: true });
-      } else {
-        navigate('/profile', { replace: true });
-      }
+      navigate(resolveRedirectPath(user), { replace: true });
     }
-  }, [user, isAuthenticated, isLoading, navigate]);
+  }, [user, isAuthenticated, isLoading, navigate, resolveRedirectPath]);
+
 
   return (
     <div className="og-register-split-container og-login-split-container">
@@ -51,13 +61,7 @@ export const LoginPage: React.FC = () => {
         {notice && <Alert type="success">{notice}</Alert>}
         <LoginForm
           onSuccess={(loggedInUser) => {
-            if (loggedInUser.roles.includes('ADMIN')) {
-              navigate('/admin', { replace: true });
-            } else if (loggedInUser.roles.includes('KTV')) {
-              navigate('/ktv', { replace: true });
-            } else {
-              navigate('/profile', { replace: true });
-            }
+            navigate(resolveRedirectPath(loggedInUser), { replace: true });
           }}
           onNavigateToRegister={googleRegistration => navigate('/register', { state: { googleRegistration } })}
           onNavigateToForgot={() => navigate('/forgot-password')}

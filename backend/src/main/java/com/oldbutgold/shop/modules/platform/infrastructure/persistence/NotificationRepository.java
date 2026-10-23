@@ -78,6 +78,12 @@ public class NotificationRepository {
             WHERE record_type='notifications' AND notification_id=? AND user_id=?
             """,id,userId)==1;
     }
+    public int markAllRead(long userId) {
+        return jdbc.update("""
+            UPDATE public.notifications SET is_read=true,read_at=COALESCE(read_at,GREATEST(created_at,CURRENT_TIMESTAMP))
+            WHERE record_type='notifications' AND user_id=? AND NOT is_read
+            """,userId);
+    }
     private String encode(Object value) {
         try { return json.writeValueAsString(value); }
         catch(JsonProcessingException e) { throw new IllegalStateException("Cannot encode notification",e); }

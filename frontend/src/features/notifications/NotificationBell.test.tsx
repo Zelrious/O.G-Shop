@@ -6,22 +6,65 @@ import { notificationApi, type NotificationPage } from './notificationApi';
 
 const actor = vi.hoisted(() => ({ userId: 1, roles: ['SELLER'] }));
 vi.mock('../auth', () => ({ useAuth: () => ({ user: actor }) }));
-vi.mock('./notificationApi', async original => ({ ...await original<typeof import('./notificationApi')>(), notificationApi: { list: vi.fn(), read: vi.fn() } }));
-const page: NotificationPage = { page: 0, size: 6, totalElements: 1, unreadCount: 1, items: [{ id: 9, type: 'LISTING', title: 'Tin đăng được duyệt', content: 'Xem kết quả kiểm duyệt', read: false, createdAt: '2026-10-13T01:00:00Z', destination: 'SELLER_LISTING', productId: 10 }] };
-function App() { return <MemoryRouter><NotificationBell /><Routes><Route path="/seller/listings/10/review" element={<h1>Kết quả kiểm duyệt</h1>} /><Route path="*" element={<h1>Trang đang xem</h1>} /></Routes></MemoryRouter>; }
-beforeEach(() => { vi.resetAllMocks(); actor.userId = 1; actor.roles = ['SELLER']; vi.mocked(notificationApi.list).mockResolvedValue(page); vi.mocked(notificationApi.read).mockResolvedValue(); });
+vi.mock('./notificationApi', async original => ({
+  ...await original<typeof import('./notificationApi')>(),
+  notificationApi: { list: vi.fn(), read: vi.fn(), readAll: vi.fn() },
+}));
+
+const page: NotificationPage = {
+  page: 0,
+  size: 6,
+  totalElements: 1,
+  unreadCount: 1,
+  items: [{ id: 9, type: 'LISTING', title: 'Tin đăng được duyệt', content: 'Xem kết quả kiểm duyệt', read: false, createdAt: '2026-10-13T01:00:00Z', destination: 'SELLER_LISTING', productId: 10 }],
+};
+
+function App() {
+  return (
+    <MemoryRouter>
+      <NotificationBell />
+      <Routes>
+        <Route path="/seller/listings/10/review" element={<h1>Kết quả kiểm duyệt</h1>} />
+        <Route path="/notifications" element={<h1>Toàn bộ thông báo</h1>} />
+        <Route path="*" element={<h1>Trang đang xem</h1>} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  actor.userId = 1;
+  actor.roles = ['SELLER'];
+  vi.mocked(notificationApi.list).mockResolvedValue(page);
+  vi.mocked(notificationApi.read).mockResolvedValue();
+  vi.mocked(notificationApi.readAll).mockResolvedValue();
+});
 
 describe('Notification quick menu', () => {
   it('reads the notice and opens its authorized destination', async () => {
-    render(<App />); fireEvent.click(screen.getByRole('button', { name: /^Thông báo/ }));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /^Thông báo/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Mở thông báo: Tin đăng được duyệt' }));
     expect(await screen.findByRole('heading', { name: 'Kết quả kiểm duyệt' })).toBeInTheDocument();
     expect(notificationApi.read).toHaveBeenCalledWith(9);
     expect(screen.queryByRole('dialog', { name: 'Thông báo' })).not.toBeInTheDocument();
   });
+
+  it('provides top action bar with view all link and mark all read button', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /^Thông báo/ }));
+    const viewAllLink = await screen.findByRole('link', { name: /Xem toàn bộ/ });
+    expect(viewAllLink).toHaveAttribute('href', '/notifications');
+    const markAllBtn = screen.getByRole('button', { name: 'Đánh dấu đã xem' });
+    fireEvent.click(markAllBtn);
+    expect(notificationApi.readAll).toHaveBeenCalledOnce();
+  });
+
   it('keeps the menu and badge on read failure and offers an explicit fallback', async () => {
     vi.mocked(notificationApi.read).mockRejectedValue(new Error('Không ghi được đã đọc'));
-    render(<App />); fireEvent.click(screen.getByRole('button', { name: /^Thông báo/ }));
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /^Thông báo/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Mở thông báo: Tin đăng được duyệt' }));
     expect(await screen.findByText('Không ghi được đã đọc')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Trang đang xem' })).toBeInTheDocument();
@@ -29,17 +72,23 @@ describe('Notification quick menu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mở nội dung dù chưa ghi được đã đọc' }));
     expect(await screen.findByRole('heading', { name: 'Kết quả kiểm duyệt' })).toBeInTheDocument();
   });
+
   it('closes with Escape and restores focus to the bell', () => {
-    render(<App />); const bell = screen.getByRole('button', { name: /^Thông báo/ });
-    fireEvent.click(bell); fireEvent.keyDown(screen.getByRole('dialog', { name: 'Thông báo' }), { key: 'Escape' });
+    render(<App />);
+    const bell = screen.getByRole('button', { name: /^Thông báo/ });
+    fireEvent.click(bell);
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Thông báo' }), { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Thông báo' })).not.toBeInTheDocument();
     expect(bell).toHaveFocus();
   });
+
   it('ignores a late inbox result from the previous account', async () => {
     let oldResult!: (result: NotificationPage) => void;
     vi.mocked(notificationApi.list).mockReturnValueOnce(new Promise(resolve => { oldResult = resolve; }));
     const { rerender } = render(<App />);
-    actor.userId = 8; vi.mocked(notificationApi.list).mockResolvedValue({ ...page, items: [], unreadCount: 0 }); rerender(<App />);
+    actor.userId = 8;
+    vi.mocked(notificationApi.list).mockResolvedValue({ ...page, items: [], unreadCount: 0 });
+    rerender(<App />);
     oldResult(page);
     fireEvent.click(screen.getByRole('button', { name: /^Thông báo/ }));
     await waitFor(() => expect(screen.getByText('Chưa có thông báo')).toBeInTheDocument());

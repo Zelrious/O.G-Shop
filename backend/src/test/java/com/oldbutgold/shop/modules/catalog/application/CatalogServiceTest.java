@@ -8,6 +8,7 @@ import com.oldbutgold.shop.modules.catalog.infrastructure.persistence.ProductMed
 import com.oldbutgold.shop.modules.catalog.infrastructure.persistence.ProductMediaRepository;
 import com.oldbutgold.shop.modules.catalog.infrastructure.persistence.ProductRepository;
 import com.oldbutgold.shop.modules.identity.application.IdentityCatalogFacade;
+import com.oldbutgold.shop.modules.communication.application.NegotiatedCheckoutFacade;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
@@ -32,6 +33,7 @@ class CatalogServiceTest {
     private ProductRepository productRepository;
     private ProductMediaRepository productMediaRepository;
     private IdentityCatalogFacade identityCatalogFacade;
+    private NegotiatedCheckoutFacade negotiatedCheckoutFacade;
     private CatalogService catalogService;
 
     private CategoryEntity category;
@@ -44,8 +46,9 @@ class CatalogServiceTest {
         productRepository = mock(ProductRepository.class);
         productMediaRepository = mock(ProductMediaRepository.class);
         identityCatalogFacade = mock(IdentityCatalogFacade.class);
+        negotiatedCheckoutFacade = mock(NegotiatedCheckoutFacade.class);
 
-        catalogService = new CatalogService(categoryRepository, productRepository, productMediaRepository, identityCatalogFacade);
+        catalogService = new CatalogService(categoryRepository, productRepository, productMediaRepository, identityCatalogFacade, negotiatedCheckoutFacade);
 
         now = Instant.parse("2026-09-20T12:00:00Z");
 
@@ -154,6 +157,78 @@ class CatalogServiceTest {
 
         assertThatThrownBy(() -> catalogService.getProductDetail(999L))
                 .isInstanceOf(ProductNotFoundException.class);
+    }
+
+    @Test
+    void searchProducts_withBuyerId_enrichesAgreedPriceWhenAcceptedOfferExists() throws Exception {
+        when(productRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(product)));
+        when(categoryRepository.findAllById(any())).thenReturn(List.of(category));
+        when(identityCatalogFacade.getSellerSummaries(any())).thenReturn(Map.of(
+                100L, new IdentityCatalogFacade.SellerPublicSummary(100L, "Người bán A", "Người bán MVP")
+        ));
+        when(productMediaRepository.findByProductIdInOrderByDisplayOrderAscIdAsc(any()))
+                .thenReturn(List.of());
+
+        long buyerId = 200L;
+        when(negotiatedCheckoutFacade.findActiveAcceptedOffersForBuyer(buyerId))
+                .thenReturn(Map.of(500L, new NegotiatedCheckoutFacade.Agreement(88L, BigDecimal.valueOf(8000000), BigDecimal.ZERO, BigDecimal.ZERO, 1L)));
+
+        CatalogDtos.PageResponse<CatalogDtos.ProductSummaryResponse> response =
+                catalogService.searchProducts(null, null, null, null, null, 0, 12, "newest", buyerId);
+
+        assertThat(response.items()).hasSize(1);
+        CatalogDtos.ProductSummaryResponse item = response.items().get(0);
+        assertThat(item.listedPrice()).isEqualByComparingTo(BigDecimal.valueOf(9500000));
+        assertThat(item.agreedPrice()).isEqualByComparingTo(BigDecimal.valueOf(8000000));
+        assertThat(item.acceptedOfferId()).isEqualTo(88L);
+    }
+
+    @Test
+    void searchProducts_whenUserIsSeller_doesNotEnrichAgreedPrice() throws Exception {
+        when(productRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(product)));
+        when(categoryRepository.findAllById(any())).thenReturn(List.of(category));
+        when(identityCatalogFacade.getSellerSummaries(any())).thenReturn(Map.of(
+                100L, new IdentityCatalogFacade.SellerPublicSummary(100L, "Người bán A", "Người bán MVP")
+        ));
+        when(productMediaRepository.findByProductIdInOrderByDisplayOrderAscIdAsc(any()))
+                .thenReturn(List.of());
+
+        // product.sellerId is 100L
+        long sellerAsBuyerId = 100L;
+        when(negotiatedCheckoutFacade.findActiveAcceptedOffersForBuyer(sellerAsBuyerId))
+                .thenReturn(Map.of(500L, new NegotiatedCheckoutFacade.Agreement(88L, BigDecimal.valueOf(8000000), BigDecimal.ZERO, BigDecimal.ZERO, 1L)));
+
+        CatalogDtos.PageResponse<CatalogDtos.ProductSummaryResponse> response =
+                catalogService.searchProducts(null, null, null, null, null, 0, 12, "newest", sellerAsBuyerId);
+
+        assertThat(response.items()).hasSize(1);
+        CatalogDtos.ProductSummaryResponse item = response.items().get(0);
+        assertThat(item.listedPrice()).isEqualByComparingTo(BigDecimal.valueOf(9500000));
+        assertThat(item.agreedPrice()).isNull();
+        assertThat(item.acceptedOfferId()).isNull();
+    }
+
+    @Test
+    void getProductDetail_withBuyerId_enrichesAgreedPrice() throws Exception {
+        when(productRepository.findByIdAndStatusAndDeletedAtIsNull(500L, "ACTIVE"))
+                .thenReturn(Optional.of(product));
+        when(categoryRepository.findById(10L)).thenReturn(Optional.of(category));
+        when(identityCatalogFacade.getSellerSummary(100L)).thenReturn(Optional.of(
+                new IdentityCatalogFacade.SellerPublicSummary(100L, "Người bán A", "Người bán MVP")
+        ));
+        when(productMediaRepository.findByProductIdOrderByDisplayOrderAscIdAsc(500L))
+                .thenReturn(List.of());
+
+        long buyerId = 200L;
+        when(negotiatedCheckoutFacade.findActiveAcceptedOffer(buyerId, 500L))
+                .thenReturn(Optional.of(new NegotiatedCheckoutFacade.Agreement(99L, BigDecimal.valueOf(8500000), BigDecimal.ZERO, BigDecimal.ZERO, 1L)));
+
+        CatalogDtos.ProductDetailResponse detail = catalogService.getProductDetail(500L, buyerId);
+        assertThat(detail.listedPrice()).isEqualByComparingTo(BigDecimal.valueOf(9500000));
+        assertThat(detail.agreedPrice()).isEqualByComparingTo(BigDecimal.valueOf(8500000));
+        assertThat(detail.acceptedOfferId()).isEqualTo(99L);
     }
 
     private static void setField(Object target, String fieldName, Object value) throws Exception {

@@ -85,7 +85,14 @@ public class OrderManagementService {
         Pageable pageable = PageRequest.of(clampedPage, clampedSize);
         Page<OrderEntity> orderPage;
         if (status != null && !status.isBlank() && !status.equalsIgnoreCase("ALL")) {
-            orderPage = orderRepository.findByBuyerIdAndStatusOrderByCreatedAtDescIdDesc(buyerId, status.trim().toUpperCase(), pageable);
+            String upper = status.trim().toUpperCase();
+            if ("SHIPPED".equals(upper)) {
+                orderPage = orderRepository.findByBuyerIdAndStatusInOrderByCreatedAtDescIdDesc(buyerId, List.of(OrderEntity.STATUS_SHIPPED, OrderEntity.STATUS_DELIVERED), pageable);
+            } else if ("REFUNDED".equals(upper)) {
+                orderPage = orderRepository.findByBuyerIdAndStatusInOrderByCreatedAtDescIdDesc(buyerId, List.of(OrderEntity.STATUS_REFUNDED, OrderEntity.STATUS_DISPUTED), pageable);
+            } else {
+                orderPage = orderRepository.findByBuyerIdAndStatusOrderByCreatedAtDescIdDesc(buyerId, upper, pageable);
+            }
         } else {
             orderPage = orderRepository.findByBuyerIdOrderByCreatedAtDescIdDesc(buyerId, pageable);
         }

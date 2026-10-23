@@ -5,6 +5,7 @@ import com.oldbutgold.shop.modules.catalog.application.ProductNotFoundException;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.*;
 import com.oldbutgold.shop.modules.identity.application.IdentityCommerceFacade;
 import com.oldbutgold.shop.modules.communication.application.NegotiatedCheckoutFacade;
+import com.oldbutgold.shop.modules.fulfillment.application.FulfillmentShippingFacade;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,7 +35,9 @@ public class CheckoutService {
     private final NegotiatedCheckoutFacade negotiated;
     private final ObjectMapper json;
     private final VoucherService wallet;
+    private final FulfillmentShippingFacade shippingFacade;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public CheckoutService(CatalogCommerceFacade catalogCommerceFacade,
                            IdentityCommerceFacade identityCommerceFacade,
                            SystemFeePolicyRepository systemFeePolicyRepository,
@@ -42,7 +45,12 @@ public class CheckoutService {
                            OrderRepository orderRepository,
                            OrderItemRepository orderItemRepository,
                            OrderVoucherRepository orderVoucherRepository,
-                           Clock clock,NegotiatedCheckoutFacade negotiated,ObjectMapper json,VoucherService wallet) {
+                           Clock clock,
+                           NegotiatedCheckoutFacade negotiated,
+                           ObjectMapper json,
+                           VoucherService wallet,
+                           @org.springframework.beans.factory.annotation.Autowired(required = false)
+                           FulfillmentShippingFacade shippingFacade) {
         this.catalogCommerceFacade = catalogCommerceFacade;
         this.identityCommerceFacade = identityCommerceFacade;
         this.systemFeePolicyRepository = systemFeePolicyRepository;
@@ -51,7 +59,25 @@ public class CheckoutService {
         this.orderItemRepository = orderItemRepository;
         this.orderVoucherRepository = orderVoucherRepository;
         this.clock = clock;
-        this.negotiated=negotiated;this.json=json;this.wallet=wallet;
+        this.negotiated = negotiated;
+        this.json = json;
+        this.wallet = wallet;
+        this.shippingFacade = shippingFacade;
+    }
+
+    public CheckoutService(CatalogCommerceFacade catalogCommerceFacade,
+                           IdentityCommerceFacade identityCommerceFacade,
+                           SystemFeePolicyRepository systemFeePolicyRepository,
+                           VoucherRepository voucherRepository,
+                           OrderRepository orderRepository,
+                           OrderItemRepository orderItemRepository,
+                           OrderVoucherRepository orderVoucherRepository,
+                           Clock clock,
+                           NegotiatedCheckoutFacade negotiated,
+                           ObjectMapper json,
+                           VoucherService wallet) {
+        this(catalogCommerceFacade, identityCommerceFacade, systemFeePolicyRepository, voucherRepository,
+             orderRepository, orderItemRepository, orderVoucherRepository, clock, negotiated, json, wallet, null);
     }
 
     @Transactional(readOnly = true)
@@ -73,6 +99,18 @@ public class CheckoutService {
         IdentityCommerceFacade.UserSummary seller = identityCommerceFacade.getUserSummary(product.sellerId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người bán."));
 
+        IdentityCommerceFacade.AddressDto sellerAddress = identityCommerceFacade.getDefaultAddress(product.sellerId()).orElse(null);
+
+        Long eligibleOfferId = null;
+        BigDecimal eligibleOfferPrice = null;
+        if (offerId == null) {
+            var activeOfferOpt = negotiated.findActiveAcceptedOffer(buyerId, productId);
+            if (activeOfferOpt.isPresent()) {
+                eligibleOfferId = activeOfferOpt.get().offerId();
+                eligibleOfferPrice = activeOfferOpt.get().price();
+            }
+        }
+
         List<IdentityCommerceFacade.AddressDto> addresses = identityCommerceFacade.getUserAddresses(buyerId);
         List<CheckoutDtos.AddressSummaryResponse> addressDtos = addresses.stream()
                 .map(this::toAddressSummary)
@@ -87,11 +125,15 @@ public class CheckoutService {
         BigDecimal subtotal = agreement==null?product.listedPrice():agreement.price();
         List<CheckoutDtos.VoucherSummaryResponse> voucherDtos = wallet.usable(buyerId,productId,subtotal).stream().map(g->toVoucherSummary(g.campaign())).toList();
         BigDecimal shippingFee = STANDARD_SHIPPING_FEE;
+        if (shippingFacade != null && sellerAddress != null && sellerAddress.hasValidGhnCodes() && selectedAddress != null && selectedAddress.hasValidGhnCodes()) {
+            shippingFee = shippingFacade.calculateShippingFee(sellerAddress.ghnDistrictId(), sellerAddress.ghnWardCode(), selectedAddress.ghnDistrictId(), selectedAddress.ghnWardCode(), 500);
+        }
         BigDecimal buyerSystemFee = agreement==null?BigDecimal.ZERO:agreement.buyerFee();
 
         BigDecimal voucherDiscount = BigDecimal.ZERO;
         BigDecimal shippingDiscount = BigDecimal.ZERO;
         CheckoutDtos.VoucherSummaryResponse appliedVoucher = null;
+        String voucherRejectionReason = null;
 
         if (voucherCode != null && !voucherCode.isBlank()) {
             var voucher = wallet.usable(buyerId,productId,subtotal).stream().map(VoucherDtos.Grant::campaign)
@@ -103,6 +145,8 @@ public class CheckoutService {
                 } else {
                     voucherDiscount = calculateDiscount(voucher, subtotal);
                 }
+            } else {
+                voucherRejectionReason = wallet.checkEligibilityReason(buyerId, voucherCode, productId, subtotal);
             }
         }
 
@@ -124,7 +168,12 @@ public class CheckoutService {
                 addressDtos,
                 selectedAddress,
                 voucherDtos,
-                appliedVoucher,subtotal,offerId
+                appliedVoucher,
+                agreement == null ? null : agreement.price(),
+                offerId,
+                eligibleOfferId,
+                eligibleOfferPrice,
+                voucherRejectionReason
         );
     }
 
@@ -191,6 +240,9 @@ public class CheckoutService {
 
         BigDecimal subtotal = agreement==null?product.listedPrice():agreement.price();
         BigDecimal shippingFee = STANDARD_SHIPPING_FEE;
+        if (shippingFacade != null && sellerAddress.hasValidGhnCodes() && address.hasValidGhnCodes()) {
+            shippingFee = shippingFacade.calculateShippingFee(sellerAddress.ghnDistrictId(), sellerAddress.ghnWardCode(), address.ghnDistrictId(), address.ghnWardCode(), 500);
+        }
         BigDecimal buyerFee = agreement==null?BigDecimal.ZERO:agreement.buyerFee(); // Accepted offers preserve the fee snapshot.
         BigDecimal sellerFee = agreement==null?feePolicy.getSellerFixedFee().add(
                 subtotal.multiply(feePolicy.getSellerFeeRate()).setScale(0, RoundingMode.HALF_UP)
