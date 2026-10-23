@@ -106,6 +106,13 @@ public class ApiExceptionHandler {
         return response(status, code, message, request, List.of());
     }
 
+    @ExceptionHandler(java.util.NoSuchElementException.class)
+    ResponseEntity<ApiError> notFound(java.util.NoSuchElementException exception, HttpServletRequest request) {
+        return response(HttpStatus.NOT_FOUND, "NOT_FOUND",
+                exception.getMessage() != null ? exception.getMessage() : "Không tìm thấy tài nguyên yêu cầu.",
+                request, List.of());
+    }
+
     @ExceptionHandler(AvatarStorageUnavailableException.class)
     ResponseEntity<ApiError> avatarUnavailable(AvatarStorageUnavailableException exception, HttpServletRequest request) {
         return response(HttpStatus.SERVICE_UNAVAILABLE, "AVATAR_STORAGE_UNAVAILABLE", exception.getMessage(), request, List.of());

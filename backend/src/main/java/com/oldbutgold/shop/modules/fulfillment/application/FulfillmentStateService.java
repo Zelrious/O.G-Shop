@@ -37,63 +37,120 @@ public class FulfillmentStateService {
     }
 
     /**
-     * Điều phối cập nhật trạng thái giao hàng thành công từ đơn vị vận chuyển (Carrier DELIVERED).
+     * Kết quả xử lý chuyển trạng thái DELIVERED dùng chung.
+     */
+    public record DeliveryTransitionResult(boolean successful, boolean idempotent, String reason) {
+        public static DeliveryTransitionResult ofSuccess() {
+            return new DeliveryTransitionResult(true, false, "SUCCESS");
+        }
+        public static DeliveryTransitionResult ofIdempotent(String currentStatus) {
+            return new DeliveryTransitionResult(true, true, "ALREADY_" + currentStatus);
+        }
+        public static DeliveryTransitionResult ofIgnored(String reason) {
+            return new DeliveryTransitionResult(false, false, reason);
+        }
+    }
+
+    /**
+     * Phương thức dùng chung duy nhất để chuyển đơn hàng và vận đơn sang DELIVERED (TASK-0016 A1, A4).
+     * Được gọi bởi:
+     *  1. deliverSellerOrder (mô phỏng demo)
+     *  2. applyCarrierDelivered (GHN Webhook)
+     *  3. GhnReconciliationScheduler (đối soát định kỳ)
      *
-     * Các bước chuẩn tắc:
-     * 1. Mở transaction với @Transactional.
-     * 2. Đọc sơ bộ Shipment không giữ khóa để xác định orderId.
-     * 3. Khóa Order TRƯỚC bằng commerceFacade.lockOrderForFulfillment(orderId).
-     * 4. Khóa Shipment SAU bằng shipmentRepository.findByOrderIdForUpdate(orderId).
-     * 5. Tái kiểm tra liên kết Order-Shipment, tracking number và trạng thái terminal xung đột.
-     * 6. Cập nhật ShipmentEntity (markDelivered).
-     * 7. Cập nhật OrderEntity qua Facade (markDeliveredDirectFromCarrier).
-     * Cả hai thực thể được lưu nguyên tử trong cùng transaction. Nếu phát sinh lỗi, rollback toàn bộ.
+     * Quy tắc bắt buộc:
+     * - Khóa Order TRƯỚC (commerceFacade.lockOrderForFulfillment), Shipment SAU (shipmentRepository.findByOrderIdForUpdate).
+     * - Idempotent: nếu Order đã DELIVERED hoặc COMPLETED thì bỏ qua, không ghi đè delivered_at.
+     * - Cờ sự cố adminReviewRequired: nếu true, từ chối ném lỗi (với demo) hoặc log cảnh báo bỏ qua (với webhook/scheduler).
+     * - Trạng thái Order: chỉ chuyển DELIVERED khi Order đang ở SHIPPED. Nếu đến khi Order ở trạng thái khác: ném lỗi (với demo) hoặc log cảnh báo bỏ qua (với webhook/scheduler) để không làm GHN retry vô hạn.
+     * - Cập nhật Shipment và Order trong cùng một transaction.
+     */
+    @Transactional
+    public DeliveryTransitionResult markOrderDelivered(Long orderId, Instant deliveredAt, String source) {
+        if (orderId == null) {
+            throw new IllegalArgumentException("OrderId không được để trống");
+        }
+        Instant now = clock.instant();
+        Instant effectiveTime = deliveredAt != null ? deliveredAt : now;
+        boolean isDemo = "DEMO_SIMULATION".equalsIgnoreCase(source) || "SELLER_DEMO_DELIVER".equalsIgnoreCase(source);
+
+        // 1. Khóa Order TRƯỚC
+        OrderFulfillmentSnapshot orderSnap = commerceFacade.lockOrderForFulfillment(orderId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
+
+        // 2. Khóa Shipment SAU theo orderId
+        ShipmentEntity shipment = shipmentRepository.findByOrderIdForUpdate(orderId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy vận đơn bị khóa cho đơn hàng #" + orderId));
+
+        // 3. Kiểm tra cờ sự cố adminReviewRequired
+        if (shipment.isAdminReviewRequired()) {
+            if (isDemo) {
+                throw new IllegalStateException("Đơn hàng đang có sự cố vận chuyển cần Admin xử lý (admin_review_required = true). Không thể mô phỏng giao hàng.");
+            }
+            log.warn("Bỏ qua chuyển DELIVERED cho orderId={} từ nguồn {} vì shipment có cờ admin_review_required = true", orderId, source);
+            return DeliveryTransitionResult.ofIgnored("admin_review_required");
+        }
+
+        // 4. Idempotency: nếu đã DELIVERED hoặc COMPLETED thì bỏ qua, không ghi đè delivered_at
+        if (orderSnap.isAlreadyDeliveredOrCompleted()) {
+            log.info("Đơn hàng #{} đã ở trạng thái {} từ trước, bỏ qua chuyển DELIVERED (idempotent).", orderId, orderSnap.status());
+            if (!ShipmentEntity.STATUS_DELIVERED.equals(shipment.getStatus()) && !shipment.isTerminal()) {
+                shipment.markDelivered(effectiveTime, effectiveTime, now);
+                shipmentRepository.save(shipment);
+            }
+            return DeliveryTransitionResult.ofIdempotent(orderSnap.status());
+        }
+
+        // Kiểm tra xung đột terminal của shipment hoặc order
+        if (shipment.hasTerminalConflictWithDelivered() || orderSnap.isTerminalConflict()) {
+            if (isDemo) {
+                throw new IllegalStateException("Đơn hàng hoặc vận đơn đang ở trạng thái xung đột (" + orderSnap.status() + "/" + shipment.getStatus() + "), không thể chuyển sang DELIVERED");
+            }
+            log.warn("Bỏ qua chuyển DELIVERED cho orderId={} từ nguồn {} vì trạng thái xung đột terminal: order={}, shipment={}",
+                    orderId, source, orderSnap.status(), shipment.getStatus());
+            return DeliveryTransitionResult.ofIgnored("terminal_conflict");
+        }
+
+        // 5. Kiểm tra trạng thái Order:
+        // - Luồng demo: bắt buộc Order phải đang ở SHIPPED
+        // - Luồng carrier webhook / scheduler: chấp nhận cả SHIPPED lẫn SELLER_CONFIRMED (nhánh catch-up)
+        boolean isEligibleOrder = "SHIPPED".equals(orderSnap.status())
+                || (!isDemo && "SELLER_CONFIRMED".equals(orderSnap.status()));
+
+        if (!isEligibleOrder) {
+            if (isDemo) {
+                throw new IllegalStateException("Chỉ có thể chuyển sang DELIVERED khi đơn hàng đang ở trạng thái SHIPPED. Trạng thái hiện tại: " + orderSnap.status());
+            }
+            log.warn("Nhận sự kiện DELIVERED từ nguồn {} nhưng Order #{} đang ở trạng thái {} (không phải SHIPPED/SELLER_CONFIRMED). Bỏ qua không ném lỗi.",
+                    source, orderId, orderSnap.status());
+            shipment.setRawGhnStatus("delivered");
+            shipmentRepository.save(shipment);
+            return DeliveryTransitionResult.ofIgnored("order_not_eligible: " + orderSnap.status());
+        }
+
+        // 6. Cập nhật Shipment và Order trong cùng một transaction
+        shipment.markDelivered(effectiveTime, effectiveTime, now);
+        shipmentRepository.save(shipment);
+
+        commerceFacade.markDeliveredDirectFromCarrier(orderId, effectiveTime);
+
+        log.info("Đã đồng bộ giao hàng thành công (DELIVERED) cho orderId={} từ nguồn {}", orderId, source);
+        return DeliveryTransitionResult.ofSuccess();
+    }
+
+    /**
+     * Điều phối cập nhật trạng thái giao hàng thành công từ đơn vị vận chuyển (Carrier DELIVERED).
      */
     @Transactional
     public void applyCarrierDelivered(String trackingNumber, Instant eventTime, String rawStatus) {
         if (trackingNumber == null || trackingNumber.isBlank()) {
             throw new IllegalArgumentException("Tracking number không được để trống");
         }
-        Instant now = clock.instant();
-        Instant effectiveTime = eventTime != null ? eventTime : now;
 
-        // 1. Đọc sơ bộ không giữ khóa
         Long orderId = shipmentRepository.findOrderIdByTrackingNumber(trackingNumber)
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy vận đơn với mã: " + trackingNumber));
 
-        // 2. Khóa Order TRƯỚC
-        OrderFulfillmentSnapshot orderSnap = commerceFacade.lockOrderForFulfillment(orderId)
-                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
-
-        // 3. Khóa Shipment SAU theo orderId
-        ShipmentEntity shipment = shipmentRepository.findByOrderIdForUpdate(orderId)
-                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy vận đơn bị khóa cho đơn hàng #" + orderId));
-
-        // 4. Tái kiểm tra tính toàn vẹn dưới khóa bi quan
-        if (!trackingNumber.equals(shipment.getTrackingNumber())) {
-            throw new IllegalStateException("Mã vận đơn không khớp dưới khóa bi quan (yêu cầu: "
-                    + trackingNumber + ", hiện tại: " + shipment.getTrackingNumber() + ")");
-        }
-        if (!orderId.equals(shipment.getOrderId())) {
-            throw new IllegalStateException("OrderId không khớp giữa Order và Shipment");
-        }
-
-        // Kiểm tra xung đột terminal
-        if (shipment.hasTerminalConflictWithDelivered()) {
-            throw new IllegalStateException("Vận đơn đang ở trạng thái xung đột (" + shipment.getStatus() + "), không thể chuyển sang DELIVERED");
-        }
-        if (orderSnap.isTerminalConflict()) {
-            throw new IllegalStateException("Đơn hàng đang ở trạng thái xung đột (" + orderSnap.status() + "), không thể chuyển sang DELIVERED");
-        }
-
-        // 5. Cập nhật Shipment
-        shipment.markDelivered(effectiveTime, effectiveTime, now);
-        shipmentRepository.save(shipment);
-
-        // 6. Cập nhật Order trong cùng transaction
-        commerceFacade.markDeliveredDirectFromCarrier(orderId, effectiveTime);
-
-        log.info("Đã đồng bộ giao hàng thành công (DELIVERED) cho orderId={} và trackingNumber={}", orderId, trackingNumber);
+        markOrderDelivered(orderId, eventTime, "GHN_WEBHOOK");
     }
 
     /**

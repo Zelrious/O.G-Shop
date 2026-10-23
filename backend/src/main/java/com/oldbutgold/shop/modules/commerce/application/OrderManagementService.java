@@ -10,6 +10,8 @@ import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderVouc
 import com.oldbutgold.shop.modules.identity.application.IdentityCommerceFacade;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.PaymentEntity;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.PaymentRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -17,20 +19,35 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.oldbutgold.shop.modules.fulfillment.api.FulfillmentDtos;
+import com.oldbutgold.shop.modules.fulfillment.api.FulfillmentDtos.ShipmentResponse;
+import com.oldbutgold.shop.modules.fulfillment.application.FulfillmentService;
+import com.oldbutgold.shop.modules.fulfillment.application.FulfillmentStateService;
+import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.ShipmentEntity;
+import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.ShipmentRepository;
+import org.springframework.transaction.support.TransactionTemplate;
+
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 @Service
 public class OrderManagementService {
+    private static final Logger log = LoggerFactory.getLogger(OrderManagementService.class);
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderVoucherRepository orderVoucherRepository;
     private final CatalogCommerceFacade catalogCommerceFacade;
     private final PaymentRepository paymentRepository;
     private final IdentityCommerceFacade identityCommerceFacade;
+    private final ShipmentRepository shipmentRepository;
+    private final FulfillmentService fulfillmentService;
+    private final FulfillmentStateService fulfillmentStateService;
+    private final FulfillmentSimulationGuard simulationGuard;
+    private final TransactionTemplate transactionTemplate;
     private final Clock clock;
 
     public OrderManagementService(
@@ -40,6 +57,11 @@ public class OrderManagementService {
             CatalogCommerceFacade catalogCommerceFacade,
             PaymentRepository paymentRepository,
             IdentityCommerceFacade identityCommerceFacade,
+            ShipmentRepository shipmentRepository,
+            FulfillmentService fulfillmentService,
+            FulfillmentStateService fulfillmentStateService,
+            FulfillmentSimulationGuard simulationGuard,
+            TransactionTemplate transactionTemplate,
             Clock clock
     ) {
         this.orderRepository = orderRepository;
@@ -48,6 +70,11 @@ public class OrderManagementService {
         this.catalogCommerceFacade = catalogCommerceFacade;
         this.paymentRepository = paymentRepository;
         this.identityCommerceFacade = identityCommerceFacade;
+        this.shipmentRepository = shipmentRepository;
+        this.fulfillmentService = fulfillmentService;
+        this.fulfillmentStateService = fulfillmentStateService;
+        this.simulationGuard = simulationGuard;
+        this.transactionTemplate = transactionTemplate;
         this.clock = clock;
     }
 
@@ -76,10 +103,10 @@ public class OrderManagementService {
     @Transactional(readOnly = true)
     public OrderManagementDtos.OrderDetailResponse getBuyerOrderDetail(Long buyerId, Long orderId) {
         OrderEntity order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn hàng #" + orderId));
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
 
         if (!order.getBuyerId().equals(buyerId)) {
-            throw new AccessDeniedException("Bạn không có quyền truy cập đơn hàng này.");
+            throw new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId);
         }
 
         return mapToDetail(order);
@@ -103,10 +130,10 @@ public class OrderManagementService {
     @Transactional(readOnly = true)
     public OrderManagementDtos.OrderDetailResponse getSellerOrderDetail(Long sellerId, Long orderId) {
         OrderEntity order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn hàng #" + orderId));
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
 
         if (!order.getSellerId().equals(sellerId)) {
-            throw new AccessDeniedException("Bạn không có quyền truy cập đơn hàng này.");
+            throw new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId);
         }
 
         return mapToDetail(order);
@@ -190,6 +217,195 @@ public class OrderManagementService {
                 "Đã xác nhận đơn hàng thành công! Sản phẩm đã chuyển sang trạng thái ĐÃ BÁN."
         );
     }
+
+    /**
+     * Quy trình 3 pha tạo vận đơn GHN cho đơn hàng của người bán (A3):
+     * - Pha 1: Transaction ngắn kiểm tra quyền sở hữu và trạng thái SELLER_CONFIRMED.
+     *          Nếu đơn đã SHIPPED và có tracking_number thì trả về kết quả idempotent.
+     * - Pha 2: Gọi FulfillmentService.createShipment ra ngoài transaction để không giữ DB lock khi chờ mạng GHN.
+     * - Pha 3: Transaction ngắn khóa OrderEntity, kiểm tra lại trạng thái và chốt sang SHIPPED.
+     */
+    public OrderManagementDtos.OrderShipmentActionResponse shipSellerOrder(Long sellerId, Long orderId) {
+        // Pha 1: Validate trong transaction ngắn
+        ValidatedShipmentOrder validated = transactionTemplate.execute(status -> {
+            OrderEntity order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
+
+            if (!order.getSellerId().equals(sellerId)) {
+                throw new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId);
+            }
+
+            if (OrderEntity.STATUS_SHIPPED.equals(order.getStatus())
+                    || OrderEntity.STATUS_DELIVERED.equals(order.getStatus())
+                    || OrderEntity.STATUS_COMPLETED.equals(order.getStatus())) {
+                ShipmentEntity existing = shipmentRepository.findByOrderId(orderId).orElse(null);
+                if (existing != null && existing.getTrackingNumber() != null && !existing.getTrackingNumber().isBlank()) {
+                    return new ValidatedShipmentOrder(true, existing.getTrackingNumber(), existing.getCarrier(), order.getStatus());
+                }
+            }
+
+            if (!OrderEntity.STATUS_SELLER_CONFIRMED.equals(order.getStatus())) {
+                throw new IllegalStateException("Chỉ có thể tạo vận đơn khi người bán đã xác nhận đơn hàng (SELLER_CONFIRMED). Trạng thái hiện tại: " + order.getStatus());
+            }
+
+            return new ValidatedShipmentOrder(false, null, null, order.getStatus());
+        });
+
+        if (validated != null && validated.isAlreadyShipped()) {
+            return new OrderManagementDtos.OrderShipmentActionResponse(
+                    orderId,
+                    validated.status(),
+                    validated.trackingNumber(),
+                    validated.carrier(),
+                    "Đơn hàng đã được tạo vận đơn trước đó."
+            );
+        }
+
+        // Pha 2: Outbound HTTP call sang GHN hoàn toàn ngoài transaction
+        FulfillmentDtos.ShipmentResponse shipmentResponse = fulfillmentService.createShipment(sellerId, orderId, null);
+
+        // Pha 3: Chốt trạng thái Order trong transaction ngắn độc lập
+        return transactionTemplate.execute(status -> {
+            Instant now = clock.instant();
+            OrderEntity order = orderRepository.findByIdForUpdate(orderId)
+                    .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
+
+            if (OrderEntity.STATUS_SELLER_CONFIRMED.equals(order.getStatus())) {
+                order.markShipped(now);
+                orderRepository.save(order);
+                log.info("Đơn hàng #{} đã chuyển trạng thái sang SHIPPED với vận đơn {}", orderId, shipmentResponse.trackingNumber());
+            } else {
+                log.warn("Đơn hàng #{} ở trạng thái {} trong pha chốt vận đơn (dự kiến SELLER_CONFIRMED)", orderId, order.getStatus());
+            }
+
+            return new OrderManagementDtos.OrderShipmentActionResponse(
+                    orderId,
+                    order.getStatus(),
+                    shipmentResponse.trackingNumber(),
+                    shipmentResponse.carrier(),
+                    "Tạo vận đơn GHN thành công và đã chuyển trạng thái đơn hàng sang SHIPPED."
+            );
+        });
+    }
+
+    /**
+     * Endpoint mô phỏng giao hàng dành riêng cho môi trường DEV/TEST (A1 + A2).
+     * Chốt chặn bảo mật (fail-closed): Kiểm tra môi trường simulation NGAY ĐẦU method,
+     * TRƯỚC kiểm tra owner và TRƯỚC mọi truy vấn database.
+     */
+    public OrderManagementDtos.OrderActionResponse deliverSellerOrder(Long sellerId, Long orderId) {
+        // 1. Chốt chặn môi trường fail-closed trước mọi truy vấn
+        simulationGuard.ensureSimulationAllowed();
+
+        // 2. Kiểm tra quyền sở hữu người bán (trả 404 NoSuchElementException để không lộ sự tồn tại đơn)
+        OrderEntity order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
+
+        if (!order.getSellerId().equals(sellerId)) {
+            throw new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId);
+        }
+
+        Instant now = clock.instant();
+        FulfillmentStateService.DeliveryTransitionResult result = fulfillmentStateService.markOrderDelivered(orderId, now, "SELLER_DEMO_DELIVER");
+
+        if (!result.successful() && !result.idempotent()) {
+            throw new IllegalStateException(result.reason());
+        }
+
+        return new OrderManagementDtos.OrderActionResponse(
+                orderId,
+                OrderEntity.STATUS_DELIVERED,
+                result.reason()
+        );
+    }
+
+    /**
+     * Xác nhận hoàn tất đơn hàng và giải ngân tiền ký quỹ (Escrow Release: HELD -> RELEASED) (A4 + A5).
+     *
+     * Quy ước thứ tự khóa tài nguyên (Lock Order Invariant):
+     *   OrderEntity (1) -> ShipmentEntity (2) -> PaymentEntity (3)
+     *
+     * Thứ tự kiểm tra bảo mật & nghiệp vụ bắt buộc:
+     *   (1) Quyền sở hữu của buyer (trả 404 NoSuchElementException nếu không sở hữu)
+     *   (2) Idempotency: nếu Order đã COMPLETED và Payment đã RELEASED -> trả 200 idempotent
+     *   (3) Trạng thái Order phải là DELIVERED
+     *   (4) Các chốt chặn an toàn: không có yêu cầu admin review, không UNDER_REVIEW, Payment phải là HELD
+     *   (5) Cập nhật nguyên tử Order và Payment trong cùng một transaction
+     */
+    @Transactional
+    public OrderManagementDtos.OrderActionResponse completeBuyerOrder(Long buyerId, Long orderId) {
+        Instant now = clock.instant();
+
+        // Bước 1: Khóa OrderEntity trước tiên theo quy ước Order -> Shipment -> Payment
+        OrderEntity order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
+
+        // Kiểm tra quyền sở hữu buyer (trả 404 để không lộ sự tồn tại đơn)
+        if (!order.getBuyerId().equals(buyerId)) {
+            throw new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId);
+        }
+
+        // Bước 2: Khóa ShipmentEntity thứ hai
+        ShipmentEntity shipment = shipmentRepository.findByOrderIdForUpdate(orderId).orElse(null);
+
+        // Bước 3: Khóa PaymentEntity thứ ba
+        PaymentEntity payment = paymentRepository.findByOrderIdForUpdate(orderId).orElse(null);
+
+        // Bước 2 kiểm tra: Idempotency - nếu Order đã COMPLETED và Payment đã RELEASED
+        if (OrderEntity.STATUS_COMPLETED.equals(order.getStatus())
+                && payment != null && PaymentEntity.STATUS_RELEASED.equals(payment.getStatus())) {
+            return new OrderManagementDtos.OrderActionResponse(
+                    orderId,
+                    OrderEntity.STATUS_COMPLETED,
+                    "Đơn hàng đã được xác nhận hoàn thành trước đó."
+            );
+        }
+
+        // Bước 3 kiểm tra: Trạng thái Order phải là DELIVERED
+        if (!OrderEntity.STATUS_DELIVERED.equals(order.getStatus())) {
+            throw new IllegalStateException("Chỉ có thể xác nhận hoàn thành khi đơn hàng đã ở trạng thái DELIVERED. Trạng thái hiện tại: " + order.getStatus());
+        }
+
+        // Bước 4 kiểm tra: Các guards
+        if (shipment != null && shipment.isAdminReviewRequired()) {
+            throw new IllegalStateException("Đơn hàng đang có cảnh báo bất thường cần Admin kiểm duyệt, không thể tự động giải ngân.");
+        }
+
+        if (payment == null) {
+            throw new IllegalStateException("Không tìm thấy thông tin ký quỹ (Payment) cho đơn hàng #" + orderId);
+        }
+
+        if (PaymentEntity.STATUS_UNDER_REVIEW.equals(payment.getStatus())) {
+            throw new IllegalStateException("Thanh toán của đơn hàng đang trong trạng thái kiểm duyệt (UNDER_REVIEW), không thể giải ngân.");
+        }
+
+        if (!PaymentEntity.STATUS_HELD.equals(payment.getStatus())) {
+            throw new IllegalStateException("Chỉ có thể giải ngân tiền ký quỹ khi thanh toán đang ở trạng thái HELD. Trạng thái hiện tại: " + payment.getStatus());
+        }
+
+        // Bước 5: Cập nhật nguyên tử Order và Payment trong cùng một transaction
+        order.markCompleted(now);
+        orderRepository.save(order);
+
+        payment.markReleased(now);
+        paymentRepository.save(payment);
+
+        log.info("Đơn hàng #{} đã được Buyer #{} xác nhận COMPLETED. Escrow Payment #{} giải ngân thành công (RELEASED).",
+                orderId, buyerId, payment.getId());
+
+        return new OrderManagementDtos.OrderActionResponse(
+                orderId,
+                OrderEntity.STATUS_COMPLETED,
+                "Xác nhận nhận hàng thành công. Tiền ký quỹ đã được giải ngân cho người bán."
+        );
+    }
+
+    private record ValidatedShipmentOrder(
+            boolean isAlreadyShipped,
+            String trackingNumber,
+            String carrier,
+            String status
+    ) {}
 
     @Transactional
     public int expireOverdueOrders() {
@@ -303,6 +519,7 @@ public class OrderManagementService {
         String appliedVoucherCode = !vouchers.isEmpty() ? vouchers.get(0).getVoucherCodeSnapshot() : null;
 
         PaymentEntity payment = paymentRepository.findByOrderId(order.getId()).orElse(null);
+        ShipmentEntity shipment = shipmentRepository.findByOrderId(order.getId()).orElse(null);
 
         return new OrderManagementDtos.OrderDetailResponse(
                 order.getId(),
@@ -340,7 +557,11 @@ public class OrderManagementService {
                 order.getCreatedAt(),
                 order.getCompletedAt(),
                 order.getCancelledAt(),
-                order.getCancellationReason()
+                order.getCancellationReason(),
+                shipment != null ? shipment.getTrackingNumber() : null,
+                shipment != null ? shipment.getCarrier() : null,
+                shipment != null ? shipment.getShippedAt() : null,
+                shipment != null ? shipment.getDeliveredAt() : null
         );
     }
 }
