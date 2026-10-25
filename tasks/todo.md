@@ -1,194 +1,246 @@
-# Danh sách công việc (Todo List) - Tích hợp VNPay Sandbox (Kiến Trúc Chuẩn Hóa Chuyên Sâu)
+# Danh sách Công việc (Todo List): Luồng Trả hàng & Tranh chấp Nhiều Vòng
 
-## Phase 1: Database Migration & Backend Core
-- [x] **BE-01**: Viết Flyway migration `V12__add_vnpay_attempts.sql`:
-  - `ALTER TABLE payments DROP CONSTRAINT ck_payments_method;`
-  - `ALTER TABLE payments ADD CONSTRAINT ck_payments_method CHECK (payment_method IN ('COD_MOCK', 'BANK_TRANSFER_MOCK', 'E_WALLET_MOCK', 'VNPAY'));`
-  - Mở rộng `ck_orders_status` và `ck_payments_status` thêm trạng thái `'UNDER_REVIEW'`
-  - **Sửa `ck_payments_state_fields`:** DROP và ADD lại constraint với nhánh `UNDER_REVIEW` (`paid_at IS NOT NULL`, `held_at IS NULL`, `released_at IS NULL`, `refunded_at IS NULL`, `failure_reason IS NULL`), đồng thời mở rộng `REFUND_PENDING` và `REFUNDED` cho phép `held_at IS NULL OR held_at >= paid_at` để hợp lệ khi chuyển tiếp từ `UNDER_REVIEW`
-  - `ALTER TABLE payments ADD CONSTRAINT uq_payments_payment_order UNIQUE (payment_id, order_id);` (hỗ trợ composite foreign key)
-  - `CREATE TABLE payment_attempts` với composite FK `(payment_id, order_id) REFERENCES payments (payment_id, order_id) ON DELETE RESTRICT`, `txn_ref UNIQUE`, `amount > 0`, `currency = 'VND'`, check constraint trạng thái đầy đủ 9 trạng thái
-  - `CREATE UNIQUE INDEX uq_payment_attempts_single_pending ON payment_attempts(payment_id) WHERE status = 'PENDING';`
-  - `CREATE TABLE payment_ipn_raw_receipts` lưu MỌI HTTP request đến controller: `receipt_id`, `raw_query_params` (TEXT NOT NULL), `raw_query_original_length` (INT NOT NULL), `raw_query_truncated` (BOOLEAN DEFAULT FALSE), `raw_query_sanitized` (BOOLEAN DEFAULT FALSE), `raw_query_sha256` (CHAR(64) NOT NULL), `ip_address`, `received_at`, `vnp_txn_ref` (VARCHAR(100) NULL), `vnp_transaction_no` (VARCHAR(100) NULL), `vnp_amount_text` (TEXT NULL), `verification_status` (CHECK 5 trạng thái), `processing_status` (CHECK 4 trạng thái), `processing_error` (VARCHAR(200) NULL); kèm đầy đủ 4 ràng buộc CHECK toàn vẹn (a)-(d)
-  - `CREATE TABLE payment_ipn_events` chỉ lưu callback đã xác thực chữ ký và liên kết attempt: `event_id`, `receipt_id BIGINT NOT NULL UNIQUE REFERENCES payment_ipn_raw_receipts(receipt_id) ON DELETE RESTRICT`, `attempt_id BIGINT NOT NULL REFERENCES payment_attempts(attempt_id) ON DELETE RESTRICT`, `order_id`, `payment_id`, `txn_ref`, `vnp_transaction_no`, `vnp_response_code`, `vnp_transaction_status`, `vnp_curr_code`, `vnp_amount_text`, `vnp_amount_raw`, `vnp_amount`, `vnp_bank_code`, `vnp_bank_tran_no`, `vnp_card_type`, `vnp_pay_date`, `ip_address`, `processing_outcome`, `received_at`; bỏ cột `raw_query_params`; CHECK outcome đầy đủ 11 nhánh; CHECK amount conditional cho phép NULL khi outcome là `REJECTED_AMOUNT_MISMATCH`
-  - `CREATE TABLE payment_review_audits` với `ON DELETE RESTRICT` để lưu vết thẩm định đơn `UNDER_REVIEW` (`order_id`, `payment_id`, `attempt_id`, `decided_by`, `decision`, `reason_note`, `vnp_verification_ref`)
-  - `CREATE TABLE payment_reconciliation_cases` lưu hàng đợi đối soát: `case_id`, `order_id`, `payment_id`, `attempt_id` (NULL), `case_type`, `status` (OPEN/RESOLVED), `source_type` (IPN_EVENT/REVIEW_DECISION), `event_id` (NULL REFERENCES payment_ipn_events ON DELETE RESTRICT), `review_audit_id` (NULL REFERENCES payment_review_audits ON DELETE RESTRICT), `vnp_transaction_no` (NULL), `dedup_key VARCHAR(150) NOT NULL UNIQUE`, `assigned_to`, `resolution_note`, timestamps; kèm 3 ràng buộc CHECK (case_type, source_fk khớp source_type, tổ hợp case_type và source_type)
-  - `CREATE TABLE payment_alert_requests` outbox cảnh báo: `alert_id`, `case_id BIGINT NOT NULL UNIQUE REFERENCES payment_reconciliation_cases(case_id) ON DELETE RESTRICT`, `alert_type`, `severity`, `status` (PENDING/SENT/FAILED), `attempt_count`, `last_error`, `created_at`, `sent_at`
-  - Phân quyền Database: Cấp `INSERT, SELECT` cho user ứng dụng trên `payment_ipn_events`; thu hồi `UPDATE, DELETE` (bảo toàn append-only); chính sách lưu trữ kiểm toán nội bộ (retention) 3–5 năm
-  - **Files:** `backend/src/main/resources/db/migration/V12__add_vnpay_attempts.sql`
-  - **Phụ thuộc:** `V1` đến `V11`
-- [x] **BE-02**: Tạo Entity, Repository, Parser & Method Chuyển Trạng Thái Entity:
-  - Cập nhật `OrderEntity.java`: Thêm `STATUS_UNDER_REVIEW = "UNDER_REVIEW"`, thêm method `markUnderReview(Instant now)` (từ `PAYMENT_PENDING`), `approveFromReview(Instant now)` (từ `UNDER_REVIEW`), `cancelFromReview(String reason, Instant now)` (từ `UNDER_REVIEW`); ném `IllegalStateException` khi trạng thái nguồn sai
-  - Cập nhật `PaymentEntity.java`: Thêm `METHOD_VNPAY = "VNPAY"`, `STATUS_UNDER_REVIEW = "UNDER_REVIEW"`, thêm method `markUnderReview(String txnCode, Instant now)` chỉ chuyển Payment từ `PENDING` (gán `paidAt = now`, `heldAt = null`), `approveFromReview(Instant now)` (gán `status = HELD, heldAt = now`), `markRefundPending(BigDecimal refundAmount, String reason, Instant now)` (chấp nhận từ `HELD` hoặc `UNDER_REVIEW`); ném `IllegalStateException` khi trạng thái nguồn sai. Khi Payment đã `UNDER_REVIEW`, Nhánh B không gọi lại method này.
-  - Xây dựng `VnPayQueryParser.java`: Đọc `getQueryString()` 1 lần, làm sạch lone surrogate (thay bằng `?`, bật `raw_query_sanitized`), tính code point và cắt chuỗi nếu vượt 4096 (bật `raw_query_truncated`), tính SHA-256; trả về map tham số hoặc mã lỗi cố định (`NON_ASCII_RAW_QUERY`, `RAW_QUERY_TOO_LARGE`, `INVALID_PERCENT_ENCODING`, `EMPTY_PARAM_NAME`, `DUPLICATE_VNP_PARAM:<tên>`, `NONCANONICAL_VNP_PARAM_CASE:<tên>`)
-  - Xây dựng `IpnReceiptService.java`: Service riêng chạy `REQUIRES_NEW` để INSERT raw receipt ở trạng thái ban đầu và UPDATE khi từ chối mà không bị rollback bởi transaction nghiệp vụ
-  - Tạo Entity và Repository cho 6 bảng mới: `PaymentAttemptEntity` (kèm method khóa bi quan `findByTxnRefForUpdate`), `PaymentIpnRawReceiptEntity`, `PaymentIpnEventEntity`, `PaymentReviewAuditEntity`, `PaymentReconciliationCaseEntity`, `PaymentAlertRequestEntity`
-  - **Files:**
+> Tài liệu theo dõi tiến độ chi tiết của `tasks/complaint_plan.md` dựa trên Báo cáo đồ án (`Báo_cáo_đồ_án.docx`: UC22, UC26, UC27, UC33, UC40, UC52, UC62, UC63, UC71, UC75, UC83).
+
+---
+
+## Giai đoạn 1: Backend Domain Models & Persistence Layer
+- [x] **Task 1.1: Tạo các Entity JPA và Enum mã lý do (JPQL Smoke Test)**
+  - **Mô tả**: Tạo `CaseEntity`, `CaseRoundEntity`, `CaseDecisionEntity`, `CaseEvidenceEntity`, `CaseEventEntity`, `ReturnReasonCode` và test smoke JPQL khởi tạo/biên dịch trên H2 (không kiểm tra schema PostgreSQL thật).
+  - **Tiêu chí chấp nhận**:
+    - [x] Tạo `CaseEntity`, `CaseRoundEntity`, `CaseDecisionEntity`, `CaseEvidenceEntity`, `CaseEventEntity`, `ReturnReasonCode`.
+    - [x] `CaseEntity` hỗ trợ các trạng thái: `OPEN`, `REVIEWING`, `RETURN_APPROVED`, `RETURNING`, `POST_RETURN`, `CLOSED`, `REJECTED`.
+    - [x] `CaseRoundEntity` hỗ trợ stages: `RETURN_APPROVAL`, `POST_RETURN_RESOLUTION`.
+    - [x] `CaseDecisionEntity` hỗ trợ outcomes: `APPROVE_RETURN`, `REJECT_RETURN`, `SELLER_DECLINED`, `FULL_GOODS_REFUND`, `EXEMPT_GOODS_REFUND`, `SYSTEM_TIMEOUT`.
+    - [x] `CaseEvidenceEntity` hỗ trợ media type `IMAGE`, `VIDEO` (<= 60s, <= 50MB) và cơ chế Append-only với `submission_no`.
+    - [x] `ReturnReasonCode` enum và parser tiền tố chuẩn hóa được kiểm thử đơn vị thành công (9 tests pass).
+    - [x] `CaseEntitiesSmokeTest`: Smoke test JPQL kiểm tra biên dịch và khởi tạo entity trên H2 (chỉ kiểm tra cú pháp JPA & quan hệ, không kiểm tra schema thật hay trigger DB).
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseEntity.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseRoundEntity.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseDecisionEntity.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseEvidenceEntity.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseEventEntity.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/ReturnReasonCode.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/ReturnReasonCodeTest.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseEntitiesSmokeTest.java`
+
+- [ ] **Task 1.1b: Kiểm thử tích hợp PostgreSQL thật (og_compat schema & triggers)**
+  - **Mô tả**: Kiểm thử tích hợp thực tế trên PostgreSQL theo mẫu `ShipmentPostgresTest` / `VouchersPostgresTest`, sử dụng `PostgresTestSafetyGuard` và `@EnabledIfEnvironmentVariable(named = "OGSHOP_TEST_DB_URL", matches = ".+")`.
+  - **Tiêu chí chấp nhận**:
+    - [ ] Kết nối DB test an toàn biệt lập qua `PostgresTestSafetyGuard` (`OGSHOP_TEST_DB_ISOLATED=true`, `OGSHOP_TEST_DB_URL`).
+    - [ ] Đọc SELECT thành công từ cả 5 view: `og_compat.cases`, `og_compat.case_rounds`, `og_compat.case_decisions`, `og_compat.case_evidences`, `og_compat.case_events`.
+    - [ ] Insert đơn hàng fixture thỏa 6 điều kiện của `og_guard_return_case` (đơn `DELIVERED`, có `valid_delivered_at`, trong hạn 3 ngày, `return_allowed = true`, chưa hoàn tất sớm `early_completed_at IS NULL`, tiền chưa giải ngân cuối `escrow_state = 'HELD'`) và có bản ghi `order_fund_components`.
+    - [ ] Insert hồ sơ mẫu `CaseEntity` và xác nhận trigger `trg_return_case_holds` tự động tạo bản ghi `money_holds` cho hồ sơ.
+    - [ ] Ánh xạ khớp hoàn toàn database schema thật `og_compat` (chỉ tích mục này sau khi Task 1.1b pass).
+    - [ ] Dọn dẹp dữ liệu fixture hoặc tự động rollback trong transaction, không để lại dữ liệu rác.
+  - **Files**:
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseEntitiesPostgresTest.java`
+
+- [ ] **Task 1.2: Bổ sung các trường nghiệp vụ vào `OrderEntity` & Cập nhật Repositories**
+  - **Mô tả**: Ánh xạ `return_allowed`, `valid_delivered_at`, `return_due_at`, `early_completed_at`, `early_completion_warning_version` vào `OrderEntity`. Đảm bảo KHÔNG dùng `STATUS_DISPUTED` làm trạng thái đơn; đơn giữ `DELIVERED`, cờ `has_blocking_case` được tính từ hồ sơ `cases`.
+  - **Tiêu chí chấp nhận**:
+    - [ ] `OrderEntity` ánh xạ đủ 5 trường trên.
+    - [ ] `CaseRepository` hỗ trợ `findByOrderId` và `findActiveCaseByOrderId`.
+  - **Files**:
     - `backend/src/main/java/com/oldbutgold/shop/modules/commerce/infrastructure/persistence/OrderEntity.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/infrastructure/persistence/PaymentEntity.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/application/VnPayQueryParser.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/application/IpnReceiptService.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/infrastructure/persistence/PaymentAttemptEntity.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/infrastructure/persistence/PaymentAttemptRepository.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/infrastructure/persistence/PaymentIpnRawReceiptEntity.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/infrastructure/persistence/PaymentIpnRawReceiptRepository.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/infrastructure/persistence/PaymentIpnEventEntity.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/infrastructure/persistence/PaymentIpnEventRepository.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/infrastructure/persistence/PaymentReviewAuditEntity.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/infrastructure/persistence/PaymentReviewAuditRepository.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/infrastructure/persistence/PaymentReconciliationCaseEntity.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/infrastructure/persistence/PaymentReconciliationCaseRepository.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/infrastructure/persistence/PaymentAlertRequestEntity.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/infrastructure/persistence/PaymentAlertRequestRepository.java`
-  - **Phụ thuộc:** BE-01
-- [x] **BE-03**: Cập nhật `VnPayService.java` dùng `Clock` bean:
-  - Inject `Clock` và khai báo timezone `Asia/Ho_Chi_Minh`
-  - Sinh `vnp_CreateDate` và `vnp_ExpireDate` (+15 phút theo cấu hình O.G-Shop) chuẩn định dạng `yyyyMMddHHmmss`
-  - Cập nhật `VnPayServiceTest.java` với clock cố định
-  - **Files:**
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/application/VnPayService.java`
-    - `backend/src/test/java/com/oldbutgold/shop/modules/payment/application/VnPayServiceTest.java`
-  - **Phụ thuộc:** Không
-- [x] **BE-04**: Refactor API Tạo Link Thanh Toán `POST /api/v1/payments/vnpay-url`:
-  - Request body chỉ nhận `{ "orderId": Long }`
-  - Kiểm tra JWT, lấy `buyerId`, kiểm tra quyền sở hữu đơn hàng, kiểm tra `PAYMENT_PENDING`, chưa quá hạn 1 giờ
-  - Khóa theo thứ tự cố định: `Order → Payment → PaymentAttempt`
-  - Khởi tạo hoặc lấy `PaymentEntity` hợp lệ với `paymentMethod = "VNPAY"` và status `PENDING`
-  - Nếu có attempt `PENDING` cũ -> chuyển sang `SUPERSEDED`
-  - Tạo attempt mới `OG_{orderId}_{attemptTimestamp}` với status `PENDING`, lưu vào DB
-  - Sinh URL VNPay với số tiền lấy từ `order.getTotalAmount()`
-  - **Files:**
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/api/PaymentController.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/api/PaymentDtos.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/application/PaymentService.java`
-  - **Phụ thuộc:** BE-02, BE-03
-- [x] **BE-05**: Xử lý Webhook IPN `GET /api/v1/payments/vnpay-ipn` với Khóa Bi Quan Theo Thứ Tự Cố Định:
-  - Bỏ `@RequestParam Map` và `request.getParameter*`; gọi `VnPayQueryParser` phân tích query đúng 1 lần từ `request.getQueryString()`
-  - INSERT raw receipt trước mọi quyết định từ chối qua `IpnReceiptService` (`REQUIRES_NEW`); nếu vi phạm cấu trúc query -> UPDATE receipt sang `(MALFORMED_REQUEST, PROCESSED, mã_lỗi)` và trả mã `97` (🧪)
-  - Nếu query hợp lệ: Điền 3 cột tra cứu forensic trên receipt (bỏ giá trị chứa NUL `%00`) qua transaction ngắn; kiểm tra chữ ký HMAC-SHA512 (sai -> UPDATE receipt sang `SIGNATURE_INVALID, PROCESSED`, trả `97`)
-  - Parse `orderId` từ `txnRef` và khóa bi quan trong transaction nghiệp vụ: `Order → Payment → PaymentAttempt` (không tìm thấy attempt -> UPDATE receipt sang `SIGNATURE_VALID_UNLINKED, PROCESSED`, trả `01`)
-  - **Bước kiểm tra 1 (Amount & Currency Mismatch):** So sánh số tiền nguyên `vnp_Amount` với `attempt.amount * 100` và currency với `attempt.currency`. Nếu sai lệch:
-    + Amount sai -> ghi event `REJECTED_AMOUNT_MISMATCH`. Currency sai -> ghi event `REJECTED_CURRENCY_MISMATCH` (ưu tiên amount nếu sai cả hai)
-    + Tăng `attempt.ipn_count`, cập nhật `first/last_ipn_received_at`
-    + Nếu callback báo đã thu tiền hoặc nghi ngờ (`00/00` hoặc `07`): Tạo 1 case `MISMATCH_CHARGE` + 1 alert request (khử trùng qua `dedup_key`). Nếu callback báo thất bại mà sai amount/currency: chỉ ghi event `REJECTED_*`, không tạo case/alert
-    + Tuyệt đối KHÔNG đổi trạng thái hay trường bằng chứng của Order/Payment/Attempt (không dùng `FLAGGED_SUSPICIOUS`, không đưa vào `UNDER_REVIEW`, không trả `00`)
-    + UPDATE receipt sang `(LINKED, PROCESSED)`
-    + COMMIT transaction nghiệp vụ thành công rồi mới ánh xạ mã phản hồi: Amount sai trả mã `04` (🧪), Currency sai trả mã `99` (🧪); tuyệt đối cấm ném exception làm rollback mất audit
-  - **Bước kiểm tra 2 (Terminal Immutability):** Nếu attempt đã có kết quả cuối:
-    - Trước khi phân loại callback thành công muộn/mâu thuẫn, so transaction number với các event thành công đã ghi nhận cho attempt. Cùng `vnp_TransactionNo` (hoặc cả hai cùng thiếu mã theo `NO_TXN_NO`) -> event `DUPLICATE_ACKNOWLEDGED`, tăng `ipn_count`, cập nhật receipt, trả `02` (🧪), không tạo case/alert mới
-    - Callback `00/00` có transaction number mới khi attempt vẫn `FAILED` -> giữ nguyên trạng thái, ghi event `CONFLICT_CHARGE_REQUIRES_RECONCILIATION`, tạo case `LATE_SUCCESS_ON_FAILED` riêng theo transaction number mới và alert request nếu case mới, tăng `ipn_count`, cập nhật receipt, trả `02` (🧪)
-    - Callback `00/00` có transaction number mới khi attempt đã ghi nhận khoản thu thành công -> giữ nguyên Order/Payment/Attempt, ghi event `CONFLICT_CHARGE_REQUIRES_RECONCILIATION`, tạo case `DUPLICATE_CHARGE` riêng theo transaction number mới và alert request nếu case mới, tăng `ipn_count`, cập nhật receipt, trả `02` (🧪)
-    - Callback mâu thuẫn khác không phải khoản thu mới: giữ nguyên trạng thái, ghi event `CONFLICT_IGNORED`, tăng `ipn_count`, trả mã `02` (🧪)
-  - **Bước kiểm tra 3 (Rẽ nhánh nghiệp vụ A/B/C):**
-    - Nhánh A: Thành công (`00/00`):
-      + Đã có khoản thu trước (`Payment` đã thu tiền hoặc có attempt `status IN ('SUCCESS', 'SUCCESS_PENDING_REVIEW', 'FLAGGED_SUSPICIOUS')`): `attempt.status = SUCCESS_DUPLICATE_CHARGE`, ghi event `APPLIED_DUPLICATE_CHARGE`, tạo case `DUPLICATE_CHARGE` + alert request, trả `00`
-      + Đơn đang `UNDER_REVIEW`: `attempt.status = SUCCESS_PENDING_REVIEW`, ghi event `APPLIED_PENDING_REVIEW`, giữ `UNDER_REVIEW`, trả `00`
-      + Đơn đã hủy hoặc quá hạn 1h: `attempt.status = SUCCESS_ON_EXPIRED_ORDER`, ghi event `APPLIED_EXPIRED_ORDER`, tạo case `EXPIRED_ORDER` + alert request, trả `00`
-      + Thành công hợp lệ: `attempt.status = SUCCESS`, chuyển attempt pending khác sang `SUPERSEDED`, gọi `order.markPaidHeld(now)`, `payment.markHeld(vnp_TransactionNo, now)`, ghi event `APPLIED_SUCCESS`, trả `00`
-    - Nhánh B: Nghi ngờ gian lận (mã 07): Chỉ xét khi amount/currency hợp lệ (đã vượt qua Bước 1). Có guard chặt chẽ (nếu đơn đã có khoản thu trước -> chuyển nhánh thu trùng; nếu đơn đã hủy/quá hạn -> chuyển nhánh đơn hết hạn). Nếu Order=`PAYMENT_PENDING`, gọi các method chuyển trạng thái Order/Payment sang `UNDER_REVIEW`; nếu Order và Payment đã cùng `UNDER_REVIEW`, không gọi lại method chuyển trạng thái và giữ nguyên dữ liệu review. Cả hai trường hợp đều đặt attempt hiện tại thành `FLAGGED_SUSPICIOUS`, ghi event `FLAGGED_SUSPICIOUS`, trả `00`. Nếu trạng thái Order/Payment lệch nhau, rollback nghiệp vụ, receipt `PROCESSING_FAILED`, trả `99` theo Mục 13; không tự sửa trạng thái.
-    - Nhánh C: Thất bại / Hủy: Đơn đã có khoản thu trước -> ghi event `APPLIED_FAILED`, trả `02`; đơn pending -> ghi event `APPLIED_FAILED`, giữ Order `PAYMENT_PENDING`, trả `00`
-  - Trong cùng transaction nghiệp vụ: Cập nhật Order/Payment/Attempt, tăng `ipn_count`, ghi `payment_ipn_events`, tạo case + alert request, UPDATE receipt sang `LINKED/PROCESSED`
-  - Đảm bảo bất biến: `attempt.ipn_count = COUNT(payment_ipn_events)`
-  - Xử lý khi INSERT receipt ban đầu thất bại (DB sập): Không chạm bảng nghiệp vụ, trả HTTP 500 hoặc mã retryable (🧪), log ERROR
-  - **Files:**
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/application/PaymentService.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/api/PaymentController.java`
-  - **Phụ thuộc:** BE-02, BE-04
-- [x] **BE-06**: Xây dựng API Xác minh Return URL `GET /api/v1/payments/vnpay-verify`:
-  - Yêu cầu JWT, kiểm tra `buyerId` sở hữu đơn hàng (chống IDOR, sai trả 403)
-  - Dùng chung `VnPayQueryParser`: Từ chối ngay nếu query sai cấu trúc, trả DTO `INVALID_SIGNATURE` (hoặc `MALFORMED_REQUEST`), không gọi DB nghiệp vụ
-  - Xác thực chữ ký HMAC-SHA512
-  - Chỉ đọc trạng thái DB, tuyệt đối không gọi `save()` hay mutation trạng thái đơn hàng
-  - Trả về DTO: `SUCCESS`, `PENDING_CONFIRMATION`, `UNDER_REVIEW`, `FAILED`, `INVALID_SIGNATURE`, `NOT_FOUND`, `AMOUNT_MISMATCH`
-  - **Files:**
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/api/PaymentController.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/application/PaymentService.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/api/PaymentDtos.java`
-  - **Phụ thuộc:** BE-02, BE-04
-- [x] **BE-07**: Xây dựng Nghiệp vụ Thẩm định & Đóng Trạng thái `UNDER_REVIEW` (Admin / KTV Resolution Runbook):
-  - Cập nhật `SecurityConfig.java`: Thêm matcher `requestMatchers("/api/v1/admin/payments/**").hasAnyRole("ADMIN", "KTV")` đặt trước `.anyRequest().denyAll()`
-  - Triển khai controller `AdminPaymentController.java` endpoint `POST /api/v1/admin/payments/review-decision`
-  - Tiếp nhận quyết định:
-    + `APPROVED_SAFE`: Gọi `order.approveFromReview(now)` -> `PAID_HELD`, `payment.approveFromReview(now)` -> `HELD`, `attempt.status` giữ nguyên; ghi bản ghi vào `payment_review_audits`
-    + `REJECTED_FRAUD`: Gọi `order.cancelFromReview(reason, now)` -> `CANCELLED`, `payment.markRefundPending(amount, reason, now)` -> `REFUND_PENDING`, `attempt.status` giữ nguyên, gọi `catalogCommerceFacade.releaseProductReservation(...)` nhả hàng kho; ghi `payment_review_audits`; tạo 1 case đối soát `REFUND_PENDING` (`dedup_key = REFUND_PENDING:{payment_id}`) + 1 alert request tương ứng trong cùng transaction
-  - **Files:**
-    - `backend/src/main/java/com/oldbutgold/shop/shared/config/SecurityConfig.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/api/AdminPaymentController.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/application/PaymentService.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/api/PaymentDtos.java`
-  - **Phụ thuộc:** BE-02, BE-05
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseRepository.java`
 
-## Phase 2: Frontend Integration & User Experience
-- [x] **FE-01**: Cập nhật API Client & Types:
-  - Thêm `createVnPayUrl(orderId)` và `verifyVnPayReturn(params)` vào `frontend/src/features/payment/paymentApi.ts` (gửi kèm JWT Bearer token)
-  - Khai báo kiểu dữ liệu phản hồi xác minh trong `types.ts`
-  - **Files:**
-    - `frontend/src/features/payment/paymentApi.ts`
-    - `frontend/src/features/payment/types.ts`
-  - **Phụ thuộc:** BE-04, BE-06
-- [x] **FE-02**: Tích hợp Lựa chọn VNPay vào `PaymentView` & Cô lập Mock:
-  - Thêm phương thức "Cổng VNPAY (QR Code / Thẻ ATM / Visa)" trong `PaymentView.tsx`
-  - Xử lý nút "Thanh toán qua VNPAY": gọi API lấy link và redirect `window.location.href = paymentUrl`
-  - Đóng gói các nút mock thanh toán vào điều kiện `DEV`
-  - **Files:** `frontend/src/features/payment/components/PaymentView.tsx`
-  - **Phụ thuộc:** FE-01
-- [x] **FE-03**: Xây dựng Route & Component Tiếp nhận Kết quả Return URL:
-  - Khai báo route `/payment/vnpay-return` trong `App.tsx`
-  - Tạo page wrapper `pages/VnPayReturnPage.tsx`
-  - Tạo feature component `features/payment/components/VnPayReturnView.tsx`:
-    - Gọi API verify các params từ VNPay
-    - Hiển thị giao diện thành công (Ký quỹ Escrow an toàn)
-    - Hiển thị giao diện đang rà soát an toàn (`UNDER_REVIEW`) khi gặp mã 07
-    - Xử lý tình huống Return đến trước IPN: hiển thị "Đang xác nhận kết quả thanh toán...", tự động polling mỗi 2 giây (tối đa 5 lần) kèm nút kiểm tra lại thủ công
-    - Hiển thị giao diện thất bại kèm nút "Thử lại thanh toán" dẫn về `/checkout/payment?orderId=...`
-  - **Files:**
-    - `frontend/src/pages/VnPayReturnPage.tsx`
-    - `frontend/src/features/payment/components/VnPayReturnView.tsx`
-    - `frontend/src/app/App.tsx`
-  - **Phụ thuộc:** FE-01
+---
 
-## Phase 3: Automated Testing, Edge Cases & Verification
-- [x] **TEST-01**: Mở rộng Test Suite Backend (Unit & Integration Tests Với PostgreSQL/Testcontainers):
-  - **Quy tắc bắt buộc:** Phải sử dụng cơ sở dữ liệu thực (PostgreSQL qua Testcontainers) để kiểm thử khóa bi quan, composite foreign key, check constraints, và partial unique index; tuyệt đối không dùng unit test mock để khẳng định khóa DB hoạt động
-  - Bổ sung 32 kịch bản kiểm thử bắt buộc:
-    1. Kiểm tra `ck_payments_state_fields` cho `UNDER_REVIEW`, chuyển `UNDER_REVIEW -> HELD`, chuyển `UNDER_REVIEW -> REFUND_PENDING` (thỏa mãn khi `held_at IS NULL`)
-    2. Duyệt rà soát giữ nguyên trạng thái attempt (`FLAGGED_SUSPICIOUS`), chỉ ghi `payment_review_audits`; nhận diện khoản thu trước vẫn đúng sau duyệt
-    3. Ghi raw receipt thành công khi sai chữ ký, thiếu/quá dài `vnp_TxnRef`; chữ ký sai -> `(SIGNATURE_INVALID, PROCESSED)`; unlinked -> `(SIGNATURE_VALID_UNLINKED, PROCESSED)`; không sinh event/case
-    4. Ghi receipt hai bước: Sau INSERT 3 cột forensic là NULL; request hợp lệ được điền; ép lỗi điền -> receipt vẫn tồn tại với cột NULL
-    5. Receipt trước khi từ chối (Mục 4.1): Ép lỗi ở bước UPDATE từ chối -> receipt còn `UNVERIFIED/RECEIVED`, request vẫn bị từ chối với mã chuẩn, không chạm bảng nghiệp vụ
-    6. `vnp_amount_text` giữ nguyên chuỗi nhận được (`12abc`, `1e5`, `-100`, rỗng, thập phân, có `+`, `%20`) với query ASCII hợp lệ
-    7. Request chữ ký sai có mã trùng giao dịch thật -> không sinh event/case, không tăng `ipn_count`; `dedup_key` chỉ sinh từ callback đã xác thực
-    8. Query chứa non-ASCII chưa percent-encode -> `(MALFORMED_REQUEST, PROCESSED, NON_ASCII_RAW_QUERY)`, không parse, không chạm bảng nghiệp vụ, trả `97`; query percent-encode (`Thanh%20to%C3%A1n`) xử lý bình thường; ký tự điều khiển/NUL -> `NON_ASCII_RAW_QUERY`
-    9. Emoji ghi thành công, CHECK độ dài đúng cả Java codePoint và DB `char_length`; lone surrogate thay bằng `?`, đặt `sanitized=true`, `NON_ASCII_RAW_QUERY`, không lỗi INSERT
-    10. Query đúng 4096 code points xử lý bình thường; vượt 1 code point -> `(MALFORMED_REQUEST, PROCESSED, RAW_QUERY_TOO_LARGE)`, `truncated=true`, lưu đúng 4096 code points, hash tính trên chuỗi đầy đủ; INSERT ban đầu ở `UNVERIFIED/RECEIVED` với `truncated=true` thành công
-    11. DB CHECK từ chối: UPDATE receipt `truncated=true` hoặc `sanitized=true` sang `LINKED`; receipt có ký tự ngoài ASCII in được ở `LINKED`; INSERT `truncated=false` mà độ dài lưu khác `original_length`; query vượt 8192 code points
-    12. Query ASCII hợp lệ có `%00` trong giá trị giải mã -> receipt ghi được, `vnp_amount_text` NULL, `raw_query_params` giữ `%00`
-    13. Ép lỗi DB sập ở bước INSERT receipt ban đầu -> không xử lý nghiệp vụ, trả HTTP 500 / mã retryable (🧪), không sinh event
-    14. Parser: Giá trị chứa dấu `=` (base64) giữ nguyên; cặp không có `=` có giá trị rỗng; `&&` bỏ qua; tên rỗng -> `EMPTY_PARAM_NAME`; `%C3%28`, `%zz` -> `INVALID_PERCENT_ENCODING`; `vnp%5FAmount` giải mã thành `vnp_Amount`
-    15. Tham số trùng tên (`vnp_Amount` + `vnp_amount`) -> `DUPLICATE_VNP_PARAM:<tên>`; tên đứng riêng sai kiểu chữ (`VNP_Amount`, `vnp_amount`) -> `NONCANONICAL_VNP_PARAM_CASE:<tên>`
-    16. Sai Amount có chữ ký hợp lệ (callback 00/00 hoặc 07) -> Event `REJECTED_AMOUNT_MISMATCH`, receipt `(LINKED, PROCESSED)`, `ipn_count` +1, Order/Payment/Attempt không đổi (không sang `UNDER_REVIEW`, không gán `FLAGGED_SUSPICIOUS`), đúng 1 case `MISMATCH_CHARGE` + 1 alert request, commit trước khi trả mã `04` (không trả `00`); event tồn tại sau khi trả mã (chứng minh không bị rollback)
-    17. Amount không parse được / âm / tràn / không phải bội 100 -> Event `REJECTED_AMOUNT_MISMATCH` với `vnp_amount_raw/vnp_amount` NULL, lưu `vnp_amount_text`; DB từ chối event NULL amount với outcome `APPLIED_*`
-    18. Sai Currency (`vnp_CurrCode=USD`, callback 00/00 hoặc 07) -> Event `REJECTED_CURRENCY_MISMATCH`, tạo case + alert, trả mã `99` (không đổi trạng thái, không gán `FLAGGED_SUSPICIOUS`, không trả `00`); thiếu `vnp_CurrCode` -> dùng currency attempt, không mismatch
-    19. Callback thất bại sai amount -> Event `REJECTED_*`, không tạo case/alert, trạng thái không đổi
-    20. Sai amount trên attempt đã Terminal -> Event `REJECTED_*`, trạng thái attempt không đổi
-    21. Sai amount gửi 3 lần -> 3 receipt, 3 event `REJECTED_*`, đúng 1 case, đúng 1 alert request, `ipn_count = 3 = COUNT(events)`
-    22. Rollback nghiệp vụ (Lựa chọn A) -> receipt ở `PROCESSING_FAILED` hoặc `RETRYABLE_ERROR`, không có event; gửi lại thành công -> đúng 1 event áp dụng, đúng 1 case, 2 receipt liên kết qua `vnp_txn_ref`; gửi lần ba -> thêm 1 event `DUPLICATE_ACKNOWLEDGED`
-    23. N lần gọi lặp thành công muộn sau FAILED gửi 3 lần -> 3 receipt, 3 event (1 `CONFLICT_CHARGE_REQUIRES_RECONCILIATION` + 2 `DUPLICATE_ACKNOWLEDGED`), đúng 1 case `LATE_SUCCESS_ON_FAILED`, đúng 1 alert request, `ipn_count = 3`
-    24. Cùng attempt nhưng khác `vnp_TransactionNo` báo thành công -> event `CONFLICT_CHARGE_REQUIRES_RECONCILIATION`, case riêng theo mã mới (`LATE_SUCCESS_ON_FAILED` nếu attempt vẫn `FAILED`; `DUPLICATE_CHARGE` nếu attempt đã có khoản thu thành công) và alert request khi case mới; lặp lại mã mới -> event `DUPLICATE_ACKNOWLEDGED`, không tạo case/alert thêm; `ipn_count = COUNT(events)` đúng. Thiếu mã -> dùng `NO_TXN_NO` và gom chung case
-    25. KTV duyệt `REJECTED_FRAUD` -> đúng 1 case `source_type=REVIEW_DECISION`, `review_audit_id` có giá trị, `event_id` NULL, kèm 1 alert request; duyệt lần hai trên đơn đã hủy bị chặn bởi kiểm tra trạng thái
-    26. CHECK của Case: DB từ chối: `IPN_EVENT` thiếu `event_id`; có cả `event_id` lẫn `review_audit_id`; `REFUND_PENDING` với `source_type=IPN_EVENT`; case bất thường với `source_type=REVIEW_DECISION`; trùng `dedup_key`
-    27. Quan hệ Receipt <-> Event: DB từ chối INSERT 2 event cùng `receipt_id`; từ chối `receipt_id` NULL hoặc không tồn tại
-    28. Bất biến `ipn_count = COUNT(events của attempt)` đúng trong mọi kịch bản
-    29. Quét receipt kẹt bằng `SELECT ... FOR UPDATE SKIP LOCKED` không gây tranh chấp với transaction IPN đang lock; quét không phát sinh khóa trên Order/Payment/Attempt
-    30. Nhận mã 07 khi đơn đã `PAID_HELD`, `CANCELLED` hoặc quá hạn -> không kéo ngược trạng thái; khi Order và Payment đã cùng `UNDER_REVIEW`, không gọi lại transition methods, giữ dữ liệu review và ghi event cho attempt hiện tại; trạng thái Order/Payment chỉ lệch một bên thì xử lý như vi phạm invariant, không tự sửa
-    31. Security: Endpoint `/api/v1/admin/payments/**` trả 401 khi chưa đăng nhập; 403 khi đăng nhập role Buyer/Seller; 200 khi đăng nhập role ADMIN/KTV
-    32. Ràng buộc toàn vẹn xóa: DB chặn xóa attempt khi đã có IPN event (`ON DELETE RESTRICT`); user ứng dụng không thể chạy `UPDATE` hoặc `DELETE` trên `payment_ipn_events`
-  - **Files:**
-    - `backend/src/test/java/com/oldbutgold/shop/modules/payment/application/PaymentServiceTest.java`
-    - `backend/src/test/java/com/oldbutgold/shop/modules/payment/api/PaymentControllerTest.java`
-  - **Phụ thuộc:** BE-01 đến BE-07
-- [ ] **TEST-02**: Kiểm thử Toàn trình Sandbox (E2E Integration Verification):
-  - Setup ngrok tunnel trỏ vào cổng 8080 và cấu hình vào Merchant Portal của VNPay Sandbox
-  - Đặt hàng mới -> Chọn VNPay -> Thanh toán bằng thẻ test Sandbox (`9704198526191432198`) -> Nhận IPN cập nhật DB -> Trở về trang Return URL hiển thị thành công -> Đơn hàng hiển thị `PAID_HELD` trong danh sách đơn mua
-  - Kiểm tra frontend build không có lỗi TypeScript hay linting (`npm run build`)
-  - **Phụ thuộc:** BE-01 đến BE-06, FE-01 đến FE-03, TEST-01
+## Checkpoint 1: Domain Entities & JPA Mapping
+- [ ] Biên dịch sạch sẽ: `cd backend; .\mvnw.cmd test-compile`
+- [ ] Chạy smoke test H2: `cd backend; .\mvnw.cmd test "-Dtest=ReturnReasonCodeTest,CaseEntitiesSmokeTest"`
+- [ ] Chạy Postgres test (khi bật DB test): `cd backend; .\mvnw.cmd test "-Dtest=CaseEntitiesPostgresTest"`
+
+---
+
+## Giai đoạn 2: Tách Hoàn tất sớm (UC27) & Nghiệp vụ Vòng 1 (UC62 & UC75)
+- [ ] **Task 2.1: Refactor `earlyCompleteOrder` & Tách biệt nút "Đã nhận hàng" (UC27, UC71)**
+  - **Mô tả**:
+    * Nút "Đã nhận hàng": Chỉ ghi nhận `orders.received_at = now()`, KHÔNG đổi trạng thái giải ngân, KHÔNG đóng quyền trả hàng, KHÔNG gán lại `valid_delivered_at`.
+    * Nút "Hoàn tất sớm" (`earlyCompleteOrder`): Bắt buộc Người mua đồng thuận cảnh báo từ bỏ quyền trả hàng (`warningConsent`), gọi hàm DB `og_early_complete_order`. Hàm này CHỈ ghi nhận mốc `early_completed_at` và sự kiện `EARLY_COMPLETION_ACCEPTED`, KHÔNG trực tiếp đổi trạng thái giải ngân (UC71 3a).
+    * Tiến trình giải ngân cho Người bán (`disburseSellerFunds`): Là bước xử lý riêng, chỉ giải phóng tiền ký quỹ (`RELEASED`) và chuyển đơn sang `COMPLETED` khi đủ 3 điều kiện: (1) `valid_delivered_at` có giá trị; (2) Hết 3 ngày từ `valid_delivered_at` HOẶC có mốc `early_completed_at`; (3) Không có hồ sơ ngăn (`og_order_has_blocking_case = false`) và không có `money_holds` chưa đóng (BR-UC71-04).
+  - **Tiêu chí chấp nhận**:
+    - [ ] Chặn Hoàn tất sớm nếu đơn hàng đang có hồ sơ mở (`og_order_has_blocking_case(orderId) == true`).
+    - [ ] Khi Hoàn tất sớm thành công: Chỉ ghi nhận mốc `early_completed_at`, tạo `order_events`, không giải ngân ngay trong hàm này.
+    - [ ] Tiến trình giải ngân kiểm tra đủ 3 điều kiện theo BR-UC71-04 trước khi giải ngân `RELEASED` và đóng đơn `COMPLETED`.
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/commerce/application/OrderManagementService.java`
+
+- [ ] **Task 2.2: Triển khai Mở yêu cầu trả hàng đủ 6 điều kiện (`createReturnRequest` - UC62)**
+  - **Mô tả**: Kiểm tra đủ 6 điều kiện bắt buộc, khởi tạo hồ sơ `cases` ở trạng thái `OPEN` và Round 1 `RETURN_APPROVAL`.
+  - **Tiêu chí chấp nhận**:
+    - [ ] Kiểm tra đủ 6 điều kiện: `DELIVERED`, có `valid_delivered_at`, `return_allowed == true`, trong hạn 3 ngày từ `valid_delivered_at`, chưa Hoàn tất sớm, tiền chưa giải ngân cuối, không có hồ sơ mở.
+    - [ ] Validate 3 lý do chuẩn: `CHANGE_MIND`, `NOT_AS_DESCRIBED`, `DAMAGED_OR_DEFECTIVE`.
+    - [ ] Validate giới hạn bằng chứng: Tối đa 5 ảnh, 2 video <= 60 giây.
+    - [ ] Tiền ký quỹ bị đóng băng (trigger `trg_return_case_holds` tự động tạo `money_holds`).
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseDtos.java`
+
+- [ ] **Task 2.3: Triển khai Người bán phản hồi & KTV phân xử Vòng 1 (UC62 & UC75)**
+  - **Mô tả**:
+    * KTV thấy hồ sơ ngay khi `OPEN`, có thể chủ động duyệt `APPROVE_RETURN` hoặc bác `REJECT_RETURN` (kèm lý do).
+    * Người bán có 2 lựa chọn: `[Chấp thuận trả]` (`APPROVE_RETURN`) hoặc `[Không đồng ý, chuyển KTV]` (`SELLER_DECLINED`).
+    * Xử lý xung đột đua quyết định (first-write wins).
+  - **Tiêu chí chấp nhận**:
+    - [ ] Người bán `APPROVE_RETURN` -> Case chuyển `RETURN_APPROVED` (**chưa hoàn tiền**, chờ gửi hàng trả).
+    - [ ] Người bán `SELLER_DECLINED` -> Case chuyển `REVIEWING`, hạn KTV 48h tính từ khi hồ sơ đủ nội dung.
+    - [ ] KTV duyệt `APPROVE_RETURN` hoặc bác `REJECT_RETURN` (bắt buộc nhập lý do).
+    - [ ] KTV bác (`REJECT_RETURN`) -> Hồ sơ chuyển `REJECTED`, **không giải ngân ngay** mà chờ đủ điều kiện UC71 (hết 3 ngày hoặc Hoàn tất sớm).
+    - [ ] Quá hạn KTV 48h: Ghi nhận event `ESCALATED`, không tự động duyệt/hoàn tiền.
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+
+- [ ] **Task 2.4: Triển khai Người mua rút yêu cầu trả hàng (`withdrawReturnRequest` - UC62 7c)**
+  - **Mô tả**: Người mua chủ động rút yêu cầu trước khi gửi hàng trả.
+  - **Tiêu chí chấp nhận**:
+    - [ ] Chỉ cho rút khi hồ sơ ở `OPEN`, `REVIEWING`, `RETURN_APPROVED` và chưa bàn giao bưu tá / chưa gửi hàng.
+    - [ ] Đóng lệnh giữ tiền (`money_holds.closed_at = now()`), giải phóng cản trở (`has_blocking_case = false`), tiền tiếp tục xử lý giải ngân theo điều kiện UC71.
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+
+---
+
+## Giai đoạn 3: Vận chuyển Trả hàng (UC33) & Nghiệp vụ Vòng 2 (UC63 & UC75)
+- [ ] **Task 3.1: Xử lý Vận chuyển hàng trả & Ghi nhận nhận lại hàng (UC33)**
+  - **Mô tả**: Theo dõi vận đơn trả (`shipments.leg = 'RETURN'`), ghi nhận `valid_returned_at` từ sự kiện vận đơn hoặc OTP/bàn giao hai bên, mở hạn 2 ngày phản hồi của Người bán.
+  - **Tiêu chí chấp nhận**:
+    - [ ] Hạn gửi hàng trả: Hết 3 ngày hoặc 3 lần lấy thất bại. Lỗi ĐVVC mô phỏng không tự quy kết lỗi Người mua.
+    - [ ] Ghi nhận `valid_returned_at` từ webhook giao thành công chiều về hoặc qua endpoint xác nhận bàn giao trực tiếp hai bên (`og_confirm_direct_handover`).
+    - [ ] Tự động gán thời hạn phản hồi: `seller_response_due_at = valid_returned_at + 2 days`.
+    - [ ] Chuyển trạng thái hồ sơ sang `POST_RETURN`, khởi tạo Round 2 với `stage = 'POST_RETURN_RESOLUTION'`.
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+
+- [ ] **Task 3.2: Nghiệp vụ Vòng 2 của Người bán (UC63 & UC83)**
+  - **Mô tả**: Người bán kiểm tra hàng thực tế với 2 lựa chọn:
+    1. `[Hàng đúng, đồng ý hoàn tiền]`: Gọi endpoint `agree-refund` -> kích hoạt hoàn tiền ngay (UC83).
+    2. `[Hàng có vấn đề, gửi đề nghị xét lại]`: Gọi endpoint `damage-exemption` (`VALID_DAMAGE_REQUEST` - hỗ trợ hàng hư hỏng nặng HOẶC tráo hàng, sai hàng, thiếu hàng).
+  - **Tiêu chí chấp nhận**:
+    - [ ] Người bán đồng ý hoàn tiền -> Case chuyển sang giải quyết hoàn tiền theo UC83.
+    - [ ] Người bán gửi đề nghị xét lại kèm <= 5 ảnh, 2 video <= 60s -> Tiếp tục giữ tiền, chuyển KTV thụ lý Vòng 2 (SLA 48h).
+    - [ ] Người bán không được tự quyết từ chối hoàn tiền; chỉ KTV mới có thẩm quyền miễn hoàn.
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+
+- [ ] **Task 3.3: Hệ thống Workers tự động định kỳ**
+  - **Mô tả**: Worker quét quá hạn 2 ngày tự hoàn tiền (`reconcileOverdueReturnResponses`) và Worker tự giải ngân sau 3 ngày cho đơn `DELIVERED` đủ điều kiện UC71 (`reconcileOverdueDeliveries`).
+  - **Tiêu chí chấp nhận**:
+    - [ ] Hồ sơ `POST_RETURN` quá hạn 2 ngày không có đề nghị hợp lệ -> Tự động ra quyết định `SYSTEM_TIMEOUT` + `FULL_GOODS_REFUND` hoàn 100% tiền hàng.
+    - [ ] Đơn `DELIVERED` quá hạn 3 ngày từ `valid_delivered_at`, không có hồ sơ mở -> Tự động giải ngân cho Người bán (áp dụng cho cả đơn `return_allowed = false`).
+    - [ ] Đảm bảo tính idempotent khi chạy lại nhiều lần.
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnReconciliationScheduler.java`
+
+- [ ] **Task 3.4: KTV phân xử Vòng 2 (UC75)**
+  - **Mô tả**: KTV quyết định miễn hoàn tiền (`EXEMPT_GOODS_REFUND`) hoặc bác đề nghị để hoàn tiền (`FULL_GOODS_REFUND`).
+  - **Tiêu chí chấp nhận**:
+    - [ ] Chỉ KTV mới được quyền quyết định miễn hoàn khi có căn cứ xác thực (hàng hỏng nặng hoặc sai khác hàng đã giao).
+    - [ ] Chấp thuận miễn hoàn (`EXEMPT_GOODS_REFUND`): Tiền hàng giải ngân cho Người bán theo BR-UC71-01/05 (tiền hàng thực trả + sàn tài trợ voucher/xu cho hàng; không trừ phí sàn bán; không gồm ship/phí đăng), không hoàn tiền/không trả xu cho Người mua.
+    - [ ] Bác đề nghị (`FULL_GOODS_REFUND`): Kích hoạt hoàn 100% tiền hàng thực trả cho Người mua theo UC83.
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+
+---
+
+## Giai đoạn 4: Hạch toán Hoàn tiền Chuẩn xác (UC83, UC71, UC22)
+- [ ] **Task 4.1: Triển khai Service tính toán hoàn tiền (`RefundSettlementService`)**
+  - **Mô tả**: Tính tiền mặt hoàn = tiền hàng thực trả sau voucher và xu phân bổ cho hàng. Hoàn 100% xu đã dùng của đơn. Không hoàn phí ship tiền mặt, không hoàn phí đăng tin, không cấp lại voucher. Xử lý đơn 0đ không tạo giao dịch hoàn tiền 0đ.
+  - **Tiêu chí chấp nhận**:
+    - [ ] Trạng thái thanh toán chuyển `REFUND_PENDING` -> `REFUNDED` khi dịch vụ thanh toán xác nhận thành công.
+    - [ ] Tái sử dụng bảng `og_compat.settlement_operations` để ghi nhận giao dịch hoàn/giải ngân an toàn, idempotent qua `command_key`.
+    - [ ] Khóa tài nguyên theo đúng thứ tự: `OrderEntity` (1) -> `PaymentEntity` (2) -> `CaseEntity` (3).
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/application/RefundSettlementService.java`
+
+---
+
+## Checkpoint 2: Kiểm thử Tự động Backend (27 Test Cases)
+- [ ] Viết bộ test `ReturnCaseServiceTest` và `RefundSettlementTest` phủ đủ 27 test cases trong Test Matrix:
+  - [ ] Test chặn khi đơn chưa `DELIVERED`, đơn `return_allowed = false`, quá 3 ngày, hoặc đã hoàn tất sớm.
+  - [ ] Test chặn video > 60s hoặc > 5 ảnh.
+  - [ ] Test giữ tiền ký quỹ và chặn hoàn tất sớm khi có hồ sơ mở.
+  - [ ] Test luồng Vòng 1: Người bán duyệt, Người bán từ chối chuyển KTV, KTV bác kèm lý do không giải ngân ngay.
+  - [ ] Test đua quyết định Vòng 1: first-write wins.
+  - [ ] Test rút yêu cầu trả hàng trước khi gửi hàng.
+  - [ ] Test luồng Vòng 2: Hạn 2 ngày, auto-refund khi quá hạn, đề nghị miễn hoàn do hàng hỏng/tráo hàng, KTV phán quyết.
+  - [ ] Test công thức hoàn tiền: Đơn 0 đồng (Ví dụ UC83-07), đơn có ship tiền mặt (voucher hàng), đơn có voucher ship, nhánh `EXEMPT` không trả xu.
+  - [ ] Test worker idempotent không hoàn trùng.
+- [ ] Chạy test xanh 100%: `cd backend; .\mvnw.cmd test -Dtest=ReturnCaseServiceTest,RefundSettlementTest`
+
+---
+
+## Giai đoạn 5: REST API Controllers & DTOs
+- [ ] **Task 5.1: Controller cho Người mua & Người bán (`ReturnCaseController`)**
+  - **Endpoints**:
+    - `POST /api/v1/commerce/orders/{orderId}/early-complete` (Hoàn tất sớm có popup cảnh báo)
+    - `POST /api/v1/commerce/orders/{orderId}/confirm-received` (Xác nhận nhận hàng, không giải ngân)
+    - `POST /api/v1/commerce/orders/{orderId}/return-request` (Mở yêu cầu trả hàng)
+    - `GET /api/v1/commerce/orders/{orderId}/return-case` (Xem chi tiết hồ sơ trả hàng)
+    - `POST /api/v1/commerce/orders/{orderId}/return-case/withdraw` (Người mua rút yêu cầu trước khi gửi hàng)
+    - `POST /api/v1/commerce/orders/{orderId}/return-case/seller-response` (Người bán phản hồi Vòng 1)
+    - `POST /api/v1/commerce/orders/{orderId}/return-shipment/confirm-direct-handover` (Bàn giao trực tiếp hai bên)
+    - `POST /api/v1/commerce/orders/{orderId}/return-case/agree-refund` (Người bán đồng ý hoàn tiền Vòng 2)
+    - `POST /api/v1/commerce/orders/{orderId}/return-case/damage-exemption` (Người bán đề nghị xét lại Vòng 2)
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/commerce/api/ReturnCaseController.java`
+
+- [ ] **Task 5.2: Controller cho KTV (`KtvCaseController`)**
+  - **Endpoints**:
+    - `GET /api/v1/ktv/cases` (Queue hồ sơ KTV `OPEN` & `REVIEWING`, cảnh báo SLA 48h)
+    - `POST /api/v1/ktv/cases/{caseId}/decide-round1` (KTV phán quyết Vòng 1)
+    - `POST /api/v1/ktv/cases/{caseId}/decide-round2` (KTV phán quyết Vòng 2)
+    - `POST /api/v1/ktv/cases/{caseId}/request-evidence` (KTV yêu cầu nộp thêm bằng chứng)
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/api/KtvCaseController.java`
+
+- [ ] **Task 5.3: Controller cho Admin Giám sát Tranh chấp (`AdminDisputeController`)**
+  - **Endpoints**:
+    - `GET /api/v1/admin/cases/escalated` (Danh sách các hồ sơ bị trễ hạn SLA 48h của KTV)
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/api/AdminDisputeController.java`
+
+---
+
+## Giai đoạn 6: Giao diện Người dùng (Frontend)
+- [ ] **Task 6.1: Giao diện Người mua (`BuyerOrderDetailView.tsx` & Modals)**
+  - **Mô tả**: Tách biệt nút "Đã nhận hàng" và nút "Hoàn tất sớm (có popup cảnh báo)", nút "Yêu cầu trả hàng" (kiểm tra 6 điều kiện), nút "Rút yêu cầu", Modal tải bằng chứng, Timeline hồ sơ nhiều vòng.
+  - **Files**:
+    - `frontend/src/features/orders/components/BuyerOrderDetailView.tsx`
+    - `frontend/src/features/orders/components/CreateReturnRequestModal.tsx`
+    - `frontend/src/features/orders/components/EarlyCompleteModal.tsx`
+
+- [ ] **Task 6.2: Giao diện Người bán (`SellerOrderDetailView.tsx` & `SellerReturnsView.tsx`)**
+  - **Mô tả**: Khối hồ sơ trả hàng ở Vòng 1, màn hình "Hàng trả" theo dõi vận đơn trả (UC33), bộ đếm ngược 2 ngày và 2 lựa chọn Vòng 2: `[Hàng đúng, đồng ý hoàn tiền]` và `[Hàng có vấn đề, gửi đề nghị xét lại]`.
+  - **Files**:
+    - `frontend/src/features/orders/components/SellerOrderDetailView.tsx`
+    - `frontend/src/features/orders/components/SellerReturnsView.tsx`
+
+- [ ] **Task 6.3: Giao diện KTV Workbench (`KtvCasesPage.tsx`)**
+  - **Mô tả**: Hàng đợi hồ sơ `OPEN` và `REVIEWING`, cảnh báo SLA 48h màu đỏ, giao diện đối chiếu bằng chứng 2 bên, form nhập phán quyết.
+  - **Files**:
+    - `frontend/src/features/trustsafety/KtvCasesPage.tsx`
+
+- [ ] **Task 6.4: Giao diện Admin Giám sát Tranh chấp (`AdminDisputesView.tsx`)**
+  - **Mô tả**: Danh sách các hồ sơ bị `ESCALATED` do KTV quá hạn 48h để Quản trị viên can thiệp xử lý.
+  - **Files**:
+    - `frontend/src/features/admin/AdminDisputesView.tsx`
+
+---
+
+## Checkpoint 3: Kiểm thử Tích hợp & Nghiệm thu
+- [ ] Frontend build thành công: `npm run build` không lỗi TypeScript.
+- [ ] Backend test xanh 100%: 27 test cases pass.
+- [ ] E2E Manual Test đầy đủ luồng Người mua -> Người bán -> Vận chuyển trả -> Người bán Vòng 2 -> KTV -> Hoàn tiền.
+
+---
+
+## Ghi chú Các Tính năng Hoãn (Deferred Features)
+1. **UC40, UC48, UC52 (Push Notifications / WebSockets)**:
+   - Hoãn triển khai socket thời gian thực do yêu cầu hạ tầng riêng. Toàn bộ sự kiện thông báo được ghi vào `case_events` và bảng thông báo hệ thống; giao diện hiển thị trạng thái hồ sơ trực tiếp trong chi tiết đơn hàng.
+2. **UC64, UC76 (Khiếu nại Lỗi Hệ thống / Thu tiền ngoài đơn trả hàng)**:
+   - Hoãn do thuộc phân hệ khiếu nại tài chính độc lập, không gắn với vòng đời đơn hàng vật lý.
+3. **Tích hợp Tự động API Bưu tá GHN lấy hàng chiều về**:
+   - Sử dụng cơ chế mô phỏng sự kiện vận chuyển theo đúng kịch bản sandbox của đồ án.
