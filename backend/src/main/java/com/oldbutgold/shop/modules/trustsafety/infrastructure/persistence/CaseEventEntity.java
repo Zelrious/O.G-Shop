@@ -19,15 +19,14 @@ import java.util.UUID;
 @Table(name = "case_events", schema = "og_compat")
 public class CaseEventEntity {
 
-    public static final String TYPE_RETURN_REQUESTED = "RETURN_REQUESTED";
-    public static final String TYPE_ROUND_DECIDED = "ROUND_DECIDED";
-    public static final String TYPE_EVIDENCE_SUBMITTED = "EVIDENCE_SUBMITTED";
-    public static final String TYPE_RETURN_SHIPPED = "RETURN_SHIPPED";
-    public static final String TYPE_RETURN_DELIVERED = "RETURN_DELIVERED";
-    public static final String TYPE_DAMAGE_EXEMPTION_REQUESTED = "DAMAGE_EXEMPTION_REQUESTED";
+    public static final String TYPE_SUBMITTED = "SUBMITTED";
+    public static final String TYPE_SUPPLEMENTED = "SUPPLEMENTED";
+    public static final String TYPE_VALID_DAMAGE_REQUEST = "VALID_DAMAGE_REQUEST";
     public static final String TYPE_ESCALATED = "ESCALATED";
-    public static final String TYPE_REQUEST_WITHDRAWN = "REQUEST_WITHDRAWN";
-    public static final String TYPE_CASE_CLOSED = "CASE_CLOSED";
+    public static final String TYPE_ASSIGNED = "ASSIGNED";
+    public static final String TYPE_COMPENSATION = "COMPENSATION";
+    public static final String TYPE_DEADLINE_EXTENSION = "DEADLINE_EXTENSION";
+    public static final String TYPE_CLEANUP = "CLEANUP";
 
     @Id
     @Column(name = "event_id", nullable = false)

@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Smoke test JPQL cho 5 JPA Entity thuộc phân hệ Trả hàng & Tranh chấp nhiều vòng.
  * <p>
- * <b>LƯU Ý QUAN TRỌNG:</b> Test này chạy trên môi trường H2 In-Memory với {@code ddl-auto=create-drop}.
+ * <b>LƯU Ý QUAN TRỌNG:</b> Test này chạy trên môi trường H2 In-Memory với {@code ddl-auto=update}.
  * Mục đích chỉ là kiểm tra biên dịch (compilation), khởi tạo Entity, quan hệ mapping JPQL và cú pháp JPA.
  * Test này <b>KHÔNG</b> kiểm tra hoặc chứng minh tính tương thích với database schema thật,
  * view {@code og_compat}, hay trigger PostgreSQL (xem Task 1.1b / {@code CaseEntitiesPostgresTest} cho kiểm thử schema thật).
@@ -25,14 +25,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
-@DisplayName("Smoke test JPQL cho 5 Entity Trả hàng & Tranh chấp (H2/In-Memory)")
+@DisplayName("CaseEntitiesSmokeTest - JPQL mapping and compilation smoke test on H2")
 class CaseEntitiesSmokeTest {
 
     @Autowired
     private EntityManager entityManager;
 
     @Test
-    @DisplayName("Smoke JPQL: Khởi tạo và SELECT được từ cả 5 Entity (H2 In-Memory)")
+    @DisplayName("Should successfully execute JPQL SELECT across all 5 case entities")
     void testSelectEntitiesMapping() {
         // Kiểm tra câu lệnh SELECT JPQL cho cả 5 Entity
         List<CaseEntity> cases = entityManager.createQuery("SELECT c FROM CaseEntity c", CaseEntity.class)
@@ -62,7 +62,7 @@ class CaseEntitiesSmokeTest {
     }
 
     @Test
-    @DisplayName("Smoke JPQL: Persist hồ sơ mẫu qua cả 5 Entity, flush kiểm tra quan hệ và rollback")
+    @DisplayName("Should persist and flush complete sample case graph then rollback")
     void testInsertSampleCaseAndRollback() {
         // 1. Tạo CaseEntity
         CaseEntity sampleCase = new CaseEntity(
@@ -126,7 +126,7 @@ class CaseEntitiesSmokeTest {
                 round.getId(),
                 2001L,
                 3001L,
-                CaseEventEntity.TYPE_RETURN_REQUESTED,
+                CaseEventEntity.TYPE_SUBMITTED,
                 "Mở hồ sơ yêu cầu trả hàng",
                 "{\"client_ip\":\"127.0.0.1\"}",
                 "CMD_TEST_EVENT_" + UUID.randomUUID()

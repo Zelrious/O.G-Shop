@@ -20,6 +20,7 @@ public class CaseEvidenceEntity {
 
     public static final String MEDIA_IMAGE = "IMAGE";
     public static final String MEDIA_VIDEO = "VIDEO";
+    public static final String MEDIA_TEXT = "TEXT";
 
     @Id
     @Column(name = "evidence_id", nullable = false)
@@ -43,6 +44,7 @@ public class CaseEvidenceEntity {
     @Column(name = "text_content", columnDefinition = "text")
     private String textContent;
 
+    @org.hibernate.annotations.JdbcTypeCode(java.sql.Types.CHAR)
     @Column(name = "content_digest", length = 64)
     private String contentDigest;
 

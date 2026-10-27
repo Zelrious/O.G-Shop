@@ -11,8 +11,9 @@
     - [x] Tạo `CaseEntity`, `CaseRoundEntity`, `CaseDecisionEntity`, `CaseEvidenceEntity`, `CaseEventEntity`, `ReturnReasonCode`.
     - [x] `CaseEntity` hỗ trợ các trạng thái: `OPEN`, `REVIEWING`, `RETURN_APPROVED`, `RETURNING`, `POST_RETURN`, `CLOSED`, `REJECTED`.
     - [x] `CaseRoundEntity` hỗ trợ stages: `RETURN_APPROVAL`, `POST_RETURN_RESOLUTION`.
-    - [x] `CaseDecisionEntity` hỗ trợ outcomes: `APPROVE_RETURN`, `REJECT_RETURN`, `SELLER_DECLINED`, `FULL_GOODS_REFUND`, `EXEMPT_GOODS_REFUND`, `SYSTEM_TIMEOUT`.
-    - [x] `CaseEvidenceEntity` hỗ trợ media type `IMAGE`, `VIDEO` (<= 60s, <= 50MB) và cơ chế Append-only với `submission_no`.
+    - [x] `CaseDecisionEntity` hỗ trợ outcomes: `APPROVE_RETURN`, `REJECT_RETURN`, `SELLER_DECLINED`, `FULL_GOODS_REFUND`, `EXEMPT_GOODS_REFUND`, `SYSTEM_RESOLVED`.
+    - [x] `CaseEvidenceEntity` hỗ trợ media types: `IMAGE`, `VIDEO` (<= 60s, <= 50MB), `TEXT` (khớp DB CHECK `case_evidence_media_type_check`).
+    - [x] `CaseEventEntity` hỗ trợ đúng 8 event types theo DB CHECK `case_events_event_type_check`: `SUBMITTED`, `SUPPLEMENTED`, `VALID_DAMAGE_REQUEST`, `ESCALATED`, `ASSIGNED`, `COMPENSATION`, `DEADLINE_EXTENSION`, `CLEANUP`.
     - [x] `ReturnReasonCode` enum và parser tiền tố chuẩn hóa được kiểm thử đơn vị thành công (9 tests pass).
     - [x] `CaseEntitiesSmokeTest`: Smoke test JPQL kiểm tra biên dịch và khởi tạo entity trên H2 (chỉ kiểm tra cú pháp JPA & quan hệ, không kiểm tra schema thật hay trigger DB).
   - **Files**:
@@ -25,15 +26,16 @@
     - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/ReturnReasonCodeTest.java`
     - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseEntitiesSmokeTest.java`
 
-- [ ] **Task 1.1b: Kiểm thử tích hợp PostgreSQL thật (og_compat schema & triggers)**
-  - **Mô tả**: Kiểm thử tích hợp thực tế trên PostgreSQL theo mẫu `ShipmentPostgresTest` / `VouchersPostgresTest`, sử dụng `PostgresTestSafetyGuard` và `@EnabledIfEnvironmentVariable(named = "OGSHOP_TEST_DB_URL", matches = ".+")`.
+- [x] **Task 1.1b: Kiểm thử tích hợp PostgreSQL thật (og_compat schema & triggers)**
+  - **Mô tả**: Kiểm thử tích hợp thực tế trên PostgreSQL theo mẫu `ShipmentPostgresTest` / `VouchersPostgresTest`, sử dụng `PostgresTestSafetyGuard` và `@EnabledIfEnvironmentVariable(named = "OGSHOP_TEST_DB_URL", matches = ".+")`. Cổng DB container thực tế là 55432 (URL: `jdbc:postgresql://127.0.0.1:55432/og_shop_test`).
   - **Tiêu chí chấp nhận**:
-    - [ ] Kết nối DB test an toàn biệt lập qua `PostgresTestSafetyGuard` (`OGSHOP_TEST_DB_ISOLATED=true`, `OGSHOP_TEST_DB_URL`).
-    - [ ] Đọc SELECT thành công từ cả 5 view: `og_compat.cases`, `og_compat.case_rounds`, `og_compat.case_decisions`, `og_compat.case_evidences`, `og_compat.case_events`.
-    - [ ] Insert đơn hàng fixture thỏa 6 điều kiện của `og_guard_return_case` (đơn `DELIVERED`, có `valid_delivered_at`, trong hạn 3 ngày, `return_allowed = true`, chưa hoàn tất sớm `early_completed_at IS NULL`, tiền chưa giải ngân cuối `escrow_state = 'HELD'`) và có bản ghi `order_fund_components`.
-    - [ ] Insert hồ sơ mẫu `CaseEntity` và xác nhận trigger `trg_return_case_holds` tự động tạo bản ghi `money_holds` cho hồ sơ.
-    - [ ] Ánh xạ khớp hoàn toàn database schema thật `og_compat` (chỉ tích mục này sau khi Task 1.1b pass).
-    - [ ] Dọn dẹp dữ liệu fixture hoặc tự động rollback trong transaction, không để lại dữ liệu rác.
+    - [x] Kết nối DB test an toàn biệt lập qua `PostgresTestSafetyGuard` (`OGSHOP_TEST_DB_ISOLATED=true`, `OGSHOP_TEST_DB_URL`).
+    - [x] Đọc SELECT thành công từ cả 5 view: `og_compat.cases`, `og_compat.case_rounds`, `og_compat.case_decisions`, `og_compat.case_evidence`, `og_compat.case_events`.
+    - [x] Insert đơn hàng fixture thỏa các điều kiện của `og_guard_return_case` (`workflow_model = 'UC83'`, `buyer_id = buyer`, `return_allowed = true`, `valid_delivered_at` trong hạn 3 ngày, `early_completed_at IS NULL`) và có bản ghi `order_fund_components` (`GOODS_CASH`).
+    - [x] Insert hồ sơ mẫu `CaseEntity` và xác nhận trigger `trg_return_case_holds` tự động tạo bản ghi `money_holds` cho hồ sơ.
+    - [x] 7 Test âm kiểm chứng đúng ngoại lệ SQLSTATE `23514` của DB trigger: (1) state != OPEN; (2) workflow_model != UC83; (3) created_by != buyer_id; (4) return_allowed = false; (5) valid_delivered_at IS NULL; (6) early_completed_at IS NOT NULL; (7) quá hạn 3 ngày.
+    - [x] Ánh xạ khớp hoàn toàn database schema thật `og_compat` (chỉ tích mục này sau khi Task 1.1b pass).
+    - [x] Dọn dẹp dữ liệu fixture hoặc tự động rollback trong transaction, không để lại dữ liệu rác.
   - **Files**:
     - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseEntitiesPostgresTest.java`
 

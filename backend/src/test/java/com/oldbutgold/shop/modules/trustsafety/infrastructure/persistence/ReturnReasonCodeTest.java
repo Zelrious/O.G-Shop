@@ -5,10 +5,11 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@DisplayName("ReturnReasonCodeTest - Return reason prefix parser and formatter unit tests")
 class ReturnReasonCodeTest {
 
     @Test
-    @DisplayName("Parse tiền tố hợp lệ cho cả 3 mã lý do chuẩn hóa")
+    @DisplayName("Should successfully parse valid prefixes for all 3 standardized reason codes")
     void testParseValidStandardReasons() {
         var r1 = ReturnReasonCode.parse("[CHANGE_MIND] Người mua đổi ý, chưa mở hộp");
         assertEquals(ReturnReasonCode.CHANGE_MIND, r1.reasonCode());
@@ -27,7 +28,7 @@ class ReturnReasonCodeTest {
     }
 
     @Test
-    @DisplayName("Parse tiền tố không có khoảng trắng sau dấu đóng ngoặc vuông")
+    @DisplayName("Should parse prefix without whitespace after closing square bracket")
     void testParseWithoutSpaceAfterBracket() {
         var result = ReturnReasonCode.parse("[CHANGE_MIND]Không ưng ý");
         assertEquals(ReturnReasonCode.CHANGE_MIND, result.reasonCode());
@@ -35,7 +36,7 @@ class ReturnReasonCodeTest {
     }
 
     @Test
-    @DisplayName("Parse tiền tố khi không có văn bản chi tiết đi kèm")
+    @DisplayName("Should parse prefix when no detail description is provided")
     void testParseWithoutDetail() {
         var result = ReturnReasonCode.parse("[DAMAGED_OR_DEFECTIVE]");
         assertEquals(ReturnReasonCode.DAMAGED_OR_DEFECTIVE, result.reasonCode());
@@ -43,7 +44,7 @@ class ReturnReasonCodeTest {
     }
 
     @Test
-    @DisplayName("Parse có khoảng trắng dư thừa ở đầu và cuối chuỗi")
+    @DisplayName("Should parse prefix with extra leading and trailing whitespace")
     void testParseWithExtraWhitespace() {
         var result = ReturnReasonCode.parse("   [NOT_AS_DESCRIBED]   Thiếu phụ kiện sạc đi kèm   ");
         assertEquals(ReturnReasonCode.NOT_AS_DESCRIBED, result.reasonCode());
@@ -51,7 +52,7 @@ class ReturnReasonCodeTest {
     }
 
     @Test
-    @DisplayName("Parse chuỗi văn bản thuần túy không có tiền tố (backward compatibility)")
+    @DisplayName("Should parse plain text without prefix as legacy backward compatible description")
     void testParsePlainLegacyText() {
         var result = ReturnReasonCode.parse("Tôi muốn trả hàng vì lý do cá nhân");
         assertNull(result.reasonCode());
@@ -60,7 +61,7 @@ class ReturnReasonCodeTest {
     }
 
     @Test
-    @DisplayName("Parse chuỗi có tag không thuộc danh mục chuẩn")
+    @DisplayName("Should parse unknown tag as plain text without standard reason code")
     void testParseUnknownTag() {
         var result = ReturnReasonCode.parse("[DELIVERY_ISSUE] Giao trễ 3 ngày");
         assertNull(result.reasonCode());
@@ -69,7 +70,7 @@ class ReturnReasonCodeTest {
     }
 
     @Test
-    @DisplayName("Parse chuỗi null hoặc rỗng")
+    @DisplayName("Should handle null or blank input gracefully")
     void testParseNullOrBlank() {
         var rNull = ReturnReasonCode.parse(null);
         assertNull(rNull.reasonCode());
@@ -81,7 +82,7 @@ class ReturnReasonCodeTest {
     }
 
     @Test
-    @DisplayName("Format tiền tố chuẩn từ Enum và văn bản chi tiết")
+    @DisplayName("Should format prefix correctly from Enum and detail text")
     void testFormat() {
         String formatted = ReturnReasonCode.format(ReturnReasonCode.CHANGE_MIND, "Đổi ý cá nhân");
         assertEquals("[CHANGE_MIND] Đổi ý cá nhân", formatted);
@@ -94,7 +95,7 @@ class ReturnReasonCodeTest {
     }
 
     @Test
-    @DisplayName("Tích hợp CaseEntity với getter/setter lý do chuẩn hóa")
+    @DisplayName("Should integrate with CaseEntity helper methods correctly")
     void testCaseEntityIntegration() {
         CaseEntity caseEntity = new CaseEntity(
                 CaseEntity.TYPE_RETURN,
