@@ -11,9 +11,11 @@ import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.Shipme
 import com.oldbutgold.shop.modules.identity.application.IdentityCommerceFacade;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.PaymentEntity;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.PaymentRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
@@ -49,6 +51,8 @@ class OrderManagementServiceTest {
     private FulfillmentSimulationGuard simulationGuard;
     private TransactionTemplate transactionTemplate;
     private Clock clock;
+    private JdbcTemplate jdbcTemplate;
+    private EntityManager entityManager;
 
     private OrderManagementService service;
     private Instant now;
@@ -68,6 +72,8 @@ class OrderManagementServiceTest {
         fulfillmentStateService = mock(FulfillmentStateService.class);
         simulationGuard = mock(FulfillmentSimulationGuard.class);
         transactionTemplate = mock(TransactionTemplate.class);
+        jdbcTemplate = mock(JdbcTemplate.class);
+        entityManager = mock(EntityManager.class);
 
         when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
             TransactionCallback<?> callback = invocation.getArgument(0);
@@ -89,7 +95,9 @@ class OrderManagementServiceTest {
                 fulfillmentStateService,
                 simulationGuard,
                 transactionTemplate,
-                clock
+                clock,
+                jdbcTemplate,
+                entityManager
         );
 
         order = new OrderEntity(
@@ -522,9 +530,185 @@ class OrderManagementServiceTest {
         inOrder.verify(paymentRepository).findByOrderIdForUpdate(1L);
     }
 
+    @Test
+    void confirmReceived_success_setsReceivedAtAndKeepsDeliveredWithoutDisbursement() {
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+
+        OrderManagementDtos.OrderActionResponse response = service.confirmReceived(100L, 1L);
+
+        assertThat(response.orderId()).isEqualTo(1L);
+        assertThat(response.status()).isEqualTo(OrderEntity.STATUS_DELIVERED);
+        assertThat(order.getStatus()).isEqualTo(OrderEntity.STATUS_DELIVERED);
+        assertThat(order.getReceivedAt()).isEqualTo(now);
+        assertThat(order.getCompletedAt()).isNull();
+
+        verify(orderRepository).save(order);
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    void confirmReceived_idempotent_whenAlreadyReceived_doesNotOverwrite() {
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+
+        Instant earlier = now.minus(Duration.ofHours(2));
+        order.setReceivedAt(earlier);
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+
+        OrderManagementDtos.OrderActionResponse response = service.confirmReceived(100L, 1L);
+
+        assertThat(response.orderId()).isEqualTo(1L);
+        assertThat(response.status()).isEqualTo(OrderEntity.STATUS_DELIVERED);
+        assertThat(order.getReceivedAt()).isEqualTo(earlier);
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void confirmReceived_orderNotDelivered_throwsIllegalStateException() {
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> service.confirmReceived(100L, 1L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DELIVERED");
+    }
+
+    @Test
+    void confirmReceived_unauthorizedBuyer_throwsNoSuchElementException() {
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> service.confirmReceived(999L, 1L))
+                .isInstanceOf(NoSuchElementException.class);
+    }
+
+    @Test
+    void completeBuyerOrder_uc83Order_throwsIllegalArgumentExceptionWithClearGuidance() throws Exception {
+        setField(order, "workflowModel", "UC83");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> service.completeBuyerOrder(100L, 1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("UC83")
+                .hasMessageContaining("confirm-received")
+                .hasMessageContaining("early-complete");
+    }
+
+    @Test
+    void earlyCompleteOrder_missingConsent_throwsIllegalArgumentException() {
+        assertThatThrownBy(() -> service.earlyCompleteOrder(100L, 1L, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("warningConsent");
+
+        assertThatThrownBy(() -> service.earlyCompleteOrder(100L, 1L, new OrderManagementDtos.EarlyCompleteRequest(false, "CMD1")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("warningConsent");
+    }
+
+    @Test
+    void earlyCompleteOrder_notUc83_throwsIllegalStateException() {
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+
+        OrderManagementDtos.EarlyCompleteRequest request = new OrderManagementDtos.EarlyCompleteRequest(true, "CMD1");
+        assertThatThrownBy(() -> service.earlyCompleteOrder(100L, 1L, request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("UC83");
+    }
+
+    @Test
+    void earlyCompleteOrder_notDelivered_throwsIllegalStateException() throws Exception {
+        setField(order, "workflowModel", "UC83");
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+
+        OrderManagementDtos.EarlyCompleteRequest request = new OrderManagementDtos.EarlyCompleteRequest(true, "CMD1");
+        assertThatThrownBy(() -> service.earlyCompleteOrder(100L, 1L, request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DELIVERED");
+    }
+
+    @Test
+    void earlyCompleteOrder_missingValidDeliveredAt_throwsIllegalStateException() throws Exception {
+        setField(order, "workflowModel", "UC83");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+
+        OrderManagementDtos.EarlyCompleteRequest request = new OrderManagementDtos.EarlyCompleteRequest(true, "CMD1");
+        assertThatThrownBy(() -> service.earlyCompleteOrder(100L, 1L, request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("validDeliveredAt");
+    }
+
+    @Test
+    void earlyCompleteOrder_hasActiveCase_throwsIllegalStateException() throws Exception {
+        setField(order, "workflowModel", "UC83");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        setField(order, "validDeliveredAt", now);
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_order_has_blocking_case(?)"), eq(Boolean.class), eq(1L)))
+                .thenReturn(true);
+
+        OrderManagementDtos.EarlyCompleteRequest request = new OrderManagementDtos.EarlyCompleteRequest(true, "CMD1");
+        assertThatThrownBy(() -> service.earlyCompleteOrder(100L, 1L, request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("khiếu nại");
+    }
+
+    @Test
+    void earlyCompleteOrder_success_callsProcedureFlushRefreshAndKeepsDeliveredWithoutDisbursement() throws Exception {
+        setField(order, "workflowModel", "UC83");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        setField(order, "validDeliveredAt", now);
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_order_has_blocking_case(?)"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(eq("SELECT og_early_complete_order(?, ?, ?, ?)"), eq(Boolean.class), eq(1L), eq(100L), eq("v1.0"), eq("CMD_123")))
+                .thenReturn(true);
+
+        OrderManagementDtos.EarlyCompleteRequest request = new OrderManagementDtos.EarlyCompleteRequest(true, "CMD_123");
+        OrderManagementDtos.OrderActionResponse response = service.earlyCompleteOrder(100L, 1L, request);
+
+        assertThat(response.orderId()).isEqualTo(1L);
+        assertThat(response.status()).isEqualTo(OrderEntity.STATUS_DELIVERED);
+        assertThat(order.getStatus()).isEqualTo(OrderEntity.STATUS_DELIVERED);
+        assertThat(order.getCompletedAt()).isNull();
+
+        verify(entityManager).flush();
+        verify(entityManager).refresh(order);
+        verify(paymentRepository, never()).save(any());
+    }
+
     private static void setId(Object target, Long id) throws Exception {
         Field idField = target.getClass().getDeclaredField("id");
         idField.setAccessible(true);
         idField.set(target, id);
+    }
+
+    private static void setField(Object target, String fieldName, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
     }
 }

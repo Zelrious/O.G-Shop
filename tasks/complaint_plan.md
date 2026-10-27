@@ -22,6 +22,9 @@
   > *"hàng trả hư hỏng nghiêm trọng HOẶC không đúng với hàng đã giao (tráo hàng, sai hàng, thiếu hàng)"*.
   Phải sửa đồng bộ toàn bộ các Use Case liên quan trong báo cáo (xem bảng chi tiết tại Mục 7).
 - **D6**: Đơn hàng **GIỮ TRẠNG THÁI `DELIVERED`**. Tuyệt đối **KHÔNG dùng `STATUS_DISPUTED` làm trạng thái đơn hàng**; trạng thái có tranh chấp được suy ra từ cờ quan hệ hồ sơ (`has_blocking_case = true` qua hàm DB `og_order_has_blocking_case`).
+- **D7 (Quyết định Schema Cases cho Task 2.2)**: Task 2.2 sử dụng **schema `cases` hiện tại** (V19/V22: `case_type`, `order_id`, `created_by`, `description`, `state`, `command_key`) và **KHÔNG** tạo migration schema mới (V37).
+  * *Căn cứ & Lý do kỹ thuật*: `CaseEntity` và `CaseRepository` đã được ánh xạ chuẩn xác với view `og_compat.cases` và vượt qua kiểm thử `ddl-auto=validate` trên PostgreSQL thật (`CaseEntitiesPostgresTest`).
+  * *Cơ chế mã hóa lý do trả hàng*: Mã lý do chuẩn (`ReturnReasonCode`: `CHANGE_MIND`, `NOT_AS_DESCRIBED`, `DAMAGED_OR_DEFECTIVE`) được đóng gói và phân tích qua `ReturnReasonCode.format(code, explanation)` và `ReturnReasonCode.parse(description)` lưu trong cột `description`. Cách làm này đảm bảo 100% toàn vẹn dữ liệu, không làm lệch trigger DB hiện hành (`og_guard_return_case`), và tránh rủi ro vỡ `ddl-auto=validate`.
 
 ---
 
@@ -248,22 +251,48 @@ Hệ thống kiểm tra nghiêm ngặt cả **6 điều kiện nghiệp vụ** (
 
 ## 5. Tách "Đã nhận hàng" khỏi "Hoàn tất sớm" & Tái sử dụng Database Functions (UC26, UC27, UC71)
 
-### 5.1. Định nghĩa Nút "Đã nhận hàng" vs "Hoàn tất sớm"
-- **Nút "Đã nhận hàng" (UC27)**:
-  * Chỉ mang tính chất ghi nhận việc Người mua xác nhận đã nhận được kiện hàng từ bưu tá / người bán (`orders.received_at = now()`).
-  * **KHÔNG thay đổi tiến độ giải ngân**, **KHÔNG đóng quyền trả hàng**, **KHÔNG gán lại `valid_delivered_at`**.
-  * Mốc `valid_delivered_at` chỉ được ghi nhận từ sự kiện giao hàng thành công hợp lệ (sự kiện vận đơn GHN hoặc OTP bàn giao theo UC26).
+### 5.1. Định nghĩa Nút "Đã nhận hàng" vs "Hoàn tất sớm" (UC27 & UC71)
+
+- **Nút "Đã nhận hàng" (`confirmReceived` - UC27)**:
+  * Endpoint mới: `POST /api/v1/commerce/orders/{orderId}/confirm-received`.
+  * Ghi nhận mốc thời gian: `orders.received_at = now()`.
+  * Ánh xạ vào `OrderEntity` như trường ghi thường: `@Column(name = "received_at")`, có getter và setter.
+  * **Tính chất Idempotent**: Gọi lần 2 (nếu đã có `received_at`) thì không ghi đè lại thời điểm ban đầu, trả về thành công 200 idempotent.
+  * **Chốt chặn an toàn**: KHÔNG thay đổi trạng thái giải ngân (vẫn giữ nguyên `HELD`), KHÔNG đóng quyền trả hàng của Người mua, KHÔNG gán lại `valid_delivered_at`.
+  * Backend KHÔNG bắt buộc `received_at` phải có trước khi gọi `earlyCompleteOrder` (stored procedure DB không kiểm tra cột này).
 - **Nút "Hoàn tất sớm" (`earlyCompleteOrder` - UC27, UC71)**:
-  * Refactor từ endpoint `completeBuyerOrder` cũ.
-  * Bắt buộc Người mua đồng thuận cảnh báo từ bỏ quyền trả hàng: gửi kèm tham số `warningConsent: string`.
+  * Endpoint mới: `POST /api/v1/commerce/orders/{orderId}/early-complete`.
+  * Client gửi cờ boolean: `warningConsent: boolean` (DTO: `EarlyCompleteRequest(Boolean warningConsent, String commandKey)`). Hằng số phiên bản cảnh báo `EARLY_COMPLETION_WARNING_VERSION = "v1.0"` được quản lý tập trung ở phía server.
   * Hiển thị popup cảnh báo: *"Xác nhận hoàn tất sớm sẽ đóng vĩnh viễn quyền gửi yêu cầu trả hàng mới của bạn và đơn hàng sẽ được chuyển sang tiến trình giải ngân cho Người bán"*.
   * Kiểm tra guard: Không có hồ sơ trả hàng nào đang mở (`og_order_has_blocking_case(orderId) == false`).
-  * Gọi trực tiếp hàm stored procedure `og_early_complete_order`. Hàm này **CHỈ ghi nhận mốc `early_completed_at` và tạo sự kiện `EARLY_COMPLETION_ACCEPTED`, KHÔNG trực tiếp đổi trạng thái giải ngân** (UC71 3a).
-- **Tiến trình Giải ngân cho Người bán (`disburseSellerFunds` / `reconcileOverdueDeliveries` - UC71 3a, BR-UC71-04)**:
-  * Là bước xử lý riêng biệt. Hệ thống chỉ giải phóng tiền ký quỹ (`RELEASED`) cho Người bán và chuyển đơn sang `COMPLETED` khi thỏa mãn đồng thời cả 3 điều kiện:
-    1. Đơn hàng đã giao thành công hợp lệ (`valid_delivered_at` có giá trị);
-    2. Hết hạn 3 ngày kể từ `valid_delivered_at` HOẶC Người mua đã xác nhận hoàn tất sớm (`early_completed_at` có giá trị);
-    3. Không có hồ sơ ngăn chặn (`og_order_has_blocking_case(orderId) == false`) và không còn lệnh giữ tiền (`money_holds`) nào chưa đóng.
+  * Gọi trực tiếp hàm stored procedure `og_early_complete_order(orderId, buyerId, warningVersion, commandKey)`. Hàm này **CHỈ ghi nhận mốc `early_completed_at` và tạo sự kiện `EARLY_COMPLETION_ACCEPTED`, KHÔNG trực tiếp đổi trạng thái giải ngân và KHÔNG chuyển đơn sang COMPLETED** (UC71 3a).
+  * **Lưu ý Stale Entity (Bộ nhớ Hibernate)**: Do thuộc tính `OrderEntity.earlyCompletedAt` được cấu hình `updatable = false`, câu lệnh UPDATE của `og_early_complete_order` diễn ra trực tiếp dưới DB qua JDBC. Mọi logic đọc lại `early_completed_at` trên `order` trong cùng transaction bắt buộc phải gọi `entityManager.refresh(order)` hoặc đọc qua truy vấn DB mới để tránh đọc dữ liệu cũ trong Java cache.
+- **Chiến lược Endpoint `POST /complete` cũ**:
+  * Giữ nguyên hỗ trợ cho đơn `LEGACY_V14` để bảo toàn tương thích ngược cho frontend hiện hữu và các integration test cũ.
+  * Với đơn `UC83`, nếu gọi vào `/complete`, hệ thống lập tức ném lỗi nghiệp vụ rõ ràng (HTTP 400 Bad Request): *"Đơn hàng thuộc mô hình UC83, vui lòng sử dụng chức năng Xác nhận nhận hàng (/confirm-received) hoặc Hoàn tất sớm (/early-complete)"*.
+- **Tách biệt Phạm vi Task 2.1 và Task 2.1b**:
+  * **Task 2.1 (UC27)**: Thuần túy mốc thời gian: `confirmReceived` (ghi nhận `received_at`, idempotent, map vào `OrderEntity` như trường ghi thường), `earlyCompleteOrder` (gọi `og_early_complete_order`, consent v1.0, tạo `order_events`), xử lý endpoint cũ `/complete`. **TUYỆT ĐỐI KHÔNG GIẢI NGÂN UC83 TRONG TASK 2.1**. Đơn sau `earlyCompleteOrder` vẫn giữ nguyên trạng thái `DELIVERED`, tiền ký quỹ vẫn giữ nguyên.
+  * **Task 2.1b (`disburseSellerFunds` - UC71 3a, BR-UC71-04)**: Tiến trình hạch toán giải ngân riêng biệt.
+    - Kiểm tra đủ 3 điều kiện BR-UC71-04:
+      1. Đơn hàng đã giao thành công hợp lệ (`valid_delivered_at` có giá trị);
+      2. Hết hạn 3 ngày kể từ `valid_delivered_at` HOẶC Người mua đã xác nhận hoàn tất sớm (`early_completed_at` có giá trị);
+      3. Không có hồ sơ ngăn chặn (`og_order_has_blocking_case(orderId) == false`) và không còn lệnh giữ tiền (`money_holds`) nào chưa đóng.
+    - Với đơn `LEGACY_V14`: gọi `payment.markReleased(now)` và chuyển `orders.status = 'COMPLETED'`.
+    - Với đơn `UC83`: Bảng `payments` là bảng aggregate của V14 (`COMMENT ON TABLE payments IS 'V14 legacy aggregate. UC83 intents/components/operations are canonical; do not double-write money.'`). Giải ngân cho Người bán ở UC83 **KHÔNG dùng `payment.markReleased`**, mà bắt buộc tạo bản ghi trong `settlement_operations` (`operation_type = 'RELEASE_SELLER'`, `cause_type = 'COMPLETION'`) tác động lên `order_fund_components`.
+    - **Thứ tự khóa tài nguyên (Lock Order Invariant)**: `orders` (1) -> `order_fund_components` (2) -> `settlement_operations` (3) (theo DB trigger `og_guard_settlement_operation` tại V18 dòng 269-270).
+    - **Các câu hỏi thiết kế chi tiết (Đã tra cứu và xác minh 100% mã nguồn V18/V22)**:
+      a. *Ai/cái gì chuyển `settlement_operations` từ `REQUESTED` sang `CONFIRMED`, và `provider`/`provider_operation_id` lấy từ đâu?*
+         - DB không có worker ngầm tự chuyển state. Service Java (hoặc worker scheduler) khởi tạo INSERT bản ghi với `state = 'REQUESTED'` (bắt buộc theo V18 dòng 271), sau đó Service (hoặc Worker mô phỏng) thực hiện UPDATE sang `state = 'CONFIRMED'`.
+         - Khi UPDATE sang `CONFIRMED`, CHECK constraint (V18 dòng 258, V22 dòng 9284) bắt buộc phải có `confirmed_at`, `provider`, `provider_operation_id`.
+         - Trong môi trường đồ án (mô phỏng cổng thanh toán), `provider = 'INTERNAL_SIMULATED'` và `provider_operation_id = 'SIM-RELEASE-' + operation_id` (hoặc UUID) đảm bảo tính duy nhất theo `UNIQUE(provider, provider_operation_id)` (V18 dòng 257).
+      b. *`amount` lấy từ đâu và trigger nào cập nhật `released_amount`?*
+         - `amount` lấy từ số dư khả dụng của từng component: `c.confirmed_amount - c.released_amount - c.refunded_amount - c.reserved_amount` (thông thường khi hoàn tất đơn đủ điều kiện thì `amount = c.confirmed_amount`).
+         - Trigger cập nhật `released_amount`: DB Trigger `trg_settlement_operation_guard` (hàm `og_guard_settlement_operation` tại V18 dòng 316-320) khi UPDATE sang `CONFIRMED` sẽ tự động trừ `reserved_amount` và cộng `released_amount = released_amount + NEW.amount` vào `order_fund_components`. Java cấm tự update trực tiếp bảng này vì sẽ bị trigger `og_guard_fund_component` chặn do `pg_trigger_depth() < 2` (V18 dòng 340-341).
+      c. *Có cần hai operation cho `GOODS_CASH` và `PLATFORM_GOODS_SUBSIDY` không, và quy tắc `command_key`?*
+         - **CÓ, BẮT BUỘC 2 OPERATION RIÊNG**: Khóa ngoại `component_id UUID NOT NULL REFERENCES order_fund_components(component_id)` (V18 dòng 243-244) là trường đơn. Hai component `GOODS_CASH` và `PLATFORM_GOODS_SUBSIDY` có 2 UUID khác nhau nên phải tạo 2 bản ghi `settlement_operations` riêng biệt (nếu đơn có trợ giá sàn).
+         - Quy tắc `command_key` ổn định để idempotent: `"DISBURSE:SELLER:" + orderId + ":" + componentType + ":COMPLETION"` (đảm bảo thỏa mãn `command_key VARCHAR(150) NOT NULL UNIQUE` tại V18 dòng 256).
+      d. *Khi tất cả component đã `RELEASED` thì trigger/hàm nào đóng đơn sang `COMPLETED`, hay service phải làm?*
+         - **SERVICE PHẢI LÀM**: Trong toàn bộ schema DB (V18, V19, V21, V22), không có bất kỳ trigger nào tự động cập nhật `orders.status = 'COMPLETED'`. Sau khi giải ngân các components qua `settlement_operations` hoàn tất, chính Service phải thực hiện `order.markCompleted(now)` và `orderRepository.save(order)`.
 
 ### 5.2. Chữ ký Hàm & Trích đoạn Migration Tái sử dụng Database (Đã kiểm tra 100% file thật)
 
@@ -547,14 +576,62 @@ Các quy tắc sau đây là thiết kế chi tiết kỹ thuật bổ trợ cho
 
 ## 10. Danh mục Công việc Chi tiết (Tasks Roadmap)
 
-### Giai đoạn 1: Backend Domain Models & Persistence Layer
-- [x] **Task 1.1**: Tạo các JPA Entity và Enum mã lý do (`CaseEntity`, `CaseRoundEntity`, `CaseDecisionEntity`, `CaseEvidenceEntity`, `CaseEventEntity`, `ReturnReasonCode`) kèm Smoke test JPQL trên H2 (`CaseEntitiesSmokeTest`).
-- [ ] **Task 1.1b**: Kiểm thử tích hợp PostgreSQL thật (`CaseEntitiesPostgresTest`): kết nối an toàn qua `PostgresTestSafetyGuard`, đọc 5 view `og_compat`, tạo fixture đơn hàng thỏa 6 điều kiện `og_guard_return_case` kèm `order_fund_components`, kiểm tra trigger tạo `money_holds`, rollback sạch sẽ.
-- [ ] **Task 1.2**: Bổ sung các trường `return_allowed`, `valid_delivered_at`, `return_due_at`, `early_completed_at`, `early_completion_warning_version` vào `OrderEntity`.
+### Giai đoạn 1: Khởi tạo Nền tảng & Ánh xạ CSDL
+- [x] **Task 1.1**: Tạo Entities JPA tương ứng cho 5 bảng/view nghiệp vụ: `CaseEntity`, `CaseRoundEntity`, `CaseDecisionEntity`, `CaseEvidenceEntity`, `CaseEventEntity`.
+- [x] **Task 1.1b**: Tạo Enum `ReturnReasonCode` (3 lý do hợp lệ: `CHANGE_MIND`, `NOT_AS_DESCRIBED`, `DAMAGED_OR_DEFECTIVE`), bổ sung test unit và test tích hợp PostgreSQL (`CaseEntitiesPostgresTest`).
+- [x] **Task 1.2**: Ánh xạ 9 cột bổ sung vào `OrderEntity` với cờ `insertable=false, updatable=false` (chế độ read-only cho mô hình UC83).
+- [ ] **Task 1.2b: Nâng cấp Checkout & Payment sang mô hình UC83 (Tiền đề BẮT BUỘC của Giai đoạn 6 UI và E2E)**
+  - **Mô tả & Phạm vi**: Đây là tiền đề **BẮT BUỘC** của Giai đoạn 6 (Giao diện người dùng) và bước kiểm thử End-to-End (E2E) để tạo được đơn hàng UC83 thật từ màn hình mua hàng. Cho tới khi Task 1.2b hoàn thành, toàn bộ kiểm thử tích hợp và E2E của luồng Trả hàng **CHỈ CHẠY ĐƯỢC BẰNG DỮ LIỆU FIXTURE / SCRIPT** chuẩn PostgreSQL (như đã chứng minh thành công ở `CaseEntitiesPostgresTest`).
+  - **Trạng thái**: **CHƯA LÀM LÚC NÀY** (sẽ làm trước Giai đoạn 6).
+  - **Lưu ý Quan trọng về Trigger Aggregate (`og_validate_checkout_aggregate`)**:
+    * Ràng buộc aggregate của checkout group, order và order_items là **DEFERRED constraint trigger** (`trg_group_aggregate`, `trg_order_aggregate`, `trg_item_aggregate` tại V17 dòng 230-235).
+    * Trigger này **CHỈ ĐƯỢC KÍCH HOẠT VÀ KIỂM TRA TẠI THỜI ĐIỂM COMMIT TRANSACTION**.
+    * Do đó, mọi test fixture hoặc bài test checkout UC83 của Task 1.2b **bắt buộc phải COMMIT transaction thật** (hoặc dùng transaction template commit) để phát hiện và kiểm chứng các lỗi vi phạm aggregate; nếu chỉ chạy trong transaction rollback thông thường thì lỗi aggregate trigger sẽ không nổ ra trong quá trình chạy method.
+  - **Checklist gỡ cờ read-only trên `OrderEntity` (Bắt buộc thực hiện ở Task 1.2b)**:
+    - [ ] Gỡ `insertable=false` trên `OrderEntity` cho các cột: `workflow_model`, `group_id`, `delivery_method`, `handover_day`, `return_allowed`.
+  - **Danh sách việc con (Subtasks đầy đủ theo `ck_orders_amounts`, `ck_order_items_prices`, `og_validate_checkout_aggregate`)**:
+    1. *Tạo bản ghi `checkout_groups`*: Entity/Repository `CheckoutGroupEntity`, sinh `group_id`, `command_key`, `request_digest`, `address_snapshot`, `delivery_method`, `payment_method`, `expected_total`, `payment_due_at`. Gán `orders.group_id = checkout_groups.group_id`. Bắt buộc `orders.group_id = orders.checkout_group_id` (thỏa mãn DB CHECK `ck_order_uc83_snapshot`).
+    2. *Cập nhật `order_items` cho UC83*: Gán `order_items.workflow_model = 'UC83'`, bắt buộc `product_revision_id IS NOT NULL` và `return_allowed IS NOT NULL` (thỏa mãn DB CHECK `ck_item_uc83_revision`).
+    3. *Phân bổ voucher và xu ở cấp item (`order_items`)*:
+       - Đảm bảo `voucher_allocation + points_allocation <= agreed_price * quantity`.
+       - `buyer_line_total = agreed_price * quantity - voucher_allocation - points_allocation`.
+       - `seller_line_proceeds = agreed_price * quantity`.
+       - (Thỏa mãn DB CHECK `ck_order_items_prices`).
+    4. *Ràng buộc cấp order (`orders`)*:
+       - `seller_proceeds = subtotal`.
+       - `total_amount = subtotal + shipping_fee - voucher_discount_amount - shipping_discount_amount - points_discount_amount`.
+       - `total_amount >= 0`.
+       - `shipping_discount_amount`: tính từ voucher giảm phí ship (`benefit_component = 'SHIPPING'`), nếu không có voucher ship thì `= 0`; luôn thỏa mãn `0 <= shipping_discount_amount <= shipping_fee`.
+       - Ràng buộc thời hạn trả hàng: khi `return_due_at IS NOT NULL` thì bắt buộc `return_allowed = true` và `return_due_at = valid_delivered_at + '3 days'::interval` (thỏa mãn DB CHECK `ck_order_return_window`).
+       - (Thỏa mãn DB CHECK `ck_orders_amounts` và `ck_order_return_window`).
+    5. *Đảm bảo tổng phân bổ item khớp với cấp order*:
+       - `orders.subtotal = sum(order_items.agreed_price * quantity)`.
+       - `orders.voucher_discount_amount = sum(order_items.voucher_allocation)`.
+       - `orders.points_discount_amount = sum(order_items.points_allocation)`.
+       - (Ràng buộc DB Trigger: `og_validate_checkout_aggregate()` / `trg_group_aggregate`, `trg_order_aggregate`, `trg_item_aggregate` tại V17 dòng 200-235).
+    6. *Tạo giữ chỗ kho `inventory_reservations`*: Tạo bản ghi giữ chỗ cho từng item với `quantity` khớp `order_items.quantity` và `expires_at = orders.payment_due_at` (yêu cầu của trigger `og_validate_checkout_aggregate()`).
+    7. *Quy tắc phí UC83 bằng 0*: Bỏ tính `sellerFee` và `buyerFee` theo chính sách cũ; áp dụng `buyer_system_fee = 0`, `seller_system_fee = 0`, `order_items.fee_policy_id = NULL`, `sponsor_type = 'PLATFORM'` (thỏa mãn `ck_order_items_prices` và `ck_orders_amounts`).
+    8. *Phí vận chuyển theo `delivery_method`*: Nếu `delivery_method <> 'CARRIER'` (ví dụ `SELF_PICKUP`, `SELF_DELIVERY`), bắt buộc `shipping_fee = 0` (thỏa mãn `ck_orders_amounts`). Nếu là `CARRIER`, tính phí GHN bình thường.
+    9. *Chuỗi thanh toán phân bổ*: Tích hợp chuỗi `payment_intents` (cho checkout group) -> `payment_attempts` -> `payment_confirmations` -> `payment_allocations` (phân bổ thanh toán cho từng `order_id` khi thanh toán thành công).
+    10. *Khởi tạo các thành phần ký quỹ `order_fund_components`*: Khi đơn chuyển sang `PAID_HELD`, tự động tạo các thành phần quỹ: `GOODS_CASH`, `PLATFORM_GOODS_SUBSIDY`, `SHIPPING_CASH`, `PLATFORM_SHIPPING_SUBSIDY` theo đúng công thức `og_guard_fund_component`.
+  - **Các rủi ro chính (Risks)**:
+    1. *Rủi ro phá vỡ luồng Checkout & VNPay hiện hành*: `CheckoutService` và `PaymentService` đang phục vụ trực tiếp cho Frontend hiện có. Sửa đổi cấu trúc có thể làm gãy các test unit/integration của module Commerce & Payment nếu không phân nhánh cẩn thận.
+    2. *Rủi ro vi phạm ràng buộc DB*: Bất kỳ sai lệch nào về tổng tiền giữa `orders`, `order_items`, `checkout_groups`, `payment_allocations` và `order_fund_components` đều sẽ kích hoạt các trigger kiểm tra chéo (`ck_orders_amounts`, `ck_order_items_prices`, `og_guard_fund_component`, `og_validate_checkout_aggregate`, `og_validate_payment_allocations`) gây rollback giao dịch.
+    3. *Rủi ro bất đồng bộ trạng thái đơn hàng*: Việc chuyển đổi từ `PAYMENT_PENDING` sang `PAID_HELD` yêu cầu đúng thứ tự giữa ghi nhận `payment_allocations` trước rồi mới chuyển trạng thái đơn hàng.
 - [ ] **Task 1.3**: Tạo Repositories tương ứng cho `Case`, `CaseRound`, `CaseDecision`, `CaseEvidence`.
 
 ### Giai đoạn 2: Tách Hoàn tất sớm (UC27) & Nghiệp vụ Vòng 1 (UC62 & UC75)
-- [ ] **Task 2.1**: Refactor `earlyCompleteOrder` thay thế `completeBuyerOrder`, yêu cầu `warningConsent`, gọi `og_early_complete_order`, chặn khi có hồ sơ mở. Nút "Đã nhận hàng" chỉ ghi nhận `received_at`, không giải ngân và không đóng quyền trả hàng.
+- [x] **Task 2.1**: Refactor `earlyCompleteOrder`, `confirmReceived` & Xử lý Endpoint `/complete` cũ (UC27):
+  * Nút "Đã nhận hàng" (`confirmReceived`): Ghi nhận `orders.received_at = now()`. Idempotent: gọi lần hai không ghi đè `received_at` ban đầu. Không đổi trạng thái đơn, không giải ngân, không gán lại `valid_delivered_at`. Ánh xạ `received_at` vào `OrderEntity` như trường ghi thường (`@Column(name = "received_at")`, getter/setter).
+  * Nút "Hoàn tất sớm" (`earlyCompleteOrder`): Yêu cầu cờ boolean `warningConsent: true` (server gắn hằng số `EARLY_COMPLETION_WARNING_VERSION = "v1.0"`). Gọi `og_early_complete_order`. CHỈ ghi nhận mốc `early_completed_at` và chèn sự kiện `EARLY_COMPLETION_ACCEPTED` vào `order_events`, KHÔNG giải ngân và KHÔNG chuyển đơn sang COMPLETED. Chặn khi có hồ sơ khiếu nại mở (`og_order_has_blocking_case`) hoặc có `money_holds` mở.
+  * Stale Entity: Sau khi gọi hàm DB `og_early_complete_order`, mọi logic đọc `early_completed_at` trên `OrderEntity` trong cùng transaction phải `entityManager.refresh(order)` hoặc query DB do cột này là `updatable = false`.
+  * Endpoint `/complete` cũ: Giữ cho đơn `LEGACY_V14`; nếu đơn là `UC83` ném lỗi nghiệp vụ rõ ràng (HTTP 400) hướng dẫn dùng `/confirm-received` hoặc `/early-complete`.
+  * **KHÔNG giải ngân UC83 trong Task 2.1** (chuyển sang Task 2.1b).
+- [ ] **Task 2.1b**: Tiến trình giải ngân riêng cho Người bán (`disburseSellerFunds` - UC71):
+  * Kiểm tra đủ 3 điều kiện BR-UC71-04 trước khi giải ngân.
+  * Đơn `LEGACY_V14`: gọi `payment.markReleased(now)`, cập nhật `orders.status = 'COMPLETED'`.
+  * Đơn `UC83`: giải ngân qua `settlement_operations` (`RELEASE_SELLER`, `cause_type = 'COMPLETION'`) tác động `order_fund_components`, không dùng `payment.markReleased`. Lock order: `orders` -> `order_fund_components` -> `settlement_operations`. Tạo 2 operation riêng cho `GOODS_CASH` và `PLATFORM_GOODS_SUBSIDY`, chuyển `REQUESTED` sang `CONFIRMED` với mock provider. Service đóng đơn `COMPLETED` sau khi release thành công.
+  * Chặn: Task 3.4 (Worker auto-disburse) và Task 4.1.
 - [ ] **Task 2.2**: Triển khai `createReturnRequest` kiểm tra đủ 6 điều kiện, validate 3 lý do chuẩn, giới hạn 5 ảnh / 2 video <= 60s, kích hoạt `money_holds`.
 - [ ] **Task 2.3**: Triển khai Người bán phản hồi Vòng 1 (`APPROVE_RETURN` hoặc `SELLER_DECLINED`) và KTV phân xử Vòng 1 (thấy hồ sơ ngay khi `OPEN`, SLA 48h từ lúc đủ nội dung, bác yêu cầu có lý do, không giải ngân ngay). Xử lý đua quyết định Vòng 1 (first-write wins).
 - [ ] **Task 2.4**: Triển khai Người mua rút yêu cầu trả hàng (`withdrawReturnRequest` - UC62 7c): chỉ cho rút trước khi gửi hàng trả, giải phóng `money_holds`, chờ giải ngân theo UC71.
@@ -565,11 +642,12 @@ Các quy tắc sau đây là thiết kế chi tiết kỹ thuật bổ trợ cho
   * Lựa chọn 1: `[Hàng đúng, đồng ý hoàn tiền]` qua endpoint `agree-refund`.
   * Lựa chọn 2: `[Hàng có vấn đề, gửi đề nghị xét lại]` qua endpoint `damage-exemption` (hỗ trợ lý do hàng hỏng hoặc tráo hàng/sai hàng).
 - [ ] **Task 3.3**: Xây dựng Worker tự động hoàn tiền sau 2 ngày nếu Người bán không phản hồi (`reconcileOverdueReturnResponses` - `SYSTEM_TIMEOUT` + `FULL_GOODS_REFUND`).
-- [ ] **Task 3.4**: Xây dựng Worker tự động giải ngân sau 3 ngày cho đơn `DELIVERED` đủ điều kiện UC71 (`reconcileOverdueDeliveries`).
+- [ ] **Task 3.4**: Xây dựng Worker tự động giải ngân sau 3 ngày cho đơn `DELIVERED` đủ điều kiện UC71 (`reconcileOverdueDeliveries`). Phụ thuộc trực tiếp vào **Task 2.1b** (`disburseSellerFunds`).
 - [ ] **Task 3.5**: Triển khai KTV phân xử Vòng 2 (`EXEMPT_GOODS_REFUND` hoặc `FULL_GOODS_REFUND`).
 
 ### Giai đoạn 4: Hạch toán Hoàn tiền Chuẩn xác (UC83 & UC71)
 - [ ] **Task 4.1**: Xây dựng `RefundSettlementService`:
+  * Phụ thuộc: Tái sử dụng bảng `settlement_operations` (`operation_type = 'REFUND_BUYER'`) và cơ chế lock / state machine tương tự **Task 2.1b**.
   * Tính tiền hàng thực trả sau voucher/xu phân bổ cho hàng.
   * Hoàn 100% xu đã dùng cho Người mua.
   * Không hoàn phí ship chiều mua tiền mặt, không hoàn phí đăng tin, không cấp lại voucher.
@@ -589,40 +667,32 @@ Các quy tắc sau đây là thiết kế chi tiết kỹ thuật bổ trợ cho
   * `POST /api/v1/commerce/orders/{orderId}/return-case/agree-refund` (Người bán đồng ý hoàn tiền Vòng 2)
   * `POST /api/v1/commerce/orders/{orderId}/return-case/damage-exemption` (Người bán đề nghị xét lại Vòng 2)
 - [ ] **Task 5.2**: Controller cho KTV (`KtvCaseController`):
-  * `GET /api/v1/ktv/cases` (Queue hồ sơ KTV `OPEN` & `REVIEWING`, hiển thị cảnh báo SLA 48h)
-  * `POST /api/v1/ktv/cases/{caseId}/decide-round1` (KTV phán quyết Vòng 1)
-  * `POST /api/v1/ktv/cases/{caseId}/decide-round2` (KTV phán quyết Vòng 2)
-  * `POST /api/v1/ktv/cases/{caseId}/request-evidence` (KTV yêu cầu Người mua nộp thêm bằng chứng)
-- [ ] **Task 5.3**: Controller cho Admin (`AdminDisputeController`):
-  * `GET /api/v1/admin/cases/escalated` (Danh sách các hồ sơ bị trễ hạn SLA 48h của KTV)
+  * `GET /api/v1/ktv/cases/work-queue` (Hàng đợi công việc của KTV)
+  * `POST /api/v1/ktv/cases/{caseId}/assign` (Nhận thụ lý hồ sơ)
+  * `POST /api/v1/ktv/cases/{caseId}/decision` (Ra quyết định Vòng 1 hoặc Vòng 2)
+- [ ] **Task 5.3**: Controller cho Admin (`AdminCaseController`):
+  * `GET /api/v1/admin/cases/escalated` (Giám sát hồ sơ KTV quá hạn SLA 48h)
 
-### Giai đoạn 6: Giao diện Người dùng (Frontend)
-- [ ] **Task 6.1**: Giao diện Người mua (`BuyerOrderDetailView.tsx` & Modals):
-  * Nút "Đã nhận hàng" tách biệt hoàn toàn (chỉ xác nhận nhận kiện hàng, không đổi trạng thái giải ngân).
-  * Nút "Hoàn tất sớm" mở `EarlyCompleteModal` với cảnh báo từ bỏ quyền trả hàng.
+### Giai đoạn 6: Giao diện Người dùng (React / Tailwind)
+- [ ] **Task 6.1**: Giao diện Người mua (`BuyerOrderDetailView.tsx` & `BuyerReturnsView.tsx`):
+  * Nút "Đã nhận được hàng" và "Hoàn tất sớm" (popup modal cảnh báo từ bỏ quyền trả hàng).
+  * *Lưu ý UI/UX*: Nếu Người mua bấm thẳng "Hoàn tất sớm" mà đơn chưa có `received_at`, frontend tự động gọi tuần tự: (1) `POST /confirm-received`, (2) hiển thị modal checkbox cam kết `"Tôi đã kiểm tra kỹ hàng hóa và đồng ý từ bỏ quyền trả hàng/khiếu nại"`, (3) Người mua tích chọn rồi mới gọi `POST /early-complete`.
   * Nút "Yêu cầu trả hàng" kiểm tra 6 điều kiện, mở `CreateReturnRequestModal` (3 lý do, upload ảnh/video).
   * Timeline theo dõi hồ sơ nhiều vòng.
 - [ ] **Task 6.2**: Giao diện Người bán (`SellerOrderDetailView.tsx` & `SellerReturnsView.tsx`):
-  * Khối hồ sơ Vòng 1 với 2 nút: `[Chấp thuận trả]` và `[Không đồng ý, chuyển KTV]`.
-  * Màn hình "Hàng trả" (`SellerReturnsView.tsx`) theo dõi mã vận đơn và tiến trình hàng trả chiều về (UC33).
-  * Vòng 2 sau khi nhận hàng: Bộ đếm ngược 48h, nút `[Hàng đúng, đồng ý hoàn tiền]` và nút `[Hàng có vấn đề, gửi đề nghị xét lại]` kèm form upload bằng chứng.
-- [ ] **Task 6.3**: Giao diện KTV Workbench (`KtvCasesPage.tsx`):
-  * Queue hồ sơ `OPEN` và `REVIEWING`, cảnh báo SLA 48h màu đỏ.
-  * Giao diện đối chiếu song song: Bằng chứng lúc nhận của Người mua vs Bằng chứng lúc nhận lại của Người bán.
-  * Form ra phán quyết kèm lý do giải trình bắt buộc.
-- [ ] **Task 6.4**: Màn hình Admin Giám sát Tranh chấp (`AdminDisputesView.tsx`):
-  * Theo dõi danh sách các case bị `ESCALATED` do KTV quá hạn 48h.
-
-### Giai đoạn 7: Kiểm thử Tự động Toàn diện
-- [ ] **Task 7.1**: Viết bộ test `ReturnCaseServiceTest` và `RefundSettlementTest` phủ đủ 27 test cases trong Test Matrix.
+  * Hiển thị trạng thái hoàn tất sớm và đồng hồ đếm ngược 3 ngày giao hàng.
+  * Màn hình xử lý yêu cầu Vòng 1: [Chấp thuận] hoặc [Từ chối chuyển KTV].
+  * Màn hình xử lý nhận hàng Vòng 2: [Đồng ý hoàn tiền] hoặc [Đề nghị xét lại do hàng hỏng/sai khác].
+- [ ] **Task 6.3**: Giao diện Nhân viên Kỹ thuật KTV (`KtvDisputeQueueView.tsx` & `KtvDisputeDetailView.tsx`):
+  * Hàng đợi hồ sơ theo SLA 48h, tab Vòng 1 và tab Vòng 2.
+  * Form ra quyết định có lý do bắt buộc.
+- [ ] **Task 6.4**: Giao diện Admin (`AdminDisputesView.tsx`):
+  * Giám sát các hồ sơ KTV trễ hạn (`ESCALATED`).
 
 ---
 
-## 11. Các Điểm Đã Được Người Dùng Chốt (Finalized Decisions)
-
-Cả 3 điểm giả định kỹ thuật đã được người dùng chính thức phê duyệt và chốt chặt chẽ:
-
-1. **Quyết định phạm vi Phân bổ Voucher và Xu (UC22 phụ thuộc)**:
+## 11. Các Điểm Thống nhất Thêm với Người dùng (Decisions Log)
+1. **Chính sách Xu tích lũy (Points) & Đơn hàng 0 đồng**:
    - Giữ nguyên quyết định: **KHÔNG triển khai checkout dùng xu lúc này**.
    - Ghi nhận UC22 "Dùng xu ở checkout" là phụ thuộc chưa triển khai. Đơn hàng tạo mới giữ `points_discount_amount = 0`.
    - **Ràng buộc bắt buộc trong kế hoạch**: Khi làm checkout dùng xu trong tương lai, BẮT BUỘC phải trừ xu theo quy tắc:
@@ -636,3 +706,92 @@ Cả 3 điểm giả định kỹ thuật đã được người dùng chính th
 3. **Màn hình và Endpoint Admin cho hồ sơ ESCALATED**:
    - Đồng ý triển khai endpoint `GET /api/v1/admin/cases/escalated` (Task 5.3) và màn hình Admin `AdminDisputesView.tsx` (Task 6.4) để giám sát các hồ sơ KTV trễ hạn SLA 48h.
 
+---
+
+## 12. Kế hoạch Xác minh & Kiểm thử (Verification Plan)
+
+### 12.1. Phía Agent
+1. **Biên dịch mã nguồn**:
+   - Chạy `.\mvnw.cmd test-compile` đảm bảo các Entity và Repositories biên dịch không lỗi cú pháp.
+2. **Kiểm thử đơn vị & Smoke test trên H2**:
+   - Chạy `.\mvnw.cmd test "-Dtest=ReturnReasonCodeTest,CaseEntitiesSmokeTest"` đảm bảo logic mã lý do và cấu trúc quan hệ JPA biên dịch, map quan hệ hợp lệ.
+
+### 12.2. Phía bạn (User)
+1. **Kiểm thử tích hợp trên PostgreSQL thật (`CaseEntitiesPostgresTest`)**:
+   - Đảm bảo biến môi trường `OGSHOP_TEST_DB_URL=jdbc:postgresql://127.0.0.1:55432/og_shop_test` và `OGSHOP_TEST_DB_ISOLATED=true` đã được thiết lập.
+   - Chạy lệnh: `.\mvnw.cmd test "-Dtest=CaseEntitiesPostgresTest"`.
+   - Mục tiêu: Xác minh 5 view `og_compat`, trigger `og_guard_return_case`, `money_holds`, và 7 test âm ngoại lệ SQLSTATE 23514.
+2. **Kiểm thử bảo vệ luồng Checkout & VNPay hiện hành (`LegacyCheckoutPersistencePostgresTest`)**:
+   - *Bối cảnh*: Task 1.2 bổ sung 9 trường vào `OrderEntity` với cờ `insertable=false, updatable=false`. Đây là điểm nhạy cảm có thể ảnh hưởng đến luồng mua hàng thật (`CheckoutService.buyNow()`) và thanh toán VNPay nếu ánh xạ Hibernate làm thay đổi câu lệnh INSERT.
+   - *Hiện trạng repo*: Hiện repo đã có unit test `CheckoutServiceTest.java` (dùng Mockito, không chạm database thật) và `VnPayPaymentPostgresTest.java` / `VouchersPostgresTest.java` (chạy trên PostgreSQL thật). Tuy nhiên, chưa có test nào assert trực tiếp rằng đơn hàng sau khi tạo có `workflow_model = 'LEGACY_V14'` và các trường read-only nhận đúng giá trị mặc định từ DB.
+   - *Đề xuất test PostgreSQL cụ thể*:
+     * **Tên test**: `LegacyCheckoutPersistencePostgresTest`
+     * **Mục tiêu**: Kiểm thử tích hợp chạy qua `CheckoutService.buyNow()` lưu vào database PostgreSQL thật (`og_compat.orders`), nạp lại `OrderEntity` từ DB và xác minh giá trị mặc định.
+     * **Các Assert chính**:
+       ```java
+       // 1. Tạo đơn mua hàng qua CheckoutService hiện hữu
+       var response = checkoutService.buyNow(buyerId, buyNowRequest);
+       assertThat(response.orderId()).isNotNull();
+
+       // LƯU Ý BẮT BUỘC: Phải flush() + clear() EntityManager (hoặc đọc trong transaction mới)
+       // để đẩy dữ liệu xuống DB và xóa First-Level Cache (L1 Cache) của Hibernate.
+       // Nếu không clear, findById sẽ trả về ngay entity instance trong bộ nhớ cache
+       // mà trên đó các trường read-only chưa được nạp giá trị default từ DB.
+       entityManager.flush();
+       entityManager.clear();
+
+       // 2. Tải lại entity từ DB thông qua OrderRepository (bắt buộc Hibernate phát sinh SELECT mới)
+       OrderEntity order = orderRepository.findById(response.orderId()).orElseThrow();
+
+       // 3. Assert giá trị default của workflow_model và 8 trường read-only
+       assertThat(order.getWorkflowModel()).isEqualTo("LEGACY_V14");
+       assertThat(order.getReturnAllowed()).isNull();
+       assertThat(order.getValidDeliveredAt()).isNull();
+       assertThat(order.getReturnDueAt()).isNull();
+       assertThat(order.getEarlyCompletedAt()).isNull();
+       assertThat(order.getEarlyCompletionWarningVersion()).isNull();
+       assertThat(order.getGroupId()).isNull();
+       assertThat(order.getDeliveryMethod()).isNull();
+       assertThat(order.getHandoverDay()).isNull();
+
+       // 4. Assert trực tiếp qua SQL query trên view og_compat.orders
+       Map<String, Object> row = jdbcTemplate.queryForMap(
+           "SELECT workflow_model, group_id, return_allowed FROM og_compat.orders WHERE order_id = ?",
+           response.orderId()
+       );
+       assertThat(row.get("workflow_model")).isEqualTo("LEGACY_V14");
+       assertThat(row.get("group_id")).isNull();
+       assertThat(row.get("return_allowed")).isNull();
+       ```
+   - *Kịch bản chạy tay (Manual Test)*: Đăng nhập giao diện Người mua -> bấm Mua ngay một sản phẩm bất kỳ -> kiểm tra đơn hàng tạo thành công, thanh toán thành công chuyển `DELIVERED`, kiểm tra trong DB `SELECT workflow_model, return_allowed FROM og_compat.orders` trả về `('LEGACY_V14', null)`.
+
+3. **Kiểm thử tích hợp Hoàn tất sớm & Xác nhận nhận hàng (`EarlyCompletionPostgresTest` - Task 2.1)**:
+   - *Bối cảnh*: Task 2.1 refactor chức năng hoàn tất sớm sang gọi hàm DB `og_early_complete_order` và tách biệt nút "Đã nhận hàng".
+   - *Điều kiện Fixture Test Dương*: Phải dựng đơn thỏa mãn: `workflow_model = 'UC83'`, `buyer_id = buyerId`, `status = 'DELIVERED'`, có `valid_delivered_at`, **KHÔNG có hồ sơ tranh chấp đang mở** (`og_order_has_blocking_case = false`), và **KHÔNG có lệnh giữ tiền (`money_holds`) nào chưa đóng**.
+   - *Hai Nhóm Test Cần Triển Khai*:
+     * **Nhóm 1 (Kiểm thử trực tiếp Stored Procedure qua JdbcTemplate)**:
+       - Gọi trực tiếp `SELECT og_early_complete_order(?, ?, ?, ?)`:
+         * Test âm 1: Thiếu warning consent (`p_warning = ''` hoặc `null`) -> bắt `DataAccessException` kiểm tra đúng mã SQLSTATE `23514` và thông báo `"Early completion needs Buyer warning consent and no blockers"`.
+         * Test âm 2: Đơn có `CaseEntity` trạng thái `OPEN` -> ném SQLSTATE `23514`.
+         * Test âm 3: Đơn có `money_holds` chưa đóng -> ném SQLSTATE `23514`.
+         * Test âm 4: Đơn chưa có `valid_delivered_at` hoặc trạng thái khác `DELIVERED` -> ném SQLSTATE `23514`.
+         * Test dương SP: Gọi hợp lệ -> SP trả về `true`, DB cập nhật `early_completed_at` và `order_events` có bản ghi `EARLY_COMPLETION_ACCEPTED`.
+     * **Nhóm 2 (Kiểm thử qua OrderManagementService & Ánh xạ Ngoại lệ Nghiệp vụ)**:
+       - Test nút "Đã nhận hàng" `confirmReceived`: Idempotent (gọi lần hai giữ nguyên `received_at` ban đầu, không thay đổi trạng thái đơn, không giải ngân).
+       - Test endpoint cũ `POST /complete`:
+         * Gọi với đơn `UC83` -> assert ném ngoại lệ nghiệp vụ (HTTP 400), hướng dẫn dùng `/confirm-received` hoặc `/early-complete`.
+         * Gọi với đơn `LEGACY_V14` -> hoạt động bình thường, chuyển `COMPLETED` và `payment.markReleased()`.
+       - Test âm `earlyCompleteOrder`:
+         * Thiếu consent (`warningConsent = false`) -> assert ném `IllegalArgumentException`.
+         * Có hồ sơ khiếu nại mở / sai trạng thái -> assert ném `IllegalStateException`.
+       - Test dương `earlyCompleteOrder`:
+         * Gọi `earlyCompleteOrder` hợp lệ -> thành công.
+         * LƯU Ý STALE ENTITY: Gọi `entityManager.flush() + clear()`, nạp lại entity từ DB.
+         * **CHỐT CHẶN BẮT BUỘC**: `early_completed_at IS NOT NULL`, `early_completion_warning_version = "v1.0"`, nhưng trạng thái đơn **VẪN LÀ DELIVERED**, tiền **VẪN CHƯA GIẢI NGÂN** (tuyệt đối KHÔNG assert COMPLETED / RELEASED sau `earlyCompleteOrder`).
+
+4. **Kiểm thử tích hợp Giải ngân Người bán (`SellerDisbursementPostgresTest` - Task 2.1b)**:
+   - *Bối cảnh*: Task 2.1b triển khai phương thức `disburseSellerFunds(orderId)`.
+   - *Kịch bản kiểm thử*:
+     * Test âm: gọi khi chưa đủ 3 ngày và chưa hoàn tất sớm; hoặc có hồ sơ mở / money hold mở -> ném lỗi không cho giải ngân.
+     * Test dương nhánh `LEGACY_V14`: chuyển đơn `COMPLETED`, `payment.markReleased()`.
+     * Test dương nhánh `UC83`: dựng fixture `order_fund_components` (`GOODS_CASH`, `PLATFORM_GOODS_SUBSIDY`), gọi `disburseSellerFunds`, kiểm tra tạo 2 bản ghi `settlement_operations` (`RELEASE_SELLER`, `cause_type = 'COMPLETION'`), xác nhận `CONFIRMED`, `order_fund_components.released_amount` được trigger DB cập nhật tăng, đơn chuyển `COMPLETED`.

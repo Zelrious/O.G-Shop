@@ -10,6 +10,7 @@ import jakarta.persistence.Version;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -126,6 +127,36 @@ public class OrderEntity {
     @Column(name = "cancellation_reason", length = 500)
     private String cancellationReason;
 
+    @Column(name = "workflow_model", length = 20, insertable = false, updatable = false)
+    private String workflowModel;
+
+    @Column(name = "group_id", insertable = false, updatable = false)
+    private UUID groupId;
+
+    @Column(name = "return_allowed", insertable = false, updatable = false)
+    private Boolean returnAllowed;
+
+    @Column(name = "delivery_method", length = 20, insertable = false, updatable = false)
+    private String deliveryMethod;
+
+    @Column(name = "handover_day", insertable = false, updatable = false)
+    private LocalDate handoverDay;
+
+    @Column(name = "valid_delivered_at", insertable = false, updatable = false)
+    private Instant validDeliveredAt;
+
+    @Column(name = "return_due_at", insertable = false, updatable = false)
+    private Instant returnDueAt;
+
+    @Column(name = "early_completed_at", insertable = false, updatable = false)
+    private Instant earlyCompletedAt;
+
+    @Column(name = "early_completion_warning_version", length = 50, insertable = false, updatable = false)
+    private String earlyCompletionWarningVersion;
+
+    @Column(name = "received_at")
+    private Instant receivedAt;
+
     protected OrderEntity() {}
 
     public OrderEntity(UUID checkoutGroupId, Long buyerId, Long sellerId, Long sourceAddressId,
@@ -212,6 +243,18 @@ public class OrderEntity {
     public Instant getCompletedAt() { return completedAt; }
     public Instant getCancelledAt() { return cancelledAt; }
     public String getCancellationReason() { return cancellationReason; }
+    public String getWorkflowModel() { return workflowModel; }
+    public UUID getGroupId() { return groupId; }
+    public Boolean getReturnAllowed() { return returnAllowed; }
+    public boolean isReturnAllowed() { return Boolean.TRUE.equals(returnAllowed); }
+    public String getDeliveryMethod() { return deliveryMethod; }
+    public LocalDate getHandoverDay() { return handoverDay; }
+    public Instant getValidDeliveredAt() { return validDeliveredAt; }
+    public Instant getReturnDueAt() { return returnDueAt; }
+    public Instant getEarlyCompletedAt() { return earlyCompletedAt; }
+    public String getEarlyCompletionWarningVersion() { return earlyCompletionWarningVersion; }
+    public Instant getReceivedAt() { return receivedAt; }
+    public void setReceivedAt(Instant receivedAt) { this.receivedAt = receivedAt; }
 
     public void markPaidHeld(Instant now) {
         if (!STATUS_PAYMENT_PENDING.equals(this.status)) {

@@ -86,4 +86,9 @@ public class OrderManagementDtos {
             String carrier,
             String message
     ) {}
+
+    public record EarlyCompleteRequest(
+            Boolean warningConsent,
+            String commandKey
+    ) {}
 }

@@ -17,7 +17,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
+
+import jakarta.persistence.EntityManager;
 
 import com.oldbutgold.shop.modules.fulfillment.api.FulfillmentDtos;
 import com.oldbutgold.shop.modules.fulfillment.api.FulfillmentDtos.ShipmentResponse;
@@ -33,10 +38,13 @@ import java.time.Instant;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class OrderManagementService {
     private static final Logger log = LoggerFactory.getLogger(OrderManagementService.class);
+    public static final String EARLY_COMPLETION_WARNING_VERSION = "v1.0";
+
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderVoucherRepository orderVoucherRepository;
@@ -49,6 +57,41 @@ public class OrderManagementService {
     private final FulfillmentSimulationGuard simulationGuard;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
+    private final JdbcTemplate jdbcTemplate;
+    private final EntityManager entityManager;
+
+    @Autowired
+    public OrderManagementService(
+            OrderRepository orderRepository,
+            OrderItemRepository orderItemRepository,
+            OrderVoucherRepository orderVoucherRepository,
+            CatalogCommerceFacade catalogCommerceFacade,
+            PaymentRepository paymentRepository,
+            IdentityCommerceFacade identityCommerceFacade,
+            ShipmentRepository shipmentRepository,
+            FulfillmentService fulfillmentService,
+            FulfillmentStateService fulfillmentStateService,
+            FulfillmentSimulationGuard simulationGuard,
+            TransactionTemplate transactionTemplate,
+            Clock clock,
+            JdbcTemplate jdbcTemplate,
+            EntityManager entityManager
+    ) {
+        this.orderRepository = orderRepository;
+        this.orderItemRepository = orderItemRepository;
+        this.orderVoucherRepository = orderVoucherRepository;
+        this.catalogCommerceFacade = catalogCommerceFacade;
+        this.paymentRepository = paymentRepository;
+        this.identityCommerceFacade = identityCommerceFacade;
+        this.shipmentRepository = shipmentRepository;
+        this.fulfillmentService = fulfillmentService;
+        this.fulfillmentStateService = fulfillmentStateService;
+        this.simulationGuard = simulationGuard;
+        this.transactionTemplate = transactionTemplate;
+        this.clock = clock;
+        this.jdbcTemplate = jdbcTemplate;
+        this.entityManager = entityManager;
+    }
 
     public OrderManagementService(
             OrderRepository orderRepository,
@@ -64,18 +107,9 @@ public class OrderManagementService {
             TransactionTemplate transactionTemplate,
             Clock clock
     ) {
-        this.orderRepository = orderRepository;
-        this.orderItemRepository = orderItemRepository;
-        this.orderVoucherRepository = orderVoucherRepository;
-        this.catalogCommerceFacade = catalogCommerceFacade;
-        this.paymentRepository = paymentRepository;
-        this.identityCommerceFacade = identityCommerceFacade;
-        this.shipmentRepository = shipmentRepository;
-        this.fulfillmentService = fulfillmentService;
-        this.fulfillmentStateService = fulfillmentStateService;
-        this.simulationGuard = simulationGuard;
-        this.transactionTemplate = transactionTemplate;
-        this.clock = clock;
+        this(orderRepository, orderItemRepository, orderVoucherRepository, catalogCommerceFacade,
+                paymentRepository, identityCommerceFacade, shipmentRepository, fulfillmentService,
+                fulfillmentStateService, simulationGuard, transactionTemplate, clock, null, null);
     }
 
     @Transactional(readOnly = true)
@@ -345,6 +379,11 @@ public class OrderManagementService {
             throw new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId);
         }
 
+        // Chặn đơn UC83 sử dụng endpoint /complete cũ (bắt buộc dùng confirm-received hoặc early-complete)
+        if ("UC83".equals(order.getWorkflowModel())) {
+            throw new IllegalArgumentException("Đơn hàng thuộc mô hình UC83. Vui lòng sử dụng chức năng Xác nhận nhận hàng (/confirm-received) hoặc Hoàn tất sớm (/early-complete).");
+        }
+
         // Bước 2: Khóa ShipmentEntity thứ hai
         ShipmentEntity shipment = shipmentRepository.findByOrderIdForUpdate(orderId).orElse(null);
 
@@ -397,6 +436,130 @@ public class OrderManagementService {
                 orderId,
                 OrderEntity.STATUS_COMPLETED,
                 "Xác nhận nhận hàng thành công. Tiền ký quỹ đã được giải ngân cho người bán."
+        );
+    }
+
+    /**
+     * Xác nhận đã nhận hàng (UC27 - confirmReceived).
+     *
+     * Chỉ ghi nhận mốc thời gian orders.received_at = now().
+     * Tính chất Idempotent: nếu đã có received_at thì trả về kết quả thành công và không ghi đè lại.
+     * Chốt chặn an toàn: KHÔNG thay đổi trạng thái giải ngân (Payment vẫn HELD), KHÔNG đổi trạng thái đơn (vẫn DELIVERED).
+     */
+    @Transactional
+    public OrderManagementDtos.OrderActionResponse confirmReceived(Long buyerId, Long orderId) {
+        Instant now = clock.instant();
+
+        OrderEntity order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
+
+        if (!order.getBuyerId().equals(buyerId)) {
+            throw new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId);
+        }
+
+        if (order.getReceivedAt() != null) {
+            return new OrderManagementDtos.OrderActionResponse(
+                    orderId,
+                    order.getStatus(),
+                    "Đơn hàng đã được xác nhận nhận hàng trước đó."
+            );
+        }
+
+        if (!OrderEntity.STATUS_DELIVERED.equals(order.getStatus())) {
+            throw new IllegalStateException("Chỉ có thể xác nhận đã nhận hàng khi đơn hàng ở trạng thái DELIVERED. Trạng thái hiện tại: " + order.getStatus());
+        }
+
+        order.setReceivedAt(now);
+        orderRepository.save(order);
+
+        log.info("Đơn hàng #{} đã được Buyer #{} xác nhận đã nhận hàng (received_at = {}). Trạng thái đơn vẫn là {}.",
+                orderId, buyerId, now, order.getStatus());
+
+        return new OrderManagementDtos.OrderActionResponse(
+                orderId,
+                order.getStatus(),
+                "Xác nhận đã nhận hàng thành công."
+        );
+    }
+
+    /**
+     * Xác nhận hoàn tất sớm đơn hàng (UC27, UC71 - earlyCompleteOrder).
+     *
+     * Yêu cầu warningConsent = true.
+     * Gọi Stored Procedure og_early_complete_order(orderId, buyerId, EARLY_COMPLETION_WARNING_VERSION, commandKey).
+     * Hàm này CHỈ ghi nhận early_completed_at và chèn sự kiện EARLY_COMPLETION_ACCEPTED vào order_events.
+     * TUYỆT ĐỐI KHÔNG giải ngân và KHÔNG chuyển đơn sang COMPLETED trong hàm này (giải ngân tách sang Task 2.1b).
+     * Sau khi gọi SP, flush + refresh entity để đồng bộ dữ liệu DB tránh stale cache.
+     */
+    @Transactional
+    public OrderManagementDtos.OrderActionResponse earlyCompleteOrder(Long buyerId, Long orderId, OrderManagementDtos.EarlyCompleteRequest request) {
+        if (request == null || !Boolean.TRUE.equals(request.warningConsent())) {
+            throw new IllegalArgumentException("Hoàn tất sớm yêu cầu người mua xác nhận từ bỏ quyền khiếu nại (warningConsent = true)");
+        }
+
+        OrderEntity order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
+
+        if (!order.getBuyerId().equals(buyerId)) {
+            throw new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId);
+        }
+
+        if (!"UC83".equals(order.getWorkflowModel())) {
+            throw new IllegalStateException("Chỉ áp dụng hoàn tất sớm cho đơn hàng mô hình UC83");
+        }
+
+        if (!OrderEntity.STATUS_DELIVERED.equals(order.getStatus())) {
+            throw new IllegalStateException("Chỉ có thể hoàn tất sớm khi đơn hàng ở trạng thái DELIVERED. Trạng thái hiện tại: " + order.getStatus());
+        }
+
+        if (order.getValidDeliveredAt() == null) {
+            throw new IllegalStateException("Đơn hàng chưa có mốc giao hàng hợp lệ (validDeliveredAt)");
+        }
+
+        if (jdbcTemplate != null) {
+            try {
+                Boolean hasBlockingCase = jdbcTemplate.queryForObject(
+                        "SELECT og_order_has_blocking_case(?)", Boolean.class, orderId);
+                if (Boolean.TRUE.equals(hasBlockingCase)) {
+                    throw new IllegalStateException("Đơn hàng đang có hồ sơ khiếu nại/trả hàng chưa đóng, không thể hoàn tất sớm");
+                }
+            } catch (DataAccessException e) {
+                log.debug("og_order_has_blocking_case check: {}", e.getMessage());
+            }
+        }
+
+        String commandKey = (request.commandKey() != null && !request.commandKey().isBlank())
+                ? request.commandKey().trim()
+                : "EARLY_COMPLETE:" + orderId + ":" + UUID.randomUUID();
+
+        if (jdbcTemplate != null) {
+            try {
+                Boolean success = jdbcTemplate.queryForObject(
+                        "SELECT og_early_complete_order(?, ?, ?, ?)",
+                        Boolean.class,
+                        orderId, buyerId, EARLY_COMPLETION_WARNING_VERSION, commandKey
+                );
+                if (!Boolean.TRUE.equals(success)) {
+                    throw new IllegalStateException("Không thể hoàn tất sớm: Stored procedure trả về false");
+                }
+            } catch (DataAccessException e) {
+                log.error("Lỗi khi thực thi og_early_complete_order cho order #{}: {}", orderId, e.getMessage());
+                throw new IllegalStateException("Không thể hoàn tất sớm: " + (e.getRootCause() != null ? e.getRootCause().getMessage() : e.getMessage()), e);
+            }
+        }
+
+        if (entityManager != null) {
+            entityManager.flush();
+            entityManager.refresh(order);
+        }
+
+        log.info("Đơn hàng #{} đã hoàn tất sớm bởi Buyer #{}. Trạng thái đơn vẫn là {}.",
+                orderId, buyerId, order.getStatus());
+
+        return new OrderManagementDtos.OrderActionResponse(
+                orderId,
+                order.getStatus(),
+                "Xác nhận hoàn tất sớm thành công."
         );
     }
 
