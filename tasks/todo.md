@@ -155,6 +155,8 @@
     - [x] Đã hoàn thành 14 unit tests trong `ReturnCaseServiceTest` (100% pass).
   - **Files**:
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServiceTest.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServicePostgresTest.java`
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseDtos.java`
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseRoundRepository.java`
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseEvidenceRepository.java`
@@ -175,6 +177,8 @@
     - [x] Quá hạn KTV 48h: Ghi nhận event `ESCALATED`, không tự động duyệt/hoàn tiền.
   - **Files**:
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServiceTest.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServicePostgresTest.java`
 
 - [x] **Task 2.4: Triển khai Người mua rút yêu cầu trả hàng (`withdrawReturnRequest` - UC62 7c)**
   - **Mô tả**: Người mua chủ động rút yêu cầu trước khi gửi hàng trả.
@@ -183,6 +187,8 @@
     - [x] Đóng lệnh giữ tiền (`money_holds.closed_at = now()`), giải phóng cản trở (`has_blocking_case = false`), tiền tiếp tục xử lý giải ngân theo điều kiện UC71.
   - **Files**:
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServiceTest.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServicePostgresTest.java`
 
 ---
 
@@ -196,6 +202,8 @@
     - [ ] Chuyển trạng thái hồ sơ sang `POST_RETURN`, khởi tạo Round 2 với `stage = 'POST_RETURN_RESOLUTION'`.
   - **Files**:
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServiceTest.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServicePostgresTest.java`
 
 - [ ] **Task 3.2: Nghiệp vụ Vòng 2 của Người bán (UC63 & UC83)**
   - **Mô tả**: Người bán kiểm tra hàng thực tế với 2 lựa chọn:
@@ -207,6 +215,8 @@
     - [ ] Người bán không được tự quyết từ chối hoàn tiền; chỉ KTV mới có thẩm quyền miễn hoàn.
   - **Files**:
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServiceTest.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServicePostgresTest.java`
 
 - [ ] **Task 3.3: Hệ thống Workers tự động định kỳ**
   - **Mô tả**: Worker quét quá hạn 2 ngày tự hoàn tiền (`reconcileOverdueReturnResponses`) và Worker tự giải ngân sau 3 ngày cho đơn `DELIVERED` đủ điều kiện UC71 (`reconcileOverdueDeliveries`).
@@ -226,6 +236,8 @@
     - [ ] Bác đề nghị (`FULL_GOODS_REFUND`): Kích hoạt hoàn 100% tiền hàng thực trả cho Người mua theo UC83.
   - **Files**:
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServiceTest.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServicePostgresTest.java`
 
 ---
 
