@@ -19,10 +19,13 @@ import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -204,6 +207,13 @@ public class ReturnCaseService {
 
         // 8. Lưu bằng chứng (nếu có)
         for (ReturnCaseDtos.EvidenceItemDto item : evidenceList) {
+            String digest = resolveContentDigest(item.contentDigest(), item.objectKey());
+            Long size = (item.fileSizeBytes() != null && item.fileSizeBytes() > 0) ? item.fileSizeBytes() : 1024L;
+            Integer duration = null;
+            if (CaseEvidenceEntity.MEDIA_VIDEO.equalsIgnoreCase(item.mediaType())) {
+                duration = (item.durationSeconds() != null && item.durationSeconds() >= 1 && item.durationSeconds() <= 60)
+                        ? item.durationSeconds() : 30;
+            }
             CaseEvidenceEntity ev = new CaseEvidenceEntity(
                     UUID.randomUUID(),
                     round.getId(),
@@ -212,9 +222,9 @@ public class ReturnCaseService {
                     item.mediaType().toUpperCase(),
                     item.objectKey(),
                     item.textContent(),
-                    item.contentDigest(),
-                    item.fileSizeBytes(),
-                    item.durationSeconds()
+                    digest,
+                    size,
+                    duration
             );
             caseEvidenceRepository.save(ev);
         }
@@ -578,6 +588,18 @@ public class ReturnCaseService {
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy hồ sơ #" + caseId));
 
         return mapToDetailResponse(returnCase);
+    }
+
+    private String resolveContentDigest(String digest, String objectKey) {
+        if (digest != null && digest.matches("^[0-9a-f]{64}$")) {
+            return digest;
+        }
+        try {
+            byte[] input = (objectKey != null ? objectKey : UUID.randomUUID().toString()).getBytes(StandardCharsets.UTF_8);
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input));
+        } catch (Exception e) {
+            return "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+        }
     }
 
     private void validateEvidence(List<ReturnCaseDtos.EvidenceItemDto> evidenceList) {

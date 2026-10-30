@@ -102,11 +102,22 @@ class ReturnCaseServicePostgresTest {
         buyerId = createTestUser("buyer");
         sellerId = createTestUser("seller");
         ktvId = createTestUser("ktv");
+        grantRole(buyerId, "BUYER");
+        grantRole(sellerId, "SELLER");
+        grantRole(ktvId, "KTV");
+    }
+
+    private void grantRole(Long userId, String roleName) {
+        jdbcTemplate.update("""
+                INSERT INTO og_compat.user_roles(user_id, role_id)
+                SELECT ?, role_id FROM og_compat.roles WHERE role_name = ?
+                ON CONFLICT DO NOTHING
+                """, userId, roleName);
     }
 
     private Long createTestUser(String prefix) {
         return jdbcTemplate.queryForObject(
-                "INSERT INTO og_compat.users(email, password_hash, full_name) VALUES (?, 'fixture_pass', ?) RETURNING user_id",
+                "INSERT INTO og_compat.users(email, password_hash, full_name, status) VALUES (?, 'fixture_pass', ?, 'ACTIVE') RETURNING user_id",
                 Long.class,
                 prefix + "_" + UUID.randomUUID() + "@example.test",
                 "User " + prefix
@@ -242,8 +253,10 @@ class ReturnCaseServicePostgresTest {
                 ReturnReasonCode.CHANGE_MIND,
                 "Sản phẩm còn nguyên tem mác, tôi đổi ý không mua nữa",
                 List.of(
-                        new ReturnCaseDtos.EvidenceItemDto("IMAGE", "cases/img1.jpg", "Tem mác nguyên vẹn", null, 1024L, null),
-                        new ReturnCaseDtos.EvidenceItemDto("VIDEO", "cases/vid1.mp4", "Video bóc hộp", null, 5_000_000L, 30)
+                        new ReturnCaseDtos.EvidenceItemDto("IMAGE", "cases/img1.jpg", "Tem mác nguyên vẹn",
+                                "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", 1024L, null),
+                        new ReturnCaseDtos.EvidenceItemDto("VIDEO", "cases/vid1.mp4", "Video bóc hộp",
+                                "b1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", 5_000_000L, 30)
                 ),
                 "CMD_PG_CREATE_" + UUID.randomUUID()
         );
@@ -476,3 +489,4 @@ class ReturnCaseServicePostgresTest {
                 .hasMessageContaining("Hồ sơ không ở trạng thái chờ người bán phản hồi");
     }
 }
+
