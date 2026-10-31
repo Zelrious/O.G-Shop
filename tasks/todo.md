@@ -145,16 +145,22 @@
   - **Phụ thuộc**: Task 2.1 xong trước.
   - **Chặn**: Task 3.3 (Worker auto-disburse) và Task 4.1.
 
-- [ ] **Task 2.2: Triển khai Mở yêu cầu trả hàng đủ 6 điều kiện (`createReturnRequest` - UC62)**
+- [x] **Task 2.2: Triển khai Mở yêu cầu trả hàng đủ 6 điều kiện (`createReturnRequest` - UC62)**
   - **Mô tả**: Kiểm tra đủ 6 điều kiện bắt buộc, khởi tạo hồ sơ `cases` ở trạng thái `OPEN` và Round 1 `RETURN_APPROVAL`.
   - **Tiêu chí chấp nhận**:
-    - [ ] Kiểm tra đủ 6 điều kiện: `DELIVERED`, có `valid_delivered_at`, `return_allowed == true`, trong hạn 3 ngày từ `valid_delivered_at`, chưa Hoàn tất sớm, tiền chưa giải ngân cuối, không có hồ sơ mở.
-    - [ ] Validate 3 lý do chuẩn: `CHANGE_MIND`, `NOT_AS_DESCRIBED`, `DAMAGED_OR_DEFECTIVE`.
-    - [ ] Validate giới hạn bằng chứng: Tối đa 5 ảnh, 2 video <= 60 giây.
-    - [ ] Tiền ký quỹ bị đóng băng (trigger `trg_return_case_holds` tự động tạo `money_holds`).
+    - [x] Kiểm tra đủ 6 điều kiện: `DELIVERED`, có `valid_delivered_at`, `return_allowed == true`, trong hạn 3 ngày từ `valid_delivered_at`, chưa Hoàn tất sớm, tiền chưa giải ngân cuối, không có hồ sơ mở.
+    - [x] Validate 3 lý do chuẩn: `CHANGE_MIND`, `NOT_AS_DESCRIBED`, `DAMAGED_OR_DEFECTIVE`.
+    - [x] Validate giới hạn bằng chứng: Tối đa 5 ảnh, 2 video <= 60 giây, <= 50MB.
+    - [x] Tiền ký quỹ bị đóng băng (trigger `trg_return_case_holds` tự động tạo `money_holds`).
+    - [x] Đã hoàn thành 14 unit tests trong `ReturnCaseServiceTest` (100% pass).
   - **Files**:
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseDtos.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseRoundRepository.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseEvidenceRepository.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseDecisionRepository.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseEventRepository.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServiceTest.java`
 
 - [ ] **Task 2.3: Triển khai Người bán phản hồi & KTV phân xử Vòng 1 (UC62 & UC75)**
   - **Mô tả**:
