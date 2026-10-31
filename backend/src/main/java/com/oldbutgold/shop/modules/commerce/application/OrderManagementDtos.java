@@ -91,4 +91,21 @@ public class OrderManagementDtos {
             Boolean warningConsent,
             String commandKey
     ) {}
+
+    public record DisbursementOperationDto(
+            UUID operationId,
+            UUID componentId,
+            String componentType,
+            BigDecimal amount,
+            String state,
+            String commandKey
+    ) {}
+
+    public record DisbursementResponse(
+            Long orderId,
+            String status,
+            java.util.List<DisbursementOperationDto> operations,
+            BigDecimal totalDisbursedAmount,
+            String message
+    ) {}
 }

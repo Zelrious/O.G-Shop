@@ -700,6 +700,154 @@ class OrderManagementServiceTest {
         verify(paymentRepository, never()).save(any());
     }
 
+    @Test
+    void disburseSellerFunds_orderNotFound_throwsNoSuchElementException() {
+        when(orderRepository.findByIdForUpdate(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.disburseSellerFunds(999L))
+                .isInstanceOf(NoSuchElementException.class)
+                .hasMessageContaining("Không tìm thấy đơn hàng #999");
+    }
+
+    @Test
+    void disburseSellerFunds_notDelivered_throwsIllegalStateException() throws Exception {
+        setField(order, "workflowModel", "UC83");
+        // status is PAYMENT_PENDING
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> service.disburseSellerFunds(1L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Chỉ có thể giải ngân cho đơn hàng ở trạng thái DELIVERED");
+    }
+
+    @Test
+    void disburseSellerFunds_missingValidDeliveredAt_throwsIllegalStateException() throws Exception {
+        setField(order, "workflowModel", "UC83");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        // validDeliveredAt is null
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> service.disburseSellerFunds(1L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("validDeliveredAt");
+    }
+
+    @Test
+    void disburseSellerFunds_neither3DaysNorEarlyCompleted_throwsIllegalStateException() throws Exception {
+        setField(order, "workflowModel", "UC83");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        setField(order, "validDeliveredAt", now.minus(Duration.ofDays(1))); // only 1 day ago
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> service.disburseSellerFunds(1L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Chưa đủ 3 ngày");
+    }
+
+    @Test
+    void disburseSellerFunds_hasBlockingCase_throwsIllegalStateException() throws Exception {
+        setField(order, "workflowModel", "UC83");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        setField(order, "validDeliveredAt", now.minus(Duration.ofDays(4)));
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_order_has_blocking_case(?)"), eq(Boolean.class), eq(1L)))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.disburseSellerFunds(1L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("khiếu nại");
+    }
+
+    @Test
+    void disburseSellerFunds_hasActiveHold_throwsIllegalStateException() throws Exception {
+        setField(order, "workflowModel", "UC83");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        setField(order, "validDeliveredAt", now.minus(Duration.ofDays(4)));
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_order_has_blocking_case(?)"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("SELECT EXISTS"), eq(Boolean.class), eq(1L)))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.disburseSellerFunds(1L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("tạm giữ");
+    }
+
+    @Test
+    void disburseSellerFunds_legacyEligible_marksPaymentReleasedAndOrderCompleted() throws Exception {
+        setField(order, "workflowModel", "LEGACY_V14");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        setField(order, "validDeliveredAt", now.minus(Duration.ofDays(4)));
+
+        PaymentEntity payment = new PaymentEntity(1L, new BigDecimal("120000.00"), PaymentEntity.METHOD_VNPAY, now);
+        payment.markHeld("TX_123", now);
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_order_has_blocking_case(?)"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("SELECT EXISTS"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(paymentRepository.findByOrderIdForUpdate(1L)).thenReturn(Optional.of(payment));
+
+        var response = service.disburseSellerFunds(1L);
+
+        assertThat(response.orderId()).isEqualTo(1L);
+        assertThat(response.status()).isEqualTo(OrderEntity.STATUS_COMPLETED);
+        assertThat(response.totalDisbursedAmount()).isEqualByComparingTo(new BigDecimal("120000.00"));
+        assertThat(order.getStatus()).isEqualTo(OrderEntity.STATUS_COMPLETED);
+        assertThat(order.getCompletedAt()).isEqualTo(now);
+        assertThat(payment.getStatus()).isEqualTo(PaymentEntity.STATUS_RELEASED);
+        assertThat(payment.getReleasedAt()).isEqualTo(now);
+
+        verify(orderRepository).save(order);
+        verify(paymentRepository).save(payment);
+    }
+
+    @Test
+    void disburseSellerFunds_legacyAlreadyCompleted_returnsIdempotent() throws Exception {
+        setField(order, "workflowModel", "LEGACY_V14");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        order.markCompleted(now);
+
+        PaymentEntity payment = new PaymentEntity(1L, new BigDecimal("120000.00"), PaymentEntity.METHOD_VNPAY, now);
+        payment.markHeld("TX_123", now);
+        payment.markReleased(now);
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderId(1L)).thenReturn(Optional.of(payment));
+
+        var response = service.disburseSellerFunds(1L);
+
+        assertThat(response.orderId()).isEqualTo(1L);
+        assertThat(response.status()).isEqualTo(OrderEntity.STATUS_COMPLETED);
+        assertThat(response.totalDisbursedAmount()).isEqualByComparingTo(new BigDecimal("120000.00"));
+        assertThat(response.message()).contains("trước đó");
+        verify(paymentRepository, never()).save(any());
+    }
+
     private static void setId(Object target, Long id) throws Exception {
         Field idField = target.getClass().getDeclaredField("id");
         idField.setAccessible(true);

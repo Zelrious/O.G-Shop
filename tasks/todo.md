@@ -92,6 +92,8 @@
 - [x] [Đề xuất Phía User] Chạy kiểm thử xác minh luồng checkout hiện hành không bị ảnh hưởng bởi Task 1.2:
   * Test đề xuất: `LegacyCheckoutPersistencePostgresTest` (xác minh `CheckoutService.buyNow()` lưu đơn thành công; bắt buộc gọi `entityManager.flush() + clear()` trước `findById` để xóa L1 cache; assert reloaded entity có `workflow_model = 'LEGACY_V14'`, 8 trường read-only còn lại nhận giá trị `null`).
 
+> **Baseline quality gate hiện tại**: `679 run / 212 skipped / 0 fail` (trong đó 212 skip chủ yếu là test Postgres bị gate bởi biến môi trường `OGSHOP_TEST_DB_*`).
+
 ---
 
 ## Giai đoạn 2: Tách Hoàn tất sớm (UC27) & Nghiệp vụ Vòng 1 (UC62 & UC75)
@@ -114,7 +116,7 @@
     - `backend/src/main/java/com/oldbutgold/shop/modules/commerce/api/OrderController.java`
     - `backend/src/main/java/com/oldbutgold/shop/modules/commerce/application/OrderManagementDtos.java`
 
-- [ ] **Task 2.1b: Tiến trình Giải ngân cho Người bán (`disburseSellerFunds` - UC71)**
+- [x] **Task 2.1b: Tiến trình Giải ngân cho Người bán (`disburseSellerFunds` - UC71)**
   - **Mô tả**:
     * Xử lý giải phóng tiền và đóng đơn sang `COMPLETED` khi đủ 3 điều kiện BR-UC71-04:
       (1) Đơn hàng đã giao thành công hợp lệ (`valid_delivered_at` có giá trị);
@@ -129,14 +131,17 @@
       c. **Số lượng operation & quy tắc `command_key`**: Bắt buộc tạo 2 bản ghi `settlement_operations` riêng biệt cho 2 components `GOODS_CASH` và `PLATFORM_GOODS_SUBSIDY` do `component_id` là khóa ngoại đơn 1-1 (V18:243-244). Quy tắc `command_key` ổn định để idempotent: `"DISBURSE:SELLER:" + orderId + ":" + componentType + ":COMPLETION"` (V18:256).
       d. **Chuyển trạng thái đơn sang `COMPLETED`**: DB KHÔNG có trigger tự động đóng đơn sang `COMPLETED`. Sau khi toàn bộ các component hàng được giải ngân, chính Service phải gọi `order.markCompleted(now)` và lưu đơn hàng.
   - **Tiêu chí chấp nhận**:
-    - [ ] Kiểm tra chặt chẽ đủ 3 điều kiện theo BR-UC71-04 trước khi giải ngân.
-    - [ ] Với đơn `LEGACY_V14`: chuyển đơn `COMPLETED`, `payment.markReleased()`.
-    - [ ] Với đơn `UC83`: tạo `settlement_operations` riêng cho từng component hàng, chuyển `CONFIRMED`, trigger DB tự tăng `released_amount`.
-    - [ ] Service đóng đơn sang `COMPLETED` sau khi giải ngân thành công.
-    - [ ] Đảm bảo đúng thứ tự lock và idempotent theo `command_key`.
+    - [x] Kiểm tra chặt chẽ đủ 3 điều kiện theo BR-UC71-04 trước khi giải ngân. (Pass Unit & Postgres tests)
+    - [x] Với đơn `LEGACY_V14`: chuyển đơn `COMPLETED`, `payment.markReleased()`. (Pass Unit & Postgres tests)
+    - [x] Với đơn `UC83`: tạo `settlement_operations` riêng cho từng component hàng, chuyển `CONFIRMED`, trigger DB tự tăng `released_amount`. (Pass Unit & Postgres tests)
+    - [x] Service đóng đơn sang `COMPLETED` sau khi giải ngân thành công. (Pass Unit & Postgres tests)
+    - [x] Đảm bảo đúng thứ tự lock và idempotent theo `command_key`. (Pass Unit & Postgres tests)
   - **Files**:
     - `backend/src/main/java/com/oldbutgold/shop/modules/commerce/application/OrderManagementService.java`
-    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/...`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/commerce/application/OrderManagementDtos.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/api/AdminPaymentController.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/commerce/application/OrderManagementServiceTest.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/commerce/application/SellerDisbursementPostgresTest.java`
   - **Phụ thuộc**: Task 2.1 xong trước.
   - **Chặn**: Task 3.3 (Worker auto-disburse) và Task 4.1.
 

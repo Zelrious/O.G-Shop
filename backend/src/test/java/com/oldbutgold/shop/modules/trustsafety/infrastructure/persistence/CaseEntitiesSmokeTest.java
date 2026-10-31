@@ -31,6 +31,9 @@ class CaseEntitiesSmokeTest {
     @Autowired
     private EntityManager entityManager;
 
+    @Autowired
+    private CaseRepository caseRepository;
+
     @Test
     @DisplayName("Should successfully execute JPQL SELECT across all 5 case entities")
     void testSelectEntitiesMapping() {
@@ -134,5 +137,39 @@ class CaseEntitiesSmokeTest {
         entityManager.persist(event);
         entityManager.flush();
         assertThat(event.getId()).isEqualTo(eventId);
+    }
+
+    @Test
+    @DisplayName("Should execute CaseRepository query methods and OrderEntity read-only mapping")
+    void testCaseRepositoryMethodsAndOrderEntityMapping() {
+        Long orderId = 99999L;
+        String cmdKey = "CMD_CASE_REPO_" + UUID.randomUUID();
+        CaseEntity newCase = new CaseEntity(
+                CaseEntity.TYPE_RETURN,
+                orderId,
+                1001L,
+                "Lý do đổi ý",
+                cmdKey
+        );
+        caseRepository.save(newCase);
+        entityManager.flush();
+
+        List<CaseEntity> byOrder = caseRepository.findByOrderId(orderId);
+        assertThat(byOrder).hasSize(1);
+        assertThat(byOrder.getFirst().getCommandKey()).isEqualTo(cmdKey);
+
+        var activeCaseOpt = caseRepository.findActiveCaseByOrderId(orderId);
+        assertThat(activeCaseOpt).isPresent();
+        assertThat(activeCaseOpt.get().getState()).isEqualTo(CaseEntity.STATE_OPEN);
+
+        var byCmdOpt = caseRepository.findByCommandKey(cmdKey);
+        assertThat(byCmdOpt).isPresent();
+
+        // Verify OrderEntity JPQL query compile and read-only mapping on H2
+        List<com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderEntity> orders = entityManager.createQuery(
+                "SELECT o FROM OrderEntity o WHERE o.workflowModel = :wf",
+                com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderEntity.class
+        ).setParameter("wf", "LEGACY_V14").getResultList();
+        assertThat(orders).isNotNull();
     }
 }
