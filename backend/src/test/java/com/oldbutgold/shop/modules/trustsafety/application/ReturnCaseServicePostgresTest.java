@@ -2,6 +2,8 @@ package com.oldbutgold.shop.modules.trustsafety.application;
 
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderEntity;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderRepository;
+import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.ShipmentEntity;
+import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.ShipmentRepository;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseDecisionEntity;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseDecisionRepository;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseEntity;
@@ -30,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,6 +66,8 @@ class ReturnCaseServicePostgresTest {
         registry.add("spring.datasource.password", () -> System.getenv("OGSHOP_TEST_DB_PASSWORD"));
         registry.add("spring.datasource.hikari.connection-init-sql", () -> "SET search_path TO og_compat,public");
         registry.add("spring.flyway.enabled", () -> true);
+        registry.add("spring.flyway.schemas", () -> "public");
+        registry.add("spring.flyway.default-schema", () -> "public");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
     }
 
@@ -86,6 +91,9 @@ class ReturnCaseServicePostgresTest {
 
     @Autowired
     private OrderRepository orderRepository;
+
+    @Autowired
+    private ShipmentRepository shipmentRepository;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -487,6 +495,250 @@ class ReturnCaseServicePostgresTest {
         assertThatThrownBy(() -> returnCaseService.sellerRespondRound1(sellerId, createdCase.caseId(), sellerReq))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Hồ sơ không ở trạng thái chờ người bán phản hồi");
+    }
+
+    // =========================================================================
+    // TASK 3.1: VẬN CHUYỂN HÀNG TRẢ (UC33) - POSTGRESQL INTEGRATION TESTS
+    // =========================================================================
+
+    @Test
+    @DisplayName("Task 3.1 Postgres: submitReturnShipment triggers og_guard_return_shipment, sets deadlines and keeps money_holds open")
+    void testReturnShipment_triggersPickupDeadline_andRefreshes() {
+        Uc83OrderFixture fixture = createDeliveredUc83Order(buyerId, sellerId, 1, true, false);
+
+        // 1. Create return request
+        ReturnCaseDtos.CreateReturnRequest createReq = new ReturnCaseDtos.CreateReturnRequest(
+                ReturnReasonCode.DAMAGED_OR_DEFECTIVE,
+                "Máy không lên nguồn",
+                List.of(),
+                "CMD_CREATE_" + UUID.randomUUID()
+        );
+        ReturnCaseDtos.ReturnCaseDetailResponse createdCase = returnCaseService.createReturnRequest(buyerId, fixture.orderId(), createReq);
+
+        // 2. Seller approves return -> Case becomes RETURN_APPROVED
+        ReturnCaseDtos.SellerRound1ResponseRequest sellerReq = new ReturnCaseDtos.SellerRound1ResponseRequest(
+                CaseDecisionEntity.OUTCOME_APPROVE_RETURN,
+                "Đồng ý nhận lại hàng kiểm tra",
+                "CMD_APPROVE_" + UUID.randomUUID()
+        );
+        ReturnCaseDtos.ReturnCaseDetailResponse approvedCase = returnCaseService.sellerRespondRound1(sellerId, createdCase.caseId(), sellerReq);
+        assertThat(approvedCase.state()).isEqualTo(CaseEntity.STATE_RETURN_APPROVED);
+
+        // 3. Buyer submits return shipment via CARRIER
+        ReturnCaseDtos.SubmitReturnShipmentRequest shipReq = new ReturnCaseDtos.SubmitReturnShipmentRequest(
+                "CARRIER",
+                "GHN",
+                "GHN-RET-123456",
+                "CMD_SHIP_" + UUID.randomUUID()
+        );
+        ReturnCaseDtos.ReturnCaseDetailResponse submittedCase = returnCaseService.submitReturnShipment(buyerId, createdCase.caseId(), shipReq);
+
+        // 4. Assertions on Case and Shipment
+        assertThat(submittedCase.state()).isEqualTo(CaseEntity.STATE_RETURNING);
+        assertThat(submittedCase.returnShipment()).isNotNull();
+        assertThat(submittedCase.returnShipment().leg()).isEqualTo("RETURN");
+        assertThat(submittedCase.returnShipment().status()).isEqualTo("PENDING");
+        assertThat(submittedCase.returnShipment().carrier()).isEqualTo("GHN");
+        assertThat(submittedCase.returnShipment().trackingNumber()).isEqualTo("GHN-RET-123456");
+
+        // Verify pickup deadlines populated by DB trigger og_guard_return_shipment
+        assertThat(submittedCase.returnShipment().pickupExpectedAt()).isNotNull();
+        assertThat(submittedCase.returnShipment().pickupDeadline()).isNotNull();
+
+        // Verify Money holds remain open!
+        List<Map<String, Object>> holds = jdbcTemplate.queryForList(
+                "SELECT closed_at FROM og_compat.money_holds WHERE case_id = ?",
+                createdCase.caseId()
+        );
+        assertThat(holds).isNotEmpty();
+        assertThat(holds).allMatch(h -> h.get("closed_at") == null);
+
+        // Verify Order status remains DELIVERED!
+        String orderStatus = jdbcTemplate.queryForObject(
+                "SELECT status FROM og_compat.orders WHERE order_id = ?",
+                String.class,
+                fixture.orderId()
+        );
+        assertThat(orderStatus).isEqualTo("DELIVERED");
+    }
+
+    @Test
+    @DisplayName("Task 3.1 Postgres: Direct handover - single party confirmation returns false, both parties confirm returns true and transitions to POST_RETURN")
+    void testDirectHandover_twoPartyConfirmationFlow() {
+        Uc83OrderFixture fixture = createDeliveredUc83Order(buyerId, sellerId, 1, true, false);
+
+        // 1. Create and approve return request
+        ReturnCaseDtos.CreateReturnRequest createReq = new ReturnCaseDtos.CreateReturnRequest(
+                ReturnReasonCode.DAMAGED_OR_DEFECTIVE,
+                "Máy lỗi bàn phím",
+                List.of(),
+                "CMD_CREATE_" + UUID.randomUUID()
+        );
+        ReturnCaseDtos.ReturnCaseDetailResponse createdCase = returnCaseService.createReturnRequest(buyerId, fixture.orderId(), createReq);
+        returnCaseService.sellerRespondRound1(sellerId, createdCase.caseId(), new ReturnCaseDtos.SellerRound1ResponseRequest(
+                CaseDecisionEntity.OUTCOME_APPROVE_RETURN,
+                "Đồng ý đổi trả",
+                "CMD_SELLER_" + UUID.randomUUID()
+        ));
+
+        // 2. Buyer submits return shipment via SELF_DELIVERY
+        ReturnCaseDtos.SubmitReturnShipmentRequest shipReq = new ReturnCaseDtos.SubmitReturnShipmentRequest(
+                "SELF_DELIVERY",
+                null,
+                null,
+                "CMD_SHIP_" + UUID.randomUUID()
+        );
+        returnCaseService.submitReturnShipment(buyerId, createdCase.caseId(), shipReq);
+
+        // 3. Step A: Buyer confirms direct handover -> Only 1 party confirmed -> should return false, stay in RETURNING
+        ReturnCaseDtos.ConfirmReturnDeliveryRequest buyerConfirm = new ReturnCaseDtos.ConfirmReturnDeliveryRequest(
+                null,
+                "Người mua đã mang hàng đến giao",
+                "CMD_CONFIRM_BUYER_" + UUID.randomUUID()
+        );
+        ReturnCaseDtos.ReturnCaseDetailResponse respAfterBuyer = returnCaseService.confirmReturnDeliveryDirect(
+                buyerId, createdCase.caseId(), buyerConfirm
+        );
+        assertThat(respAfterBuyer.state()).isEqualTo(CaseEntity.STATE_RETURNING);
+
+        // Verify Round 2 is NOT created yet
+        assertThat(caseRoundRepository.findByCaseIdAndRoundNo(createdCase.caseId(), 2)).isEmpty();
+
+        // 4. Step B: Seller confirms direct handover -> Both parties confirmed -> og_confirm_direct_handover returns TRUE!
+        ReturnCaseDtos.ConfirmReturnDeliveryRequest sellerConfirm = new ReturnCaseDtos.ConfirmReturnDeliveryRequest(
+                null,
+                "Người bán đã nhận được hàng trực tiếp",
+                "CMD_CONFIRM_SELLER_" + UUID.randomUUID()
+        );
+        ReturnCaseDtos.ReturnCaseDetailResponse respAfterSeller = returnCaseService.confirmReturnDeliveryDirect(
+                sellerId, createdCase.caseId(), sellerConfirm
+        );
+        assertThat(respAfterSeller.state()).isEqualTo(CaseEntity.STATE_POST_RETURN);
+        assertThat(respAfterSeller.validReturnedAt()).isNotNull();
+        assertThat(respAfterSeller.sellerResponseDueAt()).isNotNull();
+
+        // Verify Round 2 POST_RETURN_RESOLUTION is created and OPEN
+        Optional<CaseRoundEntity> round2 = caseRoundRepository.findByCaseIdAndRoundNo(createdCase.caseId(), 2);
+        assertThat(round2).isPresent();
+        assertThat(round2.get().getStage()).isEqualTo(CaseRoundEntity.STAGE_POST_RETURN_RESOLUTION);
+        assertThat(round2.get().getState()).isEqualTo(CaseRoundEntity.STATE_OPEN);
+
+        // Verify Event round_id references round2.getId() in DB
+        List<Map<String, Object>> events = jdbcTemplate.queryForList(
+                "SELECT round_id FROM og_compat.case_events WHERE case_id = ? AND command_key LIKE 'HANDOVER_CONFIRMED:%'",
+                createdCase.caseId()
+        );
+        assertThat(events).isNotEmpty();
+        assertThat((Long) events.get(0).get("round_id")).isEqualTo(round2.get().getId());
+
+        // Verify Money holds still OPEN
+        List<Map<String, Object>> holds = jdbcTemplate.queryForList(
+                "SELECT closed_at FROM og_compat.money_holds WHERE case_id = ?",
+                createdCase.caseId()
+        );
+        assertThat(holds).allMatch(h -> h.get("closed_at") == null);
+    }
+
+    @Test
+    @DisplayName("Task 3.1 Postgres: Carrier return delivery satisfies trg_case_state_proof and opens Round 2")
+    void testCarrierReturnDelivery_satisfiesTrgCaseStateProof() {
+        Uc83OrderFixture fixture = createDeliveredUc83Order(buyerId, sellerId, 1, true, false);
+
+        ReturnCaseDtos.CreateReturnRequest createReq = new ReturnCaseDtos.CreateReturnRequest(
+                ReturnReasonCode.NOT_AS_DESCRIBED,
+                "Giao nhầm màu sắc",
+                List.of(),
+                "CMD_CREATE_" + UUID.randomUUID()
+        );
+        ReturnCaseDtos.ReturnCaseDetailResponse createdCase = returnCaseService.createReturnRequest(buyerId, fixture.orderId(), createReq);
+        returnCaseService.sellerRespondRound1(sellerId, createdCase.caseId(), new ReturnCaseDtos.SellerRound1ResponseRequest(
+                CaseDecisionEntity.OUTCOME_APPROVE_RETURN,
+                "Shop đồng ý đổi",
+                "CMD_SELLER_" + UUID.randomUUID()
+        ));
+
+        ReturnCaseDtos.SubmitReturnShipmentRequest shipReq = new ReturnCaseDtos.SubmitReturnShipmentRequest(
+                "CARRIER",
+                "GHN",
+                "GHN-TEST-PROOF-123",
+                "CMD_SHIP_" + UUID.randomUUID()
+        );
+        ReturnCaseDtos.ReturnCaseDetailResponse submittedCase = returnCaseService.submitReturnShipment(buyerId, createdCase.caseId(), shipReq);
+        Long shipmentId = submittedCase.returnShipment().shipmentId();
+
+        // Carrier delivers return parcel to seller
+        java.time.Instant deliveredAt = java.time.Instant.now();
+        ReturnCaseDtos.ReturnCaseDetailResponse deliveredCase = returnCaseService.confirmReturnDeliveryByCarrier(
+                createdCase.caseId(), shipmentId, deliveredAt
+        );
+
+        // Verification
+        assertThat(deliveredCase.state()).isEqualTo(CaseEntity.STATE_POST_RETURN);
+        assertThat(deliveredCase.validReturnedAt()).isNotNull();
+
+        // trg_case_state_proof requires shipment.valid_delivery_at == cases.valid_returned_at
+        ShipmentEntity shipment = shipmentRepository.findById(shipmentId).orElseThrow();
+        assertThat(shipment.getStatus()).isEqualTo(ShipmentEntity.STATUS_DELIVERED);
+        assertThat(shipment.getValidDeliveryAt()).isNotNull();
+
+        // Round 2 must be created
+        Optional<CaseRoundEntity> round2 = caseRoundRepository.findByCaseIdAndRoundNo(createdCase.caseId(), 2);
+        assertThat(round2).isPresent();
+        assertThat(round2.get().getStage()).isEqualTo(CaseRoundEntity.STAGE_POST_RETURN_RESOLUTION);
+
+        // Verify Event round_id references round2.getId() in DB
+        List<Map<String, Object>> carrierEvents = jdbcTemplate.queryForList(
+                "SELECT round_id FROM og_compat.case_events WHERE case_id = ? AND command_key LIKE 'CARRIER_DELIVERED:%'",
+                createdCase.caseId()
+        );
+        assertThat(carrierEvents).isNotEmpty();
+        assertThat((Long) carrierEvents.get(0).get("round_id")).isEqualTo(round2.get().getId());
+    }
+
+    @Test
+    @DisplayName("Task 3.1 Postgres: Idempotency - replay returns same response, conflict payload throws IllegalStateException")
+    void testIdempotency_commandKey_replayAndConflict() {
+        Uc83OrderFixture fixture = createDeliveredUc83Order(buyerId, sellerId, 1, true, false);
+
+        ReturnCaseDtos.CreateReturnRequest createReq = new ReturnCaseDtos.CreateReturnRequest(
+                ReturnReasonCode.DAMAGED_OR_DEFECTIVE,
+                "Lỗi phần cứng",
+                List.of(),
+                "CMD_CREATE_" + UUID.randomUUID()
+        );
+        ReturnCaseDtos.ReturnCaseDetailResponse createdCase = returnCaseService.createReturnRequest(buyerId, fixture.orderId(), createReq);
+        returnCaseService.sellerRespondRound1(sellerId, createdCase.caseId(), new ReturnCaseDtos.SellerRound1ResponseRequest(
+                CaseDecisionEntity.OUTCOME_APPROVE_RETURN,
+                "Đồng ý",
+                "CMD_SELLER_" + UUID.randomUUID()
+        ));
+
+        String fixedCmdKey = "CMD_FIXED_" + UUID.randomUUID();
+        ReturnCaseDtos.SubmitReturnShipmentRequest shipReq = new ReturnCaseDtos.SubmitReturnShipmentRequest(
+                "CARRIER",
+                "GHN",
+                "GHN-IDEMPOTENT-001",
+                fixedCmdKey
+        );
+
+        // 1. First execution
+        ReturnCaseDtos.ReturnCaseDetailResponse resp1 = returnCaseService.submitReturnShipment(buyerId, createdCase.caseId(), shipReq);
+        assertThat(resp1.state()).isEqualTo(CaseEntity.STATE_RETURNING);
+
+        // 2. Replay with identical payload & commandKey -> idempotent success
+        ReturnCaseDtos.ReturnCaseDetailResponse resp2 = returnCaseService.submitReturnShipment(buyerId, createdCase.caseId(), shipReq);
+        assertThat(resp2.state()).isEqualTo(CaseEntity.STATE_RETURNING);
+
+        // 3. Replay with different payload & same commandKey -> conflict exception
+        ReturnCaseDtos.SubmitReturnShipmentRequest conflictReq = new ReturnCaseDtos.SubmitReturnShipmentRequest(
+                "SELF_DELIVERY",
+                null,
+                null,
+                fixedCmdKey
+        );
+        assertThatThrownBy(() -> returnCaseService.submitReturnShipment(buyerId, createdCase.caseId(), conflictReq))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Conflict: commandKey đã được sử dụng với payload khác");
     }
 }
 

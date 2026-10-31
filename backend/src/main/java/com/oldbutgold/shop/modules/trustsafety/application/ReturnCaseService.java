@@ -2,6 +2,8 @@ package com.oldbutgold.shop.modules.trustsafety.application;
 
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderEntity;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderRepository;
+import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.ShipmentEntity;
+import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.ShipmentRepository;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.PaymentEntity;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.PaymentRepository;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseDecisionEntity;
@@ -16,17 +18,26 @@ import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseRo
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseRoundRepository;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.ReturnReasonCode;
 import jakarta.persistence.EntityManager;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,6 +54,8 @@ public class ReturnCaseService {
     public static final int MAX_VIDEO_DURATION_SECONDS = 60;
     public static final long MAX_VIDEO_SIZE_BYTES = 50L * 1024 * 1024; // 50MB
 
+    private static final Logger log = LoggerFactory.getLogger(ReturnCaseService.class);
+
     private final CaseRepository caseRepository;
     private final CaseRoundRepository caseRoundRepository;
     private final CaseEvidenceRepository caseEvidenceRepository;
@@ -50,9 +63,57 @@ public class ReturnCaseService {
     private final CaseEventRepository caseEventRepository;
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
+    private final ShipmentRepository shipmentRepository;
     private final EntityManager entityManager;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
     private final Clock clock;
+
+    @Autowired
+    public ReturnCaseService(
+            CaseRepository caseRepository,
+            CaseRoundRepository caseRoundRepository,
+            CaseEvidenceRepository caseEvidenceRepository,
+            CaseDecisionRepository caseDecisionRepository,
+            CaseEventRepository caseEventRepository,
+            OrderRepository orderRepository,
+            PaymentRepository paymentRepository,
+            ShipmentRepository shipmentRepository,
+            EntityManager entityManager,
+            org.springframework.jdbc.core.JdbcTemplate jdbcTemplate,
+            ObjectMapper objectMapper,
+            Clock clock
+    ) {
+        this.caseRepository = caseRepository;
+        this.caseRoundRepository = caseRoundRepository;
+        this.caseEvidenceRepository = caseEvidenceRepository;
+        this.caseDecisionRepository = caseDecisionRepository;
+        this.caseEventRepository = caseEventRepository;
+        this.orderRepository = orderRepository;
+        this.paymentRepository = paymentRepository;
+        this.shipmentRepository = shipmentRepository;
+        this.entityManager = entityManager;
+        this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+        this.clock = clock != null ? clock : Clock.systemUTC();
+    }
+
+    public ReturnCaseService(
+            CaseRepository caseRepository,
+            CaseRoundRepository caseRoundRepository,
+            CaseEvidenceRepository caseEvidenceRepository,
+            CaseDecisionRepository caseDecisionRepository,
+            CaseEventRepository caseEventRepository,
+            OrderRepository orderRepository,
+            PaymentRepository paymentRepository,
+            ShipmentRepository shipmentRepository,
+            EntityManager entityManager,
+            org.springframework.jdbc.core.JdbcTemplate jdbcTemplate,
+            Clock clock
+    ) {
+        this(caseRepository, caseRoundRepository, caseEvidenceRepository, caseDecisionRepository,
+                caseEventRepository, orderRepository, paymentRepository, shipmentRepository, entityManager, jdbcTemplate, null, clock);
+    }
 
     public ReturnCaseService(
             CaseRepository caseRepository,
@@ -66,16 +127,17 @@ public class ReturnCaseService {
             org.springframework.jdbc.core.JdbcTemplate jdbcTemplate,
             Clock clock
     ) {
-        this.caseRepository = caseRepository;
-        this.caseRoundRepository = caseRoundRepository;
-        this.caseEvidenceRepository = caseEvidenceRepository;
-        this.caseDecisionRepository = caseDecisionRepository;
-        this.caseEventRepository = caseEventRepository;
-        this.orderRepository = orderRepository;
-        this.paymentRepository = paymentRepository;
-        this.entityManager = entityManager;
-        this.jdbcTemplate = jdbcTemplate;
-        this.clock = clock != null ? clock : Clock.systemUTC();
+        this(caseRepository, caseRoundRepository, caseEvidenceRepository, caseDecisionRepository,
+                caseEventRepository, orderRepository, paymentRepository, null, entityManager, jdbcTemplate, null, clock);
+    }
+
+    private String safeToJson(Object object) {
+        try {
+            return objectMapper.writeValueAsString(object);
+        } catch (JsonProcessingException e) {
+            log.warn("Không thể serialize metadata thành JSON: {}", e.getMessage());
+            return "{}";
+        }
     }
 
     /**
@@ -685,6 +747,13 @@ public class ReturnCaseService {
                         ev.getOccurredAt()
                 )).toList();
 
+        ReturnCaseDtos.ReturnShipmentDetailResponse returnShipmentDto = null;
+        if (shipmentRepository != null) {
+            returnShipmentDto = shipmentRepository.findByReturnCaseId(c.getId())
+                    .map(this::mapToShipmentDetailResponse)
+                    .orElse(null);
+        }
+
         return new ReturnCaseDtos.ReturnCaseDetailResponse(
                 c.getId(),
                 c.getOrderId(),
@@ -702,7 +771,434 @@ public class ReturnCaseService {
                 c.getCommandKey(),
                 roundDto,
                 evidenceDtos,
-                eventDtos
+                eventDtos,
+                returnShipmentDto
         );
+    }
+
+    private ReturnCaseDtos.ReturnShipmentDetailResponse mapToShipmentDetailResponse(ShipmentEntity s) {
+        if (s == null) return null;
+        return new ReturnCaseDtos.ReturnShipmentDetailResponse(
+                s.getId(),
+                s.getReturnCaseId(),
+                s.getOrderId(),
+                s.getLeg(),
+                s.getDeliveryMethod(),
+                s.getCarrier(),
+                s.getTrackingNumber(),
+                s.getStatus(),
+                s.getPickupExpectedAt(),
+                s.getPickupDeadline(),
+                s.getValidDeliveryAt()
+        );
+    }
+
+    /**
+     * Người mua đăng ký gửi hàng trả lại (UC33 / Task 3.1).
+     */
+    @Transactional
+    public ReturnCaseDtos.ReturnCaseDetailResponse submitReturnShipment(
+            Long buyerId,
+            Long caseId,
+            ReturnCaseDtos.SubmitReturnShipmentRequest request
+    ) {
+        if (shipmentRepository == null) {
+            throw new IllegalStateException("Chưa cấu hình kho dữ liệu vận đơn (shipmentRepository)");
+        }
+        if (buyerId == null) {
+            throw new SecurityException("Chưa xác thực danh tính");
+        }
+        if (request == null || request.commandKey() == null || request.commandKey().isBlank()) {
+            throw new IllegalArgumentException("commandKey không được để trống");
+        }
+        String deliveryMethod = request.deliveryMethod() != null ? request.deliveryMethod().trim().toUpperCase(Locale.ROOT) : "";
+        if (!ShipmentEntity.DELIVERY_METHOD_CARRIER.equals(deliveryMethod)
+                && !ShipmentEntity.DELIVERY_METHOD_SELF_DELIVERY.equals(deliveryMethod)
+                && !ShipmentEntity.DELIVERY_METHOD_SELF_PICKUP.equals(deliveryMethod)) {
+            throw new IllegalArgumentException("Phương thức vận chuyển không hợp lệ: " + request.deliveryMethod());
+        }
+
+        CaseEntity caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy khiếu nại caseId=" + caseId));
+        Long orderId = caseEntity.getOrderId();
+
+        OrderEntity order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng orderId=" + orderId));
+
+        if (!buyerId.equals(order.getBuyerId())) {
+            throw new SecurityException("Chỉ người mua mới có quyền gửi hàng trả");
+        }
+
+        CaseEntity lockedCase = caseRepository.findByIdForUpdate(caseId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy khiếu nại caseId=" + caseId));
+
+        String cmdKey = request.commandKey().trim();
+        Optional<CaseEventEntity> existingEvent = caseEventRepository.findByCommandKey(cmdKey);
+        if (existingEvent.isPresent()) {
+            CaseEventEntity ev = existingEvent.get();
+            if (!caseId.equals(ev.getCaseId()) || ev.getActorId() == null || !buyerId.equals(ev.getActorId())) {
+                throw new IllegalStateException("Conflict: commandKey đã được sử dụng cho caseId hoặc actorId khác");
+            }
+            String storedMetadata = ev.getMetadata();
+            try {
+                JsonNode node = objectMapper.readTree(storedMetadata != null ? storedMetadata : "{}");
+                String storedMethod = node.has("delivery_method") ? node.get("delivery_method").asText("") : "";
+                String storedCarrier = node.has("carrier") ? node.get("carrier").asText("") : "";
+                String storedTracking = node.has("tracking_number") ? node.get("tracking_number").asText("") : "";
+
+                String expectedCarrier = request.carrier() != null && !request.carrier().isBlank()
+                        ? request.carrier().trim()
+                        : (ShipmentEntity.DELIVERY_METHOD_CARRIER.equalsIgnoreCase(deliveryMethod) ? "GHN" : deliveryMethod);
+                String expectedTracking = request.trackingNumber() != null ? request.trackingNumber().trim() : "";
+
+                boolean matches = deliveryMethod.equalsIgnoreCase(storedMethod)
+                        && (expectedCarrier.equalsIgnoreCase(storedCarrier) || (expectedCarrier.isBlank() && storedCarrier.isBlank()))
+                        && (expectedTracking.equals(storedTracking) || (expectedTracking.isBlank() && storedTracking.isBlank()));
+
+                if (matches) {
+                    return mapToDetailResponse(lockedCase);
+                } else {
+                    throw new IllegalStateException("Conflict: commandKey đã được sử dụng với payload khác");
+                }
+            } catch (JsonProcessingException e) {
+                throw new IllegalStateException("Conflict: Không thể phân giải metadata của commandKey đã lưu", e);
+            }
+        }
+
+        if (!CaseEntity.STATE_RETURN_APPROVED.equals(lockedCase.getState())) {
+            throw new IllegalStateException("Yêu cầu trả hàng không ở trạng thái RETURN_APPROVED (trạng thái hiện tại: " + lockedCase.getState() + ")");
+        }
+
+        Optional<ShipmentEntity> existingShipment = shipmentRepository.findByReturnCaseId(caseId);
+        if (existingShipment.isPresent()) {
+            throw new IllegalStateException("Vận đơn trả hàng đã tồn tại cho khiếu nại này");
+        }
+
+        Instant now = clock.instant();
+
+        ShipmentEntity shipment = ShipmentEntity.createReturnShipment(
+                orderId,
+                caseId,
+                deliveryMethod,
+                request.carrier(),
+                request.trackingNumber(),
+                now
+        );
+        if (lockedCase.getApprovedAt() != null) {
+            shipment.setPickupExpectedAt(lockedCase.getApprovedAt().plus(Duration.ofHours(24)));
+            shipment.setPickupDeadline(lockedCase.getApprovedAt().plus(Duration.ofDays(3)));
+        }
+
+        shipment = shipmentRepository.saveAndFlush(shipment);
+        if (entityManager != null) {
+            entityManager.refresh(shipment);
+        }
+
+        lockedCase.setState(CaseEntity.STATE_RETURNING);
+        lockedCase = caseRepository.save(lockedCase);
+
+        Long currentRoundId = caseRoundRepository.findLatestRoundByCaseId(caseId)
+                .map(CaseRoundEntity::getId).orElse(null);
+
+        Map<String, Object> metaMap = new java.util.LinkedHashMap<>();
+        metaMap.put("delivery_method", deliveryMethod);
+        metaMap.put("carrier", shipment.getCarrier() != null ? shipment.getCarrier() : "");
+        metaMap.put("tracking_number", shipment.getTrackingNumber() != null ? shipment.getTrackingNumber() : "");
+        String metadata = safeToJson(metaMap);
+
+        CaseEventEntity event = new CaseEventEntity(
+                UUID.randomUUID(),
+                caseId,
+                currentRoundId,
+                buyerId,
+                order.getSellerId(),
+                CaseEventEntity.TYPE_SUBMITTED,
+                "Người mua đã đăng ký gửi hàng trả qua " + deliveryMethod,
+                metadata,
+                cmdKey
+        );
+        caseEventRepository.save(event);
+
+        return mapToDetailResponse(lockedCase);
+    }
+
+    /**
+     * Xác nhận bàn giao trực tiếp từ một phía (Buyer hoặc Seller) (UC33 / Task 3.1).
+     */
+    @Transactional
+    public ReturnCaseDtos.ReturnCaseDetailResponse confirmReturnDeliveryDirect(
+            Long actorId,
+            Long caseId,
+            ReturnCaseDtos.ConfirmReturnDeliveryRequest request
+    ) {
+        if (shipmentRepository == null) {
+            throw new IllegalStateException("Chưa cấu hình kho dữ liệu vận đơn (shipmentRepository)");
+        }
+        if (jdbcTemplate == null) {
+            throw new IllegalStateException("Chưa cấu hình thao tác cơ sở dữ liệu (jdbcTemplate)");
+        }
+        if (actorId == null) {
+            throw new SecurityException("Chưa xác thực danh tính");
+        }
+        if (request == null || request.commandKey() == null || request.commandKey().isBlank()) {
+            throw new IllegalArgumentException("commandKey không được để trống");
+        }
+
+        CaseEntity caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy khiếu nại caseId=" + caseId));
+        Long orderId = caseEntity.getOrderId();
+
+        OrderEntity order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng orderId=" + orderId));
+
+        ShipmentEntity shipment = shipmentRepository.findByReturnCaseIdForUpdate(caseId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy vận đơn trả hàng cho caseId=" + caseId));
+
+        if (ShipmentEntity.DELIVERY_METHOD_CARRIER.equalsIgnoreCase(shipment.getDeliveryMethod())) {
+            throw new IllegalArgumentException("Không thể xác nhận bàn giao trực tiếp cho vận đơn qua hãng vận chuyển (CARRIER)");
+        }
+
+        CaseEntity lockedCase = caseRepository.findByIdForUpdate(caseId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy khiếu nại caseId=" + caseId));
+
+        String party;
+        if (actorId.equals(order.getBuyerId())) {
+            party = "BUYER";
+        } else if (actorId.equals(order.getSellerId())) {
+            party = "SELLER";
+        } else {
+            throw new SecurityException("Người dùng không thuộc đơn hàng này");
+        }
+
+        if (CaseEntity.STATE_POST_RETURN.equals(lockedCase.getState()) && lockedCase.getValidReturnedAt() != null) {
+            return mapToDetailResponse(lockedCase);
+        }
+
+        if (!CaseEntity.STATE_RETURN_APPROVED.equals(lockedCase.getState()) && !CaseEntity.STATE_RETURNING.equals(lockedCase.getState())) {
+            throw new IllegalStateException("Trạng thái khiếu nại không hợp lệ để xác nhận bàn giao hàng trả: " + lockedCase.getState());
+        }
+
+        String cmdKey = request.commandKey().trim();
+        Long shipmentId = shipment.getId();
+
+        List<Map<String, Object>> existingConfirmations = jdbcTemplate.queryForList(
+                "SELECT command_key, outcome FROM og_compat.handover_confirmations WHERE shipment_id = ? AND party = ?",
+                shipmentId, party
+        );
+        if (!existingConfirmations.isEmpty()) {
+            String existingKey = (String) existingConfirmations.get(0).get("command_key");
+            if (cmdKey.equals(existingKey)) {
+                return mapToDetailResponse(lockedCase);
+            } else {
+                throw new IllegalStateException("Conflict: Bên " + party + " đã xác nhận bàn giao trước đó với commandKey khác");
+            }
+        }
+
+        Instant serverNow = clock.instant();
+
+        jdbcTemplate.update(
+                "INSERT INTO og_compat.handover_confirmations(confirmation_id, shipment_id, party, user_id, outcome, command_key, confirmed_at) VALUES (?, ?, ?, ?, 'SUCCESS', ?, ?)",
+                UUID.randomUUID(),
+                shipmentId,
+                party,
+                actorId,
+                cmdKey,
+                Timestamp.from(serverNow)
+        );
+
+        if (entityManager != null) {
+            entityManager.flush();
+        }
+
+        Boolean handoverSuccess = jdbcTemplate.queryForObject(
+                "SELECT og_confirm_direct_handover(?)",
+                Boolean.class,
+                shipmentId
+        );
+
+        if (Boolean.TRUE.equals(handoverSuccess)) {
+            if (entityManager != null) {
+                entityManager.refresh(lockedCase);
+                entityManager.refresh(shipment);
+            } else {
+                // Fallback cho unit test môi trường mock không có EntityManager
+                lockedCase.setState(CaseEntity.STATE_POST_RETURN);
+                lockedCase.setValidReturnedAt(serverNow);
+                lockedCase.setSellerResponseDueAt(serverNow.plus(Duration.ofDays(2)));
+                shipment.markDelivered(serverNow, shipment.getShippedAt(), serverNow);
+                shipment.setValidDeliveryAt(serverNow);
+            }
+
+            CaseRoundEntity round2 = caseRoundRepository.findByCaseIdAndRoundNo(caseId, 2)
+                    .orElseGet(() -> {
+                        CaseRoundEntity newRound = new CaseRoundEntity(caseId, 2, CaseRoundEntity.STAGE_POST_RETURN_RESOLUTION);
+                        newRound.setState(CaseRoundEntity.STATE_OPEN);
+                        newRound.setOpenedAt(lockedCase.getValidReturnedAt() != null ? lockedCase.getValidReturnedAt() : serverNow);
+                        return caseRoundRepository.save(newRound);
+                    });
+
+            Long round2Id = round2 != null && round2.getId() != null ? round2.getId() : 2L;
+
+            String eventCmdKey = "HANDOVER_CONFIRMED:" + shipmentId;
+            Optional<CaseEventEntity> existingEv = caseEventRepository.findByCommandKey(eventCmdKey);
+            if (existingEv.isEmpty()) {
+                Map<String, Object> metaMap = new java.util.LinkedHashMap<>();
+                metaMap.put("delivery_method", shipment.getDeliveryMethod() != null ? shipment.getDeliveryMethod() : "");
+                String eventMetadata = safeToJson(metaMap);
+
+                CaseEventEntity event = new CaseEventEntity(
+                        UUID.randomUUID(),
+                        caseId,
+                        round2Id,
+                        actorId,
+                        party.equals("SELLER") ? order.getBuyerId() : order.getSellerId(),
+                        CaseEventEntity.TYPE_SUBMITTED,
+                        "Hoàn tất bàn giao hàng trả trực tiếp 2 phía, mở Vòng 2 xét duyệt hoàn tiền",
+                        eventMetadata,
+                        eventCmdKey
+                );
+                caseEventRepository.save(event);
+            }
+        }
+
+        return mapToDetailResponse(lockedCase);
+    }
+
+    /**
+     * Xác nhận đơn vị vận chuyển đã giao hàng trả lại thành công cho người bán (UC33 / Task 3.1).
+     */
+    @Transactional
+    public ReturnCaseDtos.ReturnCaseDetailResponse confirmReturnDeliveryByCarrier(
+            Long caseId,
+            Long shipmentId,
+            Instant deliveredAt
+    ) {
+        if (shipmentRepository == null) {
+            throw new IllegalStateException("Chưa cấu hình kho dữ liệu vận đơn (shipmentRepository)");
+        }
+        CaseEntity caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy khiếu nại caseId=" + caseId));
+        Long orderId = caseEntity.getOrderId();
+
+        OrderEntity order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng orderId=" + orderId));
+
+        ShipmentEntity shipment = shipmentRepository.findByReturnCaseIdForUpdate(caseId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy vận đơn trả hàng cho caseId=" + caseId));
+
+        if (shipmentId != null && shipment.getId() != null && !shipmentId.equals(shipment.getId())) {
+            throw new IllegalArgumentException("shipmentId=" + shipmentId + " không khớp với vận đơn của caseId=" + caseId);
+        }
+
+        if (!ShipmentEntity.LEG_RETURN.equalsIgnoreCase(shipment.getLeg())) {
+            throw new IllegalStateException("Vận đơn không thuộc luồng trả hàng (leg=" + shipment.getLeg() + ")");
+        }
+        if (!"UC83".equalsIgnoreCase(shipment.getWorkflowModel())) {
+            throw new IllegalStateException("Mô hình vận hành của vận đơn không hợp lệ: " + shipment.getWorkflowModel());
+        }
+        if (!ShipmentEntity.DELIVERY_METHOD_CARRIER.equalsIgnoreCase(shipment.getDeliveryMethod())) {
+            throw new IllegalStateException("Phương thức vận chuyển không phải CARRIER: " + shipment.getDeliveryMethod());
+        }
+
+        CaseEntity lockedCase = caseRepository.findByIdForUpdate(caseId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy khiếu nại caseId=" + caseId));
+
+        if (CaseEntity.STATE_POST_RETURN.equals(lockedCase.getState())) {
+            return mapToDetailResponse(lockedCase);
+        }
+
+        if (!CaseEntity.STATE_RETURNING.equals(lockedCase.getState()) && !CaseEntity.STATE_RETURN_APPROVED.equals(lockedCase.getState())) {
+            throw new IllegalStateException("Trạng thái khiếu nại không hợp lệ để xác nhận giao hàng trả: " + lockedCase.getState());
+        }
+
+        Instant effectiveTime = deliveredAt != null ? deliveredAt : clock.instant();
+
+        shipment.markDelivered(effectiveTime, shipment.getShippedAt(), clock.instant());
+        shipment.setValidDeliveryAt(effectiveTime);
+        shipmentRepository.saveAndFlush(shipment);
+
+        lockedCase.setValidReturnedAt(effectiveTime);
+        lockedCase.setSellerResponseDueAt(effectiveTime.plus(Duration.ofDays(2)));
+        lockedCase.setState(CaseEntity.STATE_POST_RETURN);
+        lockedCase = caseRepository.saveAndFlush(lockedCase);
+
+        CaseRoundEntity round2 = caseRoundRepository.findByCaseIdAndRoundNo(caseId, 2)
+                .orElseGet(() -> {
+                    CaseRoundEntity newRound = new CaseRoundEntity(caseId, 2, CaseRoundEntity.STAGE_POST_RETURN_RESOLUTION);
+                    newRound.setState(CaseRoundEntity.STATE_OPEN);
+                    newRound.setOpenedAt(effectiveTime);
+                    return caseRoundRepository.save(newRound);
+                });
+
+        Long round2Id = round2 != null && round2.getId() != null ? round2.getId() : 2L;
+
+        String eventCmdKey = "CARRIER_DELIVERED:" + (shipment.getId() != null ? shipment.getId() : shipmentId);
+        Optional<CaseEventEntity> existingEv = caseEventRepository.findByCommandKey(eventCmdKey);
+        if (existingEv.isEmpty()) {
+            Map<String, Object> metaMap = new java.util.LinkedHashMap<>();
+            metaMap.put("carrier", shipment.getCarrier() != null ? shipment.getCarrier() : "");
+            metaMap.put("tracking_number", shipment.getTrackingNumber() != null ? shipment.getTrackingNumber() : "");
+            String metadataJson = safeToJson(metaMap);
+
+            CaseEventEntity event = new CaseEventEntity(
+                    UUID.randomUUID(),
+                    caseId,
+                    round2Id,
+                    null,
+                    order.getSellerId(),
+                    CaseEventEntity.TYPE_SUBMITTED,
+                    "Đơn vị vận chuyển đã giao hàng trả thành công tới người bán, mở Vòng 2",
+                    metadataJson,
+                    eventCmdKey
+            );
+            caseEventRepository.save(event);
+        }
+
+        return mapToDetailResponse(lockedCase);
+    }
+
+    /**
+     * Tra cứu vận đơn trả hàng theo caseId (UC33 / Task 3.1).
+     */
+    @Transactional(readOnly = true)
+    public ReturnCaseDtos.ReturnShipmentDetailResponse getReturnShipmentByCaseId(Long actorId, Long caseId) {
+        if (actorId == null) {
+            throw new SecurityException("Chưa xác thực danh tính");
+        }
+
+        CaseEntity caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy khiếu nại caseId=" + caseId));
+        OrderEntity order = orderRepository.findById(caseEntity.getOrderId())
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng orderId=" + caseEntity.getOrderId()));
+
+        boolean isBuyerOrSeller = actorId.equals(order.getBuyerId()) || actorId.equals(order.getSellerId());
+        if (!isBuyerOrSeller) {
+            boolean isStaff = false;
+            if (jdbcTemplate != null) {
+                try {
+                    Boolean hasRole = jdbcTemplate.queryForObject(
+                            "SELECT og_has_role(?, 'KTV') OR og_has_role(?, 'ADMIN')",
+                            Boolean.class,
+                            actorId, actorId
+                    );
+                    isStaff = Boolean.TRUE.equals(hasRole);
+                } catch (Exception ex) {
+                    log.warn("Lỗi khi kiểm tra vai trò KTV/ADMIN cho actorId={}: {}", actorId, ex.getMessage());
+                    isStaff = false;
+                }
+            }
+            if (!isStaff) {
+                throw new SecurityException("Người dùng không có quyền xem thông tin vận chuyển của khiếu nại này");
+            }
+        }
+
+        if (shipmentRepository == null) {
+            throw new NoSuchElementException("Chưa cấu hình kho dữ liệu vận đơn");
+        }
+
+        ShipmentEntity shipment = shipmentRepository.findByReturnCaseId(caseId)
+                .orElseThrow(() -> new NoSuchElementException("Chưa có vận đơn trả hàng cho khiếu nại caseId=" + caseId));
+
+        return mapToShipmentDetailResponse(shipment);
     }
 }

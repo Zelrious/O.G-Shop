@@ -2,6 +2,8 @@ package com.oldbutgold.shop.modules.trustsafety.application;
 
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderEntity;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderRepository;
+import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.ShipmentEntity;
+import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.ShipmentRepository;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.PaymentEntity;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.PaymentRepository;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseDecisionEntity;
@@ -66,6 +68,9 @@ class ReturnCaseServiceTest {
     private PaymentRepository paymentRepository;
 
     @Mock
+    private ShipmentRepository shipmentRepository;
+
+    @Mock
     private EntityManager entityManager;
 
     @Mock
@@ -92,6 +97,7 @@ class ReturnCaseServiceTest {
                 caseEventRepository,
                 orderRepository,
                 paymentRepository,
+                shipmentRepository,
                 entityManager,
                 jdbcTemplate,
                 clock
@@ -149,7 +155,9 @@ class ReturnCaseServiceTest {
 
         when(caseRoundRepository.saveAndFlush(any(CaseRoundEntity.class))).thenAnswer(inv -> {
             CaseRoundEntity r = inv.getArgument(0);
-            r.setId(601L);
+            if (r.getId() == null) {
+                r.setId(601L);
+            }
             return r;
         });
 
@@ -781,5 +789,552 @@ class ReturnCaseServiceTest {
         assertThatThrownBy(() -> service.withdrawReturnRequest(buyerId, caseId, null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Không thể rút yêu cầu khi hồ sơ ở trạng thái RETURNING");
+    }
+
+    // =========================================================================
+    // TASK 3.1: VẬN CHUYỂN HÀNG TRẢ (UC33) UNIT TESTS
+    // =========================================================================
+
+    @Test
+    @DisplayName("Task 3.1: submitReturnShipment - success CARRIER creates shipment and transitions to RETURNING")
+    void submitReturnShipment_success_carrier() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "[DEFECTIVE] Hàng lỗi", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_RETURN_APPROVED);
+        returnCase.setApprovedAt(fixedNow);
+
+        OrderEntity order = createValidDeliveredOrder();
+        CaseRoundEntity round1 = new CaseRoundEntity(caseId, 1, CaseRoundEntity.STAGE_RETURN_APPROVAL);
+        round1.setId(10L);
+
+        ShipmentEntity createdShipment = ShipmentEntity.createReturnShipment(
+                orderId, caseId, "CARRIER", "GHN", "GHN-RETURN-001", fixedNow
+        );
+        createdShipment.setId(901L);
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(caseRepository.findByIdForUpdate(caseId)).thenReturn(Optional.of(returnCase));
+        when(caseRoundRepository.findLatestRoundByCaseId(caseId)).thenReturn(Optional.of(round1));
+        when(shipmentRepository.findByReturnCaseId(caseId)).thenReturn(Optional.empty(), Optional.of(createdShipment));
+        when(shipmentRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(caseRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ReturnCaseDtos.SubmitReturnShipmentRequest req = new ReturnCaseDtos.SubmitReturnShipmentRequest(
+                "CARRIER", "GHN", "GHN-RETURN-001", "CMD_RETURN_SHIP_1"
+        );
+
+        ReturnCaseDtos.ReturnCaseDetailResponse resp = service.submitReturnShipment(buyerId, caseId, req);
+
+        assertThat(resp.state()).isEqualTo(CaseEntity.STATE_RETURNING);
+        assertThat(resp.returnShipment()).isNotNull();
+        assertThat(resp.returnShipment().deliveryMethod()).isEqualTo("CARRIER");
+        assertThat(resp.returnShipment().carrier()).isEqualTo("GHN");
+        assertThat(resp.returnShipment().trackingNumber()).isEqualTo("GHN-RETURN-001");
+        verify(shipmentRepository).saveAndFlush(any(ShipmentEntity.class));
+        verify(caseEventRepository).save(any(CaseEventEntity.class));
+    }
+
+    @Test
+    @DisplayName("Task 3.1: submitReturnShipment - throws IllegalArgumentException if commandKey is missing")
+    void submitReturnShipment_missingCommandKey_throwsIllegalArgumentException() {
+        Long caseId = 501L;
+        ReturnCaseDtos.SubmitReturnShipmentRequest req = new ReturnCaseDtos.SubmitReturnShipmentRequest(
+                "CARRIER", "GHN", "GHN-001", "  "
+        );
+
+        assertThatThrownBy(() -> service.submitReturnShipment(buyerId, caseId, req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("commandKey không được để trống");
+    }
+
+    @Test
+    @DisplayName("Task 3.1: submitReturnShipment - throws IllegalStateException if case is not RETURN_APPROVED")
+    void submitReturnShipment_wrongState_throwsIllegalStateException() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_OPEN);
+
+        OrderEntity order = createValidDeliveredOrder();
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(caseRepository.findByIdForUpdate(caseId)).thenReturn(Optional.of(returnCase));
+
+        ReturnCaseDtos.SubmitReturnShipmentRequest req = new ReturnCaseDtos.SubmitReturnShipmentRequest(
+                "CARRIER", "GHN", "GHN-001", "CMD_123"
+        );
+
+        assertThatThrownBy(() -> service.submitReturnShipment(buyerId, caseId, req))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("RETURN_APPROVED");
+    }
+
+    @Test
+    @DisplayName("Task 3.1: submitReturnShipment - throws SecurityException if caller is not the buyer")
+    void submitReturnShipment_unauthorizedActor_throwsSecurityException() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_RETURN_APPROVED);
+
+        OrderEntity order = createValidDeliveredOrder();
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+
+        Long strangerId = 9999L;
+        ReturnCaseDtos.SubmitReturnShipmentRequest req = new ReturnCaseDtos.SubmitReturnShipmentRequest(
+                "CARRIER", "GHN", "GHN-001", "CMD_123"
+        );
+
+        assertThatThrownBy(() -> service.submitReturnShipment(strangerId, caseId, req))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Chỉ người mua");
+    }
+
+    @Test
+    @DisplayName("Task 3.1: submitReturnShipment - idempotent replay with identical payload succeeds")
+    void submitReturnShipment_idempotentReplay() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_RETURN_APPROVED);
+
+        OrderEntity order = createValidDeliveredOrder();
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(caseRepository.findByIdForUpdate(caseId)).thenReturn(Optional.of(returnCase));
+
+        CaseEventEntity existingEvent = new CaseEventEntity(
+                UUID.randomUUID(), caseId, 1L, buyerId, sellerId,
+                CaseEventEntity.TYPE_SUBMITTED, "Reason",
+                "{\"delivery_method\":\"CARRIER\",\"carrier\":\"GHN\",\"tracking_number\":\"GHN-001\"}",
+                "CMD_SAME"
+        );
+        when(caseEventRepository.findByCommandKey("CMD_SAME")).thenReturn(Optional.of(existingEvent));
+
+        ReturnCaseDtos.SubmitReturnShipmentRequest req = new ReturnCaseDtos.SubmitReturnShipmentRequest(
+                "CARRIER", "GHN", "GHN-001", "CMD_SAME"
+        );
+
+        ReturnCaseDtos.ReturnCaseDetailResponse resp = service.submitReturnShipment(buyerId, caseId, req);
+        assertThat(resp).isNotNull();
+        verify(shipmentRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("Task 3.1: submitReturnShipment - throws IllegalStateException if same commandKey used with different payload")
+    void submitReturnShipment_conflictPayload() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_RETURN_APPROVED);
+
+        OrderEntity order = createValidDeliveredOrder();
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(caseRepository.findByIdForUpdate(caseId)).thenReturn(Optional.of(returnCase));
+
+        CaseEventEntity existingEvent = new CaseEventEntity(
+                UUID.randomUUID(), caseId, 1L, buyerId, sellerId,
+                CaseEventEntity.TYPE_SUBMITTED, "Reason",
+                "{\"delivery_method\":\"CARRIER\"}",
+                "CMD_CONFLICT"
+        );
+        when(caseEventRepository.findByCommandKey("CMD_CONFLICT")).thenReturn(Optional.of(existingEvent));
+
+        ReturnCaseDtos.SubmitReturnShipmentRequest req = new ReturnCaseDtos.SubmitReturnShipmentRequest(
+                "SELF_DELIVERY", null, null, "CMD_CONFLICT"
+        );
+
+        assertThatThrownBy(() -> service.submitReturnShipment(buyerId, caseId, req))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Conflict: commandKey đã được sử dụng với payload khác");
+    }
+
+    @Test
+    @DisplayName("Task 3.1: submitReturnShipment - throws IllegalStateException if same commandKey used for different actor or case")
+    void submitReturnShipment_conflictActorOrCase() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_RETURN_APPROVED);
+
+        OrderEntity order = createValidDeliveredOrder();
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(caseRepository.findByIdForUpdate(caseId)).thenReturn(Optional.of(returnCase));
+
+        CaseEventEntity existingEvent = new CaseEventEntity(
+                UUID.randomUUID(), 999L, 1L, 888L, sellerId,
+                CaseEventEntity.TYPE_SUBMITTED, "Reason",
+                "{\"delivery_method\":\"CARRIER\"}",
+                "CMD_DIFF_CASE"
+        );
+        when(caseEventRepository.findByCommandKey("CMD_DIFF_CASE")).thenReturn(Optional.of(existingEvent));
+
+        ReturnCaseDtos.SubmitReturnShipmentRequest req = new ReturnCaseDtos.SubmitReturnShipmentRequest(
+                "CARRIER", null, null, "CMD_DIFF_CASE"
+        );
+
+        assertThatThrownBy(() -> service.submitReturnShipment(buyerId, caseId, req))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Conflict: commandKey đã được sử dụng cho caseId hoặc actorId khác");
+
+        assertThatThrownBy(() -> service.submitReturnShipment(null, caseId, req))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Chưa xác thực danh tính");
+    }
+
+    @Test
+    @DisplayName("Task 3.1: confirmReturnDeliveryDirect - single party confirmation returns false, case stays in RETURNING")
+    void confirmReturnDeliveryDirect_singleParty_staysInReturning() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_RETURNING);
+
+        OrderEntity order = createValidDeliveredOrder();
+        ShipmentEntity returnShipment = ShipmentEntity.createReturnShipment(orderId, caseId, "SELF_DELIVERY", null, null, fixedNow);
+        returnShipment.setId(801L);
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByReturnCaseIdForUpdate(caseId)).thenReturn(Optional.of(returnShipment));
+        when(caseRepository.findByIdForUpdate(caseId)).thenReturn(Optional.of(returnCase));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_confirm_direct_handover(?)"), eq(Boolean.class), any()))
+                .thenReturn(Boolean.FALSE);
+
+        ReturnCaseDtos.ConfirmReturnDeliveryRequest req = new ReturnCaseDtos.ConfirmReturnDeliveryRequest(
+                fixedNow, "Buyer delivered", "CMD_CONFIRM_BUYER"
+        );
+
+        ReturnCaseDtos.ReturnCaseDetailResponse resp = service.confirmReturnDeliveryDirect(buyerId, caseId, req);
+
+        assertThat(resp.state()).isEqualTo(CaseEntity.STATE_RETURNING);
+        verify(caseRoundRepository, never()).save(any());
+
+        // Verify null actor fails immediately
+        assertThatThrownBy(() -> service.confirmReturnDeliveryDirect(null, caseId, req))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Chưa xác thực danh tính");
+    }
+
+    @Test
+    @DisplayName("Task 3.1: confirmReturnDeliveryDirect - guard clauses against CARRIER and invalid case states without side effects")
+    void confirmReturnDeliveryDirect_guardClauses() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_RETURNING);
+
+        OrderEntity order = createValidDeliveredOrder();
+        ShipmentEntity carrierShipment = ShipmentEntity.createReturnShipment(orderId, caseId, "CARRIER", "GHN", "GHN-RET-123", fixedNow);
+        carrierShipment.setId(801L);
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByReturnCaseIdForUpdate(caseId)).thenReturn(Optional.of(carrierShipment));
+
+        ReturnCaseDtos.ConfirmReturnDeliveryRequest req = new ReturnCaseDtos.ConfirmReturnDeliveryRequest(
+                fixedNow, "Buyer delivered", "CMD_GUARD_1"
+        );
+
+        // 1. Guard against CARRIER shipment method
+        assertThatThrownBy(() -> service.confirmReturnDeliveryDirect(buyerId, caseId, req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Không thể xác nhận bàn giao trực tiếp cho vận đơn qua hãng vận chuyển (CARRIER)");
+
+        // 2. Guard against invalid case states (e.g. STATE_OPEN)
+        carrierShipment.setDeliveryMethod(ShipmentEntity.DELIVERY_METHOD_SELF_DELIVERY);
+        returnCase.setState(CaseEntity.STATE_OPEN);
+        when(caseRepository.findByIdForUpdate(caseId)).thenReturn(Optional.of(returnCase));
+
+        assertThatThrownBy(() -> service.confirmReturnDeliveryDirect(buyerId, caseId, req))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Trạng thái khiếu nại không hợp lệ để xác nhận bàn giao hàng trả");
+
+        // Verify NO side effects: no handover confirmation inserted and no DB function invoked
+        verify(jdbcTemplate, never()).update(anyString(), any(Object[].class));
+        verify(jdbcTemplate, never()).queryForObject(eq("SELECT og_confirm_direct_handover(?)"), eq(Boolean.class), any());
+    }
+
+    @Test
+    @DisplayName("Task 3.1: confirmReturnDeliveryDirect - both parties confirmation returns true, transitions to POST_RETURN and opens Round 2 with round2Id")
+    void confirmReturnDeliveryDirect_bothParties_transitionsToPostReturn() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_RETURNING);
+
+        OrderEntity order = createValidDeliveredOrder();
+        ShipmentEntity returnShipment = ShipmentEntity.createReturnShipment(orderId, caseId, "SELF_DELIVERY", null, null, fixedNow);
+        returnShipment.setId(801L);
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByReturnCaseIdForUpdate(caseId)).thenReturn(Optional.of(returnShipment));
+        when(caseRepository.findByIdForUpdate(caseId)).thenReturn(Optional.of(returnCase));
+        when(caseRoundRepository.findByCaseIdAndRoundNo(caseId, 2)).thenReturn(Optional.empty());
+        CaseRoundEntity savedRound2 = new CaseRoundEntity(caseId, 2, CaseRoundEntity.STAGE_POST_RETURN_RESOLUTION);
+        savedRound2.setId(602L);
+        when(caseRoundRepository.save(any())).thenReturn(savedRound2);
+        when(jdbcTemplate.queryForObject(eq("SELECT og_confirm_direct_handover(?)"), eq(Boolean.class), any()))
+                .thenReturn(Boolean.TRUE);
+        doAnswer(inv -> {
+            returnCase.setState(CaseEntity.STATE_POST_RETURN);
+            returnCase.setValidReturnedAt(fixedNow);
+            return null;
+        }).when(entityManager).refresh(returnCase);
+
+        ReturnCaseDtos.ConfirmReturnDeliveryRequest req = new ReturnCaseDtos.ConfirmReturnDeliveryRequest(
+                fixedNow.plus(Duration.ofDays(10)), "Seller received", "CMD_CONFIRM_SELLER"
+        );
+
+        ReturnCaseDtos.ReturnCaseDetailResponse resp = service.confirmReturnDeliveryDirect(sellerId, caseId, req);
+
+        assertThat(resp.state()).isEqualTo(CaseEntity.STATE_POST_RETURN);
+        assertThat(resp.validReturnedAt()).isNotNull();
+        verify(caseRoundRepository).save(argThat(r -> r.getRoundNo() == 2 && CaseRoundEntity.STAGE_POST_RETURN_RESOLUTION.equals(r.getStage())));
+        // Verify Round 2 Event uses round2.getId() (602L), NOT hardcoded 2L
+        verify(caseEventRepository).save(argThat(ev -> Long.valueOf(602L).equals(ev.getRoundId())));
+    }
+
+    @Test
+    @DisplayName("Task 3.1: confirmReturnDeliveryDirect - succeeds when case is in RETURN_APPROVED state")
+    void confirmReturnDeliveryDirect_returnApprovedState_succeeds() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_RETURN_APPROVED);
+
+        OrderEntity order = createValidDeliveredOrder();
+        ShipmentEntity returnShipment = ShipmentEntity.createReturnShipment(orderId, caseId, "SELF_DELIVERY", null, null, fixedNow);
+        returnShipment.setId(801L);
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByReturnCaseIdForUpdate(caseId)).thenReturn(Optional.of(returnShipment));
+        when(caseRepository.findByIdForUpdate(caseId)).thenReturn(Optional.of(returnCase));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_confirm_direct_handover(?)"), eq(Boolean.class), any()))
+                .thenReturn(Boolean.FALSE);
+
+        ReturnCaseDtos.ConfirmReturnDeliveryRequest req = new ReturnCaseDtos.ConfirmReturnDeliveryRequest(
+                fixedNow, "Buyer handed over", "CMD_CONFIRM_APPROVED"
+        );
+
+        ReturnCaseDtos.ReturnCaseDetailResponse resp = service.confirmReturnDeliveryDirect(buyerId, caseId, req);
+
+        // Case was in RETURN_APPROVED, single party confirmed -> should not throw IllegalStateException, guard satisfied!
+        assertThat(resp).isNotNull();
+        assertThat(resp.state()).isEqualTo(CaseEntity.STATE_RETURN_APPROVED);
+    }
+
+    @Test
+    @DisplayName("Task 3.1: fail-fast when shipmentRepository is null in submit, confirmDirect, confirmCarrier")
+    void failFast_whenShipmentRepositoryIsNull() {
+        ReturnCaseService serviceWithoutShipmentRepo = new ReturnCaseService(
+                caseRepository, caseRoundRepository, caseEvidenceRepository, caseDecisionRepository,
+                caseEventRepository, orderRepository, paymentRepository, null,
+                entityManager, jdbcTemplate, null, clock
+        );
+
+        ReturnCaseDtos.SubmitReturnShipmentRequest submitReq = new ReturnCaseDtos.SubmitReturnShipmentRequest(
+                "CARRIER", "GHN", "TRACK123", "CMD_1"
+        );
+        assertThatThrownBy(() -> serviceWithoutShipmentRepo.submitReturnShipment(buyerId, 501L, submitReq))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Chưa cấu hình kho dữ liệu vận đơn (shipmentRepository)");
+
+        ReturnCaseDtos.ConfirmReturnDeliveryRequest confirmReq = new ReturnCaseDtos.ConfirmReturnDeliveryRequest(
+                fixedNow, "Note", "CMD_2"
+        );
+        assertThatThrownBy(() -> serviceWithoutShipmentRepo.confirmReturnDeliveryDirect(buyerId, 501L, confirmReq))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Chưa cấu hình kho dữ liệu vận đơn (shipmentRepository)");
+
+        assertThatThrownBy(() -> serviceWithoutShipmentRepo.confirmReturnDeliveryByCarrier(501L, 801L, fixedNow))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Chưa cấu hình kho dữ liệu vận đơn (shipmentRepository)");
+    }
+
+    @Test
+    @DisplayName("Task 3.1: confirmReturnDeliveryDirect - fail-fast when jdbcTemplate is null")
+    void confirmReturnDeliveryDirect_failFast_whenJdbcTemplateIsNull() {
+        ReturnCaseService serviceWithoutJdbc = new ReturnCaseService(
+                caseRepository,
+                caseRoundRepository,
+                caseEvidenceRepository,
+                caseDecisionRepository,
+                caseEventRepository,
+                orderRepository,
+                paymentRepository,
+                shipmentRepository,
+                entityManager,
+                null,
+                null,
+                clock
+        );
+
+        ReturnCaseDtos.ConfirmReturnDeliveryRequest confirmReq = new ReturnCaseDtos.ConfirmReturnDeliveryRequest(
+                fixedNow, "Bàn giao trực tiếp", "CMD_CONFIRM_FAILFAST_JDBC"
+        );
+
+        assertThatThrownBy(() -> serviceWithoutJdbc.confirmReturnDeliveryDirect(buyerId, 501L, confirmReq))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("jdbcTemplate");
+
+        // Xác minh không có side effect hoặc truy vấn repository không cần thiết
+        verifyNoInteractions(caseRepository);
+        verifyNoInteractions(orderRepository);
+        verifyNoInteractions(shipmentRepository);
+        verifyNoInteractions(caseRoundRepository);
+        verifyNoInteractions(caseEventRepository);
+    }
+
+    @Test
+    @DisplayName("Task 3.1: confirmReturnDeliveryByCarrier - carrier delivery transitions case to POST_RETURN and opens Round 2 with round2Id")
+    void confirmReturnDeliveryByCarrier_success() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_RETURNING);
+
+        OrderEntity order = createValidDeliveredOrder();
+        ShipmentEntity returnShipment = ShipmentEntity.createReturnShipment(orderId, caseId, "CARRIER", "GHN", "GHN-RET-123", fixedNow);
+        returnShipment.setId(802L);
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByReturnCaseIdForUpdate(caseId)).thenReturn(Optional.of(returnShipment));
+        when(caseRepository.findByIdForUpdate(caseId)).thenReturn(Optional.of(returnCase));
+        when(caseRoundRepository.findByCaseIdAndRoundNo(caseId, 2)).thenReturn(Optional.empty());
+        CaseRoundEntity savedRound2 = new CaseRoundEntity(caseId, 2, CaseRoundEntity.STAGE_POST_RETURN_RESOLUTION);
+        savedRound2.setId(602L);
+        when(caseRoundRepository.save(any())).thenReturn(savedRound2);
+        when(caseRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Instant deliveredAt = fixedNow.plus(Duration.ofHours(48));
+        ReturnCaseDtos.ReturnCaseDetailResponse resp = service.confirmReturnDeliveryByCarrier(caseId, returnShipment.getId(), deliveredAt);
+
+        assertThat(resp.state()).isEqualTo(CaseEntity.STATE_POST_RETURN);
+        assertThat(resp.validReturnedAt()).isEqualTo(deliveredAt);
+        assertThat(resp.sellerResponseDueAt()).isEqualTo(deliveredAt.plus(Duration.ofDays(2)));
+        assertThat(returnShipment.getStatus()).isEqualTo(ShipmentEntity.STATUS_DELIVERED);
+        assertThat(returnShipment.getValidDeliveryAt()).isEqualTo(deliveredAt);
+        verify(caseRoundRepository).save(argThat(r -> r.getRoundNo() == 2 && r.getOpenedAt().equals(deliveredAt)));
+        // Verify Round 2 Event uses round2.getId() (602L), NOT hardcoded 2L
+        verify(caseEventRepository).save(argThat(ev -> Long.valueOf(602L).equals(ev.getRoundId())));
+    }
+
+    @Test
+    @DisplayName("Task 3.1: confirmReturnDeliveryByCarrier - validations on shipmentId, properties, and case state")
+    void confirmReturnDeliveryByCarrier_validations() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_RETURNING);
+
+        OrderEntity order = createValidDeliveredOrder();
+        ShipmentEntity returnShipment = ShipmentEntity.createReturnShipment(orderId, caseId, "CARRIER", "GHN", "GHN-RET-123", fixedNow);
+        returnShipment.setId(802L);
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByReturnCaseIdForUpdate(caseId)).thenReturn(Optional.of(returnShipment));
+        when(caseRepository.findByIdForUpdate(caseId)).thenReturn(Optional.of(returnCase));
+
+        // 1. Mismatched shipmentId
+        assertThatThrownBy(() -> service.confirmReturnDeliveryByCarrier(caseId, 9999L, fixedNow))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("không khớp với vận đơn");
+
+        // 2. Invalid shipment leg
+        returnShipment.setLeg("OUTBOUND");
+        assertThatThrownBy(() -> service.confirmReturnDeliveryByCarrier(caseId, returnShipment.getId(), fixedNow))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Vận đơn không thuộc luồng trả hàng");
+        returnShipment.setLeg(ShipmentEntity.LEG_RETURN);
+
+        // 3. Invalid case state
+        returnCase.setState(CaseEntity.STATE_OPEN);
+        assertThatThrownBy(() -> service.confirmReturnDeliveryByCarrier(caseId, returnShipment.getId(), fixedNow))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Trạng thái khiếu nại không hợp lệ");
+    }
+
+    @Test
+    @DisplayName("Task 3.1: getReturnShipmentByCaseId - allows buyer, seller, KTV, and Admin; denies stranger, null actor, and jdbcTemplate null")
+    void getReturnShipmentByCaseId_tests() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "Detail", "CMD_1");
+        returnCase.setId(caseId);
+
+        OrderEntity order = createValidDeliveredOrder();
+        ShipmentEntity returnShipment = ShipmentEntity.createReturnShipment(orderId, caseId, "CARRIER", "GHN", "GHN-RET-123", fixedNow);
+        returnShipment.setId(802L);
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByReturnCaseId(caseId)).thenReturn(Optional.of(returnShipment));
+
+        // 1. Buyer query -> success
+        ReturnCaseDtos.ReturnShipmentDetailResponse buyerResp = service.getReturnShipmentByCaseId(buyerId, caseId);
+        assertThat(buyerResp.shipmentId()).isEqualTo(802L);
+
+        // 2. Seller query -> success
+        ReturnCaseDtos.ReturnShipmentDetailResponse sellerResp = service.getReturnShipmentByCaseId(sellerId, caseId);
+        assertThat(sellerResp.shipmentId()).isEqualTo(802L);
+
+        // 3. KTV query -> role check returns true -> success
+        Long ktvId = 8881L;
+        when(jdbcTemplate.queryForObject(eq("SELECT og_has_role(?, 'KTV') OR og_has_role(?, 'ADMIN')"), eq(Boolean.class), eq(ktvId), eq(ktvId)))
+                .thenReturn(Boolean.TRUE);
+        ReturnCaseDtos.ReturnShipmentDetailResponse ktvResp = service.getReturnShipmentByCaseId(ktvId, caseId);
+        assertThat(ktvResp.shipmentId()).isEqualTo(802L);
+
+        // 4. Admin query -> role check returns true -> success
+        Long adminId = 8882L;
+        when(jdbcTemplate.queryForObject(eq("SELECT og_has_role(?, 'KTV') OR og_has_role(?, 'ADMIN')"), eq(Boolean.class), eq(adminId), eq(adminId)))
+                .thenReturn(Boolean.TRUE);
+        ReturnCaseDtos.ReturnShipmentDetailResponse adminResp = service.getReturnShipmentByCaseId(adminId, caseId);
+        assertThat(adminResp.shipmentId()).isEqualTo(802L);
+
+        // 5. Null actor -> throws SecurityException
+        assertThatThrownBy(() -> service.getReturnShipmentByCaseId(null, caseId))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Chưa xác thực danh tính");
+
+        // 6. Stranger query -> role check returns false -> throws SecurityException
+        Long strangerId = 9999L;
+        when(jdbcTemplate.queryForObject(eq("SELECT og_has_role(?, 'KTV') OR og_has_role(?, 'ADMIN')"), eq(Boolean.class), eq(strangerId), eq(strangerId)))
+                .thenReturn(Boolean.FALSE);
+        assertThatThrownBy(() -> service.getReturnShipmentByCaseId(strangerId, caseId))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Người dùng không có quyền xem thông tin vận chuyển của khiếu nại này");
+
+        // 7. DB error during role check -> fail-closed -> throws SecurityException
+        Long dbErrUser = 7777L;
+        when(jdbcTemplate.queryForObject(eq("SELECT og_has_role(?, 'KTV') OR og_has_role(?, 'ADMIN')"), eq(Boolean.class), eq(dbErrUser), eq(dbErrUser)))
+                .thenThrow(new RuntimeException("DB Connection Timeout"));
+        assertThatThrownBy(() -> service.getReturnShipmentByCaseId(dbErrUser, caseId))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Người dùng không có quyền xem thông tin vận chuyển của khiếu nại này");
+
+        // 8. Service with null jdbcTemplate -> fail-closed -> throws SecurityException for non-buyer/seller
+        ReturnCaseService serviceWithoutJdbc = new ReturnCaseService(
+                caseRepository, caseRoundRepository, caseEvidenceRepository, caseDecisionRepository,
+                caseEventRepository, orderRepository, paymentRepository, shipmentRepository,
+                entityManager, null, null, clock
+        );
+        assertThatThrownBy(() -> serviceWithoutJdbc.getReturnShipmentByCaseId(strangerId, caseId))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Người dùng không có quyền xem thông tin vận chuyển của khiếu nại này");
     }
 }

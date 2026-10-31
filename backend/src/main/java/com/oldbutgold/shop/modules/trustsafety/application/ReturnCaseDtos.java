@@ -114,6 +114,44 @@ public final class ReturnCaseDtos {
             Instant decidedAt
     ) {}
 
+    public record SubmitReturnShipmentRequest(
+            @NotNull(message = "Phương thức vận chuyển không được để trống")
+            String deliveryMethod,
+
+            String carrier,
+
+            String trackingNumber,
+
+            @NotNull(message = "commandKey không được để trống")
+            String commandKey
+    ) {}
+
+    public record ConfirmReturnDeliveryRequest(
+            Instant deliveredAt,
+            String note,
+            @NotNull(message = "commandKey không được để trống")
+            String commandKey
+    ) {}
+
+    public record BuyerHandoverConfirmRequest(
+            @NotNull(message = "commandKey không được để trống")
+            String commandKey
+    ) {}
+
+    public record ReturnShipmentDetailResponse(
+            Long shipmentId,
+            Long caseId,
+            Long orderId,
+            String leg,
+            String deliveryMethod,
+            String carrier,
+            String trackingNumber,
+            String status,
+            Instant pickupExpectedAt,
+            Instant pickupDeadline,
+            Instant validDeliveryAt
+    ) {}
+
     public record ReturnCaseDetailResponse(
             Long caseId,
             Long orderId,
@@ -131,7 +169,32 @@ public final class ReturnCaseDtos {
             String commandKey,
             CaseRoundDto currentRound,
             List<CaseEvidenceDto> evidence,
-            List<CaseEventDto> events
-    ) {}
+            List<CaseEventDto> events,
+            ReturnShipmentDetailResponse returnShipment
+    ) {
+        public ReturnCaseDetailResponse(
+                Long caseId,
+                Long orderId,
+                String caseType,
+                String state,
+                ReturnReasonCode reasonCode,
+                String cleanDescription,
+                String fullDescription,
+                Long createdBy,
+                Instant createdAt,
+                Instant approvedAt,
+                Instant validReturnedAt,
+                Instant sellerResponseDueAt,
+                Instant closedAt,
+                String commandKey,
+                CaseRoundDto currentRound,
+                List<CaseEvidenceDto> evidence,
+                List<CaseEventDto> events
+        ) {
+            this(caseId, orderId, caseType, state, reasonCode, cleanDescription, fullDescription,
+                    createdBy, createdAt, approvedAt, validReturnedAt, sellerResponseDueAt, closedAt,
+                    commandKey, currentRound, evidence, events, null);
+        }
+    }
 }
 
