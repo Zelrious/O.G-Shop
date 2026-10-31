@@ -37,6 +37,34 @@ public final class ReturnCaseDtos {
             String commandKey
     ) {}
 
+    public record SellerRound1ResponseRequest(
+            @NotNull(message = "Lựa chọn phản hồi không được để trống")
+            String outcome,
+
+            @Size(max = 2000, message = "Lý do tối đa 2000 ký tự")
+            String reason,
+
+            String commandKey
+    ) {}
+
+    public record KtvRound1DecisionRequest(
+            @NotNull(message = "Phán quyết không được để trống")
+            String outcome,
+
+            @NotNull(message = "Lý do phán quyết không được để trống")
+            @Size(min = 5, max = 2000, message = "Lý do phán quyết từ 5 đến 2000 ký tự")
+            String reason,
+
+            String commandKey
+    ) {}
+
+    public record WithdrawReturnRequest(
+            @Size(max = 1000, message = "Lý do rút tối đa 1000 ký tự")
+            String reason,
+
+            String commandKey
+    ) {}
+
     public record CaseRoundDto(
             Long roundId,
             Long caseId,

@@ -162,25 +162,25 @@
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseEventRepository.java`
     - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServiceTest.java`
 
-- [ ] **Task 2.3: Triển khai Người bán phản hồi & KTV phân xử Vòng 1 (UC62 & UC75)**
+- [x] **Task 2.3: Triển khai Người bán phản hồi & KTV phân xử Vòng 1 (UC62 & UC75)**
   - **Mô tả**:
     * KTV thấy hồ sơ ngay khi `OPEN`, có thể chủ động duyệt `APPROVE_RETURN` hoặc bác `REJECT_RETURN` (kèm lý do).
     * Người bán có 2 lựa chọn: `[Chấp thuận trả]` (`APPROVE_RETURN`) hoặc `[Không đồng ý, chuyển KTV]` (`SELLER_DECLINED`).
     * Xử lý xung đột đua quyết định (first-write wins).
   - **Tiêu chí chấp nhận**:
-    - [ ] Người bán `APPROVE_RETURN` -> Case chuyển `RETURN_APPROVED` (**chưa hoàn tiền**, chờ gửi hàng trả).
-    - [ ] Người bán `SELLER_DECLINED` -> Case chuyển `REVIEWING`, hạn KTV 48h tính từ khi hồ sơ đủ nội dung.
-    - [ ] KTV duyệt `APPROVE_RETURN` hoặc bác `REJECT_RETURN` (bắt buộc nhập lý do).
-    - [ ] KTV bác (`REJECT_RETURN`) -> Hồ sơ chuyển `REJECTED`, **không giải ngân ngay** mà chờ đủ điều kiện UC71 (hết 3 ngày hoặc Hoàn tất sớm).
-    - [ ] Quá hạn KTV 48h: Ghi nhận event `ESCALATED`, không tự động duyệt/hoàn tiền.
+    - [x] Người bán `APPROVE_RETURN` -> Case chuyển `RETURN_APPROVED` (**chưa hoàn tiền**, chờ gửi hàng trả).
+    - [x] Người bán `SELLER_DECLINED` -> Case chuyển `REVIEWING`, hạn KTV 48h tính từ khi hồ sơ đủ nội dung.
+    - [x] KTV duyệt `APPROVE_RETURN` hoặc bác `REJECT_RETURN` (bắt buộc nhập lý do).
+    - [x] KTV bác (`REJECT_RETURN`) -> Hồ sơ chuyển `REJECTED`, **không giải ngân ngay** mà chờ đủ điều kiện UC71 (hết 3 ngày hoặc Hoàn tất sớm).
+    - [x] Quá hạn KTV 48h: Ghi nhận event `ESCALATED`, không tự động duyệt/hoàn tiền.
   - **Files**:
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
 
-- [ ] **Task 2.4: Triển khai Người mua rút yêu cầu trả hàng (`withdrawReturnRequest` - UC62 7c)**
+- [x] **Task 2.4: Triển khai Người mua rút yêu cầu trả hàng (`withdrawReturnRequest` - UC62 7c)**
   - **Mô tả**: Người mua chủ động rút yêu cầu trước khi gửi hàng trả.
   - **Tiêu chí chấp nhận**:
-    - [ ] Chỉ cho rút khi hồ sơ ở `OPEN`, `REVIEWING`, `RETURN_APPROVED` và chưa bàn giao bưu tá / chưa gửi hàng.
-    - [ ] Đóng lệnh giữ tiền (`money_holds.closed_at = now()`), giải phóng cản trở (`has_blocking_case = false`), tiền tiếp tục xử lý giải ngân theo điều kiện UC71.
+    - [x] Chỉ cho rút khi hồ sơ ở `OPEN`, `REVIEWING`, `RETURN_APPROVED` và chưa bàn giao bưu tá / chưa gửi hàng.
+    - [x] Đóng lệnh giữ tiền (`money_holds.closed_at = now()`), giải phóng cản trở (`has_blocking_case = false`), tiền tiếp tục xử lý giải ngân theo điều kiện UC71.
   - **Files**:
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
 

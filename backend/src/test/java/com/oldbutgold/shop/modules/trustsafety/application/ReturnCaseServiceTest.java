@@ -4,6 +4,7 @@ import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderEnti
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderRepository;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.PaymentEntity;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.PaymentRepository;
+import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseDecisionEntity;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseDecisionRepository;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseEntity;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseEventEntity;
@@ -53,6 +54,9 @@ class ReturnCaseServiceTest {
     private CaseEvidenceRepository caseEvidenceRepository;
 
     @Mock
+    private CaseDecisionRepository caseDecisionRepository;
+
+    @Mock
     private CaseEventRepository caseEventRepository;
 
     @Mock
@@ -63,6 +67,9 @@ class ReturnCaseServiceTest {
 
     @Mock
     private EntityManager entityManager;
+
+    @Mock
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     private Clock clock;
     private Instant fixedNow;
@@ -81,10 +88,12 @@ class ReturnCaseServiceTest {
                 caseRepository,
                 caseRoundRepository,
                 caseEvidenceRepository,
+                caseDecisionRepository,
                 caseEventRepository,
                 orderRepository,
                 paymentRepository,
                 entityManager,
+                jdbcTemplate,
                 clock
         );
     }
@@ -475,5 +484,302 @@ class ReturnCaseServiceTest {
         assertThat(response).isNotNull();
         assertThat(response.caseId()).isEqualTo(777L);
         verify(caseRepository, never()).saveAndFlush(any());
+    }
+
+    // ==================== TASK 2.3: Seller Round 1 & KTV Round 1 Tests ====================
+
+    @Test
+    @DisplayName("sellerRespondRound1: Seller approves return -> case becomes RETURN_APPROVED, round DECIDED")
+    void sellerRespondRound1_approveReturn_success() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "[CHANGE_MIND] Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_OPEN);
+
+        OrderEntity order = createValidDeliveredOrder();
+        CaseRoundEntity round = new CaseRoundEntity(caseId, 1, CaseRoundEntity.STAGE_RETURN_APPROVAL);
+        round.setId(601L);
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(caseRoundRepository.findByCaseIdAndRoundNo(caseId, 1)).thenReturn(Optional.of(round));
+        when(caseRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ReturnCaseDtos.SellerRound1ResponseRequest request = new ReturnCaseDtos.SellerRound1ResponseRequest(
+                CaseDecisionEntity.OUTCOME_APPROVE_RETURN,
+                "Đồng ý nhận lại hàng",
+                "CMD_SELLER_R1_1"
+        );
+
+        ReturnCaseDtos.ReturnCaseDetailResponse response = service.sellerRespondRound1(sellerId, caseId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.state()).isEqualTo(CaseEntity.STATE_RETURN_APPROVED);
+        assertThat(response.approvedAt()).isEqualTo(fixedNow);
+        assertThat(round.getState()).isEqualTo(CaseRoundEntity.STATE_DECIDED);
+
+        ArgumentCaptor<CaseDecisionEntity> decisionCaptor = ArgumentCaptor.forClass(CaseDecisionEntity.class);
+        verify(caseDecisionRepository).save(decisionCaptor.capture());
+        assertThat(decisionCaptor.getValue().getOutcome()).isEqualTo(CaseDecisionEntity.OUTCOME_APPROVE_RETURN);
+        assertThat(decisionCaptor.getValue().getIsFinal()).isTrue();
+        assertThat(decisionCaptor.getValue().getReviewedBy()).isEqualTo(sellerId);
+    }
+
+    @Test
+    @DisplayName("sellerRespondRound1: Seller declines return -> case becomes REVIEWING, round stays OPEN for KTV")
+    void sellerRespondRound1_sellerDeclined_success() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "[CHANGE_MIND] Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_OPEN);
+
+        OrderEntity order = createValidDeliveredOrder();
+        CaseRoundEntity round = new CaseRoundEntity(caseId, 1, CaseRoundEntity.STAGE_RETURN_APPROVAL);
+        round.setId(601L);
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(caseRoundRepository.findByCaseIdAndRoundNo(caseId, 1)).thenReturn(Optional.of(round));
+        when(caseRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ReturnCaseDtos.SellerRound1ResponseRequest request = new ReturnCaseDtos.SellerRound1ResponseRequest(
+                CaseDecisionEntity.OUTCOME_SELLER_DECLINED,
+                "Hàng đã mở seal, không đồng ý nhận lại",
+                "CMD_SELLER_R1_2"
+        );
+
+        ReturnCaseDtos.ReturnCaseDetailResponse response = service.sellerRespondRound1(sellerId, caseId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.state()).isEqualTo(CaseEntity.STATE_REVIEWING);
+        assertThat(round.getState()).isEqualTo(CaseRoundEntity.STATE_OPEN);
+
+        ArgumentCaptor<CaseDecisionEntity> decisionCaptor = ArgumentCaptor.forClass(CaseDecisionEntity.class);
+        verify(caseDecisionRepository).save(decisionCaptor.capture());
+        assertThat(decisionCaptor.getValue().getOutcome()).isEqualTo(CaseDecisionEntity.OUTCOME_SELLER_DECLINED);
+        assertThat(decisionCaptor.getValue().getIsFinal()).isFalse();
+    }
+
+    @Test
+    @DisplayName("sellerRespondRound1: Reject if caller is not the seller")
+    void sellerRespondRound1_rejectIfNotSeller() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "[CHANGE_MIND] Detail", "CMD_1");
+        returnCase.setId(caseId);
+        OrderEntity order = createValidDeliveredOrder();
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        ReturnCaseDtos.SellerRound1ResponseRequest request = new ReturnCaseDtos.SellerRound1ResponseRequest(
+                CaseDecisionEntity.OUTCOME_APPROVE_RETURN,
+                "OK",
+                null
+        );
+
+        assertThatThrownBy(() -> service.sellerRespondRound1(buyerId, caseId, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Chỉ người bán của đơn hàng mới có quyền phản hồi");
+    }
+
+    @Test
+    @DisplayName("sellerRespondRound1: First-write wins: Reject if case is not OPEN")
+    void sellerRespondRound1_firstWriteWins_rejectIfNotOpen() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "[CHANGE_MIND] Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_RETURN_APPROVED); // Already approved by KTV or earlier
+
+        OrderEntity order = createValidDeliveredOrder();
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        ReturnCaseDtos.SellerRound1ResponseRequest request = new ReturnCaseDtos.SellerRound1ResponseRequest(
+                CaseDecisionEntity.OUTCOME_SELLER_DECLINED,
+                "Từ chối",
+                null
+        );
+
+        assertThatThrownBy(() -> service.sellerRespondRound1(sellerId, caseId, request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Hồ sơ không ở trạng thái chờ người bán phản hồi");
+    }
+
+    @Test
+    @DisplayName("ktvDecideRound1: KTV approves return from REVIEWING -> case becomes RETURN_APPROVED")
+    void ktvDecideRound1_approveReturn_success() {
+        Long caseId = 501L;
+        Long ktvId = 300L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "[NOT_AS_DESCRIBED] Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_REVIEWING);
+
+        OrderEntity order = createValidDeliveredOrder();
+        CaseRoundEntity round = new CaseRoundEntity(caseId, 1, CaseRoundEntity.STAGE_RETURN_APPROVAL);
+        round.setId(601L);
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(caseRoundRepository.findByCaseIdAndRoundNo(caseId, 1)).thenReturn(Optional.of(round));
+        when(caseRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ReturnCaseDtos.KtvRound1DecisionRequest request = new ReturnCaseDtos.KtvRound1DecisionRequest(
+                CaseDecisionEntity.OUTCOME_APPROVE_RETURN,
+                "KTV xác minh ảnh sản phẩm giao sai màu thực tế",
+                "CMD_KTV_R1_1"
+        );
+
+        ReturnCaseDtos.ReturnCaseDetailResponse response = service.ktvDecideRound1(ktvId, caseId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.state()).isEqualTo(CaseEntity.STATE_RETURN_APPROVED);
+        assertThat(response.approvedAt()).isEqualTo(fixedNow);
+        assertThat(round.getState()).isEqualTo(CaseRoundEntity.STATE_DECIDED);
+
+        ArgumentCaptor<CaseDecisionEntity> decisionCaptor = ArgumentCaptor.forClass(CaseDecisionEntity.class);
+        verify(caseDecisionRepository).save(decisionCaptor.capture());
+        assertThat(decisionCaptor.getValue().getOutcome()).isEqualTo(CaseDecisionEntity.OUTCOME_APPROVE_RETURN);
+        assertThat(decisionCaptor.getValue().getReviewedBy()).isEqualTo(ktvId);
+    }
+
+    @Test
+    @DisplayName("ktvDecideRound1: KTV rejects return -> case becomes REJECTED, closes money holds, does not disburse immediately")
+    void ktvDecideRound1_rejectReturn_success() {
+        Long caseId = 501L;
+        Long ktvId = 300L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "[CHANGE_MIND] Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_REVIEWING);
+
+        OrderEntity order = createValidDeliveredOrder();
+        CaseRoundEntity round = new CaseRoundEntity(caseId, 1, CaseRoundEntity.STAGE_RETURN_APPROVAL);
+        round.setId(601L);
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(caseRoundRepository.findByCaseIdAndRoundNo(caseId, 1)).thenReturn(Optional.of(round));
+        when(caseRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ReturnCaseDtos.KtvRound1DecisionRequest request = new ReturnCaseDtos.KtvRound1DecisionRequest(
+                CaseDecisionEntity.OUTCOME_REJECT_RETURN,
+                "Hàng không đủ điều kiện đổi ý do người mua đã sử dụng",
+                "CMD_KTV_R1_REJECT"
+        );
+
+        ReturnCaseDtos.ReturnCaseDetailResponse response = service.ktvDecideRound1(ktvId, caseId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.state()).isEqualTo(CaseEntity.STATE_REJECTED);
+        assertThat(response.closedAt()).isEqualTo(fixedNow);
+        assertThat(round.getState()).isEqualTo(CaseRoundEntity.STATE_DECIDED);
+
+        // Verify decision recorded
+        verify(caseDecisionRepository).save(any(CaseDecisionEntity.class));
+        // Verify money_holds closed
+        verify(jdbcTemplate).update(contains("UPDATE og_compat.money_holds SET closed_at"), any(java.sql.Timestamp.class), eq(caseId));
+    }
+
+    @Test
+    @DisplayName("ktvDecideRound1: Reject if reason is blank or too short")
+    void ktvDecideRound1_rejectIfReasonBlank() {
+        Long caseId = 501L;
+        Long ktvId = 300L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "[CHANGE_MIND] Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_REVIEWING);
+
+        OrderEntity order = createValidDeliveredOrder();
+        CaseRoundEntity round = new CaseRoundEntity(caseId, 1, CaseRoundEntity.STAGE_RETURN_APPROVAL);
+        round.setId(601L);
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(caseRoundRepository.findByCaseIdAndRoundNo(caseId, 1)).thenReturn(Optional.of(round));
+
+        ReturnCaseDtos.KtvRound1DecisionRequest request = new ReturnCaseDtos.KtvRound1DecisionRequest(
+                CaseDecisionEntity.OUTCOME_REJECT_RETURN,
+                "", // Blank reason
+                null
+        );
+
+        assertThatThrownBy(() -> service.ktvDecideRound1(ktvId, caseId, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("KTV bắt buộc phải nhập lý do phán quyết chi tiết");
+    }
+
+    // ==================== TASK 2.4: Buyer Withdraw Return Request Tests ====================
+
+    @Test
+    @DisplayName("withdrawReturnRequest: Buyer withdraws when OPEN -> case CLOSED, money holds closed")
+    void withdrawReturnRequest_fromOpen_success() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "[CHANGE_MIND] Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_OPEN);
+
+        OrderEntity order = createValidDeliveredOrder();
+        CaseRoundEntity round = new CaseRoundEntity(caseId, 1, CaseRoundEntity.STAGE_RETURN_APPROVAL);
+        round.setId(601L);
+
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(caseRoundRepository.findLatestRoundByCaseId(caseId)).thenReturn(Optional.of(round));
+        when(caseRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ReturnCaseDtos.WithdrawReturnRequest request = new ReturnCaseDtos.WithdrawReturnRequest(
+                "Tôi đã đổi ý và quyết định giữ lại sản phẩm",
+                "CMD_WITHDRAW_1"
+        );
+
+        ReturnCaseDtos.ReturnCaseDetailResponse response = service.withdrawReturnRequest(buyerId, caseId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.state()).isEqualTo(CaseEntity.STATE_CLOSED);
+        assertThat(response.closedAt()).isEqualTo(fixedNow);
+        assertThat(round.getState()).isEqualTo(CaseRoundEntity.STATE_DECIDED);
+
+        // Verify event CLEANUP recorded
+        ArgumentCaptor<CaseEventEntity> eventCaptor = ArgumentCaptor.forClass(CaseEventEntity.class);
+        verify(caseEventRepository).save(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getEventType()).isEqualTo(CaseEventEntity.TYPE_CLEANUP);
+        assertThat(eventCaptor.getValue().getActorId()).isEqualTo(buyerId);
+
+        // Verify money_holds closed
+        verify(jdbcTemplate).update(contains("UPDATE og_compat.money_holds SET closed_at"), any(java.sql.Timestamp.class), eq(caseId));
+    }
+
+    @Test
+    @DisplayName("withdrawReturnRequest: Reject if caller is not the buyer who created the case")
+    void withdrawReturnRequest_rejectIfNotCreator() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "[CHANGE_MIND] Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_OPEN);
+
+        OrderEntity order = createValidDeliveredOrder();
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        Long otherUser = 999L;
+        assertThatThrownBy(() -> service.withdrawReturnRequest(otherUser, caseId, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Chỉ người mua tạo yêu cầu");
+    }
+
+    @Test
+    @DisplayName("withdrawReturnRequest: Reject if goods have already been returned/shipped")
+    void withdrawReturnRequest_rejectIfAlreadyReturned() {
+        Long caseId = 501L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "[CHANGE_MIND] Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_RETURNING);
+
+        OrderEntity order = createValidDeliveredOrder();
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> service.withdrawReturnRequest(buyerId, caseId, null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Không thể rút yêu cầu khi hồ sơ ở trạng thái RETURNING");
     }
 }
