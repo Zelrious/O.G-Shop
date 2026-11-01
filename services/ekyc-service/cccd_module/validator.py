@@ -47,6 +47,40 @@ class CCCDValidator:
             return False
 
     @staticmethod
+    def validate_ho_va_ten(ho_va_ten: Optional[str]) -> bool:
+        """Kiểm tra họ và tên hợp lệ: không rỗng, ít nhất 3 ký tự, không chứa số hoặc ký tự đặc biệt, ít nhất 2 từ."""
+        if not ho_va_ten or not isinstance(ho_va_ten, str):
+            return False
+        clean = ho_va_ten.strip()
+        if len(clean) < 3 or len(clean) > 60:
+            return False
+        if any(char.isdigit() for char in clean):
+            return False
+        invalid_chars = set("@#$%^&*+=<>_~`/\\|!?.,:;\"'{}[]()")
+        if any(char in invalid_chars for char in clean):
+            return False
+        words = clean.split()
+        if len(words) < 2:
+            return False
+        return True
+
+    @staticmethod
+    def validate_que_quan(que_quan: Optional[str]) -> bool:
+        """Kiểm tra quê quán: không rỗng, ít nhất 3 ký tự."""
+        if not que_quan or not isinstance(que_quan, str):
+            return False
+        clean = que_quan.strip()
+        return len(clean) >= 3
+
+    @staticmethod
+    def validate_noi_thuong_tru(noi_thuong_tru: Optional[str]) -> bool:
+        """Kiểm tra nơi thường trú: không rỗng, ít nhất 5 ký tự."""
+        if not noi_thuong_tru or not isinstance(noi_thuong_tru, str):
+            return False
+        clean = noi_thuong_tru.strip()
+        return len(clean) >= 5
+
+    @staticmethod
     def check_logic_cccd(so_cccd: str, gioi_tinh: str, nam_sinh: str) -> Tuple[bool, str]:
         """
         Kiểm tra logic giữa Số CCCD, Giới tính và Năm sinh.
@@ -114,3 +148,13 @@ class CCCDValidator:
             
         data["validation_info"] = validation_results
         return data
+
+# Module-level convenience aliases
+validate_so_cccd = CCCDValidator.validate_so_cccd
+validate_ngay_sinh = CCCDValidator.validate_ngay_sinh
+validate_gioi_tinh = CCCDValidator.validate_gioi_tinh
+validate_ngay_het_han = CCCDValidator.validate_ngay_het_han
+validate_ho_va_ten = CCCDValidator.validate_ho_va_ten
+validate_que_quan = CCCDValidator.validate_que_quan
+validate_noi_thuong_tru = CCCDValidator.validate_noi_thuong_tru
+
