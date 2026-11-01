@@ -181,7 +181,6 @@ describe('ChangeBankModal Component', () => {
     const futureTime = Date.now() + 45000;
     sessionStorage.setItem('og_bank_otp_resend_until', String(futureTime));
     sessionStorage.setItem('og_bank_challenge_id', 'persisted-challenge-xyz');
-    sessionStorage.setItem('og_bank_masked_email', 'persisted***@ogshop.vn');
 
     const requestSpy = vi.spyOn(profileApi, 'requestBankChangeOtp');
 
@@ -207,7 +206,7 @@ describe('ChangeBankModal Component', () => {
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText('000000')).toBeInTheDocument();
-      expect(screen.getByText(/persisted\*\*\*@ogshop.vn/i)).toBeInTheDocument();
+      expect(screen.getByText(/test@ogshop\.vn/i)).toBeInTheDocument();
     });
 
     sessionStorage.clear();

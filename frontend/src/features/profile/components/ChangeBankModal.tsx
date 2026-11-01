@@ -21,30 +21,26 @@ type BankModalStep = 'SELECT_METHOD' | 'OTP_INPUT' | 'ENTER_NEW_BANK';
 
 const BANK_COOLDOWN_KEY = 'og_bank_otp_resend_until';
 const BANK_CHALLENGE_KEY = 'og_bank_challenge_id';
-const BANK_EMAIL_KEY = 'og_bank_masked_email';
 
-function getStoredBankCooldown(): { secondsLeft: number; challengeId: string | null; email: string | null } {
+function getStoredBankCooldown(): { secondsLeft: number; challengeId: string | null } {
   try {
     const rawUntil = sessionStorage.getItem(BANK_COOLDOWN_KEY);
     const challengeId = sessionStorage.getItem(BANK_CHALLENGE_KEY);
-    const email = sessionStorage.getItem(BANK_EMAIL_KEY);
-    if (!rawUntil) return { secondsLeft: 0, challengeId: null, email: null };
+    if (!rawUntil) return { secondsLeft: 0, challengeId: null };
     const diff = Math.ceil((Number(rawUntil) - Date.now()) / 1000);
     return {
       secondsLeft: diff > 0 ? diff : 0,
       challengeId: diff > 0 ? challengeId : null,
-      email: diff > 0 ? email : null,
     };
   } catch {
-    return { secondsLeft: 0, challengeId: null, email: null };
+    return { secondsLeft: 0, challengeId: null };
   }
 }
 
-function setStoredBankCooldown(seconds: number, challengeId: string, email: string) {
+function setStoredBankCooldown(seconds: number, challengeId: string) {
   try {
     sessionStorage.setItem(BANK_COOLDOWN_KEY, String(Date.now() + seconds * 1000));
     sessionStorage.setItem(BANK_CHALLENGE_KEY, challengeId);
-    sessionStorage.setItem(BANK_EMAIL_KEY, email);
   } catch {
     // ignore
   }
@@ -54,7 +50,6 @@ function clearStoredBankCooldown() {
   try {
     sessionStorage.removeItem(BANK_COOLDOWN_KEY);
     sessionStorage.removeItem(BANK_CHALLENGE_KEY);
-    sessionStorage.removeItem(BANK_EMAIL_KEY);
   } catch {
     // ignore
   }
@@ -110,7 +105,7 @@ export const ChangeBankModal: React.FC<ChangeBankModalProps> = ({
       setBankChallengeId(res.challengeId);
       setMaskedEmail(email);
       setResendCooldown(60);
-      setStoredBankCooldown(60, res.challengeId, email);
+      setStoredBankCooldown(60, res.challengeId);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Không thể gửi mã xác thực OTP qua Email.';
       setOtpError(msg);
@@ -118,7 +113,7 @@ export const ChangeBankModal: React.FC<ChangeBankModalProps> = ({
         const stored = getStoredBankCooldown();
         if (stored.secondsLeft <= 0) {
           setResendCooldown(60);
-          setStoredBankCooldown(60, bankChallengeId || '', maskedEmail || accountEmail || '');
+          setStoredBankCooldown(60, bankChallengeId || '');
         }
       }
     } finally {
@@ -144,7 +139,6 @@ export const ChangeBankModal: React.FC<ChangeBankModalProps> = ({
     if (stored.secondsLeft > 0) {
       setResendCooldown(stored.secondsLeft);
       if (stored.challengeId) setBankChallengeId(stored.challengeId);
-      if (stored.email) setMaskedEmail(stored.email);
     } else {
       setResendCooldown(0);
     }

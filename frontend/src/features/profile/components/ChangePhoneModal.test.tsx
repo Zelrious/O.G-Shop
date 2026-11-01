@@ -172,7 +172,6 @@ describe('ChangePhoneModal Component', () => {
     const futureTime = Date.now() + 45000;
     sessionStorage.setItem('og_phone_otp_resend_until', String(futureTime));
     sessionStorage.setItem('og_phone_challenge_id', 'persisted-phone-challenge-xyz');
-    sessionStorage.setItem('og_phone_masked_email', 'phone***@ogshop.vn');
 
     const requestSpy = vi.spyOn(profileApi, 'requestPhoneChangeOtp');
 
@@ -198,7 +197,7 @@ describe('ChangePhoneModal Component', () => {
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText('000000')).toBeInTheDocument();
-      expect(screen.getByText(/phone\*\*\*@ogshop.vn/i)).toBeInTheDocument();
+      expect(screen.getByText(/test@ogshop\.vn/i)).toBeInTheDocument();
     });
 
     sessionStorage.clear();

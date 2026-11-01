@@ -36,7 +36,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
     throw new AuthRequestError(body.fieldErrors?.map(field => field.message).join(' ') || body.message
       || 'Yêu cầu không thành công (' + response.status + ').', body.code, Number(response.headers.get('Retry-After')) || 0, body);
   }
-  return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  const text = await response.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 async function publicRequest<T>(path: string, body?: unknown): Promise<T> {

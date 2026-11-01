@@ -18,30 +18,26 @@ type ModalStep = 'SELECT_METHOD' | 'OTP_INPUT' | 'ENTER_NEW_PHONE';
 
 const PHONE_COOLDOWN_KEY = 'og_phone_otp_resend_until';
 const PHONE_CHALLENGE_KEY = 'og_phone_challenge_id';
-const PHONE_EMAIL_KEY = 'og_phone_masked_email';
 
-function getStoredPhoneCooldown(): { secondsLeft: number; challengeId: string | null; email: string | null } {
+function getStoredPhoneCooldown(): { secondsLeft: number; challengeId: string | null } {
   try {
     const rawUntil = sessionStorage.getItem(PHONE_COOLDOWN_KEY);
     const challengeId = sessionStorage.getItem(PHONE_CHALLENGE_KEY);
-    const email = sessionStorage.getItem(PHONE_EMAIL_KEY);
-    if (!rawUntil) return { secondsLeft: 0, challengeId: null, email: null };
+    if (!rawUntil) return { secondsLeft: 0, challengeId: null };
     const diff = Math.ceil((Number(rawUntil) - Date.now()) / 1000);
     return {
       secondsLeft: diff > 0 ? diff : 0,
       challengeId: diff > 0 ? challengeId : null,
-      email: diff > 0 ? email : null,
     };
   } catch {
-    return { secondsLeft: 0, challengeId: null, email: null };
+    return { secondsLeft: 0, challengeId: null };
   }
 }
 
-function setStoredPhoneCooldown(seconds: number, challengeId: string, email: string) {
+function setStoredPhoneCooldown(seconds: number, challengeId: string) {
   try {
     sessionStorage.setItem(PHONE_COOLDOWN_KEY, String(Date.now() + seconds * 1000));
     sessionStorage.setItem(PHONE_CHALLENGE_KEY, challengeId);
-    sessionStorage.setItem(PHONE_EMAIL_KEY, email);
   } catch {
     // ignore
   }
@@ -51,7 +47,6 @@ function clearStoredPhoneCooldown() {
   try {
     sessionStorage.removeItem(PHONE_COOLDOWN_KEY);
     sessionStorage.removeItem(PHONE_CHALLENGE_KEY);
-    sessionStorage.removeItem(PHONE_EMAIL_KEY);
   } catch {
     // ignore
   }
@@ -118,7 +113,6 @@ export const ChangePhoneModal: React.FC<ChangePhoneModalProps> = ({
     if (stored.secondsLeft > 0) {
       setResendCooldown(stored.secondsLeft);
       if (stored.challengeId) setPhoneChallengeId(stored.challengeId);
-      if (stored.email) setMaskedEmail(stored.email);
     } else {
       setResendCooldown(0);
       setPhoneChallengeId(null);
@@ -191,7 +185,7 @@ export const ChangePhoneModal: React.FC<ChangePhoneModalProps> = ({
       setMaskedEmail(email);
       setStep('OTP_INPUT');
       setResendCooldown(60);
-      setStoredPhoneCooldown(60, res.challengeId, email);
+      setStoredPhoneCooldown(60, res.challengeId);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Không thể gửi mã xác thực OTP qua Email.';
       setOtpError(msg);
@@ -199,7 +193,7 @@ export const ChangePhoneModal: React.FC<ChangePhoneModalProps> = ({
         const stored = getStoredPhoneCooldown();
         if (stored.secondsLeft <= 0) {
           setResendCooldown(60);
-          setStoredPhoneCooldown(60, phoneChallengeId || '', maskedEmail || accountEmail || '');
+          setStoredPhoneCooldown(60, phoneChallengeId || '');
         }
       }
     } finally {
