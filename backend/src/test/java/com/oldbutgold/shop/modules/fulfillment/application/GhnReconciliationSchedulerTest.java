@@ -96,6 +96,8 @@ class GhnReconciliationSchedulerTest {
 
         when(ghnClient.getOrderDetail("GHN-RECON-1"))
                 .thenReturn(createDetailResponse("GHN-RECON-1", "delivered"));
+        when(stateService.markOrderDelivered(eq(101L), any(), eq("GHN_RECONCILIATION")))
+                .thenReturn(FulfillmentStateService.DeliveryTransitionResult.ofSuccess());
 
         var report = scheduler.reconcileActiveShipments();
 
@@ -103,7 +105,7 @@ class GhnReconciliationSchedulerTest {
         assertThat(report.updated()).isEqualTo(1);
         assertThat(report.failed()).isEqualTo(0);
 
-        verify(stateService).applyCarrierDelivered(eq("GHN-RECON-1"), any(), eq("delivered"));
+        verify(stateService).markOrderDelivered(eq(101L), any(), eq("GHN_RECONCILIATION"));
     }
 
     @Test

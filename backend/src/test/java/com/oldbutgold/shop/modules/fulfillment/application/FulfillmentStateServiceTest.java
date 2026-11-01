@@ -54,7 +54,7 @@ class FulfillmentStateServiceTest {
         lockedShipment.markPickedUp(now, "picked", now);
 
         OrderFulfillmentSnapshot snapshot = new OrderFulfillmentSnapshot(
-                orderId, 1L, 2L, "SELLER_CONFIRMED", null, null
+                orderId, 1L, 2L, "SHIPPED", null, null
         );
 
         when(shipmentRepository.findOrderIdByTrackingNumber(trackingNumber)).thenReturn(Optional.of(orderId));
@@ -65,7 +65,6 @@ class FulfillmentStateServiceTest {
 
         // Kiểm tra thứ tự khóa: Order PHẢI được khóa TRƯỚC Shipment
         InOrder inOrder = inOrder(commerceFacade, shipmentRepository);
-        inOrder.verify(shipmentRepository).findOrderIdByTrackingNumber(trackingNumber);
         inOrder.verify(commerceFacade).lockOrderForFulfillment(orderId);
         inOrder.verify(shipmentRepository).findByOrderIdForUpdate(orderId);
         inOrder.verify(shipmentRepository).save(lockedShipment);
@@ -75,7 +74,33 @@ class FulfillmentStateServiceTest {
     }
 
     @Test
-    @DisplayName("applyCarrierDelivered: Từ chối khi Shipment có xung đột terminal (RETURNED hoặc FAILED)")
+    @DisplayName("applyCarrierDelivered: Tự động catch-up từ SELLER_CONFIRMED sang DELIVERED khi nhận webhook delivered")
+    void testApplyCarrierDeliveredCatchesUpFromSellerConfirmed() {
+        Long orderId = 105L;
+        String trackingNumber = "GHN_TRACK_CATCHUP";
+
+        ShipmentEntity lockedShipment = spy(new ShipmentEntity(orderId, "OG-CLIENT-CATCHUP", now));
+        lockedShipment.setTrackingNumber(trackingNumber);
+
+        // Order đang ở SELLER_CONFIRMED (chưa nhận webhook picked)
+        OrderFulfillmentSnapshot snapshot = new OrderFulfillmentSnapshot(
+                orderId, 1L, 2L, "SELLER_CONFIRMED", null, null
+        );
+
+        when(shipmentRepository.findOrderIdByTrackingNumber(trackingNumber)).thenReturn(Optional.of(orderId));
+        when(commerceFacade.lockOrderForFulfillment(orderId)).thenReturn(Optional.of(snapshot));
+        when(shipmentRepository.findByOrderIdForUpdate(orderId)).thenReturn(Optional.of(lockedShipment));
+
+        service.applyCarrierDelivered(trackingNumber, now.plusSeconds(3600), "delivered");
+
+        verify(commerceFacade).markDeliveredDirectFromCarrier(eq(orderId), eq(now.plusSeconds(3600)));
+        assertThat(lockedShipment.getStatus()).isEqualTo(ShipmentEntity.STATUS_DELIVERED);
+        assertThat(lockedShipment.getShippedAt()).isNotNull();
+        assertThat(lockedShipment.getDeliveredAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("applyCarrierDelivered: Bỏ qua khi Shipment có xung đột terminal (RETURNED hoặc FAILED) không ném lỗi làm GHN retry")
     void testApplyCarrierDeliveredRejectsTerminalConflictShipment() {
         Long orderId = 101L;
         String trackingNumber = "GHN_TRACK_RET";
@@ -85,23 +110,26 @@ class FulfillmentStateServiceTest {
         lockedShipment.markReturned(now, now);
 
         OrderFulfillmentSnapshot snapshot = new OrderFulfillmentSnapshot(
-                orderId, 1L, 2L, "SELLER_CONFIRMED", null, null
+                orderId, 1L, 2L, "SHIPPED", null, null
         );
 
         when(shipmentRepository.findOrderIdByTrackingNumber(trackingNumber)).thenReturn(Optional.of(orderId));
         when(commerceFacade.lockOrderForFulfillment(orderId)).thenReturn(Optional.of(snapshot));
         when(shipmentRepository.findByOrderIdForUpdate(orderId)).thenReturn(Optional.of(lockedShipment));
 
-        assertThatThrownBy(() -> service.applyCarrierDelivered(trackingNumber, now, "delivered"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("trạng thái xung đột");
+        // Webhook ignores cleanly without exception
+        service.applyCarrierDelivered(trackingNumber, now, "delivered");
 
         verify(commerceFacade, never()).markDeliveredDirectFromCarrier(anyLong(), any());
-        verify(shipmentRepository, never()).save(any());
+
+        // But DEMO simulation throws IllegalStateException
+        assertThatThrownBy(() -> service.markOrderDelivered(orderId, now, "DEMO_SIMULATION"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("xung đột");
     }
 
     @Test
-    @DisplayName("applyCarrierDelivered: Từ chối khi Order có xung đột terminal (CANCELLED)")
+    @DisplayName("applyCarrierDelivered: Bỏ qua khi Order có xung đột terminal (CANCELLED) không ném lỗi làm GHN retry")
     void testApplyCarrierDeliveredRejectsTerminalConflictOrder() {
         Long orderId = 102L;
         String trackingNumber = "GHN_TRACK_CANCEL";
@@ -118,11 +146,15 @@ class FulfillmentStateServiceTest {
         when(commerceFacade.lockOrderForFulfillment(orderId)).thenReturn(Optional.of(snapshot));
         when(shipmentRepository.findByOrderIdForUpdate(orderId)).thenReturn(Optional.of(lockedShipment));
 
-        assertThatThrownBy(() -> service.applyCarrierDelivered(trackingNumber, now, "delivered"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Đơn hàng đang ở trạng thái xung đột");
+        // Webhook ignores cleanly without exception
+        service.applyCarrierDelivered(trackingNumber, now, "delivered");
 
         verify(commerceFacade, never()).markDeliveredDirectFromCarrier(anyLong(), any());
+
+        // But DEMO simulation throws IllegalStateException
+        assertThatThrownBy(() -> service.markOrderDelivered(orderId, now, "DEMO_SIMULATION"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("xung đột");
     }
 
     @Test

@@ -35,7 +35,7 @@ spring:
       max-request-size: ${MAX_REQUEST_SIZE:60MB}
 
 app:
-  environment: ${APP_ENVIRONMENT:DEV}
+  environment: ${APP_ENVIRONMENT:PROD}
   google:
     client-id: ${GOOGLE_CLIENT_ID:}
   registration:
@@ -84,6 +84,7 @@ app:
       enabled: ${GHN_RECONCILIATION_ENABLED:true}
       cron: ${GHN_RECONCILIATION_CRON:0 */30 * * * *}
       batch-size: ${GHN_RECONCILIATION_BATCH_SIZE:50}
+    simulation-enabled: ${GHN_SIMULATION_ENABLED:false}
 server:
   port: ${BACKEND_PORT:8080}
   error:

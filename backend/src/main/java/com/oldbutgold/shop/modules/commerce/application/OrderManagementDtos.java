@@ -62,7 +62,11 @@ public class OrderManagementDtos {
             Instant createdAt,
             Instant completedAt,
             Instant cancelledAt,
-            String cancellationReason
+            String cancellationReason,
+            String trackingNumber,
+            String carrier,
+            Instant shippedAt,
+            Instant deliveredAt
     ) {}
 
     public record CancelOrderRequest(
@@ -72,6 +76,14 @@ public class OrderManagementDtos {
     public record OrderActionResponse(
             Long orderId,
             String status,
+            String message
+    ) {}
+
+    public record OrderShipmentActionResponse(
+            Long orderId,
+            String status,
+            String trackingNumber,
+            String carrier,
             String message
     ) {}
 }

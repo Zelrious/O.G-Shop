@@ -17,6 +17,20 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: og_shop_test
+          POSTGRES_USER: test_ci_user
+          POSTGRES_PASSWORD: test_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: backend
@@ -31,4 +45,9 @@ jobs:
           cache: maven
           cache-dependency-path: backend/pom.xml
       - name: Verify Backend
+        env:
+          OGSHOP_TEST_DB_URL: jdbc:postgresql://localhost:5432/og_shop_test
+          OGSHOP_TEST_DB_USER: test_ci_user
+          OGSHOP_TEST_DB_PASSWORD: test_ci_password
+          OGSHOP_TEST_DB_ISOLATED: "true"
         run: ./mvnw --batch-mode --no-transfer-progress verify

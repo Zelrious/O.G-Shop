@@ -43,7 +43,26 @@ Identity API dùng access JWT có thời hạn cố định, mặc định 15 ph
 
 Context test dùng H2 và không thay thế cho integration test PostgreSQL của các module nghiệp vụ.
 
+### Chạy kiểm thử tích hợp PostgreSQL thật (`FulfillmentPostgresTest`)
+
+Để chạy kiểm thử đồng thời (concurrency), khóa bi quan (`PESSIMISTIC_WRITE`), và đối soát webhook GHN trên PostgreSQL thật:
+
+```powershell
+# 1. Tạo database kiểm thử riêng biệt (thực hiện một lần)
+docker exec -it og-shop-postgres psql -U <DB_USER> -c "CREATE DATABASE og_shop_test;"
+
+# 2. Thiết lập biến môi trường trỏ vào database test (thay thế bằng thông tin của bạn, không commit credential)
+$env:OGSHOP_TEST_DB_URL = "jdbc:postgresql://localhost:55432/og_shop_test"
+$env:OGSHOP_TEST_DB_USER = "<DB_USER>"
+$env:OGSHOP_TEST_DB_PASSWORD = "<DB_PASSWORD>"
+$env:OGSHOP_TEST_DB_ISOLATED = "true"
+
+# 3. Chạy kiểm thử Fulfillment trên PostgreSQL
+.\mvnw.cmd test -Dtest=FulfillmentPostgresTest
+```
+
 Maven Wrapper lưu bản Maven đã tải trong Maven user home mặc định. Không trỏ `MAVEN_USER_HOME` vào đường dẫn dự án có ký tự Unicode trên JDK Windows hiện tại.
+
 
 ## Module boundaries
 
