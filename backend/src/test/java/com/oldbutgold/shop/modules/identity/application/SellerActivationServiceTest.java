@@ -1,9 +1,8 @@
 package com.oldbutgold.shop.modules.identity.application;
 
+import com.oldbutgold.shop.modules.identity.infrastructure.persistence.EkycRepository;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.RoleEntity;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.RoleRepository;
-import com.oldbutgold.shop.modules.identity.infrastructure.persistence.SellerVerificationEntity;
-import com.oldbutgold.shop.modules.identity.infrastructure.persistence.SellerVerificationRepository;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.UserEntity;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.UserRepository;
 import com.oldbutgold.shop.shared.config.SellerVerificationProperties;
@@ -29,7 +28,7 @@ class SellerActivationServiceTest {
 
     private UserRepository users;
     private RoleRepository roles;
-    private SellerVerificationRepository verifications;
+    private EkycRepository ekycRepository;
     private Clock clock;
     private RoleEntity buyerRole;
     private RoleEntity sellerRole;
@@ -40,7 +39,7 @@ class SellerActivationServiceTest {
     void setUp() throws Exception {
         users = mock(UserRepository.class);
         roles = mock(RoleRepository.class);
-        verifications = mock(SellerVerificationRepository.class);
+        ekycRepository = mock(EkycRepository.class);
         fixedInstant = Instant.parse("2026-09-20T10:00:00Z");
         clock = Clock.fixed(fixedInstant, ZoneOffset.UTC);
 
@@ -58,120 +57,88 @@ class SellerActivationServiceTest {
     }
 
     @Test
-    void activateSuccessWhenMvpBypassEnabled() throws Exception {
+    void activateSuccessWhenUserHasVerifiedEkyc() throws Exception {
         SellerVerificationProperties properties = new SellerVerificationProperties("MVP_BYPASS");
-        SellerActivationService service = new SellerActivationService(users, roles, verifications, properties, clock);
+        SellerActivationService service = new SellerActivationService(users, roles, ekycRepository, properties, clock);
 
-        when(verifications.findFirstByUserIdAndStatus(1L, "VERIFIED")).thenReturn(Optional.empty());
-        when(verifications.findFirstByUserIdAndStatus(1L, "PENDING")).thenReturn(Optional.empty());
-
-        SellerVerificationEntity savedEntity = new SellerVerificationEntity(user, "MVP_BYPASS", fixedInstant);
-        Field verificationIdField = SellerVerificationEntity.class.getDeclaredField("id");
-        verificationIdField.setAccessible(true);
-        verificationIdField.set(savedEntity, 101L);
-
-        when(verifications.save(any(SellerVerificationEntity.class))).thenReturn(savedEntity);
+        when(ekycRepository.hasVerifiedProfile(1L)).thenReturn(true);
 
         var result = service.activate(1L);
 
-        assertThat(result.verificationId()).isEqualTo(101L);
-        assertThat(result.status()).isEqualTo("VERIFIED");
-        assertThat(result.verificationMethod()).isEqualTo("MVP_BYPASS");
-        assertThat(user.getRoles()).extracting(RoleEntity::getRoleName).contains("BUYER", "SELLER");
-        verify(verifications).save(any(SellerVerificationEntity.class));
-    }
-
-    @Test
-    void idempotentWhenCalledTwiceReturnsSameVerificationWithoutDuplicate() throws Exception {
-        SellerVerificationProperties properties = new SellerVerificationProperties("MVP_BYPASS");
-        SellerActivationService service = new SellerActivationService(users, roles, verifications, properties, clock);
-
-        SellerVerificationEntity existingEntity = new SellerVerificationEntity(user, "MVP_BYPASS", fixedInstant);
-        Field verificationIdField = SellerVerificationEntity.class.getDeclaredField("id");
-        verificationIdField.setAccessible(true);
-        verificationIdField.set(existingEntity, 202L);
-
-        user.getRoles().add(sellerRole);
-        when(verifications.findFirstByUserIdAndStatus(1L, "VERIFIED")).thenReturn(Optional.of(existingEntity));
-
-        var result = service.activate(1L);
-
-        assertThat(result.verificationId()).isEqualTo(202L);
-        assertThat(result.status()).isEqualTo("VERIFIED");
-        assertThat(result.verificationMethod()).isEqualTo("MVP_BYPASS");
-        verify(verifications, never()).save(any(SellerVerificationEntity.class));
-    }
-
-    @Test
-    void repairsMissingSellerRoleWhenAlreadyVerified() throws Exception {
-        SellerVerificationProperties properties = new SellerVerificationProperties("MVP_BYPASS");
-        SellerActivationService service = new SellerActivationService(users, roles, verifications, properties, clock);
-
-        SellerVerificationEntity existingEntity = new SellerVerificationEntity(user, "AI_EKYC", fixedInstant);
-        Field verificationIdField = SellerVerificationEntity.class.getDeclaredField("id");
-        verificationIdField.setAccessible(true);
-        verificationIdField.set(existingEntity, 303L);
-
-        // User only has BUYER role, missing SELLER
-        when(verifications.findFirstByUserIdAndStatus(1L, "VERIFIED")).thenReturn(Optional.of(existingEntity));
-
-        var result = service.activate(1L);
-
-        assertThat(result.verificationId()).isEqualTo(303L);
+        assertThat(result.verificationId()).isEqualTo(0L);
         assertThat(result.status()).isEqualTo("VERIFIED");
         assertThat(result.verificationMethod()).isEqualTo("AI_EKYC");
-        assertThat(user.getRoles()).extracting(RoleEntity::getRoleName).contains("SELLER");
-        verify(verifications, never()).save(any(SellerVerificationEntity.class));
+        assertThat(user.getRoles()).extracting(RoleEntity::getRoleName).contains("BUYER", "SELLER");
     }
 
     @Test
-    void upgradesPendingVerificationToMvpBypass() throws Exception {
+    void throwsExceptionWhenUserHasNoVerifiedEkyc() {
         SellerVerificationProperties properties = new SellerVerificationProperties("MVP_BYPASS");
-        SellerActivationService service = new SellerActivationService(users, roles, verifications, properties, clock);
+        SellerActivationService service = new SellerActivationService(users, roles, ekycRepository, properties, clock);
 
-        SellerVerificationEntity pendingEntity = new SellerVerificationEntity(user, "MANUAL_ID_DOCUMENT", fixedInstant);
-        Field verificationIdField = SellerVerificationEntity.class.getDeclaredField("id");
-        verificationIdField.setAccessible(true);
-        verificationIdField.set(pendingEntity, 404L);
-        Field statusField = SellerVerificationEntity.class.getDeclaredField("status");
-        statusField.setAccessible(true);
-        statusField.set(pendingEntity, "PENDING");
+        when(ekycRepository.hasVerifiedProfile(1L)).thenReturn(false);
 
-        when(verifications.findFirstByUserIdAndStatus(1L, "VERIFIED")).thenReturn(Optional.empty());
-        when(verifications.findFirstByUserIdAndStatus(1L, "PENDING")).thenReturn(Optional.of(pendingEntity));
+        assertThatThrownBy(() -> service.activate(1L))
+                .isInstanceOf(SellerActivationDisabledException.class)
+                .hasMessageContaining("phải hoàn tất xác thực eKYC và được KTV duyệt");
 
-        var result = service.activate(1L);
+        verify(users, never()).findById(any());
+    }
 
-        assertThat(result.verificationId()).isEqualTo(404L);
-        assertThat(result.status()).isEqualTo("VERIFIED");
-        assertThat(result.verificationMethod()).isEqualTo("MVP_BYPASS");
+    @Test
+    void idempotentWhenCalledTwiceGrantsSellerRoleOnlyOnce() throws Exception {
+        SellerVerificationProperties properties = new SellerVerificationProperties("MVP_BYPASS");
+        SellerActivationService service = new SellerActivationService(users, roles, ekycRepository, properties, clock);
+
+        when(ekycRepository.hasVerifiedProfile(1L)).thenReturn(true);
+
+        // First call
+        var result1 = service.activate(1L);
+        assertThat(result1.verificationMethod()).isEqualTo("AI_EKYC");
         assertThat(user.getRoles()).extracting(RoleEntity::getRoleName).contains("SELLER");
-        verify(verifications, never()).save(any(SellerVerificationEntity.class));
+
+        // Second call - role already granted, should still work
+        var result2 = service.activate(1L);
+        assertThat(result2.verificationMethod()).isEqualTo("AI_EKYC");
     }
 
     @Test
     void throwsExceptionAndDoesNotMutateWhenMvpBypassDisabled() {
         SellerVerificationProperties properties = new SellerVerificationProperties("DISABLED");
-        SellerActivationService service = new SellerActivationService(users, roles, verifications, properties, clock);
+        SellerActivationService service = new SellerActivationService(users, roles, ekycRepository, properties, clock);
 
         assertThatThrownBy(() -> service.activate(1L))
                 .isInstanceOf(SellerActivationDisabledException.class)
                 .hasMessageContaining("Chế độ kích hoạt Seller tức thì hiện không khả dụng");
 
         verify(users, never()).findById(any());
-        verify(verifications, never()).save(any());
     }
 
     @Test
     void throwsBadCredentialsWhenUserNotFound() {
         SellerVerificationProperties properties = new SellerVerificationProperties("MVP_BYPASS");
-        SellerActivationService service = new SellerActivationService(users, roles, verifications, properties, clock);
+        SellerActivationService service = new SellerActivationService(users, roles, ekycRepository, properties, clock);
 
+        when(ekycRepository.hasVerifiedProfile(999L)).thenReturn(true);
         when(users.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.activate(999L))
                 .isInstanceOf(BadCredentialsException.class)
                 .hasMessageContaining("Account is unavailable");
+    }
+
+    @Test
+    void throwsExceptionWhenIdentityWorkflowIsUC83() {
+        SellerVerificationProperties properties = new SellerVerificationProperties("MVP_BYPASS");
+        SellerActivationService service = new SellerActivationService(users, roles, ekycRepository, properties, clock);
+
+        when(ekycRepository.hasVerifiedProfile(1L)).thenReturn(true);
+        // User with UC83 workflow
+        user.setIdentityWorkflow("UC83");
+
+        assertThatThrownBy(() -> service.activate(1L))
+                .isInstanceOf(SellerActivationDisabledException.class)
+                .hasMessageContaining("Hồ sơ Người bán cần hoàn tất eKYC và được KTV duyệt");
     }
 
     private static RoleEntity createRole(String name) throws Exception {
