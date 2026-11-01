@@ -1,25 +1,30 @@
 import { Icon } from '../../../shared/components/Icon/Icon';
+import { InfoTooltip } from '../../../shared/components';
 import { useState, forwardRef, InputHTMLAttributes } from 'react';
 
 export interface PasswordInputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   helperText?: string;
+  tooltip?: string;
   toggleAriaLabel?: string;
 }
 
 export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
-  ({ label, error, helperText, toggleAriaLabel, id, className = '', ...props }, ref) => {
+  ({ label, error, helperText, tooltip, toggleAriaLabel, id, className = '', ...props }, ref) => {
     const [showPassword, setShowPassword] = useState(false);
     const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
 
     return (
       <div className="og-form-group">
         {label && (
-          <label htmlFor={inputId} className="og-label">
-            {label}
-            {props.required && <span style={{ color: 'var(--og-color-danger)' }}> *</span>}
-          </label>
+          <div className="og-label-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <label htmlFor={inputId} className="og-label" style={{ marginBottom: 0 }}>
+              {label}
+              {props.required && <span style={{ color: 'var(--og-color-danger)' }}> *</span>}
+            </label>
+            {tooltip && <InfoTooltip content={tooltip} ariaLabel="Xem chỉ dẫn" />}
+          </div>
         )}
         <div className="og-password-container">
           <input

@@ -34,6 +34,7 @@ public class SmtpRegistrationEmail implements RegistrationEmailPort {
             case "PASSWORD_RESET" -> "đặt lại mật khẩu";
             case "LOGIN_EMAIL_2FA" -> "đăng nhập";
             case "GOOGLE_LINK" -> "liên kết Google";
+            case "SECURITY_SETTING" -> "thay đổi thông tin bảo mật / tài khoản ngân hàng";
             default -> "đăng ký";
         };
         message.setSubject("Mã xác thực " + action + " O.G Shop");

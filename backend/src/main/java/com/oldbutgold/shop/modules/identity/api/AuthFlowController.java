@@ -6,6 +6,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import org.springframework.http.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
 
@@ -26,6 +28,14 @@ public class AuthFlowController {
     public record GoogleRequest(@NotNull UUID nonceId,@NotBlank @Size(max=16000) String credential) {
         @Override public String toString() { return "GoogleRequest[redacted]"; }
     }
+    public record PhoneVerificationVerifyRequest(@NotNull UUID challengeId, @NotBlank @Size(min = 6, max = 6) String code) {}
+
+    @PostMapping("/phone/verify")
+    ResponseEntity<?> verifyPhoneVerification(@Valid @RequestBody PhoneVerificationVerifyRequest body, HttpServletRequest request) {
+        origins.validate(request);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(flows.verify(body.challengeId(), body.code(), "SECURITY_SETTING").pending());
+    }
+
     @PostMapping("/login/verify")
     ResponseEntity<?> verifyLogin(@Valid @RequestBody AuthDtos.VerifyRegistrationRequest body,HttpServletRequest request) {
         origins.validate(request); return sessions.flowResponse(flows.verify(body.challengeId(),body.code(),"LOGIN_EMAIL_2FA"));

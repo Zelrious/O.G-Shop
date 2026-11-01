@@ -6,7 +6,8 @@ import type { RegistrationChallenge, RegistrationCompletion, SellerRegistration,
 import { GoogleSignInButton } from './GoogleSignInButton';
 import { AuthOtpForm } from './AuthOtpForm';
 import { Input, Button, Alert } from '../../../shared/components';
-import { SellerRegistrationFields } from './SellerRegistrationFields';
+import { SellerAddressStep } from './SellerAddressStep';
+import { SellerBankStep } from './SellerBankStep';
 import { RoleSelectorCards } from './RoleSelectorCards';
 import { RegisterStepIndicator } from './RegisterStepIndicator';
 import { PasswordInput } from './PasswordInput';
@@ -30,8 +31,8 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
   const [googleProfile, setGoogleProfile] = useState(googleRegistration);
   const [loginChallenge, setLoginChallenge] = useState<AuthChallenge | null>(null);
 
-  // Multi-step state: 1: Account, 2: Seller Profile (only for SELLER)
-  const [step, setStep] = useState<1 | 2>(1);
+  // Multi-step state: 1: Account, 2: Address (for SELLER), 3: Bank (for SELLER)
+  const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Form Fields
   const [fullName, setFullName] = useState(googleRegistration?.fullName || '');
@@ -55,7 +56,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
   const topRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    onStepChange?.(pending ? (accountType === 'SELLER' ? 3 : 2) : step, accountType);
+    onStepChange?.(pending ? (accountType === 'SELLER' ? 4 : 2) : step, accountType);
   }, [step, accountType, pending, onStepChange]);
 
   useEffect(() => {
@@ -92,6 +93,15 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
       setError('Vui lòng nhập họ tên và email.');
       return false;
     }
+    if (!phoneNumber.trim()) {
+      setError('Vui lòng nhập số điện thoại.');
+      return false;
+    }
+    const phoneRegex = /^(0|\+84)[35789][0-9]{8}$/;
+    if (!phoneRegex.test(phoneNumber.trim())) {
+      setError('Số điện thoại không đúng định dạng Việt Nam (ví dụ: 0912345678).');
+      return false;
+    }
     if (!acceptsNewPassword(password)) {
       setError(NEW_PASSWORD_HINT);
       return false;
@@ -103,12 +113,14 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
     return true;
   };
 
-  const validateStep2Seller = (): boolean => {
-    if (!seller.storeName.trim()) {
-      setError('Vui lòng nhập tên cửa hàng.');
+  const validateStep2SellerAddress = (): boolean => {
+    const finalStoreName = seller.storeName.trim() || fullName.trim();
+    if (!finalStoreName) {
+      setError('Vui lòng nhập tên hiển thị gian hàng hoặc họ tên.');
       return false;
     }
-    if (!seller.contactPhone.trim()) {
+    const contact = seller.contactPhone.trim() || phoneNumber.trim();
+    if (!contact) {
       setError('Vui lòng nhập số điện thoại liên hệ cửa hàng.');
       return false;
     }
@@ -122,6 +134,10 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
       setError('Vui lòng điền đầy đủ địa chỉ trả hàng.');
       return false;
     }
+    return true;
+  };
+
+  const validateStep3SellerBank = (): boolean => {
     if (!seller.bankName.trim() || !seller.accountNumber.trim() || !seller.accountHolder.trim()) {
       setError('Vui lòng điền đầy đủ thông tin ngân hàng nhận thanh toán.');
       return false;
@@ -137,6 +153,11 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
     if (!validateStep1()) return;
 
     if (accountType === 'SELLER') {
+      setSeller((prev) => ({
+        ...prev,
+        contactPhone: prev.contactPhone.trim() || phoneNumber.trim(),
+        storeName: prev.storeName.trim() || fullName.trim(),
+      }));
       setStep(2);
       scrollToTop();
     } else {
@@ -145,29 +166,57 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
     }
   };
 
-  const handleNextFromStep2 = async (event: React.FormEvent) => {
+  const handleNextFromStep2 = (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
     setNotice(null);
 
-    if (!validateStep2Seller()) return;
+    if (!validateStep2SellerAddress()) return;
+    setStep(3);
+    scrollToTop();
+  };
+
+  const handleNextFromStep3 = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    setNotice(null);
+
+    if (!validateStep3SellerBank()) return;
+
     await executeRegistration();
+  };
+
+  const handleBackToStep1 = () => {
+    setError(null);
+    setNotice(null);
+    setStep(1);
+    scrollToTop();
+  };
+
+  const handleBackToStep2 = () => {
+    setError(null);
+    setNotice(null);
+    setStep(2);
+    scrollToTop();
   };
 
   const executeRegistration = async () => {
     if (isSubmitting || retryAt > Date.now()) return;
     setIsSubmitting(true);
     setError(null);
-    setNotice(null);
-
     try {
+      const finalPhoneNumber = phoneNumber.trim();
       const result = await register({
         fullName: fullName.trim(),
         email: email.trim(),
-        phoneNumber: phoneNumber.trim() || undefined,
+        phoneNumber: finalPhoneNumber,
         password,
         accountType,
-        seller: accountType === 'SELLER' ? seller : undefined,
+        seller: accountType === 'SELLER' ? {
+          ...seller,
+          storeName: seller.storeName.trim() || fullName.trim(),
+          contactPhone: seller.contactPhone.trim() || finalPhoneNumber,
+        } : undefined,
         googleTicket: googleProfile?.registrationTicket,
       });
 
@@ -207,14 +256,6 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleBackToStep1 = (event?: React.SyntheticEvent) => {
-    event?.preventDefault();
-    setError(null);
-    setNotice(null);
-    setStep(1);
-    scrollToTop();
   };
 
   const resend = async () => {
@@ -260,7 +301,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
   const expired = pending !== null && Date.parse(pending.expiresAt) <= now;
 
   // Calculate current active step for the indicator
-  const currentStepNumber = pending ? (accountType === 'SELLER' ? 3 : 2) : step;
+  const currentStepNumber = pending ? (accountType === 'SELLER' ? 4 : 2) : step;
 
   const completeGoogle = async (result: GoogleResponse) => {
     if ('registrationTicket' in result) {
@@ -282,8 +323,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
         currentStep={currentStepNumber}
         accountType={accountType}
         onStepClick={(targetStep) => {
-          if (step === 2 && targetStep === 1 && !pending) {
-            handleBackToStep1();
+          if (!pending) {
+            if (targetStep === 1) handleBackToStep1();
+            else if (targetStep === 2 && step === 3) handleBackToStep2();
           }
         }}
       />
@@ -351,7 +393,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
         </form>
       ) : step === 1 ? (
         /* STEP 1: ACCOUNT INFORMATION & ROLE SELECTION */
-        <form key="account" onSubmit={handleNextFromStep1} className="og-step-enter">
+        <form key="account" onSubmit={handleNextFromStep1} className="og-step-enter" noValidate>
           <fieldset disabled={isSubmitting} style={{ border: 0, padding: 0, margin: 0 }}>
             <div className="og-form-grid-2">
               <div className="og-form-col-full">
@@ -379,13 +421,15 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
               />
 
               <Input
-                label="Số điện thoại (không bắt buộc)"
+                label="Số điện thoại"
                 type="tel"
                 value={phoneNumber}
                 onChange={(event) => setPhoneNumber(event.target.value)}
+                required
                 pattern="(0|\+84)[35789][0-9]{8}"
                 autoComplete="tel"
                 placeholder="0912345678"
+                tooltip="Số điện thoại dùng để bảo mật tài khoản và liên hệ."
               />
 
               <PasswordInput
@@ -394,7 +438,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
                 onChange={(event) => setPassword(event.target.value)}
                 required
                 autoComplete="new-password"
-                helperText="Ít nhất 8 ký tự."
+                tooltip="Ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường và số hoặc ký tự đặc biệt."
                 placeholder="••••••••"
               />
 
@@ -460,11 +504,54 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
             </button>
           </div>
         </form>
-      ) : (
-        /* STEP 2: SELLER PROFILE (ONLY FOR SELLER) */
-        <form key="seller" onSubmit={handleNextFromStep2} className="og-step-enter">
+      ) : step === 2 ? (
+        /* STEP 2: SELLER ADDRESS (ONLY FOR SELLER) */
+        <form key="seller-address" onSubmit={handleNextFromStep2} className="og-step-enter" noValidate>
           <fieldset disabled={isSubmitting} style={{ border: 0, padding: 0, margin: 0 }}>
-            <SellerRegistrationFields
+            <SellerAddressStep
+              value={seller}
+              onChange={setSeller}
+              disabled={isSubmitting}
+              defaultFullName={fullName.trim()}
+            />
+          </fieldset>
+
+          {/* ACTION BUTTONS (BACK & NEXT) */}
+          <div className="og-step-actions og-step-actions--between">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleBackToStep1}
+              disabled={isSubmitting}
+            >
+              ← Quay lại
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+            >
+              Tiếp tục →
+            </Button>
+          </div>
+
+          <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '0.92rem' }}>
+            Đã có tài khoản?{' '}
+            <button
+              type="button"
+              className="og-button og-button--ghost"
+              onClick={onNavigateToLogin}
+              disabled={isSubmitting}
+              style={{ fontWeight: 600, padding: '4px 8px', color: 'var(--og-color-primary)' }}
+            >
+              Đăng nhập
+            </button>
+          </div>
+        </form>
+      ) : (
+        /* STEP 3: SELLER BANK ACCOUNT (ONLY FOR SELLER) */
+        <form key="seller-bank" onSubmit={handleNextFromStep3} className="og-step-enter" noValidate>
+          <fieldset disabled={isSubmitting} style={{ border: 0, padding: 0, margin: 0 }}>
+            <SellerBankStep
               value={seller}
               onChange={setSeller}
               disabled={isSubmitting}
@@ -476,7 +563,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
             <Button
               type="button"
               variant="outline"
-              onClick={handleBackToStep1}
+              onClick={handleBackToStep2}
               disabled={isSubmitting}
             >
               ← Quay lại

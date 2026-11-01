@@ -63,13 +63,32 @@ public final class AuthDtos {
             String avatarUrl,
             List<String> roles,
             Instant createdAt,
-            boolean sellerApprovalRequired
+            boolean sellerApprovalRequired,
+            boolean verifiedSeller
     ) {
+        public UserResponse(
+                long userId,
+                String email,
+                String fullName,
+                String phoneNumber,
+                String avatarUrl,
+                List<String> roles,
+                Instant createdAt,
+                boolean sellerApprovalRequired
+        ) {
+            this(userId, email, fullName, phoneNumber, avatarUrl, roles, createdAt, sellerApprovalRequired, false);
+        }
+
         static UserResponse from(UserEntity user) {
+            return from(user, false);
+        }
+
+        static UserResponse from(UserEntity user, boolean verifiedSeller) {
             return new UserResponse(
                     user.getId(), user.getEmail(), user.getFullName(), user.getPhoneNumber(), user.getAvatarUrl(),
                     user.getRoles().stream().map(role -> role.getRoleName()).sorted().toList(),
-                    user.getCreatedAt(), "UC83".equals(user.getIdentityWorkflow())
+                    user.getCreatedAt(), "UC83".equals(user.getIdentityWorkflow()),
+                    verifiedSeller
             );
         }
     }

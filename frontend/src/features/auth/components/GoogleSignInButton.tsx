@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { authApi, AuthRequestError } from '../authApi';
 import type { GoogleResponse } from '../types';
 import { Alert, Button } from '../../../shared/components';
+import { ThemeContext } from '../../../shared/context/themeContext';
 
 interface GoogleIdApi {
   initialize(options: { client_id: string; nonce: string; callback: (r: { credential: string }) => void; ux_mode: 'popup' }): void;
-  renderButton(element: HTMLElement, options: { theme: string; size: string; text: string; locale: string; width?: number }): void;
+  renderButton(element: HTMLElement, options: { theme: string; size: string; text?: string; locale?: string; width?: number; type?: 'standard' | 'icon'; shape?: 'rectangular' | 'pill' | 'circle' | 'square' }): void;
 }
 declare global { interface Window { google?: { accounts: { id: GoogleIdApi } } } }
 let sdk: Promise<void> | undefined;
@@ -32,6 +33,10 @@ export function GoogleSignInButton({
   showDivider = true,
   dividerText = 'Hoặc tiếp tục với Google',
 }: GoogleSignInButtonProps) {
+  const themeCtx = useContext(ThemeContext);
+  const resolvedTheme = themeCtx?.resolvedTheme || (typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+  const isDark = resolvedTheme === 'dark';
+
   const container = useRef<HTMLDivElement>(null);
   const callback = useRef(onResult);
   useEffect(() => { callback.current = onResult; }, [onResult]);
@@ -78,11 +83,10 @@ export function GoogleSignInButton({
       } });
       container.current.replaceChildren();
       window.google.accounts.id.renderButton(container.current, {
-        theme: 'outline',
+        type: 'icon',
+        shape: 'circle',
+        theme: isDark ? 'filled_black' : 'outline',
         size: 'large',
-        text: 'continue_with',
-        locale: 'vi',
-        width: 320,
       });
     })().catch(e => {
       if (!active) return;
@@ -94,7 +98,7 @@ export function GoogleSignInButton({
       }
     });
     return () => { active = false; };
-  }, [attempt]);
+  }, [attempt, isDark]);
   return (
     <div className="og-google-auth-section" style={{ width: '100%', marginTop: 8 }}>
       {showDivider && configured !== false && (
@@ -108,17 +112,31 @@ export function GoogleSignInButton({
         </p>
       )}
       <div
-        ref={container}
-        aria-label="Tiếp tục bằng Google"
         style={{
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
           width: '100%',
-          minHeight: configured === false ? 0 : '44px',
-          ...(busy ? { pointerEvents: 'none', opacity: 0.6 } : undefined),
         }}
-      />
+      >
+        <div
+          ref={container}
+          aria-label="Tiếp tục bằng Google"
+          style={{
+            display: 'inline-flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            width: '42px',
+            height: '42px',
+            borderRadius: '50%',
+            overflow: 'hidden',
+            boxShadow: isDark ? '0 0 0 1px rgba(255, 255, 255, 0.15)' : '0 1px 3px rgba(0, 0, 0, 0.12)',
+            background: isDark ? '#131314' : '#ffffff',
+            transition: 'transform 0.18s ease, box-shadow 0.18s ease',
+            ...(busy ? { pointerEvents: 'none', opacity: 0.6 } : undefined),
+          }}
+        />
+      </div>
       {busy && <p role="status" style={{ textAlign: 'center', fontSize: '0.88rem', color: 'var(--og-color-text-secondary)', marginTop: 8 }}>Đang xác minh Google…</p>}
       {error && (
         <div style={{ marginTop: 12 }}>

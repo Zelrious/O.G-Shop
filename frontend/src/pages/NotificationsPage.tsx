@@ -10,7 +10,7 @@ import '../features/notifications/notifications.css';
 export function NotificationsPage() {
   const chat = useContext(ChatContext);
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, reloadCurrentUser } = useAuth();
   const [page, setPage] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const [data, setData] = useState<NotificationPage | null>(null);
@@ -70,6 +70,9 @@ export function NotificationsPage() {
   };
 
   const handleItemClick = (item: NotificationItem) => {
+    if (item.type === 'EKYC_APPROVED') {
+      void reloadCurrentUser();
+    }
     const target = notificationTarget(item, user?.roles ?? []);
     void read(item).then(ok => {
       if (ok) {

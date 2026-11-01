@@ -1,5 +1,7 @@
 # Requirements Index
 
+- [Nhật ký đối chiếu và điều chỉnh Use Case sau TASK-0113](use-cases-83/CHANGELOG_UC_ALIGNMENT.md) — Ghi nhận các điểm điều chỉnh giữa code thực tế và đặc tả UC (UC08 quét liên tục 2s, UC02/UC06 Onboarding Người bán, UC05 đổi SĐT).
+
 Đây là danh mục requirement sống của dự án và có thể được cập nhật liên tục. Tài liệu trong `reference/requirements/` chỉ là nguồn tham khảo trừ khi `reference/SOURCE_REGISTER.md` đánh dấu rõ là `APPROVED`; thay đổi requirement phải cập nhật traceability, module liên quan và kế hoạch kiểm thử trước khi triển khai.
 
 ## Functional use cases

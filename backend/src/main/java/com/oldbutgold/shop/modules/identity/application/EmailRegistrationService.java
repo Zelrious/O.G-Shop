@@ -63,6 +63,11 @@ public class EmailRegistrationService {
             repository.lockEmail(draft.email());
             String googleSubject=googleTicket==null?null:flows.consumeRegistrationTicket(googleTicket,draft.email()).subject();
             if (repository.emailExists(draft.email())) throw new DuplicateEmailException();
+            if (draft.phoneNumber() != null && !draft.phoneNumber().isBlank()) {
+                if (repository.phoneExists(draft.phoneNumber())) {
+                    throw new DuplicatePhoneException();
+                }
+            }
             Challenge existing = repository.openForEmail(draft.email()).orElse(null);
             if (existing != null && (existing.draft() == null || existing.draftExpiresAt() == null
                     || !existing.draftExpiresAt().isAfter(clock.instant()))) {
@@ -137,6 +142,12 @@ public class EmailRegistrationService {
             }
             if (repository.emailExists(subject)) return Attempt.failed(new RegistrationException(
                     "EMAIL_ALREADY_REGISTERED", "Email này đã được sử dụng. Vui lòng đăng nhập.", 409));
+            if (challenge.draft().phoneNumber() != null && !challenge.draft().phoneNumber().isBlank()) {
+                if (repository.phoneExists(challenge.draft().phoneNumber())) {
+                    return Attempt.failed(new RegistrationException(
+                            "PHONE_ALREADY_REGISTERED", "Số điện thoại này đã được sử dụng bởi một tài khoản khác. Vui lòng đăng ký lại với số điện thoại khác.", 409));
+                }
+            }
             var user = auth.createVerifiedAccount(challenge.draft());
             if(challenge.draft().googleSubject()!=null) identities.linkGoogle(user.getId(),challenge.draft().googleSubject());
             commerce.grantRegistrationReward(user.getId());
