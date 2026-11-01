@@ -40,27 +40,39 @@ class CCCDProcessor:
 
     def _check_image_quality(self, image) -> Dict[str, Any]:
         """
-        Kiểm tra chất lượng ảnh sử dụng phương sai Laplacian để phát hiện ảnh mờ.
+        Kiểm tra chất lượng ảnh sử dụng phương sai Laplacian để phát hiện ảnh mờ
+        và độ sáng trung bình (Mean Brightness) để phát hiện ảnh quá tối hoặc chói lóa.
         """
         if image is None:
             raise CCCDExtractionError("Không thể đọc dữ liệu ảnh.")
             
+        import numpy as np
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+        laplacian_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+        mean_brightness = float(np.mean(gray))
         
-        # Ngưỡng mờ (threshold có thể tùy chỉnh)
-        blur_threshold = 10.0
+        # Ngưỡng sắc nét cho văn bản thẻ CCCD
+        blur_threshold = 40.0
+        is_clear = laplacian_var >= blur_threshold
+        is_too_dark = mean_brightness < 45.0
+        is_too_bright = mean_brightness > 225.0
         
-        quality = {
-            "is_clear": bool(laplacian_var >= blur_threshold),
-            "is_full_document_visible": True, # YOLO sẽ kiểm tra sau
-            "is_glare_free": True, 
-            "rejection_reason": ""
-        }
-        
-        if not quality["is_clear"]:
-            quality["rejection_reason"] = "Ảnh bị mờ. Vui lòng chụp lại ảnh rõ nét hơn."
+        rejection_reasons = []
+        if not is_clear:
+            rejection_reasons.append(f"Ảnh chụp bị mờ hoặc rung tay (độ nét {laplacian_var:.1f} < {blur_threshold}). Vui lòng giữ chắc camera và chụp lại.")
+        if is_too_dark:
+            rejection_reasons.append(f"Ảnh chụp quá tối (độ sáng {mean_brightness:.1f} < 45). Vui lòng chụp ở nơi đủ ánh sáng.")
+        if is_too_bright:
+            rejection_reasons.append(f"Ảnh chụp bị lóa sáng hoặc chói đèn flash (độ sáng {mean_brightness:.1f} > 225). Vui lòng tránh ánh đèn phản chiếu trực tiếp vào thẻ.")
             
+        quality = {
+            "is_clear": is_clear and not is_too_dark and not is_too_bright,
+            "is_full_document_visible": True, # YOLO sẽ kiểm tra sau
+            "is_glare_free": not is_too_bright, 
+            "laplacian_var": round(laplacian_var, 2),
+            "brightness": round(mean_brightness, 2),
+            "rejection_reason": " ".join(rejection_reasons)
+        }
         return quality
 
     def _infer_gender(self, so_cccd: str) -> str:
@@ -136,12 +148,51 @@ class CCCDProcessor:
                 "que_quan": "Quê quán", 
                 "noi_thuong_tru": "Nơi thường trú"
             }
-            missing_fields = [name for key, name in required_fields.items() if not extracted_data.get(key)]
+            missing_fields = [name for key, name in required_fields.items() if not str(extracted_data.get(key, '')).strip()]
             
             if missing_fields:
                 return {
                     "status": "ERROR",
-                    "error_message": f"Quét không nhận được đủ thông tin. Bị lóa hoặc che khuất phần: {', '.join(missing_fields)}.",
+                    "error_code": "MISSING_REQUIRED_FIELDS",
+                    "error_message": f"Ảnh không nhận diện được đủ thông tin do bị mờ hoặc che khuất phần: {', '.join(missing_fields)}. Vui lòng chụp lại toàn bộ thẻ rõ nét, không che các góc hoặc nội dung.",
+                    "image_quality_check": quality_check,
+                    "extracted_data": extracted_data
+                }
+            
+            if not CCCDValidator.validate_so_cccd(so_cccd):
+                return {
+                    "status": "ERROR",
+                    "error_code": "INVALID_CCCD_NUMBER",
+                    "error_message": f"Số CCCD không đủ 12 chữ số hoặc bị che khuất (đọc được '{so_cccd}'). Vui lòng chụp lại ảnh rõ nét phần số CCCD.",
+                    "image_quality_check": quality_check,
+                    "extracted_data": extracted_data
+                }
+
+            if not CCCDValidator.validate_ho_va_ten(extracted_data.get("ho_va_ten")):
+                raw_name = extracted_data.get("ho_va_ten", "")
+                return {
+                    "status": "ERROR",
+                    "error_code": "INVALID_FULL_NAME",
+                    "error_message": f"Họ và tên trên thẻ không hợp lệ hoặc bị che khuất (đọc được '{raw_name}'). Vui lòng không che thẻ và chụp lại ảnh rõ nét.",
+                    "image_quality_check": quality_check,
+                    "extracted_data": extracted_data
+                }
+
+            if not CCCDValidator.validate_ngay_sinh(extracted_data.get("ngay_sinh")):
+                raw_dob = extracted_data.get("ngay_sinh", "")
+                return {
+                    "status": "ERROR",
+                    "error_code": "INVALID_DOB",
+                    "error_message": f"Ngày sinh trên thẻ không đúng định dạng DD/MM/YYYY hoặc bị che khuất (đọc được '{raw_dob}'). Vui lòng chụp lại ảnh rõ nét.",
+                    "image_quality_check": quality_check,
+                    "extracted_data": extracted_data
+                }
+
+            if not CCCDValidator.validate_noi_thuong_tru(extracted_data.get("noi_thuong_tru")):
+                return {
+                    "status": "ERROR",
+                    "error_code": "INVALID_ADDRESS",
+                    "error_message": "Nơi thường trú trên thẻ không rõ ràng hoặc bị che khuất. Vui lòng chụp lại ảnh rõ nét.",
                     "image_quality_check": quality_check,
                     "extracted_data": extracted_data
                 }
