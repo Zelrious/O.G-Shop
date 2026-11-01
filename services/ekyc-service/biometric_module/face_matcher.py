@@ -321,11 +321,11 @@ class FaceMatcher:
                 "quality_score": round(quality_score, 3),
             }
 
-        if std_contrast < 8.0:
+        if std_contrast < 7.0:
             return {
                 "is_valid": False,
                 "status": "POOR_CONTRAST",
-                "message": f"Khuôn mặt có độ tương phản quá kém ({std_contrast:.1f} < 8).",
+                "message": f"Khuôn mặt có độ tương phản quá kém ({std_contrast:.1f} < 7).",
                 "sharpness": round(lap_var, 2),
                 "brightness": round(mean_brightness, 2),
                 "quality_score": round(quality_score, 3),
