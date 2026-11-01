@@ -10,43 +10,44 @@ vi.mock('../features/auth/authApi', () => ({
   authApi: { resendRegistration: vi.fn(), cancelRegistration: vi.fn() },
 }));
 
-describe('RegisterPage Split-Screen', () => {
+describe('RegisterPage Clean Centered Layout', () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
 
-  it('renders split-screen layout with buyer visual by default', () => {
+  it('renders centered card layout by default', () => {
     render(
       <MemoryRouter>
         <RegisterPage />
       </MemoryRouter>
     );
 
-    // Left Visual Panel content
-    expect(screen.getByText('Tìm lại giá trị trong những món đồ cũ.')).toBeInTheDocument();
-    expect(screen.getByText(/Khám phá hàng ngàn sản phẩm độc đáo/)).toBeInTheDocument();
-
-    // Right Form Panel content
+    // Centered Form Header content
     expect(screen.getByRole('heading', { name: 'Tạo tài khoản O.G Shop' })).toBeInTheDocument();
+    expect(screen.getByText('Tham gia cộng đồng mua bán đồ cũ an toàn và minh bạch.')).toBeInTheDocument();
     expect(screen.getByLabelText(/Họ và tên/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Số điện thoại/)).toBeInTheDocument();
+
+    // Check that compact logo is present
+    expect(screen.getByTitle(/Old but Gold/)).toBeInTheDocument();
   });
 
-  it('transitions visual panel when role changes from buyer to seller', () => {
+  it('toggles seller opt-in checkbox cleanly without shifting form layout', () => {
     render(
       <MemoryRouter>
         <RegisterPage />
       </MemoryRouter>
     );
 
-    // Select Seller card
-    fireEvent.click(screen.getByLabelText('Mua và bán hàng'));
+    const checkbox = screen.getByLabelText('Mua và bán hàng');
+    expect(checkbox).not.toBeChecked();
 
-    // Seller visual text is rendered
-    expect(screen.getByText('Biến món đồ cũ thành giá trị mới.')).toBeInTheDocument();
-    expect(screen.getByText(/Tạo gian hàng, đăng sản phẩm nhanh chóng/)).toBeInTheDocument();
+    fireEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
+    expect(screen.getByText('Tiếp tục →')).toBeInTheDocument();
   });
 
-  it('updates page title and context when advancing to seller onboarding step', () => {
+  it('updates page title and context when advancing through seller onboarding steps', () => {
     render(
       <MemoryRouter>
         <RegisterPage />
@@ -55,13 +56,14 @@ describe('RegisterPage Split-Screen', () => {
 
     fireEvent.change(screen.getByLabelText(/Họ và tên/), { target: { value: 'Seller User' } });
     fireEvent.change(screen.getByLabelText(/Địa chỉ Email/), { target: { value: 'seller@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^Số điện thoại/), { target: { value: '0901234567' } });
     fireEvent.change(screen.getByLabelText(/^Mật khẩu/), { target: { value: 'Password123@' } });
     fireEvent.change(screen.getByLabelText(/Xác nhận mật khẩu/), { target: { value: 'Password123@' } });
     fireEvent.click(screen.getByLabelText('Mua và bán hàng'));
     fireEvent.click(screen.getByText('Tiếp tục →'));
 
-    // Step 2 page heading
-    expect(screen.getByRole('heading', { name: 'Thiết lập thông tin người bán' })).toBeInTheDocument();
-    expect(screen.getByText(/Thiết lập địa chỉ lấy hàng và tài khoản ngân hàng/)).toBeInTheDocument();
+    // Step 2 page heading: Địa chỉ lấy hàng
+    expect(screen.getByRole('heading', { name: 'Thiết lập địa chỉ lấy hàng' })).toBeInTheDocument();
+    expect(screen.getByText(/Cung cấp địa chỉ lấy hàng để bưu tá/)).toBeInTheDocument();
   });
 });

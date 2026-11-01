@@ -121,6 +121,7 @@ Provider payment, shipment tracking và dispute resolution.
 
 - [x] Tạo package boundary và tài liệu module.
 - [x] V3 snapshot giá niêm yết, giá thỏa thuận, phí hai phía và seller proceeds trên order/order item.
+- [x] **UC08 Quick Face Auth cho checkout yêu cầu eKYC**: `BuyNowRequest` thêm `quickAuthResultId`, `IdentityCommerceFacade.requireQuickAuthResult` verify kết quả xác thực nhanh còn hiệu lực (hết hạn 15 phút). Trigger DB `og_validate_quick_auth_match` đảm bảo phải có attempt `MATCH` trước khi tạo result. Test: `CheckoutServiceTest` 4 ca mới, `DefaultIdentityCommerceFacadeTest` 4 ca mới.
 
 ## Remaining tasks
 

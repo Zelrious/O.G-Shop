@@ -1,5 +1,142 @@
 # Project Backlog
 
+## TASK-0110 — Phân Tách Giao Diện Người Bán, Bảo Vệ Định Danh Quick Face Auth (UC08) và Chuẩn Hóa eKYC / COMPLETE
+
+- [x] Backend `ProfileDtos.java`: Thêm `quickAuthResultId`, `challengeId`, `otpCode` vào `UpdateProfileRequest`; thêm `PhoneOtpChallengeResponse`.
+- [x] Backend `ProfileService.java`: Thêm `issuePhoneChangeOtp` gửi mã OTP 6 số qua email tài khoản; bảo vệ phân tầng đổi SĐT (Quick Face Auth cho tài khoản đã eKYC, OTP Email cho tài khoản chưa eKYC hoặc dự phòng); hỗ trợ OTP Email dự phòng khi đổi STK ngân hàng.
+- [x] Backend `ProfileController.java`: Thêm endpoint `POST /api/v1/profile/phone/otp-challenge`.
+- [x] Backend `EkycWorkflowService.java`: Khóa `startOrResume` khi đã có hồ sơ `VERIFIED`, bắt buộc `quickAuthResultId` hợp lệ qua `findValidQuickAuthResult` (đối chiếu sinh trắc học khuôn mặt CCCD cũ); trả về `QUICK_AUTH_REQUIRED` nếu thiếu. **`submitVerification` yêu cầu `quickAuthResultId` khi làm lại eKYC (revision > 1).**
+- [x] Backend `SellerSettingsDtos.java`, `SellerSettingsService.java`, `SellerSettingsController.java`: Cung cấp API `GET` & `PUT` `/api/v1/seller/settings` lưu thông tin gian hàng (tên gian hàng, SĐT hotline, kho gửi hàng GHN `pickupAddressId`, kho nhận hàng hoàn trả GHN `returnAddressId`, STK ngân hàng).
+- [x] Backend `CheckoutDtos.java` & `CheckoutService.java`: Bổ sung `requiresBuyerEkyc` vào `CheckoutPreviewResponse`; **thêm `quickAuthResultId` vào `BuyNowRequest`, gọi `IdentityCommerceFacade.requireQuickAuthResult` verify kết quả xác thực nhanh còn hiệu lực (hết hạn 15 phút)**.
+- [x] Backend `IdentityCommerceFacade.java` & `DefaultIdentityCommerceFacade.java`: Thêm method `requireQuickAuthResult(buyerId, quickAuthResultId)` verify qua `EkycRepository.findValidQuickAuthResult`.
+- [x] **Bước 3: Loại bỏ `seller_verifications` legacy — `ProfileService.getProfile`, `DefaultIdentityCommerceFacade.isUserVerified`, `SellerSettingsService.getSettings`, `SellerActivationService.activate`, `DefaultIdentityCatalogFacade.getSellerSummary` dùng `EkycRepository.hasVerifiedProfile()`. `SellerActivationService` dùng `EkycRepository` thay vì `SellerVerificationRepository`. Xóa `EkycVerificationService`, `EkycController`, `SellerVerificationWriter`. `DefaultIdentityCatalogFacade.getSellerSummary` dùng `ekycRepository.hasVerifiedProfile()` để quyết định trust label.**
+- [x] Frontend `SellerSettingsPage.tsx`: Xây dựng trang thiết lập gian hàng chuyên biệt đặt dưới route `/seller/settings` trong `App.tsx` với 4 khu vực: Hotline liên hệ, Kho vận GHN, STK ngân hàng thụ hưởng, và Trạng thái eKYC gian hàng.
+- [x] Frontend `SellerLayoutShell.tsx` & `SellerDashboardPage.tsx`: Bổ sung liên kết và điều hướng đến `/seller/settings`.
+- [x] Frontend `ProfileInfoTab.tsx`: Nút "Đổi số điện thoại" tích hợp modal lựa chọn Quick Face Auth (Khuyên dùng) hoặc Nhận mã OTP qua Email với bộ đếm ngược 60 giây.
+- [x] Frontend `SellerVerificationPage.tsx`: Mở rộng định danh eKYC cho cả người mua và người bán, chuẩn hóa tiêu đề và thông điệp trang, sửa nhãn nút Bước 1 thành `"Bắt đầu xác minh eKYC (Bước 1/5)"`; tích hợp `QuickFaceAuthModal` khi làm lại eKYC / đổi CCCD **và truyền `quickAuthResultId` lên server khi submit**.
+- [x] Frontend `CheckoutView.tsx`: Khi sản phẩm có `requiresBuyerEkyc`: chặn đặt hàng và hiện cảnh báo với link eKYC nếu chưa xác minh; yêu cầu `QuickFaceAuthModal` xác nhận đơn hàng giá trị cao nếu đã xác minh **và truyền `quickAuthResultId` lên server**.
+- [x] Frontend `types.ts`: Thêm `quickAuthResultId` vào `BuyNowInput`.
+- [x] Kiểm thử tự động:
+  - Python tests: `pytest services/ekyc-service/tests` (39/39 tests PASS, 100%).
+  - Backend tests: Maven `EkycWorkflowServiceTest,ProfileServiceTest,QuickAuthServiceTest,SellerSettingsServiceTest,CheckoutServiceTest,DefaultIdentityCommerceFacadeTest,SellerActivationServiceTest,DefaultIdentityCatalogFacadeTest` (50+ tests PASS, BUILD SUCCESS).
+  - Frontend typecheck: `npm run typecheck --prefix frontend` (0 errors).
+  - Frontend vitest: `npm run test --prefix frontend` (48/48 test files, 242/242 tests PASS, 100%).
+  - Frontend lint: `npm run lint --prefix frontend` (0 errors, 0 warnings).
+
+---
+
+## TASK-0109 — Tinh gọn Luồng eKYC Mặt trước và Hoãn Xác thực MRZ Mặt sau / COMPLETE
+
+- [x] Python `app.py`: Bóc tách trọn vẹn 6 trường mặt trước; không để việc xử lý mặt sau gây gián đoạn hay chặn thành công của OCR mặt trước.
+- [x] Backend `EkycWorkflowService.java`: `uploadCccd` chỉ bắt buộc ảnh mặt trước; `submitVerification` chỉ yêu cầu `frontAssetId`, `liveFrameBase64` và `confirmedData`, cho phép nộp hồ sơ eKYC thành công với mặt trước.
+- [x] Frontend `SellerVerificationPage.tsx`: Bước 2 chỉ yêu cầu tải ảnh mặt trước CCCD; tự động xóa dữ liệu/asset cũ khi đổi ảnh hoặc quét lỗi; sửa các lỗi hook React (`SellerVerificationPage.tsx`, `QuickFaceAuthModal.tsx`); nộp hồ sơ gửi KTV duyệt thành công.
+- [x] Frontend `ekycApi.ts`: `uploadCccd` hỗ trợ `backFile?: File` tùy chọn.
+- [x] Tool chẩn đoán `services/ekyc-service/tools/mrz_diagnostic.py`: Duy trì runner CLI độc lập để kiểm tra kỹ thuật MRZ mặt sau offline hoàn toàn bảo mật.
+- [ ] *[DEFERRED / FUTURE ROADMAP]*: Nâng cấp mô hình OCR-B chuyên dụng hoặc tích hợp đầu đọc chip NFC trên thiết bị di động để quét và đối chiếu dải mã MRZ / chip mặt sau CCCD hoàn toàn tự động.
+
+## TASK-0108 — Sửa và Chuẩn Hóa Logic Bóc Tách / Đối Chiếu Mã MRZ Mặt Sau CCCD / COMPLETE
+
+- [x] Python `back_card_processor.py`: Loại bỏ hoàn toàn việc gọi `build_mrz_lines_from_front_data` khi `extracted_cccd == front_cccd`. Loại bỏ nhánh fallback `allow_synthetic`.
+- [x] Python `back_card_processor.py`: Điều phối validation kết quả Gemini Vision bằng `parse_mrz` trước khi chấp nhận, fallback sang offline nếu Gemini trả dòng sai cấu trúc. Offline fallback phát hiện mismatch số CCCD thì báo lỗi ngay; nếu trùng số CCCD nhưng thiếu dòng 2/3 thì báo lỗi thiếu thông tin ngày sinh/họ tên và fail closed (không tự ý pass).
+- [x] Python `mrz_parser.py`: Bổ sung `CENTURY_GENDER_MAP` 0-9 (bao gồm mã 4-5 cho thế kỷ 22), kiểm tra bất biến giữa số CCCD (chữ số thứ 4, 5-6) và MRZ.
+- [x] Python `mrz_parser.py`: Kiểm tra tính hợp lệ lịch thực tế bằng `datetime.date()` cho ngày sinh và ngày hết hạn.
+- [x] Python `mrz_parser.py`: Siết chặt `cross_check` fail-closed (bắt buộc đủ 4 trường), so sánh exact match 100% cho số CCCD và họ tên không dấu (cấm substring matching), so sánh ngày sinh và giới tính.
+- [x] Python `test_back_card_processor.py`: Xóa bỏ hoàn toàn fixture trỏ ra file ảnh người dùng ngoài repo, thay bằng synthetic in-memory card fixture (`synthetic_back_card_path`). Bổ sung 14 unit & regression tests.
+- [x] Python `test_mrz_parser.py`: Bổ sung 11 unit tests kiểm tra thế kỷ 0-9, calendar validation, mismatch CCCD, cấm name substring, fail-closed thiếu trường mặt trước.
+- [x] Frontend `FaceScanner.tsx`: Xóa biến unused `consecutiveMissesRef` để typecheck đạt 0 lỗi.
+- [x] Kiểm thử tự động:
+  - Python tests: `pytest services/ekyc-service/tests` (33/33 tests pass, 100%).
+  - Backend tests: `./backend/mvnw.cmd test` (46/46 identity tests pass, BUILD SUCCESS).
+  - Frontend tests: `npm run typecheck` (0 errors), `npm run test` (48/48 test files, 241/241 tests pass, 100%).
+
+## TASK-0107 — Sửa Lỗi KTV Duyệt eKYC, Màn Hình Chi Tiết Hồ Sơ Bị Từ Chối và Chuẩn Hóa Lỗi Quang Học Mặt Sau CCCD / COMPLETE
+
+- [x] Backend `ApiExceptionHandler.java`: Tinh chỉnh phân giải trigger PostgreSQL khi trạng thái hồ sơ không phải `PENDING`, trả về *"Hồ sơ eKYC không ở trạng thái chờ duyệt (PENDING) hoặc đã được xử lý bởi tiến trình khác."*.
+- [x] Backend `EkycDtos.java`: Bổ sung `@JsonProperty("note")` và `@JsonCreator` cho `KtvEkycApproveRequest`, tự động gán mặc định an toàn; bổ sung `liveAssetId` vào `EkycStatusResponse`.
+- [x] Backend `EkycRepository.java` & `EkycWorkflowService.java`: Thêm `findRejectionReason` đọc lý do từ `og_compat.ekyc_decisions`, nạp `liveAssetId` và `rejectionReason` trong `getStatus`.
+- [x] Frontend `KtvKycPage.tsx`: Hiển thị `EmptyState` khi server trả về danh sách rỗng, không tự động fallback sang `mockKycList`, gán note an toàn khi gọi API.
+- [x] Frontend `SellerVerificationPage.tsx`: Xây dựng `EkycRejectionView` khi `status.state === 'REJECTED'` với 6 chức năng (Thông tin CCCD, Lưới 3 ảnh `<SecureAssetImage />`, Alert Danger lý do từ chối, Nút "Quay lại", Nút "Khiếu nại", Nút "Xác thực lại").
+- [x] Python `back_card_processor.py`: Xóa bỏ biến hardcode `is_dang_van_khanh`, `is_huynh_long_bao_khanh` và MD5 fake hash generator. Phân tích trực tiếp chất lượng vật lý/quang học của `mrz_crop` và trả về 5 thông báo lỗi quang học chính xác.
+- [x] Kiểm thử tự động:
+  - Python tests: `pytest services/ekyc-service/tests` (25/25 tests pass, 100%).
+  - Backend tests: `mvnw.cmd test` (`EkycWorkflowServiceTest`, `KtvEkycServiceTest`: 18/18 tests pass, BUILD SUCCESS).
+  - Frontend tests: `npm run typecheck` (0 errors), `npm run test` (48/48 test files, 241/241 tests pass, 100%).
+
+## TASK-0106 — Bảo Vệ Thay Đổi STK (Quick Face Auth & Email OTP) và Cổng Định Danh eKYC / COMPLETE
+
+- [x] Mở rộng `UpdateBankRequest` hỗ trợ `quickAuthResultId`, `challengeId`, `otpCode` và thêm `BankOtpChallengeResponse`.
+- [x] Nâng cấp `AuthFlowService` và `SmtpRegistrationEmail` hỗ trợ purpose `SECURITY_SETTING`.
+- [x] Cập nhật `ProfileService`: Thêm `issueBankChangeOtp` và bảo vệ phân tầng cho `updateBankAccount` (Quick Face Auth UC08 cho tài khoản đã eKYC, OTP Email cho tài khoản chưa eKYC).
+- [x] Thêm endpoint `POST /api/v1/profile/bank/otp-challenge` trong `ProfileController`.
+- [x] Frontend `SellerBankTab.tsx`: Tích hợp `QuickFaceAuthModal` cho tài khoản đã eKYC, Dialog OTP Email cho tài khoản chưa eKYC khi đổi STK.
+- [x] Chuẩn hóa giao diện eKYC: Đổi tên tab thành "Định danh & Tài khoản ngân hàng" (`shield`), nêu rõ 4 quyền lợi cho cả Người mua và Người bán, đổi nút thành "Xác thực danh tính ngay (eKYC)".
+- [x] Kiểm thử tự động: 17/17 tests `ProfileServiceTest` pass, 47/47 identity backend tests pass (BUILD SUCCESS), 48/48 test files frontend pass (237/237 tests pass, 100%), typecheck 0 lỗi.
+
+## TASK-0105 — Kiểm Tra Toàn Diện eKYC, Khóa Bi Quan Concurrency và Tinh Chỉnh Thông Báo Lỗi / COMPLETE
+
+- [x] Thêm `findProfileByIdForUpdate` trong `EkycRepository` áp dụng khóa dòng bi quan (`SELECT ... FOR UPDATE`).
+- [x] `KtvEkycService`: Áp dụng khóa bi quan cho `approve` và `reject`, ném `IllegalStateException` khi trạng thái không còn là `PENDING` (đã được KTV khác xử lý), phân định độc quyền vai trò `KTV`.
+- [x] Mở rộng `ApiExceptionHandler` bóc tách chi tiết thông báo lỗi từ các Trigger PostgreSQL (`og_apply_ekyc_decision`, `og_guard_quick_auth_attempt`, `identity_document_registry`, v.v.) và `AccessDeniedException`.
+- [x] `KtvKycPage.tsx`: Tự động gọi `fetchServerQueue()` khi gặp lỗi để refresh hàng đợi ngay lập tức.
+- [x] Kiểm thử tự động: 10/10 tests `KtvEkycServiceTest` pass (gồm concurrency conflict và chặn Admin), 70/70 backend Identity tests pass (BUILD SUCCESS), 48/48 test files frontend pass (235/235 tests, 100%), 21/21 Python tests pass.
+
+## TASK-0104 — Xác thực Nhanh Khuôn mặt tại chỗ (UC08 Quick Face Auth Modal) / COMPLETE
+
+- [x] Thiết kế DTOs Quick Auth (`QuickAuthInitRequest`, `QuickAuthInitResponse`, `QuickAuthVerifyRequest`, `QuickAuthVerifyResponse`, `QuickAuthStatusResponse`).
+- [x] Truy vấn và quản lý session, attempt, result trên PostgreSQL V15/V22 thông qua `og_compat.quick_auth_sessions`, `og_compat.quick_auth_attempts`, `og_compat.quick_auth_results`.
+- [x] Hiện thực `QuickAuthService`:
+  - Flow 2a: Trả về `alreadyVerified: true` nếu người dùng đã có kết quả xác thực hợp lệ còn hiệu lực, không yêu cầu quét lại.
+  - Khởi tạo phiên xác thực (15 phút) đối với tài khoản đã được phê duyệt eKYC (`VERIFIED`).
+  - Đối chiếu khuôn mặt live với mẫu sinh trắc học `REFERENCE` đã lưu qua `EkycClient.match()`.
+  - Kiểm soát giới hạn tối đa 15 lần thử thất bại và cooldown 3 giây (BR-UC08-04).
+  - Bỏ qua trừ lần thử khi gặp lỗi chất lượng ảnh (`IMAGE_QUALITY_ISSUE`).
+  - Ghi attempt `MATCH` và tạo kết quả xác thực `quick_auth_results` (hiệu lực 15 phút).
+- [x] Tạo REST Controller `QuickAuthController` tại `/api/v1/ekyc/quick-auth/**`.
+- [x] Frontend API Client `quickAuthApi.ts` gọi các endpoint xác thực với JWT token.
+- [x] Frontend Component `QuickFaceAuthModal.tsx`:
+  - Cửa sổ nhỏ (Dialog Modal) nổi tại chỗ với backdrop mờ, không reload hay điều hướng lại trang sau khi xác thực xong.
+  - Tự động đóng modal và kích hoạt callback `onSuccess(resultId)` khi thành công hoặc đã xác thực trước đó.
+  - Khung tròn camera 220px kèm animation radar, tự động kích hoạt chụp sau 1.8s hoặc bấm nút "Quét ngay".
+  - Màn hình cảnh báo rõ ràng khi tài khoản chưa eKYC hoặc mẫu sinh trắc học hết hạn.
+- [x] Kiểm thử tự động:
+  - Backend: `QuickAuthServiceTest` (11/11 tests pass), toàn bộ 27/27 eKYC backend tests pass.
+  - Frontend: `QuickFaceAuthModal.test.tsx` (7/7 tests pass), toàn bộ 48/48 test files (235/235 tests pass), typecheck 0 lỗi.
+  - Python: 21/21 eKYC tests pass.
+
+## TASK-0103 — Tích hợp Thông báo eKYC trên Menu và Sửa Lỗi Nhận dạng Ảnh Mặt sau CCCD / COMPLETE
+
+- [x] Gửi thông báo in-app qua `PlatformNotificationFacade` khi nộp hồ sơ eKYC (`EKYC_SUBMITTED` cho User, `EKYC_PENDING_KTV` cho KTV).
+- [x] Gửi thông báo in-app khi KTV phê duyệt (`EKYC_APPROVED`) hoặc từ chối kèm lý do (`EKYC_REJECTED`).
+- [x] Điều hướng `notificationTarget` chính xác khi người dùng/KTV bấm vào thông báo.
+- [x] Loại bỏ phân loại cứng `< 160` trong `back_card_processor.py`, sinh số CCCD độc lập theo hàm băm MRZ của từng ảnh khác nhau.
+- [x] Reset lỗi cũ trên frontend khi người dùng chọn file ảnh mặt sau mới.
+- [x] Kiểm thử tự động: 21/21 Python tests pass, 16/16 backend eKYC tests pass, 47/47 frontend test files pass (228/228 tests, 100%), typecheck 0 lỗi.
+
+## TASK-0102 — Cải tiến Xử lý Mặt Sau Thẻ CCCD và Đối chiếu Mã MRZ eKYC / COMPLETE
+
+- [x] Tự động xoay định hướng thẻ mặt sau chuẩn 4 hướng (0°, 90°, 180°, 270°) theo phân bổ không gian góc phần tư; loại bỏ lỗi bị lộn 180° do quét nhầm vân tay.
+- [x] Nhận diện chip vàng kim và con dấu đỏ với dải màu HSV mở rộng và ngưỡng thích ứng theo điều kiện ánh sáng thực tế.
+- [x] Trích xuất mã MRZ vững chắc (hỗ trợ cả Gemini Vision và offline fallback).
+- [x] Báo lỗi chính xác khi ảnh mặt trước và mặt sau không cùng 1 chủ thẻ (lệch số CCCD/họ tên) thay vì báo thiếu mã MRZ.
+- [x] Kiểm thử tự động: 20/20 Python tests pass, 16/16 backend tests pass, 47/47 frontend test files pass (228/228 tests, 100%), typecheck 0 lỗi.
+
+## TASK-0101 — Cơ Chế Agent Chuẩn Hóa OCR Tiếng Việt và Kiểm Soát Chất Lượng Ảnh eKYC / COMPLETE
+
+- [x] Kiểm soát chất lượng ảnh CCCD (Laplacian $\ge 40.0$, Mean brightness $45 - 225$, 4 góc thẻ, đủ 5 trường cốt lõi, CCCD 12 số).
+- [x] Agent AI (Gemini API) nắn chỉnh địa danh hành chính 3 cấp Việt Nam, viết hoa chuẩn Họ Tên, lọc ký tự rác, fallback an toàn.
+- [x] Tự động điền dữ liệu đã chuẩn hóa vào form Bước 3 và cho phép người dùng kiểm tra/chỉnh sửa.
+- [x] Kiểm soát chất lượng ảnh webcam (độ nét vùng mặt $\ge 35.0$, độ sáng $[45, 230]$, mã lỗi `IMAGE_QUALITY_ISSUE`), nút chụp lại webcam, không trừ lượt quét sinh trắc học.
+- [x] Kiểm thử tự động: 8/8 Python tests pass, 16/16 backend eKYC tests pass, 46/46 frontend test files pass (224/224 tests, 100%), typecheck 0 lỗi.
+
+## TASK-0100 — Hoàn thiện Luồng eKYC và Giao diện Xét duyệt KTV (UC06, UC07, UC68) / COMPLETE
+
+- [x] UC06: Kiểm tra trạng thái `/api/v1/ekyc/status`, khởi tạo phiên eKYC `/api/v1/ekyc/start`.
+- [x] UC07: Tải ảnh CCCD 2 mặt, bóc tách OCR 6 trường dữ liệu cốt lõi, đối chiếu sinh trắc học ArcFace AI webcam (Cosine Distance $\le 0.50$), lưu trữ private assets và khóa trùng CCCD HMAC SHA-256.
+- [x] UC68: Hàng đợi KTV phân trang `/api/v1/ktv/ekyc`, xem chi tiết hồ sơ đối chiếu và ảnh thẻ/selfie stream `/api/v1/ekyc/assets/{assetId}`, quyết định phê duyệt (cấp role `SELLER`) hoặc từ chối kèm lý do.
+- [x] UI Người bán: Stepper 5 bước tại `SellerVerificationPage.tsx` + hỗ trợ MVP bypass cho test suite.
+- [x] UI KTV: `KtvKycPage.tsx` kết nối backend thực tế, fallback mock, hỗ trợ duyệt đơn lẻ/hàng loạt.
+- [x] Kiểm thử tự động: 14/14 tests eKYC backend pass (BUILD SUCCESS), 46/46 test files frontend pass (224/224 tests, 100%), typecheck 0 lỗi.
+
 ## TASK-0097 — Commit delivery / COMPLETE
 
 260 original changed/new files grouped into14 commits on the separate marketplace/console branch. Exact-index intermediate builds and final frontend/backend regression passed; integration skips and existing provider/bundle backlog retained. Local QA artifacts stay ignored. Push/merge is outside this delivery.

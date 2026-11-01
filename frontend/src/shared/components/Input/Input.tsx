@@ -1,23 +1,28 @@
 import { Icon } from '../Icon/Icon';
+import { InfoTooltip } from '../InfoTooltip/InfoTooltip';
 import { InputHTMLAttributes, forwardRef } from 'react';
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   helperText?: string;
+  tooltip?: string;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, helperText, id, className = '', ...props }, ref) => {
+  ({ label, error, helperText, tooltip, id, className = '', ...props }, ref) => {
     const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
 
     return (
       <div className="og-form-group">
         {label && (
-          <label htmlFor={inputId} className="og-label">
-            {label}
-            {props.required && <span style={{ color: 'var(--og-color-danger)' }}> *</span>}
-          </label>
+          <div className="og-label-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <label htmlFor={inputId} className="og-label" style={{ marginBottom: 0 }}>
+              {label}
+              {props.required && <span style={{ color: 'var(--og-color-danger)' }}> *</span>}
+            </label>
+            {tooltip && <InfoTooltip content={tooltip} ariaLabel="Xem chỉ dẫn" />}
+          </div>
         )}
         <input
           ref={ref}
