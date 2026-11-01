@@ -1,5 +1,5 @@
 import { Icon } from '../../../shared/components/Icon/Icon';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Category, CONDITION_LABELS, ProductMedia } from '../../marketplace/types';
 import { CreateOrUpdateProductPayload, SellerProductDetail } from '../types';
 
@@ -50,6 +50,18 @@ export const ListingForm: React.FC<ListingFormProps> = ({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
+
+  // Theo dõi cuộn trang để nút Tạo bản nháp tự lùi xuống khi header hạ xuống ở trên cùng
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      setIsHeaderCollapsed(scrollY > 50);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -199,6 +211,44 @@ export const ListingForm: React.FC<ListingFormProps> = ({
 
   return (
     <form className="og-listing-form" onSubmit={handleSubmit} noValidate>
+      {/* Nút hành động cố định ở góc trên bên phải của tab (thay thế thanh sticky dưới) */}
+      <div className={`og-listing-fixed-header-action ${isHeaderCollapsed ? 'og-listing-fixed-header-action--scrolled' : ''}`}>
+        <button
+          type="submit"
+          className="og-button og-button--primary"
+          disabled={isSubmitting || isMediaActionLoading}
+          style={{
+            height: '42px',
+            padding: '0 24px',
+            fontSize: '14.5px',
+            fontWeight: 600,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          {isSubmitting ? 'Đang lưu...' : submitButtonLabel}
+        </button>
+
+        {canSubmitForReview && onSubmitForReview && (
+          <button
+            type="button"
+            className="og-button og-button--gold"
+            onClick={onSubmitForReview}
+            disabled={isSubmitting || isMediaActionLoading}
+            style={{
+              height: '42px',
+              padding: '0 20px',
+              fontSize: '14.5px',
+              fontWeight: 600,
+              boxShadow: '0 4px 14px rgba(234, 179, 8, 0.25)',
+            }}
+          >
+             Gửi kiểm duyệt (PENDING)
+          </button>
+        )}
+      </div>
+
       {errorMessage && (
         <div className="og-alert og-alert--danger" role="alert" tabIndex={0}>
            {errorMessage}
@@ -728,32 +778,6 @@ export const ListingForm: React.FC<ListingFormProps> = ({
           </div>
         )}
       </section>
-
-      {/* 11. Sticky Action Bar */}
-      <div className="og-sticky-action-bar">
-        <div className="og-sticky-action-bar__inner">
-          <button
-            type="submit"
-            className="og-button og-button--primary"
-            disabled={isSubmitting || isMediaActionLoading}
-            style={{ height: '42px', padding: '0 24px', fontSize: '14.5px' }}
-          >
-            {isSubmitting ? 'Đang lưu...' : submitButtonLabel}
-          </button>
-
-          {canSubmitForReview && onSubmitForReview && (
-            <button
-              type="button"
-              className="og-button og-button--gold"
-              onClick={onSubmitForReview}
-              disabled={isSubmitting || isMediaActionLoading}
-              style={{ height: '42px', padding: '0 20px', fontSize: '14.5px' }}
-            >
-               Gửi kiểm duyệt (PENDING)
-            </button>
-          )}
-        </div>
-      </div>
     </form>
   );
 };

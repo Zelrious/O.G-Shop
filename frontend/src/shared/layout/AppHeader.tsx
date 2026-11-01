@@ -519,6 +519,20 @@ export const AppHeader: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Synchronize header collapse state with body class for floating/fixed components (e.g. nút Tạo bản nháp tự lùi xuống)
+  useEffect(() => {
+    const isExpanded = !isScrolled || isTabsExpanded;
+    if (typeof document !== 'undefined') {
+      document.body.classList.toggle('og-header-collapsed', !isExpanded);
+      document.body.classList.toggle('og-header-expanded', isExpanded);
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.body.classList.remove('og-header-collapsed', 'og-header-expanded');
+      }
+    };
+  }, [isScrolled, isTabsExpanded]);
+
   // Close floating tabs, category menu & user dropdown when route changes
   useEffect(() => {
     setIsTabsExpanded(false);

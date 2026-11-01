@@ -1,8 +1,41 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, Button, StatusBadge } from '../../shared/components';
+import { sellerSettingsApi, SellerSettings } from '../../features/seller/sellerSettingsApi';
 
 export const SellerDashboardPage: React.FC = () => {
+  const navigate = useNavigate();
+  const [settings, setSettings] = useState<SellerSettings | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    let ignore = false;
+    sellerSettingsApi
+      .getSettings()
+      .then((data) => {
+        if (!ignore) {
+          setSettings(data);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const isVerified = settings?.verifiedSeller ?? false;
+  const hasStoreInfo = settings?.hasStoreInfo ?? (
+    !!settings?.storeName &&
+    !!settings?.pickupAddressId &&
+    !!settings?.returnAddressId &&
+    !!settings?.bankAccountNumberMasked
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
@@ -14,12 +47,96 @@ export const SellerDashboardPage: React.FC = () => {
             Theo dõi dòng tiền ký quỹ, đơn hàng cần đóng gói và tình trạng các món đồ đang niêm yết.
           </p>
         </div>
-        <Link to="/seller/products/new">
-          <Button variant="gold" size="md">
-             Đăng tin bán mới
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <Link to="/seller/settings">
+            <Button variant="outline" size="md">
+              Thiết lập gian hàng
+            </Button>
+          </Link>
+          <Button
+            variant="gold"
+            size="md"
+            onClick={() => {
+              if (!isVerified) {
+                navigate('/ekyc/verification');
+              } else if (!hasStoreInfo) {
+                navigate('/seller/settings');
+              } else {
+                navigate('/seller/products/new');
+              }
+            }}
+          >
+            Đăng tin bán mới
           </Button>
-        </Link>
+        </div>
       </div>
+
+      {/* Onboarding Guidance Banners */}
+      {!loading && !isVerified && (
+        <div
+          style={{
+            padding: '18px 22px',
+            borderRadius: '16px',
+            border: '1.5px solid var(--og-color-warning, #f59e0b)',
+            backgroundColor: 'rgba(245, 158, 11, 0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '14px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '1.5rem' }}>🛡️</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.98rem', color: 'var(--og-color-text-primary)' }}>
+                Yêu cầu hoàn tất định danh eKYC trước khi bán hàng
+              </div>
+              <div style={{ fontSize: '0.86rem', color: 'var(--og-color-text-secondary)', marginTop: '2px' }}>
+                Để đảm bảo an toàn giao dịch, bạn cần xác thực CCCD và khuôn mặt trước khi đăng tin bán và nhận thanh toán.
+              </div>
+            </div>
+          </div>
+          <Link to="/ekyc/verification">
+            <Button variant="gold" size="sm">
+              Xác thực danh tính ngay (eKYC)
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {!loading && isVerified && !hasStoreInfo && (
+        <div
+          style={{
+            padding: '18px 22px',
+            borderRadius: '16px',
+            border: '1.5px solid var(--og-color-primary, #3b82f6)',
+            backgroundColor: 'rgba(59, 130, 246, 0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '14px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '1.5rem' }}>🏪</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.98rem', color: 'var(--og-color-text-primary)' }}>
+                Bước cuối cùng: Đăng ký thông tin gian hàng Người bán
+              </div>
+              <div style={{ fontSize: '0.86rem', color: 'var(--og-color-text-secondary)', marginTop: '2px' }}>
+                Vui lòng điền Kho gửi hàng GHN và Tài khoản ngân hàng nhận tiền quyết toán để mở khóa toàn bộ tính năng bán hàng.
+              </div>
+            </div>
+          </div>
+          <Link to="/seller/settings">
+            <Button variant="primary" size="sm">
+              Hoàn tất thiết lập gian hàng
+            </Button>
+          </Link>
+        </div>
+      )}
 
       {/* KPI Overview Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>

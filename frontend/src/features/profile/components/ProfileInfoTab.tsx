@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { UserProfile, profileApi } from '../index';
+import { UserProfile, profileApi, ChangePhoneModal } from '../index';
 import { useAuth } from '../../auth';
-import { Alert, Button, Input } from '../../../shared/components';
+import { Alert, Button, Input, Badge } from '../../../shared/components';
 
 interface ProfileInfoTabProps {
   profile: UserProfile;
@@ -10,7 +10,7 @@ interface ProfileInfoTabProps {
 
 export const ProfileInfoTab: React.FC<ProfileInfoTabProps> = ({ profile, onProfileUpdated }) => {
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
-  const { reloadCurrentUser } = useAuth();
+  const { user, reloadCurrentUser } = useAuth();
   const [fullName, setFullName] = useState(profile.fullName || '');
   const [phoneNumber, setPhoneNumber] = useState(profile.phoneNumber || '');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -19,6 +19,9 @@ export const ProfileInfoTab: React.FC<ProfileInfoTabProps> = ({ profile, onProfi
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Phone Change Security Modal State
+  const [showPhoneModal, setShowPhoneModal] = useState<boolean>(false);
 
   useEffect(() => {
     if (!selectedFile) {
@@ -62,10 +65,34 @@ export const ProfileInfoTab: React.FC<ProfileInfoTabProps> = ({ profile, onProfi
     }
   };
 
+  const handleOpenPhoneModal = () => {
+    setShowPhoneModal(true);
+  };
+
+  const handlePhoneChangeSuccess = async (newPhone: string) => {
+    setPhoneNumber(newPhone);
+    setSuccessMsg('Đổi số điện thoại chính thành công!');
+    try {
+      const refreshed = await profileApi.getProfile();
+      onProfileUpdated(refreshed);
+      await reloadCurrentUser();
+    } catch {
+      // fallback local update
+      onProfileUpdated({ ...profile, phoneNumber: newPhone });
+    }
+    setTimeout(() => setSuccessMsg(null), 4000);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim()) {
       setErrorMsg('Vui lòng nhập họ và tên.');
+      return;
+    }
+
+    // Nếu người dùng muốn đổi số điện thoại, mở modal xác thực
+    if (phoneNumber.trim() !== (profile.phoneNumber || '').trim()) {
+      handleOpenPhoneModal();
       return;
     }
 
@@ -79,14 +106,14 @@ export const ProfileInfoTab: React.FC<ProfileInfoTabProps> = ({ profile, onProfi
         updated = await profileApi.updateProfileWithAvatar(
           {
             fullName: fullName.trim(),
-            phoneNumber: phoneNumber.trim() || undefined,
+            phoneNumber: profile.phoneNumber || undefined,
           },
           selectedFile
         );
       } else {
         updated = await profileApi.updateProfile({
           fullName: fullName.trim(),
-          phoneNumber: phoneNumber.trim() || undefined,
+          phoneNumber: profile.phoneNumber || undefined,
           avatarUrl: profile.avatarUrl || undefined,
         });
       }
@@ -113,75 +140,54 @@ export const ProfileInfoTab: React.FC<ProfileInfoTabProps> = ({ profile, onProfi
   };
 
   return (
-    <div className="og-profile-tab">
-      <h3 style={{ margin: '0 0 16px', fontSize: '1.2rem', color: 'var(--og-color-text-primary)' }}>
-        Thông tin cá nhân
-      </h3>
-
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {successMsg && <Alert type="success">{successMsg}</Alert>}
       {errorMsg && <Alert type="danger">{errorMsg}</Alert>}
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
-        {/* Avatar Preview & File Input */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '8px' }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {/* Avatar Section */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
           <div
             style={{
-              width: '80px',
-              height: '80px',
+              width: '100px',
+              height: '100px',
               borderRadius: '50%',
-              backgroundColor: 'var(--og-color-surface-sunken)',
-              border: '2px solid var(--og-color-border-subtle)',
-              overflow: 'hidden',
+              backgroundColor: 'var(--og-color-surface-subtle)',
+              border: '2px dashed var(--og-color-border)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '2rem',
-              color: 'var(--og-color-text-tertiary)',
-              flexShrink: 0,
+              overflow: 'hidden',
+              position: 'relative',
             }}
           >
-            {previewUrl && previewUrl !== failedAvatarUrl ? (
+            {previewUrl ? (
               <img
-                key={previewUrl}
                 src={previewUrl}
                 alt="Xem trước ảnh đại diện"
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={() => setFailedAvatarUrl(previewUrl)}
               />
-            ) : !previewUrl && profile.avatarUrl && profile.avatarUrl !== failedAvatarUrl ? (
+            ) : profile.avatarUrl && failedAvatarUrl !== profile.avatarUrl ? (
               <img
-                key={profile.avatarUrl}
                 src={profile.avatarUrl}
                 alt="Ảnh đại diện"
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 onError={() => setFailedAvatarUrl(profile.avatarUrl ?? null)}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
-              profile.fullName ? profile.fullName.charAt(0).toUpperCase() : '👤'
+              <span style={{ fontSize: '2.5rem', color: 'var(--og-color-text-secondary)' }}>👤</span>
             )}
           </div>
 
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 600, marginBottom: '6px' }}>
-              Ảnh đại diện
-            </label>
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept="image/jpeg,image/png,image/webp"
-              style={{ display: 'none' }}
-              onChange={handleFileChange}
-              data-testid="avatar-file-input"
-            />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={isSaving}
               >
-                {selectedFile ? 'Đổi ảnh khác' : 'Chọn ảnh mới'}
+                Chọn ảnh mới
               </Button>
               {selectedFile && (
                 <Button
@@ -189,32 +195,33 @@ export const ProfileInfoTab: React.FC<ProfileInfoTabProps> = ({ profile, onProfi
                   variant="outline"
                   size="sm"
                   onClick={handleCancelSelection}
-                  disabled={isSaving}
-                  style={{ color: 'var(--og-color-danger)', borderColor: 'var(--og-color-danger)' }}
                 >
                   Bỏ chọn
                 </Button>
               )}
-              {selectedFile && (
-                <span style={{ fontSize: '0.82rem', color: 'var(--og-color-text-secondary)' }}>
-                  {selectedFile.name} ({(selectedFile.size / 1024).toFixed(0)} KB)
-                </span>
-              )}
             </div>
-            <span style={{ fontSize: '0.8rem', color: 'var(--og-color-text-secondary)', marginTop: '6px', display: 'block' }}>
-              Hỗ trợ định dạng JPG, PNG, WebP (Tối đa 5 MiB)
+            <input
+              type="file"
+              data-testid="avatar-file-input"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/jpeg,image/png,image/webp"
+              style={{ display: 'none' }}
+            />
+            <span style={{ fontSize: '0.8rem', color: 'var(--og-color-text-secondary)' }}>
+              Định dạng: JPEG, PNG, WebP tĩnh. Dung lượng tối đa: 5 MiB.
             </span>
           </div>
         </div>
 
-        {/* Email - Read-only */}
+        {/* Email */}
         <div>
           <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 600, marginBottom: '6px' }}>
             Địa chỉ Email (Định danh tài khoản)
           </label>
           <Input value={profile.email} disabled />
           <span style={{ fontSize: '0.8rem', color: 'var(--og-color-text-secondary)', marginTop: '4px', display: 'block' }}>
-            🔒 Email liên kết với tài khoản không thể tự ý thay đổi.
+            Email liên kết với tài khoản không thể thay đổi.
           </span>
         </div>
 
@@ -231,16 +238,81 @@ export const ProfileInfoTab: React.FC<ProfileInfoTabProps> = ({ profile, onProfi
           />
         </div>
 
-        {/* Số điện thoại */}
-        <div>
-          <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 600, marginBottom: '6px' }}>
-            Số điện thoại liên hệ
-          </label>
-          <Input
-            value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
-            placeholder="0912 345 678"
-          />
+        {/* Số điện thoại chính */}
+        <div
+          style={{
+            border: '1px solid var(--og-color-border)',
+            borderRadius: '12px',
+            padding: '16px 20px',
+            backgroundColor: 'var(--og-color-surface-subtle)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <label style={{ fontSize: '0.9rem', fontWeight: 600, margin: 0, color: 'var(--og-color-text)' }}>
+              Số điện thoại chính (Hotline gian hàng & Bảo mật)
+            </label>
+            {profile.phoneNumber ? (
+              <Badge variant="success">
+                Đã xác thực
+              </Badge>
+            ) : (
+              <Badge variant="warning">
+                Chưa thiết lập
+              </Badge>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              backgroundColor: 'var(--og-color-surface)',
+              border: '1px solid var(--og-color-border)',
+              borderRadius: '8px',
+              padding: '16px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '16px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: '240px', maxWidth: '360px' }}>
+                <Input
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  readOnly
+                  placeholder="0912345678"
+                  style={{
+                    fontWeight: 600,
+                    fontSize: '1rem',
+                    backgroundColor: 'var(--og-color-surface-subtle)',
+                    cursor: 'default',
+                    margin: 0,
+                  }}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={handleOpenPhoneModal}
+              >
+                Đổi số điện thoại
+              </Button>
+            </div>
+            <span style={{ fontSize: '0.82rem', color: 'var(--og-color-text-secondary)', display: 'block' }}>
+              Định danh duy nhất. Dùng làm hotline hiển thị trên các đơn hàng bán ra.
+            </span>
+          </div>
         </div>
 
         <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'flex-end' }}>
@@ -249,6 +321,17 @@ export const ProfileInfoTab: React.FC<ProfileInfoTabProps> = ({ profile, onProfi
           </Button>
         </div>
       </form>
+
+      {/* Modern, Outline Change Phone Modal with Real-time Validation */}
+      <ChangePhoneModal
+        isOpen={showPhoneModal}
+        onClose={() => setShowPhoneModal(false)}
+        onSuccess={handlePhoneChangeSuccess}
+        currentPhoneNumber={profile.phoneNumber}
+        currentFullName={profile.fullName}
+        accountEmail={profile.email}
+        isVerifiedSeller={user?.verifiedSeller ?? false}
+      />
     </div>
   );
 };
