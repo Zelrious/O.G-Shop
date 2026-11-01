@@ -95,9 +95,10 @@ stateDiagram-v2
 
     state "VONG 2: POST_RETURN_RESOLUTION (Giai quyet sau khi nhan lai hang)" as Round2 {
         POST_RETURN --> CLOSED_REFUND: Nguoi ban dong y hoan tien (agree-refund)\nhoac Qua han 2 ngay tu dong hoan (SYSTEM_TIMEOUT)
-        POST_RETURN --> REVIEWING_R2: Nguoi ban nop de nghi xet lai\n(VALID_DAMAGE_REQUEST + <=5 anh, <=2 video)
-        REVIEWING_R2 --> CLOSED_REFUND: KTV bac de nghi khong hoan\n(FULL_GOODS_REFUND cho Nguoi mua)
-        REVIEWING_R2 --> CLOSED_EXEMPT: KTV chap thuan mien hoan\n(EXEMPT_GOODS_REFUND cho Nguoi ban)
+        POST_RETURN --> POST_RETURN_OPEN: Nguoi ban nop de nghi xet lai\n(VALID_DAMAGE_REQUEST + <=5 anh, <=2 video)
+        note right of POST_RETURN_OPEN: Nhan mo ta tien trinh nghiep vu;\nDB va Entity thuc te giu cases.state = POST_RETURN,\ncase_rounds.state = OPEN (khong dung state REVIEWING_R2)
+        POST_RETURN_OPEN --> CLOSED_REFUND: KTV bac de nghi khong hoan\n(FULL_GOODS_REFUND cho Nguoi mua)
+        POST_RETURN_OPEN --> CLOSED_EXEMPT: KTV chap thuan mien hoan\n(EXEMPT_GOODS_REFUND cho Nguoi ban)
     }
 
     REJECTED --> [*]: Dong ho so (Giai phong money_holds, cho giai ngan UC71)
@@ -188,10 +189,7 @@ Khi KTV chấp thuận không hoàn vì hàng trả hư hỏng nghiêm trọng h
 ### 3.5. Chống Trùng lặp & Thứ tự Khóa Tài nguyên (BR-UC83-03)
 - Tuyệt đối không vừa hoàn tiền vừa giải ngân cùng một khoản hai lần (BR-UC83-03).
 - Mọi thao tác xử lý tiền và worker phải đảm bảo Idempotent thông qua `command_key` duy nhất.
-- **Thứ tự khóa tài nguyên chống Deadlock**:
-  ```text
-  Khóa OrderEntity (1)  --->  Khóa PaymentEntity (2)  --->  Khóa CaseEntity (3)
-  ```
+- **Giao thức khóa tài nguyên chống Deadlock**: Tham chiếu chi tiết tại **Mục 3.0.1 (Unified Locking Protocol)**. Không sử dụng thứ tự cũ `Order → Payment → Case`. Thứ tự khóa tài chính con `orders → order_fund_components → settlement_operations` (đã dùng ở Task 2.1b) cần được đối chiếu toàn diện với Java Gateway Lock trong Task 3.0.1, không mặc định tương thích.
 
 ---
 
@@ -533,14 +531,14 @@ Các quy tắc sau đây là thiết kế chi tiết kỹ thuật bổ trợ cho
 | STT | Giả định Đề xuất | Giá trị / Quy tắc Kỹ thuật | Lý do và Căn cứ Kỹ thuật |
 | :---: | :--- | :--- | :--- |
 | **1** | **Thời hạn Người bán phản hồi ở Vòng 1 & Quy tắc Đua lệnh** | **48 giờ (2 ngày)** kể từ khi hồ sơ mở đủ nội dung.<br>**Nguyên tắc Đua lệnh**: `first-write-wins` **CHỈ** áp dụng cho các quyết định cuối cùng (`APPROVE_RETURN`, `REJECT_RETURN`). Thao tác `SELLER_DECLINED` của Người bán **KHÔNG** khóa KTV (UC62 7b). | Báo cáo quy định hạn 2 ngày ở Vòng 2 và SLA 48h cho KTV, nhưng chưa nêu số ngày Người bán phải chọn ở Vòng 1. Thiết lập 48h để Người bán có đủ thời gian phản hồi. KTV thấy hồ sơ ngay khi `OPEN` và có thể duyệt/bác bất kỳ lúc nào. Nếu Người bán bấm `[Không đồng ý, chuyển KTV]`, hồ sơ chuyển sang `REVIEWING` để KTV ưu tiên phân xử, hoàn toàn không cản trở quyền quyết định của KTV. Khi có hai quyết định cuối cùng xảy ra đồng thời (ví dụ Người bán bấm chấp thuận trong khi KTV bấm bác), quyết định nào ghi vào DB trước sẽ thắng (`command_key` idempotent), quyết định sau bị từ chối. |
-| **2** | **SLA của KTV ở Vòng 2** | **48 giờ** kể từ khi nhận đủ đề nghị của Người bán (`valid_damage_request_at`). | Quy tắc `BR-UC75-01` ghi *"lượt đầu trong 48 giờ"*. Lượt phân xử Vòng 2 cũng liên quan trực tiếp đến số tiền đang bị đóng băng của hai bên, nên áp dụng chuẩn cam kết 48 giờ đồng bộ. Quá hạn 48 giờ tự động phát sinh sự kiện `ESCALATED` lên Admin theo dõi (có endpoint và màn hình Admin chuyên biệt). |
+| **2** | **SLA của KTV ở Vòng 2** `[PENDING USER APPROVAL - BD-4]` | **48 giờ** kể từ khi nhận đủ đề nghị của Người bán (`valid_damage_request_at`) hoặc từ `complete_submission_at`. Cần User chốt mốc tính theo BD-4. | Quy tắc `BR-UC75-01` ghi *"lượt đầu trong 48 giờ"*. Lượt phân xử Vòng 2 cũng liên quan trực tiếp đến số tiền đang bị đóng băng của hai bên, nên áp dụng chuẩn cam kết 48 giờ đồng bộ. Quá hạn 48 giờ tự động phát sinh sự kiện `ESCALATED` lên Admin theo dõi (có endpoint và màn hình Admin chuyên biệt). |
 | **3** | **Quy tắc Phân bổ Voucher và Xu giữa Tiền hàng và Phí vận chuyển (BR-UC22-04)** | **Voucher giảm trừ theo loại trước, Xu giảm trừ sau; Xu trừ vào Tiền hàng trước rồi mới đến Phí vận chuyển**.<br><br>*(a) Quyết định phạm vi*: Giữ nguyên phạm vi, **KHÔNG triển khai checkout dùng xu lúc này**. Ghi nhận UC22 *"Dùng xu ở checkout"* là phụ thuộc chưa triển khai (đơn hàng tạo mới giữ `points_discount_amount = 0`).<br>*(b) Ràng buộc bắt buộc*: Khi triển khai checkout dùng xu, bắt buộc phải trừ xu theo đúng quy tắc: `points_on_goods = min(points_discount_amount, max(0, subtotal - voucher_discount_amount))`, phần dư mới trừ vào phí giao hàng (`points_on_shipping = points_discount_amount - points_on_goods`).<br>*(c) Phạm vi kiểm thử*: Các test case hoàn tiền có xu (như TC-24, hoàn 100% xu đã dùng) sử dụng **đơn hàng giả lập (mock/fixture order)** có sẵn `points_discount_amount > 0` và `order_fund_components` để kiểm chứng. | Báo cáo `BR-UC22-04` quy định: *"voucher trước, xu sau, trừ vào tiền hàng và phí vận chuyển"*. Việc trừ thẳng vào Tiền hàng trước bảo đảm xác định chính xác và minh bạch khoản hoàn tiền mặt tối đa cho Người mua theo đúng giá trị hàng hóa thực trả (`subtotal - voucher_discount_amount - points_on_goods`). Xu hoàn 100% về ví xu (`points_discount_amount`), phí ship tiền mặt không hoàn, voucher không cấp lại. Phạm vi đã được người dùng chốt chính thức. |
 | **4** | **Thời hạn 14 ngày của cơ chế `direct_handover_attention`** | **14 ngày** kể từ thời điểm khởi tạo bàn giao trực tiếp (`initiated_at + 14 days`). | Đây là cơ chế có sẵn trong view database `direct_handover_attention` (V19 line 528). Khi hai bên giao nhận trực tiếp nhưng im lặng quá 14 ngày không xác nhận thành công, hệ thống tự động gắn cờ `SILENT_14_DAYS` để chuyển KTV kiểm tra xử lý, tránh kẹt đơn vĩnh viễn. |
 | **5** | **Điều kiện áp dụng lý do `CHANGE_MIND` (Đổi ý)** | Đơn hàng phải có `return_allowed = true` và hàng chưa mở seal/còn nguyên vẹn. | Bỏ cờ phát sinh `allow_change_mind` ở cấp sản phẩm để bám sát báo cáo; quyền đổi ý được bảo vệ mặc định cho mọi đơn hàng có cam kết `return_allowed = true` tại thời điểm đặt hàng. |
 
 ---
 
-## 9. Danh mục Kiểm thử Mở rộng (Test Matrix Chi tiết - 27 Kịch bản)
+## 9. Danh mục Kiểm thử Mở rộng (Test Matrix Chi tiết - 37 Kịch bản)
 
 | Mã Test | Kịch bản & Điều kiện Kiểm thử | Kết quả Mong đợi |
 | :--- | :--- | :--- |
@@ -562,15 +560,25 @@ Các quy tắc sau đây là thiết kế chi tiết kỹ thuật bổ trợ cho
 | **TC-16** | Đua quyết định Vòng 1: Người bán chấp thuận sau khi KTV đã ra quyết định | Thao tác của Người bán bị từ chối vì case đã ở trạng thái quyết định (`DECIDED`). |
 | **TC-17** | Người mua gửi hàng trả quá hạn 3 ngày hoặc 3 lần lấy thất bại do lỗi người mua | Dừng thu gom, chuyển hồ sơ xem xét đóng (`CLOSED_EXPIRED`). |
 | **TC-18** | Người bán nhận lại hàng qua vận đơn bưu tá hoặc OTP trực tiếp | `valid_returned_at` được ghi nhận, `seller_response_due_at = valid_returned_at + 2 days`, mở Round 2. |
-| **TC-19** | Người bán chọn [Hàng đúng, đồng ý hoàn tiền] ở Vòng 2 (`agree-refund`) | Kích hoạt hoàn tiền, trạng thái thanh toán chuyển `REFUND_PENDING` -> `REFUNDED`. |
+| **TC-19** | Người bán chọn [Hàng đúng, đồng ý hoàn tiền] ở Vòng 2 (`agree-refund`) | **Sau Feature 3.2 + 4.1a**: Ghi nhận Decision `FULL_GOODS_REFUND`, tạo Settlement Operation loại `REFUND_BUYER` ở trạng thái `REQUESTED` (thanh toán `REFUND_PENDING`, chưa hoàn ngay).<br>**Sau Task 4.1b**: Settlement Operation được cổng thanh toán/ngân hàng xác nhận thành công (`CONFIRMED`), hoàn trả 100% xu cho Buyer, chuyển thanh toán `REFUNDED`, Order chuyển `REFUNDED`. |
 | **TC-20** | Người bán nộp đề nghị miễn hoàn sau hạn 2 ngày | Bị chặn do quá hạn phản hồi. |
-| **TC-21** | Quá hạn 2 ngày mà Người bán không nộp đề nghị hợp lệ | Worker tự động kích hoạt `SYSTEM_TIMEOUT` + `FULL_GOODS_REFUND` hoàn 100% tiền hàng. |
+| **TC-21** | Quá hạn 2 ngày mà Người bán không nộp đề nghị hợp lệ | **Sau Feature 3.2 + 4.1a**: Worker tự động tạo Decision `SYSTEM_TIMEOUT` + `FULL_GOODS_REFUND`, tạo Settlement Operation `REFUND_BUYER` ở trạng thái `REQUESTED` (chưa hoàn ngay).<br>**Sau Task 4.1b**: Settlement Operation được xác nhận thành công (`CONFIRMED`), hoàn trả 100% xu cho Buyer, chuyển thanh toán `REFUNDED`. |
 | **TC-22** | Người bán nộp đề nghị "Hàng trả không đúng hàng đã giao / tráo hàng / hư hỏng" kèm bằng chứng | Đề nghị được tiếp nhận hợp lệ (`VALID_DAMAGE_REQUEST`), tiếp tục giữ tiền, chuyển KTV thụ lý Vòng 2. |
-| **TC-23** | KTV duyệt miễn hoàn tiền (`EXEMPT_GOODS_REFUND`) | Tiền hàng giải ngân cho Người bán theo BR-UC71-01/05, Người mua không được hoàn tiền và không được trả xu. |
+| **TC-23** | KTV duyệt miễn hoàn tiền (`EXEMPT_GOODS_REFUND`) | **Sau Feature 3.2 + 4.1a**: Ghi nhận Decision `EXEMPT_GOODS_REFUND`, tạo Settlement Operation `RELEASE_SELLER` với `cause_type = 'EXEMPTION'` ở trạng thái `REQUESTED` (Người mua không hoàn tiền/xu).<br>**Sau Task 4.1b**: Settlement Operation giải ngân Seller được xác nhận thành công (`CONFIRMED`), Order chuyển `COMPLETED`. |
 | **TC-24** | Kiểm thử hoàn tiền đơn 0 đồng (Ví dụ UC83-07: hàng 100k, ship 10k, voucher 10k, dùng 100k xu) | Tiền mặt hoàn = 0đ (không gọi VNPAY hoàn 0đ), trả lại đúng 100k xu vào ví, không cấp lại voucher. |
 | **TC-25** | Hoàn tiền đơn có phí ship tiền mặt (voucher gắn vào hàng): Hàng 200k, ship 30k tiền mặt, voucher hàng 20k | Tiền mặt hoàn = 180k (tiền hàng thực trả), không hoàn 30k phí ship tiền mặt. |
 | **TC-26** | Hoàn tiền đơn có voucher gắn vào phí ship: Hàng 200k, ship 30k, voucher ship 20k, tiền mặt trả 210k | Tiền mặt hoàn = 200k (tiền hàng thực trả nguyên giá), 10k ship tiền mặt còn lại không hoàn. |
 | **TC-27** | Bổ sung bằng chứng ở Vòng 2 và Worker Idempotent | Evidence mới lưu `submission_no = 2` không xóa evidence cũ. Worker chạy lặp lại 2 lần không tạo 2 quyết định/giao dịch. |
+| **TC-28** | Race condition Vòng 2: Người bán đồng ý hoàn tiền (`agree-refund`) đồng thời Worker chạy auto-refund | First-write-wins: một giao dịch ghi nhận `CaseDecision` thành công (`FULL_GOODS_REFUND`), giao dịch sau bị từ chối/bỏ qua, không tạo 2 settlement request. |
+| **TC-29** | Race condition Vòng 2: Người bán nộp đề nghị miễn hoàn (`damage-exemption`) đồng thời Worker chạy auto-refund | Nếu đề nghị của Seller ghi nhận hợp lệ trước (`valid_damage_request_at IS NOT NULL`), Worker bị chặn không được auto-refund; nếu Worker ghi trước, đề nghị của Seller bị từ chối do case đã quyết định. |
+| **TC-30** | Race condition Vòng 2: Người bán đồng ý hoàn tiền (`agree-refund`) đua với KTV Final Decision | Một quyết định cuối thắng (first-write-wins), không tạo hai settlement request mâu thuẫn. |
+| **TC-31** | Đồng thời nộp bằng chứng Evidence Batch Concurrency (theo phương án được duyệt ở 3.0.2) | Hai request nộp bằng chứng cùng lúc trên cùng Case/Round tuân thủ cơ chế batch (Task 3.0.2 / BD-6) và quota (BD-5), không ghi đè, không tạo batch số nhảy cóc, không deadlock. |
+| **TC-32** | Financial Safety Guard (P0): `OrderManagementService.disburseSellerFunds()` bị từ chối khi đơn đã có final decision hoàn tiền/miễn hoàn | Khi đơn đã có final decision `FULL_GOODS_REFUND` hoặc `EXEMPT_GOODS_REFUND`, gọi `disburseSellerFunds()` với `cause_type = 'COMPLETION'` phải bị chặn ngay (ném `IllegalStateException`), bảo vệ không giải ngân trùng sau khi `money_holds` đã đóng. |
+| **TC-33** | Settlement Request Foundation (Task 4.1a): Idempotency theo `command_key` & Transaction Rollback | Tạo `settlement_operations` ở state `REQUESTED` cùng transaction với `CaseDecision`. Nếu tạo operation thất bại, rollback toàn bộ `CaseDecision`. Gọi lặp lại cùng `command_key` không tạo operation thứ hai. |
+| **TC-34** | Quota Evidence Enforcement (theo quyết định BD-5) | Kiểm tra giới hạn bằng chứng (5 ảnh, 2 video <= 60s) theo quyết định BD-5 (áp dụng cho mỗi submission hay tổng Round); nộp vượt quá quota bị chặn ngay tại validation. |
+| **TC-35** | Buyer rút yêu cầu trả hàng trước khi gửi/bàn giao hàng trả (`withdrawReturnRequest` - Task 2.4) | Buyer rút yêu cầu khi Case ở trạng thái cho phép (`OPEN`, `REVIEWING`, `RETURN_APPROVED`) và chưa bàn giao vận chuyển. Kết quả: Case chuyển `CLOSED`, `money_holds` được đóng (`closed_at = now()`), `has_blocking_case = false`. Tuyệt đối không giải ngân ngay, tiền tiếp tục giữ và chỉ giải ngân khi đủ điều kiện UC71 (hết 3 ngày từ `valid_delivered_at` hoặc Hoàn tất sớm). |
+| **TC-36** | Buyer cố tình rút yêu cầu sau khi đã gửi/bàn giao hàng trả (`withdrawReturnRequest` - Task 2.4) | Buyer gọi API rút yêu cầu khi hàng đang trên đường trả (`RETURNING`) hoặc Người bán đã nhận lại hàng (`POST_RETURN`). Kết quả: Từ chối rút yêu cầu (HTTP 400/409), hồ sơ tiếp tục quy trình xử lý theo UC33/UC75. |
+| **TC-37** | Race condition Vòng 2: Người bán gửi đề nghị xét lại (`damage-exemption`) đua với KTV ra quyết định `EXEMPT_GOODS_REFUND` | KTV bị từ chối (SQLSTATE 23514) nếu `valid_damage_request_at` chưa có; kiểm tra lại điều kiện sau khi lấy khóa; KHÔNG áp dụng first-write-wins (Seller gửi đề nghị xong KTV mới được duyệt miễn hoàn). |
 
 ---
 
@@ -627,33 +635,222 @@ Các quy tắc sau đây là thiết kế chi tiết kỹ thuật bổ trợ cho
   * Stale Entity: Sau khi gọi hàm DB `og_early_complete_order`, mọi logic đọc `early_completed_at` trên `OrderEntity` trong cùng transaction phải `entityManager.refresh(order)` hoặc query DB do cột này là `updatable = false`.
   * Endpoint `/complete` cũ: Giữ cho đơn `LEGACY_V14`; nếu đơn là `UC83` ném lỗi nghiệp vụ rõ ràng (HTTP 400) hướng dẫn dùng `/confirm-received` hoặc `/early-complete`.
   * **KHÔNG giải ngân UC83 trong Task 2.1** (chuyển sang Task 2.1b).
-- [ ] **Task 2.1b**: Tiến trình giải ngân riêng cho Người bán (`disburseSellerFunds` - UC71):
+- [x] **Task 2.1b**: Tiến trình giải ngân riêng cho Người bán (`disburseSellerFunds` - UC71):
   * Kiểm tra đủ 3 điều kiện BR-UC71-04 trước khi giải ngân.
   * Đơn `LEGACY_V14`: gọi `payment.markReleased(now)`, cập nhật `orders.status = 'COMPLETED'`.
-  * Đơn `UC83`: giải ngân qua `settlement_operations` (`RELEASE_SELLER`, `cause_type = 'COMPLETION'`) tác động `order_fund_components`, không dùng `payment.markReleased`. Lock order: `orders` -> `order_fund_components` -> `settlement_operations`. Tạo 2 operation riêng cho `GOODS_CASH` và `PLATFORM_GOODS_SUBSIDY`, chuyển `REQUESTED` sang `CONFIRMED` với mock provider. Service đóng đơn `COMPLETED` sau khi release thành công.
-  * Chặn: Task 3.4 (Worker auto-disburse) và Task 4.1.
-- [ ] **Task 2.2**: Triển khai `createReturnRequest` kiểm tra đủ 6 điều kiện, validate 3 lý do chuẩn, giới hạn 5 ảnh / 2 video <= 60s, kích hoạt `money_holds`.
-- [ ] **Task 2.3**: Triển khai Người bán phản hồi Vòng 1 (`APPROVE_RETURN` hoặc `SELLER_DECLINED`) và KTV phân xử Vòng 1 (thấy hồ sơ ngay khi `OPEN`, SLA 48h từ lúc đủ nội dung, bác yêu cầu có lý do, không giải ngân ngay). Xử lý đua quyết định Vòng 1 (first-write wins).
-- [ ] **Task 2.4**: Triển khai Người mua rút yêu cầu trả hàng (`withdrawReturnRequest` - UC62 7c): chỉ cho rút trước khi gửi hàng trả, giải phóng `money_holds`, chờ giải ngân theo UC71.
+  * Đơn `UC83`: giải ngân qua `settlement_operations` (`RELEASE_SELLER`, `cause_type = 'COMPLETION'`) tác động `order_fund_components`, không dùng `payment.markReleased`. Lock order: `orders` -> `order_fund_components` -> `settlement_operations` (đối chiếu Gateway Lock trong 3.0.1). Tạo 2 operation riêng cho `GOODS_CASH` và `PLATFORM_GOODS_SUBSIDY`, chuyển `REQUESTED` sang `CONFIRMED` với mock provider. Service đóng đơn `COMPLETED` sau khi release thành công.
+  * Chặn: Task 3.3 (Worker auto-disburse 3 ngày) và Task 4.1a/4.1b.
+- [x] **Task 2.2**: Triển khai `createReturnRequest` kiểm tra đủ 6 điều kiện, validate 3 lý do chuẩn, giới hạn 5 ảnh / 2 video <= 60s, kích hoạt `money_holds`.
+- [x] **Task 2.3**: Triển khai Người bán phản hồi Vòng 1 (`APPROVE_RETURN` hoặc `SELLER_DECLINED`) và KTV phân xử Vòng 1 (thấy hồ sơ ngay khi `OPEN`, SLA 48h từ lúc đủ nội dung, bác yêu cầu có lý do, không giải ngân ngay). Xử lý đua quyết định Vòng 1 (first-write wins).
+- [x] **Task 2.4**: Triển khai Người mua rút yêu cầu trả hàng (`withdrawReturnRequest` - UC62 7c): chỉ cho rút trước khi gửi hàng trả, giải phóng `money_holds`, chờ giải ngân theo UC71.
 
 ### Giai đoạn 3: Vận chuyển Trả hàng (UC33) & Nghiệp vụ Vòng 2 (UC63 & UC75)
-- [ ] **Task 3.1**: Xử lý vận chuyển chiều về (`shipments.leg = 'RETURN'`), ghi nhận `valid_returned_at` từ webhook vận đơn hoặc xác nhận bàn giao trực tiếp hai bên (`confirm-direct-handover`), mở hạn 2 ngày phản hồi của Người bán.
-- [ ] **Task 3.2**: Triển khai 2 lựa chọn Vòng 2 của Người bán:
-  * Lựa chọn 1: `[Hàng đúng, đồng ý hoàn tiền]` qua endpoint `agree-refund`.
-  * Lựa chọn 2: `[Hàng có vấn đề, gửi đề nghị xét lại]` qua endpoint `damage-exemption` (hỗ trợ lý do hàng hỏng hoặc tráo hàng/sai hàng).
-- [ ] **Task 3.3**: Xây dựng Worker tự động hoàn tiền sau 2 ngày nếu Người bán không phản hồi (`reconcileOverdueReturnResponses` - `SYSTEM_TIMEOUT` + `FULL_GOODS_REFUND`).
-- [ ] **Task 3.4**: Xây dựng Worker tự động giải ngân sau 3 ngày cho đơn `DELIVERED` đủ điều kiện UC71 (`reconcileOverdueDeliveries`). Phụ thuộc trực tiếp vào **Task 2.1b** (`disburseSellerFunds`).
-- [ ] **Task 3.5**: Triển khai KTV phân xử Vòng 2 (`EXEMPT_GOODS_REFUND` hoặc `FULL_GOODS_REFUND`).
+
+#### Thứ tự Triển khai & Numbering
+**3.0 → 3.0b → 4.1a → Feature 3.2 → 4.1b → 3.3**
+
+| Mã | Nội dung | Trạng thái ban đầu |
+|---|---|---|
+| 3.0 | Architecture Gate (chỉ xác minh + chốt quyết định, không code) | TODO |
+| 3.0b | Round 1 Writer Hardening + Financial Safety Guard | BLOCKED bởi 3.0 |
+| 3.1 | Vận chuyển hàng trả & ghi nhận nhận lại (UC33) | DONE |
+| 4.1a | Settlement Request Foundation | BLOCKED bởi 3.0, 3.0b |
+| 3.2.1–3.2.6 | Feature 3.2 Round 2 Resolution | BLOCKED bởi 3.0, 3.0b, 4.1a |
+| 4.1b | Settlement Confirmation & Refund Completion | sau Feature 3.2 |
+| 3.3 | Worker auto-disbursement 3 ngày | BLOCKED bởi Financial Safety Gate + 4.1b |
+
+- **Task 3.0: Architecture Gate (Không phải task implementation - Chỉ xác minh + chốt quyết định, không code)**
+  - **Mô tả**: Rà soát, xác minh độc lập toàn bộ các kết luận kiến trúc từ source code và migration thực tế, giải quyết các bất định kỹ thuật và thu thập phê duyệt của User cho các quyết định nghiệp vụ (BD-1 .. BD-6) trước khi bắt đầu viết mã Feature 3.2.
+  - **Phân biệt ba tầng định nghĩa DB**:
+    1. *Migration lịch sử*: nội dung function trong từng file migration (V19, V22, V23–V36...).
+    2. *Effective source definition*: định nghĩa cuối cùng sau khi áp dụng toàn bộ chuỗi migration theo thứ tự.
+    3. *Runtime database definition*: định nghĩa thực tế ở DB đang chạy (`TO VERIFY IN TASK 3.0` do Flyway history runtime chưa kiểm chứng).
+  - **Hạng mục chi tiết**:
+    * **3.0.1 Unified Locking Protocol**:
+      - Ghi nhận `REPORTED (chưa tự xác minh, chuyển VERIFIED khi Task 3.0 có bằng chứng)`: trigger Decision khóa `case_rounds → cases → orders`; trigger Event khóa `cases → case_rounds` (đọc `orders` không khóa).
+      - Ghi nhận `REPORTED (chưa tự xác minh, chuyển VERIFIED khi Task 3.0 có bằng chứng)`: `sellerRespondRound1` và `ktvDecideRound1` hiện không lấy Order lock.
+      - `PROPOSED`: Gateway Lock ở Java theo thứ tự `Order → Case → CaseRound → tài nguyên phụ thuộc`. Gateway Lock là giao thức mutex ở tầng Java, KHÔNG thay đổi thứ tự khóa nội bộ của trigger và chỉ có tác dụng khi MỌI writer tuân thủ.
+      - `TO VERIFY IN TASK 3.0`: toàn văn `og_guard_case_evidence`, `og_close_case_holds`, `og_lock_money_hold`, `og_guard_settlement_operation`, `og_case_settlement_allowed` và các trigger gọi gián tiếp, kể cả `UPDATE money_holds`; danh sách đầy đủ writer Java (Round 1, Round 2, GHN webhook, direct handover, `disburseSellerFunds`, worker hiện có, repository gọi trực tiếp); khóa ngầm `FOR KEY SHARE` do FK; isolation level, refresh/reload entity sau khi lấy khóa, retry cho `40P01`, `55P03`, `40001`, `lock_timeout`.
+      - Yêu cầu: Không được kết luận đã loại bỏ deadlock khi chưa liệt kê hết đường ghi dữ liệu. Thứ tự `orders → order_fund_components → settlement_operations` của Task 2.1b là thứ tự khóa tài chính con; cần đối chiếu với Gateway trong 3.0.1, không mặc định tương thích.
+    * **3.0.2 Evidence Submission Batch**:
+      - `TO VERIFY IN TASK 3.0`: Mâu thuẫn giữa hai báo cáo review: bản trước trích V19:168 gán `COALESCE(MAX)+1`, bản sau trích V22 chỉ đếm quota theo `(round_id, submitted_by, submission_no, media_type)` và không tự cấp số. Cần xác minh mâu thuẫn này theo cả ba tầng định nghĩa DB, kèm việc kiểm tra V23–V36 xem có migration nào định nghĩa lại `og_guard_case_evidence`.
+      - Ghi nhận `REPORTED (chưa tự xác minh, chuyển VERIFIED khi Task 3.0 có bằng chứng)`: Java hiện hardcode `submission_no = 1` trong `createReturnRequest`.
+      - `saveAllAndFlush()` KHÔNG phải giải pháp gom submission, và không được coi là cơ chế batch.
+      - So sánh ba phương án (`PROPOSED`, chưa chốt, phụ thuộc BD-6):
+        (A) Service-level allocation: Order lock → Case lock → CaseRound `PESSIMISTIC_WRITE` → mới `SELECT MAX+1` → gán chung cho cả batch → flush Evidence trước Event `VALID_DAMAGE_REQUEST`;
+        (B) Submission Header;
+        (C) DB function cấp số nguyên tử.
+        Ghi rõ: Round Lock chỉ là lớp phòng thủ bổ sung của riêng phương án A, không phải một lựa chọn độc lập và không thay thế Gateway Lock; lock Case → Round theo phương án A ngược thứ tự trigger Decision (Round → Case) nên chỉ an toàn khi mọi writer đi qua Gateway.
+      - V19/V22 không được sửa. Nếu cần DDL chỉ đề xuất migration mới; số phiên bản (ví dụ V37) cần xác minh lại khi implement.
+    * **3.0.3 Event & Decision Semantics**:
+      - `PROPOSED`: `CaseDecision` là audit record chính; không dùng `SUBMITTED` cho KTV ra quyết định; `VALID_DAMAGE_REQUEST` ghi sau khi Evidence hợp lệ.
+      - `TO VERIFY IN TASK 3.0`: Event có được insert sau khi Case đã `CLOSED` không; `CaseDecision` có append-only ở tầng DB không (trigger, quyền UPDATE/DELETE). Chưa có quyết định thì không tạo Event `DECISION`, không sửa CHECK constraint.
+    * **3.0.4 Trusted Timestamp & Worker Contract**:
+      - `REPORTED (chưa tự xác minh, chuyển VERIFIED khi Task 3.0 có bằng chứng)`: `og_apply_case_decision` ghi đè `NEW.decided_at := clock_timestamp()`. Điều kiện `TO VERIFY IN TASK 3.0`: không có trigger nào khác ghi đè sau đó.
+      - `TO VERIFY IN TASK 3.0`: `SYSTEM_TIMEOUT` có cho `reviewed_by = NULL` ở DDL, Entity, trigger; unique constraint chống nhiều Decision cho một Round; `complete_submission_at` có được cập nhật ở Round 2 không.
+    * **3.0.5 KTV Queue, Escalation, ADMIN**:
+      - `REPORTED (chưa tự xác minh, chuyển VERIFIED khi Task 3.0 có bằng chứng)`: `EXEMPT_GOODS_REFUND` cần `og_has_role(reviewed_by, 'KTV')` và `valid_damage_request_at IS NOT NULL`; ADMIN không có role KTV bị chặn với SQLSTATE `23514`.
+      - `REPORTED (chưa tự xác minh, chuyển VERIFIED khi Task 3.0 có bằng chứng)`: Event `ESCALATED` yêu cầu actor có role KTV và recipient có role ADMIN, nên Worker hệ thống không thể tự ghi nếu không có thay đổi DB.
+      - `TO VERIFY IN TASK 3.0`: `cases.assigned_to` và cơ chế claim/assign; `ktv_due_at` được ai set; view/queue KTV.
+    * **3.0.6 Evidence Security**:
+      - `REPORTED (chưa tự xác minh, chuyển VERIFIED khi Task 3.0 có bằng chứng)`: `resolveContentDigest()` chấp nhận digest từ client nếu khớp regex, hoặc băm chuỗi `objectKey`; không chứng minh digest của nội dung file; fallback còn trả một digest hard-code. Ghi nhận là security gap, mục tech-debt bắt buộc trước production.
+      - Không đưa cụm "validate SHA-256" vào tiêu chí nghiệm thu như thể đã bảo mật. `TO VERIFY IN TASK 3.0`: ownership, MIME, kích thước thực, thời lượng video, quyền truy cập storage private, xử lý file mồ côi khi transaction rollback.
+    * **3.0.7 Financial Safety & Settlement Contract (P0)**:
+      - Invariant `PROPOSED` (đặt trong `OrderManagementService.disburseSellerFunds()`, không chỉ trong query của Worker): không cho giải ngân `cause_type = 'COMPLETION'` khi đơn đã có final decision `FULL_GOODS_REFUND` hoặc `EXEMPT_GOODS_REFUND`. `REJECT_RETURN` vẫn giải ngân theo UC71 khi đủ điều kiện.
+      - Lý do: `og_close_case_holds` đóng hold ngay khi insert Decision, `og_order_has_blocking_case` hết chặn, đơn `DELIVERED` quá 3 ngày trông như đủ điều kiện giải ngân. Hiện `disburseSellerFunds` đã gọi được qua `AdminPaymentController`, nên rủi ro tồn tại ngay khi Feature 3.2 tạo Decision, không đợi tới Worker 3.3. Vì vậy invariant này thuộc phạm vi 3.0b/4.1a.
+      - `money_holds.closed_at` không phải bằng chứng tiền đã hoàn hoặc đã giải ngân.
+      - `PROPOSED`: interface `RoundDecisionSettlementPort.requestSettlement(orderId, caseId, decisionId, outcome, commandKey)`; production không có adapter giả báo thành công; mock chỉ trong test.
+      - `PROPOSED`: ghi nghĩa vụ settlement bằng dòng `settlement_operations` trạng thái `REQUESTED` (có `case_decision_id`, `command_key` unique), cùng transaction với `CaseDecision`; không bắt buộc outbox nếu bảng này đã đủ vai trò truy vết bền vững.
+      - `TO VERIFY IN TASK 3.0`: với Decision vừa insert trong cùng transaction, `og_case_settlement_allowed` có thỏa (`is_final`, `valid_returned_at`); `REQUESTED` có cần hold còn mở khi hold đã bị đóng; thứ tự khóa `orders → components → settlement_operations` so với Gateway và trigger Decision.
+      - `TO VERIFY IN TASK 3.0`: Kiểm tra phụ thuộc module giữa Trust & Safety (`trustsafety`) và Payment (`payment`); xác định module nào nên sở hữu interface `RoundDecisionSettlementPort`; xem xét phương án port interface thuộc về module gọi (`trustsafety`) và adapter triển khai ở module `payment`; không tự thay đổi package/path trước khi kiểm tra kiến trúc module thực tế.
+    * **3.0.8 Business Decisions (BD-1 đến BD-6)**: Tất cả `PENDING USER APPROVAL` (đưa vào Decisions Log, không đánh LOCKED, không tự chọn):
+      - BD-1: ADMIN có cần được cấp thêm role KTV khi muốn phán quyết, và sau `ESCALATED` ADMIN có quyền gì?
+      - BD-2: `CaseDecision` có là nguồn audit chính, hay cần thêm Event `DECISION` (cần migration)?
+      - BD-3: Escalation do hệ thống (System actor, cần migration) hay do KTV chủ động (Worker chỉ cảnh báo)?
+      - BD-4: SLA KTV Round 2: 48h từ `complete_submission_at` hay từ `valid_damage_request_at`? (Giả định số 2 ở Mục 8 đánh dấu `PENDING USER APPROVAL`).
+      - BD-5: Quota 5 ảnh/2 video áp dụng cho mỗi submission hay tổng Round? Seller có được bổ sung nhiều lần không? Ảnh hưởng cả Round 1 (UC62 7a bổ sung bằng chứng).
+      - BD-6: Chỉ Application Writer được ghi Evidence/Decision, hay phải bảo vệ cả writer ngoài Java? Mặc định gợi ý: chỉ Application Writer (Java layer) thông qua Gateway Lock (Round Lock chỉ là lớp bổ sung nếu chọn phương án A), kèm ghi chú rủi ro nếu có direct SQL / writer ngoài Java can thiệp.
+  - **Tiêu chí hoàn thành Task 3.0**:
+    * Tất cả vấn đề P0 về Locking, Evidence Integrity và Financial Safety phải được giải quyết hoặc có phương án được User phê duyệt; không còn vấn đề P0 nào chưa có phương án xử lý. Cụ thể P0 gồm: (a) Unified Locking Protocol, (b) thiết kế Evidence Submission Batch và quota (BD-5, BD-6), (c) Financial Safety & Settlement Contract.
+    * Lưu ý: `resolveContentDigest()` (3.0.6) là nợ kỹ thuật (tech-debt) bắt buộc trước production, không phải P0 chặn hoàn thành Task 3.0.
+    * Các vấn đề P1/P2 chưa thể xác minh có thể được ghi nhận `INCOMPLETE` nhưng phải có lý do rõ ràng, đánh giá mức độ ảnh hưởng và chỉ định Task phụ thuộc.
+    * Tất cả các quyết định nghiệp vụ BD-1 đến BD-6 phải được User phê duyệt chính thức (các mục chưa phê duyệt giữ nguyên nhãn `PENDING USER APPROVAL`).
+    * Phải có một Unified Locking Protocol duy nhất được User phê duyệt.
+
+- [ ] **Task 3.0b: Round 1 Writer Hardening + Financial Safety Guard**
+  - **Trạng thái**: `BLOCKED` bởi 3.0.
+  - **Mô tả & Phạm vi**:
+    * Nhận danh sách writer từ Task 3.0.1 làm đầu vào; không điền sẵn danh sách writer.
+    * Bổ sung Gateway Lock theo Locking Protocol đã duyệt cho tất cả các Java Writer được Task 3.0.1 xác định là thiếu Gateway Lock, hoặc có lý do loại trừ được User phê duyệt. Quy định này bao gồm cả các writer thông qua Repository hoặc JdbcTemplate nếu chúng ghi trực tiếp vào các bảng `cases`, `case_rounds`, `case_events`, `case_evidence`, `case_decisions`, `orders` hoặc `money_holds`. Tuyệt đối không được tuyên bố Gateway Lock đã hoàn thiện nếu còn writer bypass giao thức.
+    * Nếu Task 3.0.1 liệt kê thêm các Java Writer thiếu Gateway Lock ngoài 3 writer trọng yếu (`sellerRespondRound1`, `ktvDecideRound1`, `disburseSellerFunds`), đề xuất tách Task 3.0b thành 2 phase: `Task 3.0b-1` (hardening 3 writer trọng yếu trên) và `Task 3.0b-2` (các writer còn lại), chờ User duyệt trước khi triển khai.
+    * Thêm invariant của 3.0.7 vào `OrderManagementService.disburseSellerFunds()`: từ chối giải ngân `COMPLETION` nếu đơn đã có final decision `FULL_GOODS_REFUND` hoặc `EXEMPT_GOODS_REFUND`.
+    * Không thay đổi tiêu chí nghiệp vụ của Task 2.3.
+  - **Tiêu chí chấp nhận**:
+    - [ ] Test PostgreSQL Round 1 Concurrency:
+      * (A) Seller `APPROVE_RETURN` đua với quyết định cuối của KTV (`APPROVE_RETURN` / `REJECT_RETURN`): chỉ một quyết định cuối được ghi nhận (first-write-wins), không lỗi deadlock `40P01`.
+      * (B) Seller `SELLER_DECLINED` đua với KTV: cả hai có thể thành công, KTV vẫn ra quyết định được. Ghi `TO VERIFY IN TASK 3.0`: `SELLER_DECLINED` có tạo `case_decisions` và đóng Case hay không; kỳ vọng ở (B) chỉ có hiệu lực sau khi xác minh.
+    - [ ] Test PostgreSQL Financial Safety Guard: `disburseSellerFunds` bị từ chối khi đơn có final decision `FULL_GOODS_REFUND` hoặc `EXEMPT_GOODS_REFUND` (TC-32).
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/commerce/application/OrderManagementService.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/commerce/application/SellerDisbursementPostgresTest.java`
+
+- [x] **Task 3.1: Xử lý Vận chuyển hàng trả & Ghi nhận nhận lại hàng (UC33)**
+  - **Trạng thái**: `DONE` (71/71 tests PASS).
+  - **Mô tả**: Theo dõi vận đơn trả (`shipments.leg = 'RETURN'`), ghi nhận `valid_returned_at` từ sự kiện vận đơn hoặc bàn giao hai bên (`og_confirm_direct_handover`), mở hạn 2 ngày phản hồi của Người bán. Chuyển trạng thái sang `POST_RETURN`, mở Round 2 `stage = 'POST_RETURN_RESOLUTION'`.
+  - **Tiêu chí chấp nhận**:
+    - [x] Hạn gửi hàng trả: Hạn 3 ngày hoặc 3 lần lấy thất bại theo cấu hình vận đơn; gán pickup_expected_at và pickup_deadline từ approved_at của Case.
+    - [x] Ghi nhận `valid_returned_at` từ webhook GHN giao thành công chiều về (`GhnWebhookProcessor` / `confirmReturnDeliveryByCarrier`) hoặc qua xác nhận bàn giao trực tiếp hai bên (`og_confirm_direct_handover`).
+    - [x] Tự động gán thời hạn phản hồi: `seller_response_due_at = valid_returned_at + 2 days`.
+    - [x] Chuyển trạng thái hồ sơ sang `POST_RETURN`, khởi tạo Round 2 với `stage = 'POST_RETURN_RESOLUTION'` và ghi nhận CaseEvent tương ứng.
+    - [x] Phân quyền tra cứu cho KTV/Admin (`getReturnShipmentByCaseId`) và các chốt chặn fail-fast chặt chẽ (`shipmentRepository`, `jdbcTemplate`).
+    - [x] Đã hoàn thành 71/71 tests PASS (`ReturnCaseServiceTest`, `GhnWebhookTest`, `ReturnCaseServicePostgresTest`).
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseDtos.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/fulfillment/application/GhnWebhookProcessor.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/fulfillment/infrastructure/persistence/ShipmentEntity.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/fulfillment/infrastructure/persistence/ShipmentRepository.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseRepository.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServiceTest.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServicePostgresTest.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/fulfillment/api/GhnWebhookTest.java`
+
+- [ ] **Feature 3.2: Round 2 Resolution (UC63, UC75, UC83)**
+  - **Trạng thái**: `BLOCKED` bởi 3.0, 3.0b, 4.1a.
+  - **Nguyên tắc chung**: Mọi chỗ ghi "Gateway Lock" phải tuân theo Locking Protocol 3.0.1 (`PROPOSED` cho đến khi User duyệt). Không tự chuyển trạng thái đơn hàng sang `REFUNDED`/`COMPLETED` trong luồng Round 2 khi chưa `CONFIRMED`.
+  - **Quy tắc Nghiệm thu Tài chính**: `CaseDecision` không đồng nghĩa settlement đã hoàn tất; `money_holds.closed_at` không đồng nghĩa tiền đã hoàn hoặc đã giải ngân; không chuyển Order sang `REFUNDED`/`COMPLETED` khi settlement chưa `CONFIRMED`. Feature 3.2 được nghiệm thu ở cấp Decision + Settlement Request (`REQUESTED`). Task 4.1b mới được nghiệm thu ở cấp Settlement Confirmation (`CONFIRMED`) + Wallet Points Refund (hoàn 100% xu).
+  - **Subtasks**:
+    * [ ] **3.2.1 Seller Agree Refund (`agree-refund`)**:
+      - Chuyển `CaseDecision` sang `FULL_GOODS_REFUND`.
+      - Idempotent theo `command_key`.
+      - Gọi `RoundDecisionSettlementPort` (Task 4.1a) để tạo Settlement Request (`REQUESTED`); không đánh dấu đã hoàn khi settlement chưa `CONFIRMED`.
+    * [ ] **3.2.2 Seller Damage Exemption (`submitDamageExemptionRequest`)**:
+      - Hàng hỏng nghiêm trọng hoặc sai/tráo/thiếu hàng.
+      - Evidence theo thiết kế batch đã chốt ở 3.0.2 và quota theo BD-5.
+      - Evidence flush trước Event `VALID_DAMAGE_REQUEST`.
+      - Trong hạn `seller_response_due_at`.
+      - Seller KHÔNG tự tạo `EXEMPT_GOODS_REFUND`.
+      - `BLOCKED` bởi 3.0.2, BD-5, BD-6.
+    * [ ] **3.2.3 KTV Final Decision (`ktvDecideRound2`)**:
+      - Hai outcome: `FULL_GOODS_REFUND` hoặc `EXEMPT_GOODS_REFUND`.
+      - `EXEMPT` bắt buộc có `valid_damage_request_at` và role KTV (SQLSTATE 23514); bắt buộc lý do; idempotent; gọi settlement port tạo Settlement Request (`REQUESTED`).
+      - Round 2 vẫn `cases.state = POST_RETURN`, `case_rounds.state = OPEN` sau khi Seller gửi đề nghị; không dùng state `REVIEWING_R2`.
+      - `BLOCKED` bởi 3.0, 3.0b, 4.1a, BD-1.
+    * [ ] **3.2.4 Worker Auto-Refund 2 ngày (`reconcileOverdueReturnResponses`)**:
+      - Điều kiện quét: `cases.state = 'POST_RETURN'`, `case_rounds.state = 'OPEN'`, `now() > seller_response_due_at`, `valid_damage_request_at IS NULL`.
+      - Lock và recheck điều kiện sau khi lấy khóa.
+      - `actor_type = 'SYSTEM_TIMEOUT'` + `outcome = 'FULL_GOODS_REFUND'`.
+      - Dùng `decided_at` do DB ghi đè; idempotent; gọi settlement port tạo Settlement Request (`REQUESTED`).
+    * [ ] **3.2.5 KTV SLA Escalation**:
+      - `BLOCKED` bởi BD-1, BD-3, BD-4.
+      - Không tự tạo Decision, không hoàn tiền, không mặc định Worker có quyền tạo Event `ESCALATED` nếu chưa có thay đổi DB/role.
+    * [ ] **3.2.6 Integration & Concurrency Testing**:
+      - Concurrency pairs:
+        * Seller Agree vs KTV Final Decision (TC-30)
+        * Seller Damage Request vs KTV `EXEMPT_GOODS_REFUND` (TC-37)
+        * Seller Agree vs Worker Auto-Refund (TC-28)
+        * Seller Damage Request vs Worker Auto-Refund (TC-29)
+        * Seller `agree-refund` đua với Seller `damage-exemption` (`[PENDING USER APPROVAL]` vì là câu hỏi nghiệp vụ)
+        * KTV ra quyết định Vòng 2 đua với Worker 2 ngày (`reconcileOverdueReturnResponses`)
+        * Hai request Evidence đồng thời (TC-31)
+        * Hai Worker cùng Case; GHN webhook vs Seller/KTV.
+      - Kiểm thử bắt ngoại lệ `40P01` / `55P03` / `40001` và cơ chế retry.
+      - Chống duplicate Decision/settlement; Financial Safety (không vừa hoàn vừa giải ngân cùng một khoản).
+      - Nghiệm thu: không race nghiêm trọng, không hai quyết định trái ngược cho một Round, không tự chuyển Order sang `REFUNDED`/`COMPLETED` trong luồng Round 2.
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseService.java`
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnReconciliationScheduler.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServiceTest.java`
+    - `backend/src/test/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnCaseServicePostgresTest.java`
 
 ### Giai đoạn 4: Hạch toán Hoàn tiền Chuẩn xác (UC83 & UC71)
-- [ ] **Task 4.1**: Xây dựng `RefundSettlementService`:
-  * Phụ thuộc: Tái sử dụng bảng `settlement_operations` (`operation_type = 'REFUND_BUYER'`) và cơ chế lock / state machine tương tự **Task 2.1b**.
-  * Tính tiền hàng thực trả sau voucher/xu phân bổ cho hàng.
-  * Hoàn 100% xu đã dùng cho Người mua.
-  * Không hoàn phí ship chiều mua tiền mặt, không hoàn phí đăng tin, không cấp lại voucher.
-  * Xử lý đơn 0 đồng (không tạo lệnh chuyển tiền 0đ).
-  * Quản lý trạng thái `REFUND_PENDING` -> `CONFIRMED` qua `settlement_operations`.
-  * Nhánh `EXEMPT_GOODS_REFUND`: không hoàn tiền/xu cho Người mua, giải ngân Người bán theo BR-UC71-01/05 (bỏ trừ phí sàn).
+
+- [ ] **Task 4.1a: Settlement Request Foundation (Thực hiện TRƯỚC Feature 3.2)**
+  - **Trạng thái**: `BLOCKED` bởi 3.0, 3.0b.
+  - **Mô tả & Phạm vi**: Đây là task nền tảng tính tiền cốt lõi, không phải task nhỏ:
+    * Định nghĩa interface `RoundDecisionSettlementPort` và implementation thật (`RoundDecisionSettlementAdapter`). Không dùng adapter giả báo thành công ở production; mock chỉ dùng trong test.
+    * Cùng transaction với `CaseDecision`: tạo bản ghi `settlement_operations` ở trạng thái `REQUESTED`, có `case_decision_id`, `command_key` ổn định; nếu thất bại thì rollback toàn bộ `CaseDecision`.
+    * Tính `amount` cho từng component (`GOODS_CASH`, `PLATFORM_GOODS_SUBSIDY`) theo quy tắc UC83 (sau voucher/xu phân bổ cho hàng). Đơn 0 đồng không tạo operation. Nhánh `EXEMPT_GOODS_REFUND` giải ngân Seller với `operation_type = 'RELEASE_SELLER'`, `cause_type = 'EXEMPTION'`.
+    * Bảng ánh xạ:
+      - Seller Agree / KTV `FULL_GOODS_REFUND` / Worker `SYSTEM_TIMEOUT` → `REFUND_BUYER` (cause `RETURN`);
+      - KTV `EXEMPT_GOODS_REFUND` → `RELEASE_SELLER` (cause `EXEMPTION`).
+    * Điều kiện: Toàn bộ các mục `TO VERIFY` ở 3.0.7 phải được giải quyết trước khi implement.
+  - **Quy tắc Nghiệm thu**: Task 4.1a CHỈ tạo `settlement_operations` ở state `REQUESTED` trong cùng transaction với `CaseDecision`. Tuyệt đối không tự chuyển `CONFIRMED` hay đổi trạng thái Order sang `REFUNDED`/`COMPLETED`.
+  - **Files**:
+    - Port: `RoundDecisionSettlementPort.java` (đường dẫn: `TO VERIFY AFTER TASK 3.0.7`)
+    - Adapter: `RoundDecisionSettlementAdapter.java` (đường dẫn: `TO VERIFY AFTER TASK 3.0.7`)
+    - Settlement Service: `backend/src/main/java/com/oldbutgold/shop/modules/payment/application/RefundSettlementService.java`
+
+- [ ] **Task 4.1b: Settlement Confirmation & Refund Completion (Thực hiện SAU Feature 3.2)**
+  - **Trạng thái**: `CONDITIONAL` (sau khi Feature 3.2 hoàn thành).
+  - **Mô tả & Phạm vi**:
+    * Xử lý chuyển trạng thái `settlement_operations` từ `REQUESTED → CONFIRMED/FAILED` (provider mô phỏng nội bộ nêu rõ là mô phỏng), hoàn xu 100% cho Buyer vào ví xu, retry an toàn, không hoàn/giải ngân trùng.
+    * Trạng thái thanh toán `REFUND_PENDING → REFUNDED` chỉ khi `settlement_operations` đạt `CONFIRMED`.
+    * Tiêu chí chốt chặn: Order không tự chuyển `REFUNDED`/`COMPLETED` khi settlement chưa `CONFIRMED`.
+  - **Quy tắc Nghiệm thu**: Task 4.1b chịu trách nhiệm nghiệm thu chuyển `REQUESTED → CONFIRMED/FAILED`, hoàn trả 100% xu vào ví xu, và chuyển Order sang `REFUNDED`/`COMPLETED` chỉ sau khi `CONFIRMED`.
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/payment/application/RefundSettlementService.java`
+
+- [ ] **Task 3.3: Worker Tự động Giải ngân sau 3 ngày (`reconcileOverdueDeliveries` - UC71)**
+  - **Trạng thái**: `BLOCKED` bởi Financial Safety Gate (3.0b) + Task 4.1b.
+  - **Mô tả & Phạm vi**:
+    * Chạy định kỳ quét các đơn hàng `DELIVERED` quá 3 ngày từ `valid_delivered_at`.
+    * Điều kiện bổ sung: Không có final decision `FULL_GOODS_REFUND` hoặc `EXEMPT_GOODS_REFUND`, không trùng settlement operation, gọi lại `disburseSellerFunds()` (không có logic giải ngân thứ hai trong Worker).
+    * Áp dụng cho cả đơn `return_allowed = false`.
+    * Tuyệt đối không bật trên môi trường tích hợp trước khi các điều kiện blocking được thỏa mãn.
+  - **Files**:
+    - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/application/ReturnReconciliationScheduler.java`
+
+---
+
+### Các Cổng Kiểm soát Nghiệm thu (Verification Gates G0 – G4)
+- **Gate G0**: Task 3.0 (Architecture Gate - xác minh mã nguồn & DB + chốt các quyết định BD-1..BD-6, không code).
+- **Gate G1**: Task 3.0b + Task 4.1a, dừng xuất diff và review trước khi code tiếp.
+- **Gate G2**: Task 3.2.1 + Task 3.2.2 (Nghiệp vụ Người bán Vòng 2), dừng xuất diff và review.
+- **Gate G3**: Task 3.2.3 + Task 3.2.4 (KTV Phán quyết + Worker Auto-refund 2 ngày), dừng xuất diff và review.
+- **Gate G4**: Task 3.2.5 (nếu được User duyệt) + Task 3.2.6 (Kiểm thử tích hợp & Concurrency), tiếp theo là Task 4.1b, cuối cùng là Task 3.3.
+*Quy tắc*: Không `git commit` hay `git push` sau bất kỳ Gate nào; mỗi Gate báo cáo file thay đổi, migration (nếu có), danh sách test đã chạy, và các điểm chưa xác minh.
 
 ### Giai đoạn 5: REST API Controllers & DTOs
 - [ ] **Task 5.1**: Controller cho Người mua & Người bán (`ReturnCaseController`):
@@ -666,7 +863,8 @@ Các quy tắc sau đây là thiết kế chi tiết kỹ thuật bổ trợ cho
   * `POST /api/v1/commerce/orders/{orderId}/return-shipment/confirm-direct-handover` (Bàn giao trực tiếp hai bên)
   * `POST /api/v1/commerce/orders/{orderId}/return-case/agree-refund` (Người bán đồng ý hoàn tiền Vòng 2)
   * `POST /api/v1/commerce/orders/{orderId}/return-case/damage-exemption` (Người bán đề nghị xét lại Vòng 2)
-- [ ] **Task 5.2**: Controller cho KTV (`KtvCaseController`):
+- [ ] **Task 5.2**: Controller cho KTV (`KtvCaseController`) `[PENDING USER APPROVAL về danh sách endpoint]`:
+  * *Lưu ý*: Có sự khác biệt thiết kế endpoint KTV giữa hai tài liệu: `complaint_plan.md` dự kiến (`/work-queue`, `/assign`, `/decision`), còn `todo.md` dự kiến (`/api/v1/ktv/cases`, `/decide-round1`, `/decide-round2`, `/request-evidence`). Mục này đánh dấu `[PENDING USER APPROVAL]`, giữ nguyên mô tả ở cả hai tài liệu chờ User phê duyệt lựa chọn trước khi code.
   * `GET /api/v1/ktv/cases/work-queue` (Hàng đợi công việc của KTV)
   * `POST /api/v1/ktv/cases/{caseId}/assign` (Nhận thụ lý hồ sơ)
   * `POST /api/v1/ktv/cases/{caseId}/decision` (Ra quyết định Vòng 1 hoặc Vòng 2)
@@ -706,17 +904,49 @@ Các quy tắc sau đây là thiết kế chi tiết kỹ thuật bổ trợ cho
 3. **Màn hình và Endpoint Admin cho hồ sơ ESCALATED**:
    - Đồng ý triển khai endpoint `GET /api/v1/admin/cases/escalated` (Task 5.3) và màn hình Admin `AdminDisputesView.tsx` (Task 6.4) để giám sát các hồ sơ KTV trễ hạn SLA 48h.
 
+4. **Các Quyết định Nghiệp vụ Vòng 2 Cần User Phê duyệt (Business Decisions BD-1 .. BD-6)**:
+   > *Toàn bộ các quyết định dưới đây đang ở trạng thái `[PENDING USER APPROVAL]`, tuyệt đối KHÔNG đánh dấu `LOCKED`, không tự ý lựa chọn trước khi User phê duyệt.*
+
+   | Mã | Tiêu đề & Nội dung | Đề xuất mặc định (Chờ User chốt) | Trạng thái |
+   |---|---|---|---|
+   | **BD-1** | Phân quyền ADMIN & KTV trong phán quyết và Escalation | ADMIN muốn phán quyết Vòng 2 (`EXEMPT_GOODS_REFUND`) phải được gán thêm role KTV (đáp ứng `og_has_role(reviewed_by, 'KTV')` trong DB trigger). Sau khi hồ sơ `ESCALATED`, ADMIN có quyền phân công lại KTV hoặc can thiệp xử lý theo thẩm quyền quản trị. | `PENDING USER APPROVAL` |
+   | **BD-2** | Nguồn Audit chính cho Quyết định Tranh chấp | Sử dụng bảng `case_decisions` làm audit record chính cho mọi quyết định. Không tạo thêm Event `DECISION` (đòi hỏi migration DB sửa ràng buộc CHECK trên `case_events.event_type`). | `PENDING USER APPROVAL` |
+   | **BD-3** | Cơ chế Kích hoạt Escalation KTV quá hạn SLA 48h | Kích hoạt chủ động từ phía KTV (actor có role KTV) gửi lên Admin, Worker hệ thống chỉ đóng vai trò quét phát hiện và gửi cảnh báo giám sát trên dashboard; không tự INSERT event `ESCALATED` bằng system actor nếu chưa sửa DB trigger. | `PENDING USER APPROVAL` |
+   | **BD-4** | Mốc tính SLA 48h của KTV ở Vòng 2 | Tính 48h từ thời điểm nhận đủ đề nghị của Người bán (`valid_damage_request_at`) hoặc từ `complete_submission_at`. Cần User chốt rõ mốc chuẩn. | `PENDING USER APPROVAL` |
+   | **BD-5** | Phạm vi áp dụng Quota Evidence (Tối đa 5 ảnh / 2 video <= 60s) | Quota áp dụng cho mỗi lần gửi (submission) hay tổng cộng cả Round 2? Người bán có được bổ sung bằng chứng nhiều lần không? Ảnh hưởng đồng bộ cả Round 1 (UC62 7a bổ sung bằng chứng). | `PENDING USER APPROVAL` |
+   | **BD-6** | Phạm vi Bảo vệ Toàn vẹn Dữ liệu Evidence & Decision | Mặc định đề xuất: Chỉ Application Writer (Java layer) được ghi Evidence/Decision thông qua Gateway Lock (Round Lock chỉ là lớp bổ sung nếu chọn phương án A); ghi nhận rủi ro nếu có direct SQL / writer ngoài Java can thiệp. Cần User chốt có cần migration DDL cho atomic counter hay không. | `PENDING USER APPROVAL` |
+
+5. **Danh mục Nợ Kỹ thuật Bắt buộc trước Production (Tech Debt)**:
+   - **Bảo mật Bằng chứng (`resolveContentDigest()` - 3.0.6)**: Hàm `resolveContentDigest()` hiện chấp nhận digest do client gửi lên nếu khớp format SHA-256 hex, hoặc băm chuỗi `objectKey`; chưa chứng minh được digest đại diện cho nội dung file vật lý thực tế; fallback còn trả digest cố định `"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"`. Đây là security gap bắt buộc phải xử lý trước khi đưa ra môi trường production (kiểm tra MIME thật, kích thước, hash thực của file stream từ storage).
+
 ---
 
-## 12. Kế hoạch Xác minh & Kiểm thử (Verification Plan)
+## 12. Kế hoạch Xác minh & Kiểm thử (Verification Plan / Checkpoint 2: 37 Test Cases)
 
-### 12.1. Phía Agent
+### 12.1. Phía Agent (Kiểm thử Đơn vị & Mockito)
 1. **Biên dịch mã nguồn**:
-   - Chạy `.\mvnw.cmd test-compile` đảm bảo các Entity và Repositories biên dịch không lỗi cú pháp.
-2. **Kiểm thử đơn vị & Smoke test trên H2**:
-   - Chạy `.\mvnw.cmd test "-Dtest=ReturnReasonCodeTest,CaseEntitiesSmokeTest"` đảm bảo logic mã lý do và cấu trúc quan hệ JPA biên dịch, map quan hệ hợp lệ.
+   - Chạy `.\mvnw.cmd test-compile` đảm bảo các Entity, DTO, Port, Service và Repositories biên dịch không lỗi cú pháp.
+2. **Kiểm thử đơn vị độc lập (Unit Tests)**:
+   - Chạy `.\mvnw.cmd test "-Dtest=ReturnReasonCodeTest,CaseEntitiesSmokeTest,ReturnCaseServiceTest,RefundSettlementTest"`:
+     * Kiểm tra logic mã lý do, validation DTO, giới hạn 5 ảnh / 2 video, tính toán công thức hoàn tiền (UC83), guard clauses nghiệp vụ.
+     * Sử dụng Mockito / In-memory, tuyệt đối không chạm PostgreSQL thật.
+     * **Tách rõ giai đoạn kiểm thử**:
+       - *Giai đoạn sau Task 4.1a & Feature 3.2 (Decision + Settlement Request `REQUESTED`)*:
+         + Ghi nhận `CaseDecision` (`FULL_GOODS_REFUND` / `EXEMPT_GOODS_REFUND`), tạo `settlement_operations` ở trạng thái `REQUESTED`.
+         + Tuyệt đối không tự chuyển sang `CONFIRMED`, không đổi Order sang `REFUNDED`/`COMPLETED`.
+         + Rollback toàn bộ Decision nếu tạo `REQUESTED` thất bại, idempotency theo `command_key` (TC-33).
+         + Công thức hoàn tiền: đơn 0đ (UC83-07), voucher hàng/ship, nhánh `EXEMPT` không trả xu (TC-24..TC-26).
+         + Quota Evidence theo BD-5 (TC-34).
+       - *Giai đoạn sau Task 4.1b (Settlement Confirmation & Refund Completion)*:
+         + Chuyển `settlement_operations` từ `REQUESTED → CONFIRMED/FAILED` (mock provider).
+         + Hoàn trả 100% xu vào ví xu của Buyer khi `CONFIRMED`.
+         + Đổi Order sang `REFUNDED`/`COMPLETED` chỉ sau khi `CONFIRMED`.
+         + Retry an toàn, idempotency, không hoàn/giải ngân trùng (TC-19, TC-21, TC-23 giai đoạn completion).
 
-### 12.2. Phía bạn (User)
+### 12.2. Phía bạn (User) (Kiểm thử Tích hợp & Concurrency trên PostgreSQL thật)
+- **Điều kiện môi trường bắt buộc**: Thiết lập `OGSHOP_TEST_DB_URL=jdbc:postgresql://127.0.0.1:55432/og_shop_test` và `OGSHOP_TEST_DB_ISOLATED=true`.
+- **Quy tắc nghiệm thu**: Tuyệt đối không đánh dấu pass `[x]` trước khi test thực tế được chạy trên môi trường PostgreSQL thật.
+- **Danh mục các Test Classes chạy trên PostgreSQL (Tổng 37 Test Cases)**:
 1. **Kiểm thử tích hợp trên PostgreSQL thật (`CaseEntitiesPostgresTest`)**:
    - Đảm bảo biến môi trường `OGSHOP_TEST_DB_URL=jdbc:postgresql://127.0.0.1:55432/og_shop_test` và `OGSHOP_TEST_DB_ISOLATED=true` đã được thiết lập.
    - Chạy lệnh: `.\mvnw.cmd test "-Dtest=CaseEntitiesPostgresTest"`.
@@ -795,3 +1025,22 @@ Các quy tắc sau đây là thiết kế chi tiết kỹ thuật bổ trợ cho
      * Test âm: gọi khi chưa đủ 3 ngày và chưa hoàn tất sớm; hoặc có hồ sơ mở / money hold mở -> ném lỗi không cho giải ngân.
      * Test dương nhánh `LEGACY_V14`: chuyển đơn `COMPLETED`, `payment.markReleased()`.
      * Test dương nhánh `UC83`: dựng fixture `order_fund_components` (`GOODS_CASH`, `PLATFORM_GOODS_SUBSIDY`), gọi `disburseSellerFunds`, kiểm tra tạo 2 bản ghi `settlement_operations` (`RELEASE_SELLER`, `cause_type = 'COMPLETION'`), xác nhận `CONFIRMED`, `order_fund_components.released_amount` được trigger DB cập nhật tăng, đơn chuyển `COMPLETED`.
+
+5. **Kiểm thử tích hợp Hồ sơ Trả hàng & Vận đơn (`ReturnCaseServicePostgresTest`)**:
+   - Xác minh toàn bộ luồng tạo case (Task 2.2), phản hồi Vòng 1 & KTV (Task 2.3), rút yêu cầu trả (Task 2.4 - TC-35, TC-36), vận đơn chiều về & direct handover (Task 3.1 - 71/71 tests PASS), và phán quyết Vòng 2 (Feature 3.2).
+
+6. **Kiểm thử Đồng thời Bằng chứng (`EvidenceBatchConcurrencyPostgresTest`)**:
+   - Hai request nộp bằng chứng đồng thời trên cùng Case/Round; xác minh cấp số batch theo phương án được duyệt ở Task 3.0.2 và kiểm soát quota theo BD-5 (TC-31, TC-34).
+
+7. **Kiểm thử Cạnh tranh Vòng 2 (`Round2ConcurrencyPostgresTest`)**:
+   - Kiểm thử tranh chấp đua lệnh trên PostgreSQL thật:
+     * TC-28: Seller Agree vs Worker Auto-Refund (first-write-wins).
+     * TC-29: Seller Damage Exemption vs Worker Auto-Refund.
+     * TC-30: Seller `agree-refund` vs KTV Final Decision (first-write-wins: một quyết định cuối thắng, không tạo hai settlement request mâu thuẫn).
+     * TC-37: Seller `damage-exemption` vs KTV `EXEMPT_GOODS_REFUND` (KTV bị từ chối nếu `valid_damage_request_at` chưa có; kiểm tra lại điều kiện sau khi lấy khóa; KHÔNG áp dụng first-write-wins).
+   - Kiểm chứng không xảy ra deadlock `40P01` nhờ Gateway Lock; kiểm tra retry khi gặp `55P03` hoặc `40001`.
+
+8. **Kiểm thử Hạch toán & Financial Safety Guard (`SettlementRequestPostgresTest`)**:
+   - *Giai đoạn sau Task 4.1a & Feature 3.2*: Kiểm thử tạo `settlement_operations` ở state `REQUESTED` cùng transaction với `CaseDecision` (Task 4.1a); xác minh rollback toàn bộ Decision nếu tạo Settlement Request thất bại; không tự `CONFIRMED`, không đổi Order sang `REFUNDED`/`COMPLETED` (TC-33).
+   - *Giai đoạn sau Task 4.1b*: Xác nhận `CONFIRMED/FAILED`, hoàn xu 100%, đổi Order sang `REFUNDED`/`COMPLETED` chỉ sau khi `CONFIRMED`.
+   - Kiểm thử Financial Safety Guard: `OrderManagementService.disburseSellerFunds()` từ chối giải ngân `COMPLETION` khi đơn đã có final decision `FULL_GOODS_REFUND` hoặc `EXEMPT_GOODS_REFUND` (TC-32).
