@@ -1,10 +1,14 @@
 import { authApi } from '../auth';
 import {
+  BankOtpChallengeResponse,
   ChangePasswordPayload,
   CreateAddressPayload,
   GhnDistrict,
   GhnProvince,
   GhnWard,
+  PhoneAvailabilityResult,
+  PhoneOtpChallengeResponse,
+  PhoneVerificationVerifyPayload,
   UpdateAddressPayload,
   UpdateBankPayload,
   UpdateProfilePayload,
@@ -17,7 +21,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
     const body = (await response.json().catch(() => ({}))) as { message?: string };
     throw new Error(body.message || `Yêu cầu thất bại (${response.status}).`);
   }
-  return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  const text = await response.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 export const profileApi = {
@@ -54,6 +62,34 @@ export const profileApi = {
   async changePassword(payload: ChangePasswordPayload): Promise<void> {
     const res = await authApi.authorizedFetch('/profile/password', {
       method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return parseResponse<void>(res);
+  },
+
+  async requestBankChangeOtp(): Promise<BankOtpChallengeResponse> {
+    const res = await authApi.authorizedFetch('/profile/bank/otp-challenge', {
+      method: 'POST',
+    });
+    return parseResponse<BankOtpChallengeResponse>(res);
+  },
+
+  async requestPhoneChangeOtp(newPhone?: string): Promise<PhoneOtpChallengeResponse> {
+    const res = await authApi.authorizedFetch(`/profile/phone/otp-challenge${newPhone ? `?newPhone=${encodeURIComponent(newPhone)}` : ''}`, {
+      method: 'POST',
+    });
+    return parseResponse<PhoneOtpChallengeResponse>(res);
+  },
+
+  async checkPhoneAvailability(phoneNumber: string): Promise<PhoneAvailabilityResult> {
+    const res = await authApi.authorizedFetch(`/profile/phone/check-availability?phoneNumber=${encodeURIComponent(phoneNumber)}`);
+    return parseResponse<PhoneAvailabilityResult>(res);
+  },
+
+  async verifyPhoneOtp(payload: PhoneVerificationVerifyPayload): Promise<void> {
+    const res = await authApi.authorizedFetch('/profile/phone/verify', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });

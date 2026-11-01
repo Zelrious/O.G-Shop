@@ -25,12 +25,12 @@ public class AuthFlowService {
     private final Clock clock;
     private final TransactionTemplate tx;
     private final ResetEmailDispatcher resetMail;
-    public AuthFlowService(AuthService auth,UserRepository users,AuthFlowRepository flows,RegistrationOtp otp,
-                           RegistrationEmailPort mail,RegistrationProperties properties,PasswordEncoder passwords,
-                           Clock clock,org.springframework.transaction.PlatformTransactionManager manager,ResetEmailDispatcher resetMail) {
-        this.auth=auth;this.users=users;this.flows=flows;this.otp=otp;this.mail=mail;this.properties=properties;
-        this.passwords=passwords;this.clock=clock;this.tx=new TransactionTemplate(manager);
-        this.resetMail=resetMail;
+    public AuthFlowService(AuthService auth, UserRepository users, AuthFlowRepository flows, RegistrationOtp otp,
+                           RegistrationEmailPort mail, RegistrationProperties properties, PasswordEncoder passwords,
+                           Clock clock, org.springframework.transaction.PlatformTransactionManager manager, ResetEmailDispatcher resetMail) {
+        this.auth = auth; this.users = users; this.flows = flows; this.otp = otp; this.mail = mail; this.properties = properties;
+        this.passwords = passwords; this.clock = clock; this.tx = new TransactionTemplate(manager);
+        this.resetMail = resetMail;
     }
     public record Pending(String status,UUID challengeId,String email,Instant expiresAt,Instant resendAt,
                           int attemptsRemaining,String purpose) {}
@@ -117,42 +117,113 @@ public class AuthFlowService {
             flows.consume(id,clock.instant());
         });
     }
-    public Pending resend(UUID id,String requester) {
-        Challenge initial=challenge(id,null,false);
+    public Pending startSecuritySetting(long userId, String email, String requester) {
+        return startSecuritySetting(userId, email, requester, "SECURITY_SETTING");
+    }
+
+    public Pending startSecuritySetting(long userId, String email, String requester, String purpose) {
+        String normalized = normalize(email);
+        return tx.execute(s -> {
+            flows.lock("requester:" + otp.requesterDigest(requester));
+            flows.lock("email:" + normalized);
+            flows.lockUserByEmail(normalized);
+            UserEntity user = users.findById(userId)
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản."));
+            requireActive(user);
+            return issue(purpose != null ? purpose : "SECURITY_SETTING", normalized, data(user, null), requester);
+        });
+    }
+
+    /** OTP cho thay đổi số điện thoại chính qua email chính chủ (Tách biệt khỏi SECURITY_SETTING để không bị xung đột cooldown). */
+    public Pending startPhoneVerification(long userId, String phoneNumber, String requester) {
+        UserEntity user = users.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản."));
+        requireActive(user);
+        return startSecuritySetting(userId, user.getEmail(), requester, "CHANGE_PHONE");
+    }
+
+    public void verifySecuritySetting(UUID challengeId, String code, long userId) {
+        Challenge initial = challenge(challengeId, "SECURITY_SETTING", false);
+        verifyOtpChallenge(challengeId, code, userId, initial);
+    }
+
+    public void verifyPhoneVerification(UUID challengeId, String code, long userId) {
+        Challenge initial;
+        try {
+            initial = challenge(challengeId, "CHANGE_PHONE", false);
+        } catch (Exception e) {
+            initial = challenge(challengeId, "SECURITY_SETTING", false);
+        }
+        verifyOtpChallenge(challengeId, code, userId, initial);
+    }
+
+    public boolean isRecentlyConsumedChallenge(UUID challengeId, long userId, String purpose, Duration maxAge) {
+        Instant since = clock.instant().minus(maxAge);
+        return flows.isRecentlyConsumed(challengeId, userId, purpose, since);
+    }
+
+    private void verifyOtpChallenge(UUID challengeId, String code, long userId, Challenge initial) {
+        tx.executeWithoutResult(s -> {
+            flows.lock("email:" + initial.email());
+            Challenge c = challenge(challengeId, initial.purpose(), true);
+            requireOpen(c);
+            if (c.attempts() >= c.maxAttempts()) {
+                throw error("OTP_ATTEMPTS_EXHAUSTED", "Đã hết lượt nhập mã. Hãy gửi mã mới.", 429);
+            }
+            boolean matches = MessageDigest.isEqual(
+                    otp.digest(challengeId, code).getBytes(StandardCharsets.UTF_8),
+                    c.digest().getBytes(StandardCharsets.UTF_8)
+            );
+            if (!matches || c.data().userId() == null || c.data().userId() != userId) {
+                flows.attempt(challengeId);
+                throw error("OTP_INVALID", "Mã xác thực không đúng.", 400);
+            }
+            flows.consume(challengeId, clock.instant());
+        });
+    }
+
+    public Pending resend(UUID id, String requester) {
+        Challenge initial = challenge(id, null, false);
         requireOtpPurpose(initial.purpose());
-        return tx.execute(s->{
-            flows.lock("requester:"+otp.requesterDigest(requester));
-            flows.lock("email:"+initial.email());
-            Challenge c=challenge(id,initial.purpose(),true);
-            if(!"OPEN".equals(c.state()) || c.data()==null || c.data().verified()) throw unavailable();
-            if(c.data().userId()!=null) requireActive(boundUser(c));
-            return issue(c.purpose(),c.email(),c.data(),requester);
+        return tx.execute(s -> {
+            flows.lock("requester:" + otp.requesterDigest(requester));
+            flows.lock("email:" + initial.email());
+            Challenge c = challenge(id, initial.purpose(), true);
+            if (!"OPEN".equals(c.state()) || c.data() == null || c.data().verified()) throw unavailable();
+            if (c.data().userId() != null) requireActive(boundUser(c));
+            return issue(c.purpose(), c.email(), c.data(), requester);
         });
     }
     public void cancel(UUID id) {
-        Challenge initial=challenge(id,null,false);
-        if(!"PASSWORD_RESET_COMPLETE".equals(initial.purpose())) requireOtpPurpose(initial.purpose());
-        tx.executeWithoutResult(s->{flows.lock("email:"+initial.email());flows.invalidate(id,clock.instant());});
+        Challenge initial = challenge(id, null, false);
+        if (!"PASSWORD_RESET_COMPLETE".equals(initial.purpose())) requireOtpPurpose(initial.purpose());
+        tx.executeWithoutResult(s -> {
+            flows.lock("email:" + initial.email());
+            flows.invalidate(id, clock.instant());
+        });
     }
-    private Pending issue(String purpose,String email,Data data,String requester) {
-        String digest=otp.requesterDigest(requester); flows.lock("requester:"+digest);
-        Instant now=clock.instant();
-        var previous=flows.open(email,purpose);
-        if(previous.isPresent() && previous.get().resendAt().isAfter(now))
-            throw new RegistrationException("OTP_RESEND_TOO_SOON","Vui lòng chờ trước khi gửi lại mã.",429,
-                    Math.max(1,Duration.between(now,previous.get().resendAt()).getSeconds()+1));
-        long rate=flows.rate(email,digest,now,properties.emailHourlyLimit(),properties.ipHourlyLimit());
-        if(rate>0) throw new RegistrationException("OTP_RATE_LIMIT","Đã đạt giới hạn gửi mã. Vui lòng thử lại sau.",429,rate);
-        previous.ifPresent(c->flows.invalidate(c.id(),now));
-        UUID id=UUID.randomUUID(); String code=otp.generate();
-        Instant expires=now.plus(properties.otpTtl()),resend=now.plus(properties.resendCooldown());
-        flows.insert(id,purpose,email,otp.digest(id,code),now,expires,resend,properties.maxAttempts(),digest,data);
-        // Decoys have the same challenge/cooldown contract, but cannot grant reset or send mail.
-        if(data.userId()!=null) {
-            if("PASSWORD_RESET".equals(purpose)) resetMail.afterCommit(email,code,expires);
-            else mail.sendAuthCode(email,code,properties.otpTtl(),purpose);
+    private Pending issue(String purpose, String contact, Data data, String requester) {
+        String digest = otp.requesterDigest(requester); flows.lock("requester:" + digest);
+        Instant now = clock.instant();
+        var previous = flows.open(contact, purpose);
+        if (previous.isPresent() && previous.get().resendAt().isAfter(now))
+            throw new RegistrationException("OTP_RESEND_TOO_SOON", "Vui lòng chờ trước khi gửi lại mã.", 429,
+                    Math.max(1, Duration.between(now, previous.get().resendAt()).getSeconds() + 1));
+        long rate = flows.rate(contact, digest, now, properties.emailHourlyLimit(), properties.ipHourlyLimit());
+        if (rate > 0) throw new RegistrationException("OTP_RATE_LIMIT", "Đã đạt giới hạn gửi mã. Vui lòng thử lại sau.", 429, rate);
+        previous.ifPresent(c -> flows.invalidate(c.id(), now));
+        UUID id = UUID.randomUUID(); String code = otp.generate();
+        Instant expires = now.plus(properties.otpTtl()), resend = now.plus(properties.resendCooldown());
+        flows.insert(id, purpose, contact, otp.digest(id, code), now, expires, resend, properties.maxAttempts(), digest, data);
+        // Gửi mã qua email: đặt lại mật khẩu dùng bản thân thiện, các thao tác còn lại dùng mẫu chung.
+        if (data.userId() != null) {
+            if ("PASSWORD_RESET".equals(purpose)) {
+                resetMail.afterCommit(contact, code, expires);
+            } else {
+                mail.sendAuthCode(contact, code, properties.otpTtl(), purpose);
+            }
         }
-        return new Pending("OTP_REQUIRED",id,email,expires,resend,properties.maxAttempts(),purpose);
+        return new Pending("OTP_REQUIRED", id, contact, expires, resend, properties.maxAttempts(), purpose);
     }
     public UUID googleNonce(String requester) {
         return tx.execute(s->{
@@ -217,7 +288,7 @@ public class AuthFlowService {
         if(!c.expiresAt().isAfter(clock.instant())) throw error("OTP_EXPIRED","Mã đã hết hạn. Hãy gửi mã mới.",400);
     }
     private static void requireOtpPurpose(String p) {
-        if(!Set.of("LOGIN_EMAIL_2FA","PASSWORD_RESET","GOOGLE_LINK").contains(p)) throw unavailable();
+        if(!Set.of("LOGIN_EMAIL_2FA","PASSWORD_RESET","GOOGLE_LINK","SECURITY_SETTING","CHANGE_PHONE").contains(p)) throw unavailable();
     }
     private static Data data(UserEntity u,String subject) { return new Data(u.getId(),u.getCredentialVersion(),subject,u.getEmail(),null,false); }
     private static boolean customer(UserEntity u) {

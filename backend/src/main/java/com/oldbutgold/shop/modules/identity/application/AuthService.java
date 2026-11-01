@@ -39,6 +39,14 @@ public class AuthService {
     @Transactional
     public UserEntity createVerifiedAccount(RegistrationDraft draft) {
         if (users.existsByEmail(draft.email())) throw new DuplicateEmailException();
+        if (draft.phoneNumber() != null && !draft.phoneNumber().isBlank()) {
+            String p = draft.phoneNumber().trim();
+            String local = p.startsWith("+84") ? "0" + p.substring(3) : p;
+            String intl = p.startsWith("0") ? "+84" + p.substring(1) : p;
+            if (users.existsByPhoneNumber(local) || users.existsByPhoneNumber(intl)) {
+                throw new DuplicatePhoneException();
+            }
+        }
         UserEntity user = new UserEntity(draft.email(), draft.passwordHash(), draft.fullName(),
                 draft.phoneNumber(), clock.instant());
         user.verifyRegistrationEmail(clock.instant());

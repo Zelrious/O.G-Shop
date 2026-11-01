@@ -58,6 +58,7 @@ export interface CheckoutPreview {
   eligibleOfferId?: number | null;
   eligibleOfferPrice?: number | null;
   voucherRejectionReason?: string | null;
+  requiresBuyerEkyc?: boolean;
 }
 
 export interface BuyNowInput {
@@ -66,6 +67,7 @@ export interface BuyNowInput {
   addressId?: number;
   newAddress?: CreateAddressInput;
   voucherCode?: string;
+  quickAuthResultId?: string;
 }
 
 export interface OrderCreated {

@@ -41,6 +41,16 @@ python services/ekyc-service/start.py
 
 Service mặc định bind `127.0.0.1:8001`. Swagger dùng cho local development tại `http://localhost:8001/docs`.
 
+## Chẩn đoán MRZ offline cho ảnh mặt sau
+
+Runner này là công cụ developer cục bộ, không thuộc luồng eKYC và không khởi động API. Nó chỉ in trạng thái đã khử định danh, không in MRZ hoặc thông tin CCCD. Chỉ dùng sau khi kiểm tra local VietOCR model assets đã có sẵn; runner không tải model hay gọi Gemini/network.
+
+```powershell
+python services/ekyc-service/tools/mrz_diagnostic.py "<local-back-image-path>"
+```
+
+Không dùng ảnh thật nếu chưa được phép trong phạm vi công việc; ưu tiên ảnh tổng hợp. Runner không tạo hồ sơ, asset hay ghi database.
+
 ## Kiểm tra contract bảo mật
 
 ```powershell

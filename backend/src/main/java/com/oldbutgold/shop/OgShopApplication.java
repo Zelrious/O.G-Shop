@@ -28,7 +28,11 @@ public class OgShopApplication {
         Path[] possiblePaths = new Path[]{
                 Paths.get(".env"),
                 Paths.get("../.env"),
-                Paths.get("backend/.env")
+                Paths.get("backend/.env"),
+                Paths.get("O.G Shop/.env"),
+                Paths.get("O.G Shop/backend/.env"),
+                Paths.get("../O.G Shop/.env"),
+                Paths.get("../O.G Shop/backend/.env")
         };
 
         for (Path path : possiblePaths) {

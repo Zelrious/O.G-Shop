@@ -13,9 +13,25 @@ export interface UserProfile {
 }
 
 export interface UpdateProfilePayload {
-  fullName: string;
+  fullName?: string;
   phoneNumber?: string;
   avatarUrl?: string;
+  quickAuthResultId?: string;
+  challengeId?: string;
+  otpCode?: string;
+}
+
+export interface PhoneOtpChallengeResponse {
+  challengeId: string;
+  maskedPhone?: string;
+  maskedEmail?: string;
+  expiresAt: string;
+  resendAt: string;
+}
+
+export interface PhoneVerificationVerifyPayload {
+  challengeId: string;
+  code: string;
 }
 
 export interface AvatarProfilePayload {
@@ -32,6 +48,22 @@ export interface UpdateBankPayload {
   bankName: string;
   bankAccountNumber: string;
   bankAccountHolder: string;
+  quickAuthResultId?: string;
+  challengeId?: string;
+  otpCode?: string;
+}
+
+export interface BankOtpChallengeResponse {
+  challengeId: string;
+  maskedEmail: string;
+  expiresAt: string;
+  resendAt: string;
+}
+
+export interface PhoneAvailabilityResult {
+  available: boolean;
+  reason: 'AVAILABLE' | 'SAME_AS_CURRENT' | 'ALREADY_EXISTS' | 'INVALID_FORMAT' | string;
+  message: string;
 }
 
 export interface UserAddress {

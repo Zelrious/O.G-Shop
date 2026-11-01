@@ -871,6 +871,33 @@ class ManagementStore {
     this.notify();
   }
 
+  public submitComplaint(data: {
+    title: string;
+    description: string;
+    complainantName?: string;
+    complainantEmail?: string;
+    complainantRole?: 'BUYER' | 'SELLER';
+    type?: 'TRANSACTION' | 'SYSTEM_ERROR' | 'SELLER_BEHAVIOR';
+    urgency?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  }): ComplaintRecord {
+    const newComplaint: ComplaintRecord = {
+      id: this.nextId('CMP'),
+      title: data.title,
+      description: data.description,
+      complainantName: data.complainantName || 'Người dùng',
+      complainantEmail: data.complainantEmail || 'user@example.com',
+      complainantRole: data.complainantRole || 'SELLER',
+      type: data.type || 'SYSTEM_ERROR',
+      urgency: data.urgency || 'MEDIUM',
+      status: 'PENDING',
+      createdAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
+    };
+    this.complaints = [newComplaint, ...this.complaints];
+    this.saveToStorage('og_complaints', this.complaints);
+    this.notify();
+    return newComplaint;
+  }
+
   // KEY REQUIREMENT: KTV pushes complaint up to Admin as Emergency Alert!
   public escalateComplaintToAdmin(
     complaintId: string,

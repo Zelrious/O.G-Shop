@@ -1,6 +1,7 @@
 package com.oldbutgold.shop.shared.api;
 
 import com.oldbutgold.shop.modules.identity.application.DuplicateEmailException;
+import com.oldbutgold.shop.modules.identity.application.DuplicatePhoneException;
 import com.oldbutgold.shop.modules.identity.application.EkycUnavailableException;
 import com.oldbutgold.shop.modules.identity.application.SellerActivationDisabledException;
 import com.oldbutgold.shop.modules.identity.application.InvalidAvatarException;
@@ -47,7 +48,10 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     ResponseEntity<ApiError> forbidden(AccessDeniedException exception, HttpServletRequest request) {
-        return response(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Yêu cầu không được phép.", request, List.of());
+        String msg = (exception.getMessage() != null && !exception.getMessage().isBlank() && !exception.getMessage().equalsIgnoreCase("Access Denied"))
+                ? exception.getMessage()
+                : "Yêu cầu không được phép.";
+        return response(HttpStatus.FORBIDDEN, "ACCESS_DENIED", msg, request, List.of());
     }
 
     @ExceptionHandler(DuplicateEmailException.class)
@@ -55,10 +59,43 @@ public class ApiExceptionHandler {
         return response(HttpStatus.CONFLICT, "EMAIL_ALREADY_REGISTERED", "Email này đã được sử dụng.", request, List.of());
     }
 
+    @ExceptionHandler(DuplicatePhoneException.class)
+    ResponseEntity<ApiError> duplicatePhone(DuplicatePhoneException exception, HttpServletRequest request) {
+        return response(HttpStatus.CONFLICT, "PHONE_ALREADY_REGISTERED", exception.getMessage() != null ? exception.getMessage() : "Số điện thoại này đã được sử dụng bởi một tài khoản khác.", request, List.of());
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ApiError> dataConflict(DataIntegrityViolationException exception, HttpServletRequest request) {
-        return response(HttpStatus.CONFLICT, "DATA_CONFLICT",
-                "Dữ liệu xung đột với trạng thái hiện tại.", request, List.of());
+        String detail = exception.getMostSpecificCause() != null ? exception.getMostSpecificCause().getMessage() : "";
+        String msg = "Dữ liệu xung đột với trạng thái hiện tại.";
+        if (detail != null) {
+            if (detail.contains("uq_users_phone_number") || detail.contains("phone_number")) {
+                msg = "Số điện thoại này đã được sử dụng bởi một tài khoản khác.";
+            } else if (detail.contains("uq_users_email") || detail.contains("users_email")) {
+                msg = "Email này đã được sử dụng bởi một tài khoản khác.";
+            } else if (detail.contains("Only KTV can decide a pending eKYC revision")) {
+                msg = "Hồ sơ eKYC không ở trạng thái chờ duyệt (PENDING) hoặc đã được xử lý bởi tiến trình khác.";
+            } else if (detail.contains("eKYC identity/private evidence incomplete")) {
+                msg = "Hồ sơ eKYC chưa có đủ 4 loại tài liệu bắt buộc (ảnh mặt trước, mặt sau, ảnh khuôn mặt và ảnh tham chiếu).";
+            } else if (detail.contains("Canonical role grant requires approval authority")) {
+                msg = "Cấp quyền Người bán yêu cầu hồ sơ hợp lệ và sự phê duyệt từ Kỹ thuật viên.";
+            } else if (detail.contains("Seller prerequisites incomplete")) {
+                msg = "Hồ sơ Người bán cần có địa chỉ lấy hàng và thông tin tài khoản ngân hàng.";
+            } else if (detail.contains("Quick authentication unavailable/exhausted")) {
+                msg = "Phiên xác thực nhanh không khả dụng hoặc đã vượt quá 15 lần thử cho phép. Vui lòng tạo phiên mới.";
+            } else if (detail.contains("Quick authentication cooldown")) {
+                msg = "Vui lòng đợi 3 giây trước khi thực hiện lần quét tiếp theo.";
+            } else if (detail.contains("Quick authentication result requires server match")) {
+                msg = "Kết quả xác thực nhanh chỉ được chấp nhận khi khuôn mặt khớp với mẫu eKYC.";
+            } else if (detail.contains("Quick auth requires current approved private reference")) {
+                msg = "Xác thực nhanh yêu cầu ảnh tham chiếu eKYC đã được phê duyệt và còn hiệu lực.";
+            } else if (detail.contains("Hồ sơ không ở trạng thái sẵn sàng nộp")) {
+                msg = "Hồ sơ eKYC không ở trạng thái sẵn sàng nộp hoặc đã được cập nhật bởi tiến trình khác.";
+            } else if (detail.contains("identity_document_registry")) {
+                msg = "Số CCCD này đã được liên kết với một tài khoản khác trong hệ thống.";
+            }
+        }
+        return response(HttpStatus.CONFLICT, "DATA_CONFLICT", msg, request, List.of());
     }
 
     @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class,
@@ -167,6 +204,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(com.oldbutgold.shop.modules.payment.application.PaymentStateConflictException.class)
     ResponseEntity<ApiError> paymentStateConflict(Exception exception, HttpServletRequest request) {
         return response(HttpStatus.CONFLICT, "PAYMENT_STATE_CONFLICT", exception.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler({org.springframework.dao.DataAccessException.class, org.springframework.orm.jpa.JpaSystemException.class})
+    ResponseEntity<ApiError> databaseError(Exception exception, HttpServletRequest request) {
+        return response(HttpStatus.INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "Đã xảy ra lỗi khi lưu trữ dữ liệu. Vui lòng thử lại sau.", request, List.of());
     }
 
     private static ResponseEntity<ApiError> response(HttpStatus status, String code, String message,

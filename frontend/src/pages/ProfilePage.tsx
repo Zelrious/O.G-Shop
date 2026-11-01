@@ -91,7 +91,7 @@ export const ProfilePage: React.FC = () => {
     { key: 'info', label: 'Thông tin cá nhân', icon: <Icon name="user" /> },
     { key: 'addresses', label: 'Sổ địa chỉ', icon: <Icon name="pin" /> },
     { key: 'security', label: 'Bảo mật & Mật khẩu', icon: <Icon name="lock" /> },
-    { key: 'seller', label: 'Gian hàng & Thanh toán', icon: <Icon name="store" /> },
+    { key: 'seller', label: 'Định danh & Tài khoản ngân hàng', icon: <Icon name="shield" /> },
   ];
 
   return (

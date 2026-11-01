@@ -15,6 +15,7 @@ export * from './BuyerOrdersPage';
 export * from './BuyerOrderDetailPage';
 export * from './seller/SellerOrdersPage';
 export * from './seller/SellerOrderDetailPage';
+export * from './seller/SellerEkycPage';
 export * from './ModerationPage';
 export * from './VnPayReturnPage';
 export * from './CartPage';

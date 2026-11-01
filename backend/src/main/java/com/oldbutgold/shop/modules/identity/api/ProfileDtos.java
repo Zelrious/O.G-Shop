@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 public final class ProfileDtos {
     private ProfileDtos() {}
@@ -26,7 +27,6 @@ public final class ProfileDtos {
     ) {}
 
     public record UpdateProfileRequest(
-            @NotBlank(message = "Họ và tên không được để trống")
             @Size(max = 120, message = "Họ và tên tối đa 120 ký tự")
             String fullName,
 
@@ -34,16 +34,38 @@ public final class ProfileDtos {
             String phoneNumber,
 
             @Size(max = 500, message = "Đường dẫn ảnh đại diện tối đa 500 ký tự")
-            String avatarUrl
-    ) {}
+            String avatarUrl,
+
+            UUID quickAuthResultId,
+            UUID challengeId,
+            String otpCode
+    ) {
+        public UpdateProfileRequest(String fullName, String phoneNumber, String avatarUrl) {
+            this(fullName, phoneNumber, avatarUrl, null, null, null);
+        }
+    }
+
+    public record PhoneOtpChallengeResponse(
+            UUID challengeId,
+            String maskedPhone,
+            String maskedEmail,
+            Instant expiresAt,
+            Instant resendAt
+    ) {
+        public PhoneOtpChallengeResponse(UUID challengeId, String maskedPhone, Instant expiresAt, Instant resendAt) {
+            this(challengeId, maskedPhone, maskedPhone, expiresAt, resendAt);
+        }
+    }
 
     public record AvatarProfileRequest(
             @NotBlank(message = "Họ và tên không được để trống")
             @Size(max = 120, message = "Họ và tên tối đa 120 ký tự")
-            String fullName,
-            @Pattern(regexp = "^(0|\\+84)[35789][0-9]{8}$|^$", message = "Số điện thoại không hợp lệ")
-            String phoneNumber
-    ) {}
+            String fullName
+    ) {
+        public AvatarProfileRequest(String fullName, String phoneNumber) {
+            this(fullName);
+        }
+    }
 
     public record ChangePasswordRequest(
             @NotBlank(message = "Mật khẩu hiện tại không được để trống")
@@ -65,7 +87,23 @@ public final class ProfileDtos {
 
             @NotBlank(message = "Tên chủ tài khoản không được để trống")
             @Size(max = 120, message = "Tên chủ tài khoản tối đa 120 ký tự")
-            String bankAccountHolder
+            String bankAccountHolder,
+
+            UUID quickAuthResultId,
+            UUID challengeId,
+            String otpCode
+    ) {}
+
+    public record BankOtpChallengeResponse(
+            UUID challengeId,
+            String maskedEmail,
+            Instant expiresAt,
+            Instant resendAt
+    ) {}
+
+    public record PhoneVerificationVerifyRequest(
+            UUID challengeId,
+            String code
     ) {}
 
     public record AddressResponse(

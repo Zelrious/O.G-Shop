@@ -292,7 +292,7 @@ textarea {
 }
 
 .og-button--primary:hover:not(:disabled) {
-  background-color: var(--og-color-primary-hover);
+  background-color: var(--og-color-primary-fill-hover);
   box-shadow: var(--og-shadow-sm);
 }
 
@@ -535,6 +535,165 @@ textarea {
   border: 2px dashed rgba(255, 255, 255, 0.7);
   border-radius: 50%;
   pointer-events: none;
+}
+
+/* --- Continuous eKYC Face Scanner UI --- */
+.og-face-scanner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--og-space-4);
+  width: 100%;
+}
+
+.og-scanner-viewport {
+  position: relative;
+  width: 100%;
+  max-width: 680px;
+  height: 480px;
+  border-radius: 20px;
+  overflow: hidden;
+  background-color: #050505;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  border: 3px solid var(--og-color-border);
+}
+
+.og-scanner-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+/* Central Oval Guide */
+.og-scanner-oval {
+  position: absolute;
+  top: 48%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 280px;
+  height: 360px;
+  border-radius: 50% / 52%;
+  pointer-events: none;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.28);
+}
+
+.og-scanner-oval--scanning {
+  border: 3px dashed #d4af37;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.28), 0 0 15px rgba(212, 175, 55, 0.4);
+}
+
+.og-scanner-oval--holding {
+  border: 4px solid #10b981;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.22), 0 0 25px rgba(16, 185, 129, 0.7);
+  animation: pulseGreen 1.5s infinite;
+}
+
+.og-scanner-oval--warning {
+  border: 3px dashed #f59e0b;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.28), 0 0 15px rgba(245, 158, 11, 0.4);
+}
+
+@keyframes pulseGreen {
+  0%, 100% {
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.22), 0 0 20px rgba(16, 185, 129, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.22), 0 0 35px rgba(16, 185, 129, 0.85);
+  }
+}
+
+/* Animated laser scanning beam */
+.og-scanner-beam {
+  position: absolute;
+  left: 10%;
+  width: 80%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #d4af37, #fef08a, #d4af37, transparent);
+  box-shadow: 0 0 12px #d4af37;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: scanWave 2.4s ease-in-out infinite alternate;
+}
+
+.og-scanner-oval--holding .og-scanner-beam {
+  background: linear-gradient(90deg, transparent, #10b981, #6ee7b7, #10b981, transparent);
+  box-shadow: 0 0 16px #10b981;
+}
+
+@keyframes scanWave {
+  0% {
+    top: 18%;
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.95;
+  }
+  100% {
+    top: 80%;
+    opacity: 0.2;
+  }
+}
+
+/* Real-time Guidance HUD */
+.og-scanner-hud {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 480px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 10px 16px;
+  text-align: center;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 10;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.og-scanner-hud__message {
+  font-size: 0.92rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.og-scanner-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.og-scanner-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  transition: width 0.05s linear;
+}
+
+.og-scanner-countdown-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #10b981;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 8px;
+  margin-left: 6px;
 }
 
 /* --- Responsive Helpers --- */
@@ -2361,28 +2520,28 @@ textarea {
 
 /* Verification Card (eKYC) */
 .og-verification-card {
-  background: #f0fdf4;
-  border: 1.5px solid #bbf7d0;
+  background: rgba(16, 185, 129, 0.05);
+  border: 1.5px solid rgba(16, 185, 129, 0.2);
   border-radius: 10px;
   padding: 20px;
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  transition: border-color 0.15s ease;
+  transition: all 0.2s ease;
 }
 
 .og-verification-card__icon-wrap {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #dcfce7;
-  color: #166534;
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--og-color-primary, #10b981);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
   flex-shrink: 0;
-  border: 1px solid #86efac;
+  border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
 .og-verification-card__body {
@@ -2393,13 +2552,13 @@ textarea {
 .og-verification-card__title {
   font-size: 15px;
   font-weight: 700;
-  color: #166534;
+  color: var(--og-color-text-primary, #0f172a);
   margin: 0 0 4px;
 }
 
 .og-verification-card__desc {
   font-size: 13px;
-  color: #15803d;
+  color: var(--og-color-text-secondary, #64748b);
   line-height: 1.45;
   margin: 0 0 14px;
 }
@@ -2409,9 +2568,9 @@ textarea {
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 13.5px;
-  color: #14532d;
+  color: var(--og-color-text-primary, #0f172a);
   user-select: none;
   min-height: 40px;
 }
@@ -2419,8 +2578,41 @@ textarea {
 .og-verification-card__checkbox {
   width: 18px;
   height: 18px;
-  accent-color: #166534;
+  accent-color: #10b981;
   cursor: pointer;
+}
+
+[data-theme="dark"] .og-verification-card,
+.dark .og-verification-card {
+  background: rgba(16, 185, 129, 0.07) !important;
+  border: 1px solid rgba(52, 211, 153, 0.22) !important;
+}
+
+[data-theme="dark"] .og-verification-card__icon-wrap,
+.dark .og-verification-card__icon-wrap {
+  background: rgba(16, 185, 129, 0.14) !important;
+  border-color: rgba(52, 211, 153, 0.3) !important;
+  color: #34d399 !important;
+}
+
+[data-theme="dark"] .og-verification-card__title,
+.dark .og-verification-card__title {
+  color: #34d399 !important;
+}
+
+[data-theme="dark"] .og-verification-card__desc,
+.dark .og-verification-card__desc {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .og-verification-card__checkbox-label,
+.dark .og-verification-card__checkbox-label {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .og-verification-card__checkbox,
+.dark .og-verification-card__checkbox {
+  accent-color: #10b981;
 }
 
 /* Media Upload Zone */
@@ -2523,22 +2715,179 @@ textarea {
   background: #ef4444;
 }
 
-/* Sticky Action Bar at Bottom of Form */
-.og-sticky-action-bar {
-  position: sticky;
-  bottom: 0;
-  z-index: 40;
-  background: rgba(251, 249, 244, 0.95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid var(--og-color-border);
-  padding: 14px 0;
+/* Fixed Action Button at Top-Right of Listing Form (replaces bottom bar) */
+.og-listing-fixed-header-action {
+  position: fixed;
+  top: 144px;
+  right: 32px;
+  z-index: 90;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 12px;
-  box-shadow: 0 -4px 16px rgba(20, 35, 28, 0.05);
-  margin-top: 12px;
+  transition: top 0.28s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s ease;
+}
+
+.og-listing-fixed-header-action--scrolled,
+body.og-header-collapsed .og-listing-fixed-header-action {
+  top: 78px;
+}
+
+@media (max-width: 1024px) {
+  .og-listing-fixed-header-action {
+    position: sticky;
+    top: 144px;
+    right: 0;
+    align-self: flex-end;
+    margin-bottom: -46px;
+    z-index: 50;
+  }
+  .og-listing-fixed-header-action--scrolled,
+  body.og-header-collapsed .og-listing-fixed-header-action {
+    top: 78px;
+  }
+}
+
+/* --- Dark Mode Hover Calibrations (Dịu mắt, không bị chói sáng) --- */
+[data-theme="dark"] .og-button--primary,
+.dark .og-button--primary {
+  background-color: var(--og-color-primary-fill);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .og-button--primary:hover:not(:disabled),
+.dark .og-button--primary:hover:not(:disabled) {
+  background-color: var(--og-color-primary-fill-hover) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .og-button--outline,
+.dark .og-button--outline {
+  color: var(--og-color-primary);
+  border-color: rgba(142, 196, 161, 0.35);
+  background-color: transparent;
+}
+
+[data-theme="dark"] .og-button--outline:hover:not(:disabled),
+.dark .og-button--outline:hover:not(:disabled) {
+  background-color: rgba(47, 107, 79, 0.15) !important;
+  border-color: rgba(142, 196, 161, 0.5) !important;
+  color: var(--og-color-primary-hover) !important;
+}
+
+[data-theme="dark"] .og-button--secondary,
+.dark .og-button--secondary {
+  background-color: var(--og-color-surface-subtle);
+  color: var(--og-color-primary);
+  border-color: var(--og-color-border);
+}
+
+[data-theme="dark"] .og-button--secondary:hover:not(:disabled),
+.dark .og-button--secondary:hover:not(:disabled) {
+  background-color: rgba(47, 107, 79, 0.15) !important;
+  color: var(--og-color-primary-hover) !important;
+  border-color: var(--og-color-border-strong) !important;
+}
+
+[data-theme="dark"] a:hover,
+.dark a:hover {
+  color: var(--og-color-primary-hover);
+}
+
+[data-theme="dark"] .og-nav-link:hover,
+.dark .og-nav-link:hover {
+  color: var(--og-color-primary-hover);
+  background-color: rgba(47, 107, 79, 0.12);
+}
+
+[data-theme="dark"] .og-header__toggle-tabs-btn:hover,
+.dark .og-header__toggle-tabs-btn:hover {
+  background-color: rgba(47, 107, 79, 0.15);
+  color: var(--og-color-primary-hover);
+  border-color: rgba(142, 196, 161, 0.35);
+}
+
+[data-theme="dark"] .og-header__quick-btn:hover,
+.dark .og-header__quick-btn:hover {
+  background-color: rgba(47, 107, 79, 0.15);
+  color: var(--og-color-primary-hover);
+  border-color: rgba(142, 196, 161, 0.35);
+}
+
+[data-theme="dark"] .og-btn-quick-chat:hover,
+.dark .og-btn-quick-chat:hover,
+[data-theme="dark"] .og-btn-add-cart:hover,
+.dark .og-btn-add-cart:hover,
+[data-theme="dark"] .og-btn-make-offer:hover,
+.dark .og-btn-make-offer:hover {
+  background-color: rgba(47, 107, 79, 0.15) !important;
+  color: var(--og-color-primary-hover) !important;
+  border-color: rgba(142, 196, 161, 0.35) !important;
+}
+
+/* Seller Bank ATM Card Styling (Light & Dark Mode) */
+.og-seller-atm-card {
+  position: relative;
+  width: 100%;
+  max-width: 430px;
+  aspect-ratio: 1.586 / 1;
+  border-radius: 16px;
+  padding: 20px 22px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 45%, #f1f5f9 100%);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(0, 0, 0, 0.04);
+  border: 1.5px solid var(--og-color-border, #e2e8f0);
+  color: var(--og-color-text-primary, #0f172a);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  transition: all 0.25s ease;
+}
+
+[data-theme="dark"] .og-seller-atm-card,
+.dark .og-seller-atm-card {
+  background: linear-gradient(135deg, #16362c 0%, #1f483b 50%, #17372d 100%) !important;
+  border: 1.5px solid rgba(52, 211, 153, 0.35) !important;
+  box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.55), 0 4px 14px rgba(16, 185, 129, 0.15) !important;
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .og-seller-atm-card .og-card-label,
+.dark .og-seller-atm-card .og-card-label {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .og-seller-atm-card .og-card-text,
+.dark .og-seller-atm-card .og-card-text {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .og-seller-atm-card .og-card-badge,
+.dark .og-seller-atm-card .og-card-badge {
+  background: rgba(52, 211, 153, 0.18) !important;
+  border-color: rgba(52, 211, 153, 0.35) !important;
+  color: #6ee7b7 !important;
+}
+
+[data-theme="dark"] .og-seller-atm-card .og-card-emblem,
+.dark .og-seller-atm-card .og-card-emblem {
+  color: #6ee7b7 !important;
+}
+
+[data-theme="dark"] .og-seller-atm-card .og-card-ring,
+.dark .og-seller-atm-card .og-card-ring {
+  border-color: rgba(52, 211, 153, 0.06) !important;
+}
+
+[data-theme="dark"] .og-seller-atm-card .og-card-watermark,
+.dark .og-seller-atm-card .og-card-watermark {
+  background: radial-gradient(circle at 85% 15%, rgba(52, 211, 153, 0.12) 0%, transparent 60%) !important;
+}
+
+/* Sticky Action Bar at Bottom of Form (Legacy fallback, hidden) */
+.og-sticky-action-bar {
+  display: none;
 }
 
 .og-sticky-action-bar__inner {
@@ -5591,6 +5940,50 @@ textarea {
   line-height: 1.4;
   margin: 0;
 }
+/* Seller Opt-in Card (Simplified role selection) */
+.og-seller-optin-container {
+  margin: 18px 0 12px;
+}
+.og-seller-optin-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--og-color-surface);
+  border: 1.5px solid var(--og-color-border-strong);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  user-select: none;
+}
+.og-seller-optin-card:hover {
+  border-color: var(--og-color-primary);
+  background: var(--og-color-surface-hover);
+}
+.og-seller-optin-card--active {
+  border-color: var(--og-color-primary) !important;
+  background: var(--og-color-primary-light) !important;
+  box-shadow: 0 3px 12px rgba(39, 99, 71, 0.1);
+}
+
+/* Minimalist Google Auth Button */
+.og-google-auth-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.og-google-auth-section > div[aria-label="Tiếp tục bằng Google"] {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 8px auto;
+  border-radius: 50%;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.og-google-auth-section > div[aria-label="Tiếp tục bằng Google"]:hover {
+  transform: scale(1.05);
+}
 
 /* Step Enter Animation */
 .og-step-enter {
@@ -5779,6 +6172,37 @@ textarea {
 .og-register-split-header {
   text-align: center;
   margin-bottom: 20px;
+}
+
+/* --- Register Page & Centered Card --- */
+.og-register-page-container {
+  position: relative;
+  min-height: calc(100vh - 100px);
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  background: var(--og-color-bg);
+}
+
+.og-register-glass-card {
+  position: relative;
+  z-index: 10;
+  max-width: 660px;
+  width: 100%;
+  padding: 30px 32px;
+  background: var(--og-color-surface);
+  border: 1px solid var(--og-color-border);
+  border-radius: 20px;
+  box-shadow: 0 12px 32px rgba(20, 35, 28, 0.08), 0 2px 6px rgba(20, 35, 28, 0.04);
+  transition: all var(--og-transition-base);
+}
+
+[data-theme='dark'] .og-register-glass-card {
+  background: var(--og-color-surface);
+  border: 1px solid var(--og-color-border);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
 .og-register-split-container {
@@ -6169,20 +6593,38 @@ textarea {
   background: var(--og-color-accent-gold);
 }
 
-/* --- Fluid Expanding & Collapsing Stepper --- */
+/* --- Fluid Uniform Stepper --- */
 .og-fluid-stepper {
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  margin-bottom: 22px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--og-color-border);
   width: 100%;
+}
+
+@keyframes ogStepperTrackEntrance {
+  0% {
+    opacity: 0.2;
+    transform: translateY(-3px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .og-fluid-stepper-track {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
   width: 100%;
-  --step-line-len: clamp(38px, 6vw, 70px);
+  animation: ogStepperTrackEntrance 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.og-stepper--buyer {
+  justify-content: flex-start;
+}
+
+.og-stepper--seller {
+  justify-content: space-between;
 }
 
 .og-step-node {
@@ -6195,10 +6637,10 @@ textarea {
 .og-step-node-btn {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   background: transparent;
   border: none;
-  padding: 2px 4px;
+  padding: 2px 0;
   border-radius: var(--og-radius-md);
   font-family: inherit;
   cursor: default;
@@ -6222,37 +6664,18 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 700;
   background: var(--og-color-bg-subtle);
   color: var(--og-color-text-muted);
-  border: 2px solid var(--og-color-border);
+  border: 1.5px solid var(--og-color-border);
   transition: all var(--og-transition-fast);
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
-}
-
-.og-step-digit-anim {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  animation: ogStepDigitSwap 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes ogStepDigitSwap {
-  0% {
-    transform: translateY(-6px) scale(0.7);
-    opacity: 0.2;
-  }
-
-  100% {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
 }
 
 .og-step-node--active .og-step-circle {
@@ -6269,7 +6692,7 @@ textarea {
 }
 
 .og-step-title {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--og-color-text-muted);
   white-space: nowrap;
@@ -6285,16 +6708,25 @@ textarea {
   color: var(--og-color-text-primary);
 }
 
-/* Connecting Lines - Luôn cách đều nhau 100% */
+/* Connecting Lines - Luôn bằng nhau 100% giữa các bước */
 .og-step-line {
-  width: var(--step-line-len);
-  flex: 0 0 var(--step-line-len);
   height: 2px;
   background: var(--og-color-border);
-  margin: 0 8px;
   position: relative;
   overflow: hidden;
-  transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 240ms ease;
+}
+
+.og-stepper--seller .og-step-line {
+  flex: 1 1 0;
+  min-width: 12px;
+  max-width: 60px;
+  margin: 0 8px;
+}
+
+.og-stepper--buyer .og-step-line {
+  flex: 0 0 clamp(48px, 12vw, 84px);
+  margin: 0 10px;
 }
 
 .og-step-line-fill {
@@ -6308,48 +6740,6 @@ textarea {
 
 .og-step-line--completed .og-step-line-fill {
   transform: scaleX(1);
-}
-
-/* Middle Slot: Mở rộng / thu gọn để đẩy / kéo nút Xác thực email */
-.og-step-middle-slot {
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto;
-  max-width: 0;
-  opacity: 0;
-  overflow: hidden;
-  pointer-events: none;
-  transform-origin: left center;
-  transition: max-width 420ms cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 300ms ease;
-}
-
-.og-step-middle-slot--expanded {
-  max-width: 280px;
-  opacity: 1;
-  overflow: visible;
-  pointer-events: auto;
-}
-
-.og-step-middle-slot .og-step-node--seller {
-  transition: transform 380ms cubic-bezier(0.34, 1.25, 0.64, 1), opacity 300ms ease;
-  transform: scale(0.9);
-  opacity: 0;
-}
-
-.og-step-middle-slot--expanded .og-step-node--seller {
-  transform: scale(1);
-  opacity: 1;
-}
-
-.og-step-middle-slot .og-step-line--2 {
-  width: var(--step-line-len);
-  flex: 0 0 var(--step-line-len);
-}
-
-/* Nút Final (Xác thực email)*/
-.og-step-node--final {
-  transition: transform 720ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* --- Auth Page & Step Transitions --- */

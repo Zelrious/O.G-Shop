@@ -8,7 +8,7 @@ import { notificationApi, notificationTarget, type NotificationItem, type Notifi
 import './notifications.css';
 
 export function NotificationBell() {
-  const { user } = useAuth();
+  const { user, reloadCurrentUser } = useAuth();
   const chat = useContext(ChatContext);
   const navigate = useNavigate();
   const userId = user?.userId;
@@ -68,6 +68,9 @@ export function NotificationBell() {
     }
   };
   const open = async (item: NotificationItem, close: () => void) => {
+    if (item.type === 'EKYC_APPROVED') {
+      void reloadCurrentUser();
+    }
     const target = notificationTarget(item, user.roles), owner = user.userId;
     if (reading.current.has(item.id)) return;
     reading.current.add(item.id);

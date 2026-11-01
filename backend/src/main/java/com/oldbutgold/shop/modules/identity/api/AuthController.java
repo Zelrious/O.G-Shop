@@ -2,7 +2,9 @@ package com.oldbutgold.shop.modules.identity.api;
 
 import com.oldbutgold.shop.modules.identity.application.AuthService;
 import com.oldbutgold.shop.modules.identity.application.EmailRegistrationService;
+import com.oldbutgold.shop.modules.identity.infrastructure.persistence.EkycRepository;
 import com.oldbutgold.shop.shared.config.AuthProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.CacheControl;
@@ -27,15 +29,29 @@ public class AuthController {
     private final TrustedOriginValidator originValidator;
     private final EmailRegistrationService registration;
     private final com.oldbutgold.shop.modules.identity.application.AuthFlowService flows;
+    private final EkycRepository ekycRepository;
 
     public AuthController(AuthService authService, AuthProperties properties, TrustedOriginValidator originValidator,
                           EmailRegistrationService registration,
                           com.oldbutgold.shop.modules.identity.application.AuthFlowService flows) {
+        this(authService, properties, originValidator, registration, flows, null);
+    }
+
+    @Autowired
+    public AuthController(AuthService authService, AuthProperties properties, TrustedOriginValidator originValidator,
+                          EmailRegistrationService registration,
+                          com.oldbutgold.shop.modules.identity.application.AuthFlowService flows,
+                          EkycRepository ekycRepository) {
         this.authService = authService;
         this.properties = properties;
         this.originValidator = originValidator;
         this.registration = registration;
-        this.flows=flows;
+        this.flows = flows;
+        this.ekycRepository = ekycRepository;
+    }
+
+    private boolean isVerified(long userId) {
+        return ekycRepository != null && ekycRepository.hasVerifiedProfile(userId);
     }
 
     @PostMapping("/register")
@@ -112,8 +128,10 @@ public class AuthController {
 
     @GetMapping("/me")
     public ResponseEntity<AuthDtos.UserResponse> currentUser(@AuthenticationPrincipal Jwt jwt) {
+        long userId = Long.parseLong(jwt.getSubject());
+        var user = authService.currentUser(userId);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(AuthDtos.UserResponse.from(authService.currentUser(Long.parseLong(jwt.getSubject()))));
+                .body(AuthDtos.UserResponse.from(user, isVerified(userId)));
     }
 
     ResponseEntity<?> flowResponse(com.oldbutgold.shop.modules.identity.application.AuthFlowService.Result result) {
@@ -129,7 +147,7 @@ public class AuthController {
             response.header(HttpHeaders.SET_COOKIE, legacyCookieRemoval().toString());
         }
         return response.body(new AuthDtos.AuthResponse(
-                AuthDtos.UserResponse.from(result.user()), result.accessToken(), result.expiresIn()));
+                AuthDtos.UserResponse.from(result.user(), isVerified(result.user().getId())), result.accessToken(), result.expiresIn()));
     }
 
     private ResponseCookie sessionCookie(String value, Duration lifetime) {

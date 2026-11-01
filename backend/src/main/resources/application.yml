@@ -57,9 +57,9 @@ app:
     session-cookie-path: ${AUTH_SESSION_COOKIE_PATH:/api/v1/auth}
   ekyc:
     base-url: ${EKYC_SERVICE_URL:http://localhost:8001}
-    internal-token: ${EKYC_INTERNAL_TOKEN:replace-with-a-long-random-internal-token}
-    connect-timeout: ${EKYC_CONNECT_TIMEOUT:PT3S}
-    read-timeout: ${EKYC_READ_TIMEOUT:PT60S}
+    internal-token: ${EKYC_INTERNAL_TOKEN:ogshop_ekyc_internal_secret_token_secure_random_12345}
+    connect-timeout: ${EKYC_CONNECT_TIMEOUT:PT5S}
+    read-timeout: ${EKYC_READ_TIMEOUT:PT120S}
   cloudinary:
     cloud-name: ${CLOUDINARY_CLOUD_NAME:}
     api-key: ${CLOUDINARY_API_KEY:}
