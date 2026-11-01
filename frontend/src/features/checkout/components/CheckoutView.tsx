@@ -1,10 +1,12 @@
 import { Icon } from '../../../shared/components/Icon/Icon';
 import { benefit } from '../../vouchers/voucherApi';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { checkoutApi, CheckoutApiError } from '../checkoutApi';
 import { CheckoutPreview, CreateAddressInput, OrderCreated } from '../types';
 import { profileApi, GhnProvince, GhnDistrict, GhnWard } from '../../profile';
+import { AuthContext } from '../../auth/context';
+import { QuickFaceAuthModal } from '../../verification/components/QuickFaceAuthModal';
 import '../checkout.css';
 
 interface CheckoutViewProps {
@@ -15,9 +17,14 @@ interface CheckoutViewProps {
 
 export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, initialVoucherCode }) => {
   const navigate = useNavigate();
+  const authContext = useContext(AuthContext);
+  const user = authContext?.user;
+  const isUserVerified = Boolean(user?.verifiedSeller || user?.roles?.includes('SELLER'));
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [showHighValueQuickAuth, setShowHighValueQuickAuth] = useState(false);
+  const [highValueQuickAuthResultId, setHighValueQuickAuthResultId] = useState<string | null>(null);
   const [preview, setPreview] = useState<CheckoutPreview | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isConflict, setIsConflict] = useState(false);
@@ -265,8 +272,44 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
     ? isNewAddressGhnValid
     : isSelectedAddressGhnValid;
 
+  const executeOrderPlacement = async () => {
+    try {
+      setSubmitting(true);
+      setErrorMsg(null);
+
+      const finalOfferId = pricingMode === 'OFFER' ? (offerId ?? activeOfferId ?? preview?.eligibleOfferId ?? undefined) : undefined;
+      const order = await checkoutApi.buyNow({
+        productId,
+        offerId: finalOfferId,
+        addressId: !isAddingNewAddress ? selectedAddressId! : undefined,
+        newAddress: isAddingNewAddress ? newAddress : undefined,
+        voucherCode: appliedVoucherCode || undefined,
+        quickAuthResultId: highValueQuickAuthResultId || undefined,
+      });
+
+      setCreatedOrder(order);
+      // Chuyển hướng người dùng trực tiếp đến màn hình thanh toán gồm Bill và mã QR VietQR (1 giờ đếm ngược)
+      navigate(`/checkout/payment?orderId=${order.orderId}&method=${paymentMethod}`);
+    } catch (err: unknown) {
+      const error = err as CheckoutApiError;
+      if (error.code === 'PRODUCT_STATE_CONFLICT' || error.code === 'PRODUCT_UNAVAILABLE') {
+        setIsConflict(true);
+        setErrorMsg('Rất tiếc! Món đồ này vừa được người mua khác giữ chỗ thanh toán.');
+      } else {
+        setErrorMsg(error.message || 'Đặt hàng không thành công. Vui lòng thử lại.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleConfirmOrder = async () => {
     if (!preview) return;
+
+    if (preview.requiresBuyerEkyc && !isUserVerified) {
+      setErrorMsg('Món đồ này yêu cầu người mua phải hoàn tất định danh eKYC trước khi đặt hàng.');
+      return;
+    }
 
     if (!isAddingNewAddress && !selectedAddressId) {
       setErrorMsg('Vui lòng chọn hoặc thêm địa chỉ nhận hàng.');
@@ -301,33 +344,19 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
       }
     }
 
-    try {
-      setSubmitting(true);
-      setErrorMsg(null);
-
-      const finalOfferId = pricingMode === 'OFFER' ? (offerId ?? activeOfferId ?? preview.eligibleOfferId ?? undefined) : undefined;
-      const order = await checkoutApi.buyNow({
-        productId,
-        offerId: finalOfferId,
-        addressId: !isAddingNewAddress ? selectedAddressId! : undefined,
-        newAddress: isAddingNewAddress ? newAddress : undefined,
-        voucherCode: appliedVoucherCode || undefined,
-      });
-
-      setCreatedOrder(order);
-      // Chuyển hướng người dùng trực tiếp đến màn hình thanh toán gồm Bill và mã QR VietQR (1 giờ đếm ngược)
-      navigate(`/checkout/payment?orderId=${order.orderId}&method=${paymentMethod}`);
-    } catch (err: unknown) {
-      const error = err as CheckoutApiError;
-      if (error.code === 'PRODUCT_STATE_CONFLICT' || error.code === 'PRODUCT_UNAVAILABLE') {
-        setIsConflict(true);
-        setErrorMsg('Rất tiếc! Món đồ này vừa được người mua khác giữ chỗ thanh toán.');
-      } else {
-        setErrorMsg(error.message || 'Đặt hàng không thành công. Vui lòng thử lại.');
-      }
-    } finally {
-      setSubmitting(false);
+    // Nếu sản phẩm yêu cầu eKYC người mua và người mua đã eKYC, yêu cầu Quick Face Auth xác nhận đơn hàng giá trị cao
+    if (preview.requiresBuyerEkyc) {
+      setShowHighValueQuickAuth(true);
+      return;
     }
+
+    await executeOrderPlacement();
+  };
+
+  const handleHighValueQuickAuthSuccess = async (resultId: string) => {
+    setHighValueQuickAuthResultId(resultId);
+    setShowHighValueQuickAuth(false);
+    await executeOrderPlacement();
   };
 
   const formatVnd = (num: number) => `${new Intl.NumberFormat('vi-VN').format(num)} đ`;
@@ -1126,30 +1155,51 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
               </div>
             </div>
 
+            {preview.requiresBuyerEkyc && !isUserVerified && (
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: 12, marginTop: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#b91c1c', fontWeight: 600, fontSize: 14 }}>
+                  <span>⚠️</span>
+                  <span>Yêu cầu Định danh eKYC Người mua</span>
+                </div>
+                <p style={{ margin: '4px 0 8px', fontSize: 13, color: '#7f1d1d', lineHeight: 1.4 }}>
+                  Món đồ này thuộc danh mục giá trị cao, yêu cầu người mua hoàn tất xác thực danh tính (eKYC) trước khi đặt hàng.
+                </p>
+                <Link
+                  to="/ekyc/verification"
+                  className="og-button og-button--primary og-button--sm"
+                  style={{ display: 'inline-block', fontSize: 12, padding: '6px 12px' }}
+                >
+                  Xác thực danh tính eKYC ngay →
+                </Link>
+              </div>
+            )}
+
             <button
               type="button"
-              disabled={submitting || !isCheckoutAddressValid}
+              disabled={submitting || !isCheckoutAddressValid || Boolean(preview.requiresBuyerEkyc && !isUserVerified)}
               onClick={handleConfirmOrder}
               style={{
                 width: '100%',
                 padding: '14px 16px',
-                background: submitting || !isCheckoutAddressValid ? 'var(--og-color-text-muted, #9ca3af)' : '#e25b29',
+                background: submitting || !isCheckoutAddressValid || Boolean(preview.requiresBuyerEkyc && !isUserVerified) ? 'var(--og-color-text-muted, #9ca3af)' : '#e25b29',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 8,
                 fontSize: 16,
                 fontWeight: 700,
                 marginTop: 20,
-                cursor: submitting || !isCheckoutAddressValid ? 'not-allowed' : 'pointer',
+                cursor: submitting || !isCheckoutAddressValid || Boolean(preview.requiresBuyerEkyc && !isUserVerified) ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 8,
-                boxShadow: submitting || !isCheckoutAddressValid ? 'none' : '0 2px 8px rgba(226, 91, 41, 0.3)',
+                boxShadow: submitting || !isCheckoutAddressValid || Boolean(preview.requiresBuyerEkyc && !isUserVerified) ? 'none' : '0 2px 8px rgba(226, 91, 41, 0.3)',
               }}
             >
               {submitting
                 ? 'Đang xử lý đặt hàng...'
+                : preview.requiresBuyerEkyc && !isUserVerified
+                ? '⚠️ Yêu cầu Định danh eKYC Người mua'
                 : !isCheckoutAddressValid
                 ? '⚠️ Cần chọn địa chỉ chuẩn hóa GHN'
                 : '⚡ Xác nhận Mua ngay & Giữ hàng'}
@@ -1174,6 +1224,15 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
           </div>
         </div>
       </div>
+
+      {/* Quick Face Auth Modal for High Value Checkout */}
+      <QuickFaceAuthModal
+        isOpen={showHighValueQuickAuth}
+        onClose={() => setShowHighValueQuickAuth(false)}
+        onSuccess={handleHighValueQuickAuthSuccess}
+        title="Xác thực đơn hàng giá trị cao"
+        description="Vui lòng quét khuôn mặt 2 giây để xác nhận đặt món đồ giá trị cao này."
+      />
     </div>
   );
 };
