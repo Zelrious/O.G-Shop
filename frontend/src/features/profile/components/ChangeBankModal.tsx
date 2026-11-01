@@ -101,6 +101,31 @@ export const ChangeBankModal: React.FC<ChangeBankModalProps> = ({
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
+  const requestOtpDirectly = async () => {
+    setIsRequestingOtp(true);
+    setOtpError(null);
+    try {
+      const res = await profileApi.requestBankChangeOtp();
+      const email = res.maskedEmail || accountEmail || 'email đăng ký';
+      setBankChallengeId(res.challengeId);
+      setMaskedEmail(email);
+      setResendCooldown(60);
+      setStoredBankCooldown(60, res.challengeId, email);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Không thể gửi mã xác thực OTP qua Email.';
+      setOtpError(msg);
+      if (msg.includes('đợi') || msg.includes('trước khi') || msg.includes('429')) {
+        const stored = getStoredBankCooldown();
+        if (stored.secondsLeft <= 0) {
+          setResendCooldown(60);
+          setStoredBankCooldown(60, bankChallengeId || '', maskedEmail || accountEmail || '');
+        }
+      }
+    } finally {
+      setIsRequestingOtp(false);
+    }
+  };
+
   // Handle open / reset & auto OTP for unverified users with cooldown persistence
   useEffect(() => {
     if (!isOpen) return;
@@ -137,31 +162,6 @@ export const ChangeBankModal: React.FC<ChangeBankModalProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, isVerifiedSeller]);
-
-  const requestOtpDirectly = async () => {
-    setIsRequestingOtp(true);
-    setOtpError(null);
-    try {
-      const res = await profileApi.requestBankChangeOtp();
-      const email = res.maskedEmail || accountEmail || 'email đăng ký';
-      setBankChallengeId(res.challengeId);
-      setMaskedEmail(email);
-      setResendCooldown(60);
-      setStoredBankCooldown(60, res.challengeId, email);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Không thể gửi mã xác thực OTP qua Email.';
-      setOtpError(msg);
-      if (msg.includes('đợi') || msg.includes('trước khi') || msg.includes('429')) {
-        const stored = getStoredBankCooldown();
-        if (stored.secondsLeft <= 0) {
-          setResendCooldown(60);
-          setStoredBankCooldown(60, bankChallengeId || '', maskedEmail || accountEmail || '');
-        }
-      }
-    } finally {
-      setIsRequestingOtp(false);
-    }
-  };
 
   const handleRequestEmailOtp = async () => {
     if (resendCooldown > 0) {

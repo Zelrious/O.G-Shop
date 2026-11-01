@@ -103,11 +103,14 @@ export const QuickFaceAuthModal: React.FC<QuickFaceAuthModalProps> = ({
 
   // Stabilize callbacks using refs to prevent render-loop triggers
   const onSuccessRef = useRef(onSuccess);
-  onSuccessRef.current = onSuccess;
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
   const onNeedEkycRef = useRef(onNeedEkyc);
-  onNeedEkycRef.current = onNeedEkyc;
+
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+    onCloseRef.current = onClose;
+    onNeedEkycRef.current = onNeedEkyc;
+  }, [onSuccess, onClose, onNeedEkyc]);
 
   const isVerifyingRef = useRef<boolean>(false);
   const isSuccessRef = useRef<boolean>(false);
@@ -400,7 +403,7 @@ export const QuickFaceAuthModal: React.FC<QuickFaceAuthModalProps> = ({
     } finally {
       isVerifyingRef.current = false;
     }
-  }, [sessionId, isStreaming, captureFrame, checkLighting]);
+  }, [sessionId, isStreaming, captureFrame, checkLighting, isOpen]);
 
   // Continuous auto-scan loop: scans every 400ms automatically
   useEffect(() => {

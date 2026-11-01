@@ -6,25 +6,27 @@ import { checkoutApi } from './checkoutApi';
 import { profileApi } from '../profile';
 import { CheckoutPreview } from './types';
 import { AuthContext } from '../auth/context';
+import type { AuthContextType } from '../auth/types';
 
-const mockVerifiedAuth: any = {
+const mockVerifiedAuth: AuthContextType = {
   user: {
-    id: 1,
+    userId: 1,
     email: 'test@example.com',
     fullName: 'Test User',
     phoneNumber: '0901234567',
-    avatarUrl: null,
+    avatarUrl: undefined,
     roles: ['BUYER'],
+    createdAt: '2026-01-01T00:00:00Z',
     sellerApprovalRequired: false,
     verifiedSeller: true,
   },
-  token: 'mock-token',
-  login: vi.fn(),
-  register: vi.fn(),
-  logout: vi.fn(),
-  reloadCurrentUser: vi.fn(),
   isAuthenticated: true,
   isLoading: false,
+  login: vi.fn(),
+  register: vi.fn(),
+  verifyRegistration: vi.fn(),
+  logout: vi.fn(),
+  reloadCurrentUser: vi.fn(),
 };
 
 const mockValidGhnAddress = {

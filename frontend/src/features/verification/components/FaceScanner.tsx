@@ -347,7 +347,7 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     return () => {
       if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
     };
-  }, [isStreaming, frontAssetId, cardFile, portraitAssetId, scanStatus, checkClientLighting, captureFrame]);
+  }, [isStreaming, frontAssetId, cardFile, portraitAssetId, scanStatus, checkClientLighting, captureFrame, countdownDurationMs]);
 
   // Hành động chụp & gửi KTV xét duyệt (xuất hiện sau 20s quét tự động không thành công)
   const handleManualCaptureForKtv = () => {

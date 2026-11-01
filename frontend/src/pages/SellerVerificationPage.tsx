@@ -130,7 +130,7 @@ export const SellerVerificationPage: React.FC = () => {
     } catch (err) {
       console.warn('Cannot load seller settings or addresses:', err);
     }
-  }, [user?.fullName, user?.phoneNumber]);
+  }, [user]);
 
   const loadStatus = useCallback(async () => {
     if (!statusLoadedRef.current) {
@@ -161,7 +161,7 @@ export const SellerVerificationPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [reloadCurrentUser]);
+  }, [isSeller, reloadCurrentUser]);
 
   const userId = user?.userId;
 
