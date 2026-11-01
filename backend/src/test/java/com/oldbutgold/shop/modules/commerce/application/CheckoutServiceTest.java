@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -62,6 +63,10 @@ class CheckoutServiceTest {
                 orderRepository, orderItemRepository, orderVoucherRepository, clock,
                 mock(com.oldbutgold.shop.modules.communication.application.NegotiatedCheckoutFacade.class),new com.fasterxml.jackson.databind.ObjectMapper(),wallet
         );
+
+        // UC08: Stub the new quick auth result check to succeed by default for existing tests
+        // Individual tests that need different behavior will override
+        doNothing().when(identityCommerceFacade).requireQuickAuthResult(anyLong(), any(UUID.class));
 
         productSummary = new CatalogCommerceFacade.CommerceProductSummary(
                 1001L, 200L, "Sony WH-1000XM4 Tai nghe chống ồn",
@@ -315,6 +320,110 @@ class CheckoutServiceTest {
         assertThatThrownBy(() -> checkoutService.buyNow(300L, request))
                 .isInstanceOf(ProductStateConflictException.class)
                 .hasMessageContaining("không thể đặt mua");
+    }
+
+    @Test
+    void buyNow_succeedsWhenRequiresBuyerEkycAndValidQuickAuthResultIdProvided() {
+        // Given: product requires buyer eKYC, user has valid quick auth result
+        CatalogCommerceFacade.CommerceProductDetail ekycProductDetail = new CatalogCommerceFacade.CommerceProductDetail(
+                1001L, 200L, "iPhone 15 Pro",
+                new BigDecimal("22000000"), "LIKE_NEW", "ACTIVE",
+                null, true, 1L
+        );
+
+        when(catalogCommerceFacade.getProductForCheckoutLock(1001L)).thenReturn(ekycProductDetail);
+        when(identityCommerceFacade.getAddressById(300L, 501L)).thenReturn(Optional.of(addressDto));
+        when(identityCommerceFacade.getDefaultAddress(200L)).thenReturn(Optional.of(sellerAddressDto));
+        when(systemFeePolicyRepository.findFirstByStatusOrderByEffectiveFromDesc("ACTIVE")).thenReturn(Optional.of(feePolicy));
+        when(identityCommerceFacade.isUserVerified(300L)).thenReturn(true); // User is eKYC verified
+        // requireQuickAuthResult is stubbed to succeed by default in setUp
+
+        when(orderRepository.save(any(OrderEntity.class))).thenAnswer(invocation -> {
+            OrderEntity o = invocation.getArgument(0);
+            setField(o, "id", 9903L);
+            return o;
+        });
+        when(orderItemRepository.saveAndFlush(any(OrderItemEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UUID validResultId = UUID.randomUUID();
+        CheckoutDtos.BuyNowRequest request = new CheckoutDtos.BuyNowRequest(1001L, 501L, null, null, null, validResultId);
+        CheckoutDtos.OrderCreatedResponse response = checkoutService.buyNow(300L, request);
+
+        assertThat(response.orderId()).isEqualTo(9903L);
+        verify(identityCommerceFacade).requireQuickAuthResult(300L, validResultId);
+    }
+
+    @Test
+    void buyNow_failsWhenRequiresBuyerEkycButNoQuickAuthResultId() {
+        CatalogCommerceFacade.CommerceProductDetail ekycProductDetail = new CatalogCommerceFacade.CommerceProductDetail(
+                1001L, 200L, "iPhone 15 Pro",
+                new BigDecimal("22000000"), "LIKE_NEW", "ACTIVE",
+                null, true, 1L
+        );
+
+        when(catalogCommerceFacade.getProductForCheckoutLock(1001L)).thenReturn(ekycProductDetail);
+        when(identityCommerceFacade.getAddressById(300L, 501L)).thenReturn(Optional.of(addressDto));
+        when(identityCommerceFacade.getDefaultAddress(200L)).thenReturn(Optional.of(sellerAddressDto));
+        when(systemFeePolicyRepository.findFirstByStatusOrderByEffectiveFromDesc("ACTIVE")).thenReturn(Optional.of(feePolicy));
+        when(identityCommerceFacade.isUserVerified(300L)).thenReturn(true);
+
+        // Override stub to throw when null is passed
+        doThrow(new IllegalArgumentException("Thao tác này yêu cầu xác thực nhanh khuôn mặt."))
+                .when(identityCommerceFacade).requireQuickAuthResult(eq(300L), isNull());
+
+        CheckoutDtos.BuyNowRequest request = new CheckoutDtos.BuyNowRequest(1001L, 501L, null, null, null, null);
+
+        assertThatThrownBy(() -> checkoutService.buyNow(300L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("xác thực nhanh khuôn mặt");
+    }
+
+    @Test
+    void buyNow_failsWhenRequiresBuyerEkycAndQuickAuthResultIdInvalid() {
+        CatalogCommerceFacade.CommerceProductDetail ekycProductDetail = new CatalogCommerceFacade.CommerceProductDetail(
+                1001L, 200L, "iPhone 15 Pro",
+                new BigDecimal("22000000"), "LIKE_NEW", "ACTIVE",
+                null, true, 1L
+        );
+
+        when(catalogCommerceFacade.getProductForCheckoutLock(1001L)).thenReturn(ekycProductDetail);
+        when(identityCommerceFacade.getAddressById(300L, 501L)).thenReturn(Optional.of(addressDto));
+        when(identityCommerceFacade.getDefaultAddress(200L)).thenReturn(Optional.of(sellerAddressDto));
+        when(systemFeePolicyRepository.findFirstByStatusOrderByEffectiveFromDesc("ACTIVE")).thenReturn(Optional.of(feePolicy));
+        when(identityCommerceFacade.isUserVerified(300L)).thenReturn(true);
+
+        UUID invalidResultId = UUID.randomUUID();
+        doThrow(new IllegalStateException("Kết quả xác thực khuôn mặt không hợp lệ hoặc đã hết hạn. Vui lòng quét lại khuôn mặt."))
+                .when(identityCommerceFacade).requireQuickAuthResult(eq(300L), eq(invalidResultId));
+
+        CheckoutDtos.BuyNowRequest request = new CheckoutDtos.BuyNowRequest(1001L, 501L, null, null, null, invalidResultId);
+
+        assertThatThrownBy(() -> checkoutService.buyNow(300L, request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("không hợp lệ hoặc đã hết hạn");
+    }
+
+    @Test
+    void buyNow_doesNotRequireQuickAuthWhenProductDoesNotRequireBuyerEkyc() {
+        when(catalogCommerceFacade.getProductForCheckoutLock(1001L)).thenReturn(productDetail);
+        when(identityCommerceFacade.getAddressById(300L, 501L)).thenReturn(Optional.of(addressDto));
+        when(identityCommerceFacade.getDefaultAddress(200L)).thenReturn(Optional.of(sellerAddressDto));
+        when(systemFeePolicyRepository.findFirstByStatusOrderByEffectiveFromDesc("ACTIVE")).thenReturn(Optional.of(feePolicy));
+
+        when(orderRepository.save(any(OrderEntity.class))).thenAnswer(invocation -> {
+            OrderEntity o = invocation.getArgument(0);
+            setField(o, "id", 9904L);
+            return o;
+        });
+        when(orderItemRepository.saveAndFlush(any(OrderItemEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // No quickAuthResultId provided, should succeed because requiresBuyerEkyc = false
+        CheckoutDtos.BuyNowRequest request = new CheckoutDtos.BuyNowRequest(1001L, 501L, null, null);
+        CheckoutDtos.OrderCreatedResponse response = checkoutService.buyNow(300L, request);
+
+        assertThat(response.orderId()).isEqualTo(9904L);
+        // requireQuickAuthResult should NOT be called for products that don't require eKYC
+        verify(identityCommerceFacade, never()).requireQuickAuthResult(anyLong(), any(UUID.class));
     }
 
     private static void setField(Object target, String fieldName, Object value) throws Exception {
