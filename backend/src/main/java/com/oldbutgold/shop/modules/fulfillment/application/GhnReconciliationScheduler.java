@@ -291,8 +291,9 @@ public class GhnReconciliationScheduler {
             }
             case "delivered" -> {
                 if (!ShipmentEntity.STATUS_DELIVERED.equals(currentStatus)) {
-                    stateService.applyCarrierDelivered(trackingNumber, now, "delivered");
-                    return true;
+                    FulfillmentStateService.DeliveryTransitionResult result =
+                            stateService.markOrderDelivered(shipment.getOrderId(), now, "GHN_RECONCILIATION");
+                    return result != null && result.successful();
                 }
                 return false;
             }

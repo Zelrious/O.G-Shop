@@ -91,6 +91,11 @@ public interface FulfillmentCommerceFacade {
     void markShipped(long orderId, Instant shippedAt);
 
     /**
+     * Chuyển Order sang DELIVERED (yêu cầu SHIPPED, idempotent nếu đã DELIVERED/COMPLETED).
+     */
+    void markDelivered(long orderId, Instant deliveredAt);
+
+    /**
      * Chuyển Order sang DELIVERED từ carrier proof (chấp nhận SELLER_CONFIRMED hoặc SHIPPED).
      */
     void markDeliveredDirectFromCarrier(long orderId, Instant deliveredAt);

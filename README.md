@@ -76,6 +76,27 @@ python services/ekyc-service/start.py
 Microservice mặc định: `http://localhost:8001`.
 Swagger API Docs: `http://localhost:8001/docs`.
 
+### 5. Chạy Kiểm Thử Tích Hợp PostgreSQL Thật (`FulfillmentPostgresTest`)
+
+Để kiểm tra đồng thời (concurrency), khóa bi quan (`PESSIMISTIC_WRITE`), và đối soát webhook/giao vận trên PostgreSQL thật:
+
+```powershell
+# Bước 1: Tạo database kiểm thử riêng biệt (không ảnh hưởng dữ liệu dev)
+docker exec -it og-shop-postgres psql -U <DB_USER> -c "CREATE DATABASE og_shop_test;"
+
+# Bước 2: Thiết lập biến môi trường trỏ vào database test (thay thế bằng thông tin của bạn, không commit credential)
+$env:OGSHOP_TEST_DB_URL = "jdbc:postgresql://localhost:55432/og_shop_test"
+$env:OGSHOP_TEST_DB_USER = "<DB_USER>"
+$env:OGSHOP_TEST_DB_PASSWORD = "<DB_PASSWORD>"
+$env:OGSHOP_TEST_DB_ISOLATED = "true"
+
+# Bước 3: Chạy bộ test tích hợp Fulfillment trên PostgreSQL thật
+cd backend
+.\mvnw.cmd test -Dtest=FulfillmentPostgresTest
+```
+*(Ghi chú: Flyway sẽ tự động chạy 36 migrations và Hibernate `validate` schema trên database test này khi chạy)*.
+
+
 ## Tài liệu quan trọng
 
 - [Tiến trình tổng quát](docs/progress/STATUS.md)

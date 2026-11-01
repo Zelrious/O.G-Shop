@@ -48,7 +48,7 @@ class SmtpRegistrationEmailTest {
                         assertThat(error.getMessage()).doesNotContain("credentials","123456"));
     }
     @Test void realSmtpTransportDeliversCodeToAnIsolatedLocalMailbox() throws Exception {
-        try(var listener=new ServerSocket(0);var worker=Executors.newSingleThreadExecutor()) {
+        try(var listener=new ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"));var worker=Executors.newSingleThreadExecutor()) {
             listener.setSoTimeout(5000);
             var delivered=worker.submit(()->{
                 try(var socket=listener.accept()) {
