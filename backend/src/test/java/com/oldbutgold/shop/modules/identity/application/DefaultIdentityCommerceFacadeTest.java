@@ -2,6 +2,7 @@ package com.oldbutgold.shop.modules.identity.application;
 
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.AddressEntity;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.AddressRepository;
+import com.oldbutgold.shop.modules.identity.infrastructure.persistence.EkycRepository;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.SellerVerificationRepository;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +17,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -35,6 +37,9 @@ class DefaultIdentityCommerceFacadeTest {
     private SellerVerificationRepository sellerVerificationRepository;
 
     @Mock
+    private EkycRepository ekycRepository;
+
+    @Mock
     private AccountAccessService accountAccess;
 
     private Clock clock;
@@ -47,6 +52,7 @@ class DefaultIdentityCommerceFacadeTest {
                 userRepository,
                 addressRepository,
                 sellerVerificationRepository,
+                ekycRepository,
                 clock,
                 accountAccess
         );
@@ -110,5 +116,51 @@ class DefaultIdentityCommerceFacadeTest {
         assertThat(opt.get().ghnDistrictId()).isEqualTo(1443);
         assertThat(opt.get().ghnWardCode()).isEqualTo("30101");
         assertThat(opt.get().hasValidGhnCodes()).isTrue();
+    }
+
+    @Test
+    @DisplayName("requireQuickAuthResult ném khi resultId null")
+    void requireQuickAuthResult_NullResultId_Throws() {
+        assertThatThrownBy(() -> facade.requireQuickAuthResult(1L, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("xác thực nhanh khuôn mặt");
+    }
+
+    @Test
+    @DisplayName("requireQuickAuthResult ném khi không tìm thấy kết quả hợp lệ")
+    void requireQuickAuthResult_NoValidResult_Throws() {
+        when(ekycRepository.findValidQuickAuthResult(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> facade.requireQuickAuthResult(1L, UUID.randomUUID()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("không hợp lệ hoặc đã hết hạn");
+    }
+
+    @Test
+    @DisplayName("requireQuickAuthResult ném khi resultId không khớp")
+    void requireQuickAuthResult_Mismatch_Throws() {
+        UUID otherId = UUID.randomUUID();
+        var valid = new com.oldbutgold.shop.modules.identity.infrastructure.persistence.EkycRepository.QuickAuthResultRecord(
+                otherId, 1L, 100L, 200L, Instant.now(), Instant.now().plusSeconds(900), "cmd", UUID.randomUUID()
+        );
+        when(ekycRepository.findValidQuickAuthResult(1L)).thenReturn(Optional.of(valid));
+
+        UUID mismatchId = UUID.randomUUID();
+        assertThatThrownBy(() -> facade.requireQuickAuthResult(1L, mismatchId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("không hợp lệ hoặc đã hết hạn");
+    }
+
+    @Test
+    @DisplayName("requireQuickAuthResult thành công khi resultId khớp")
+    void requireQuickAuthResult_Success() {
+        UUID matchingId = UUID.randomUUID();
+        var valid = new com.oldbutgold.shop.modules.identity.infrastructure.persistence.EkycRepository.QuickAuthResultRecord(
+                matchingId, 1L, 100L, 200L, Instant.now(), Instant.now().plusSeconds(900), "cmd", UUID.randomUUID()
+        );
+        when(ekycRepository.findValidQuickAuthResult(1L)).thenReturn(Optional.of(valid));
+
+        facade.requireQuickAuthResult(1L, matchingId);
+        // no exception
     }
 }

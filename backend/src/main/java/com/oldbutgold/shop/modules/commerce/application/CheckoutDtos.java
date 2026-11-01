@@ -89,7 +89,8 @@ public final class CheckoutDtos {
             Long acceptedOfferId,
             Long eligibleOfferId,
             BigDecimal eligibleOfferPrice,
-            String voucherRejectionReason
+            String voucherRejectionReason,
+            Boolean requiresBuyerEkyc
     ) {
         public CheckoutPreviewResponse(
                 Long productId, String productTitle, String thumbnailUrl,
@@ -101,7 +102,21 @@ public final class CheckoutDtos {
         ) {
             this(productId, productTitle, thumbnailUrl, sellerId, sellerName, listedPrice, shippingFee,
                  buyerSystemFee, voucherDiscount, shippingDiscount, totalAmount, addresses, selectedAddress,
-                 availableVouchers, appliedVoucher, agreedPrice, acceptedOfferId, null, null, null);
+                 availableVouchers, appliedVoucher, agreedPrice, acceptedOfferId, null, null, null, false);
+        }
+
+        public CheckoutPreviewResponse(
+                Long productId, String productTitle, String thumbnailUrl,
+                Long sellerId, String sellerName, BigDecimal listedPrice,
+                BigDecimal shippingFee, BigDecimal buyerSystemFee, BigDecimal voucherDiscount,
+                BigDecimal shippingDiscount, BigDecimal totalAmount, List<AddressSummaryResponse> addresses,
+                AddressSummaryResponse selectedAddress, List<VoucherSummaryResponse> availableVouchers,
+                VoucherSummaryResponse appliedVoucher, BigDecimal agreedPrice, Long acceptedOfferId,
+                Long eligibleOfferId, BigDecimal eligibleOfferPrice, String voucherRejectionReason
+        ) {
+            this(productId, productTitle, thumbnailUrl, sellerId, sellerName, listedPrice, shippingFee,
+                 buyerSystemFee, voucherDiscount, shippingDiscount, totalAmount, addresses, selectedAddress,
+                 availableVouchers, appliedVoucher, agreedPrice, acceptedOfferId, eligibleOfferId, eligibleOfferPrice, voucherRejectionReason, false);
         }
     }
 
@@ -111,9 +126,11 @@ public final class CheckoutDtos {
             Long addressId,
             CreateAddressRequest newAddress,
             String voucherCode,
-            Long offerId
+            Long offerId,
+            java.util.UUID quickAuthResultId
     ) {
-        public BuyNowRequest(Long productId,Long addressId,CreateAddressRequest newAddress,String voucherCode){this(productId,addressId,newAddress,voucherCode,null);}
+        public BuyNowRequest(Long productId,Long addressId,CreateAddressRequest newAddress,String voucherCode){this(productId,addressId,newAddress,voucherCode,null,null);}
+        public BuyNowRequest(Long productId,Long addressId,CreateAddressRequest newAddress,String voucherCode,Long offerId){this(productId,addressId,newAddress,voucherCode,offerId,null);}
     }
 
     public record OrderCreatedResponse(
