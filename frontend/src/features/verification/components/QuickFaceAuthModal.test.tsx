@@ -206,4 +206,99 @@ describe('QuickFaceAuthModal Component', () => {
     expect(onClose).toHaveBeenCalled();
     expect(mockStopCamera).toHaveBeenCalled();
   });
+
+  it('preserves hold progress within 1200ms Smart Tolerance Buffer when a single tick drops', async () => {
+    vi.spyOn(quickAuthApi, 'init').mockResolvedValueOnce({
+      alreadyVerified: false,
+      sessionId: 'session-uuid-456',
+      message: 'Vui lòng nhìn thẳng vào camera.',
+    });
+
+    // Tick 1: match = true -> starts HOLDING
+    vi.spyOn(quickAuthApi, 'verify').mockResolvedValueOnce({
+      match: true,
+      resultId: 'result-123',
+      distance: 0.25,
+      confidenceScore: 90.0,
+      remainingAttempts: 15,
+      message: 'Khớp khuôn mặt',
+    });
+
+    render(
+      <QuickFaceAuthModal isOpen={true} onClose={vi.fn()} onSuccess={vi.fn()} countdownDurationMs={2000} />
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Advance 60ms to trigger initial tick (50ms)
+    await act(async () => {
+      vi.advanceTimersByTime(60);
+      await Promise.resolve();
+    });
+
+    // Should be in HOLDING state
+    expect(screen.getByText(/Giữ yên/i)).toBeInTheDocument();
+
+    // Tick 2: transient non-match (e.g. blink) 400ms later (total 460ms < 1200ms tolerance)
+    vi.spyOn(quickAuthApi, 'verify').mockResolvedValueOnce({
+      match: false,
+      frameStatus: 'DISTANCE_ISSUE',
+      directionalCue: 'move_closer',
+      remainingAttempts: 15,
+      message: 'Hãy đưa khuôn mặt lại gần',
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(400);
+      await Promise.resolve();
+    });
+
+    // Within 1200ms tolerance: hold progress is NOT reset to 0, still in HOLDING
+    expect(screen.getAllByText(/Giữ yên/i).length).toBeGreaterThan(0);
+  });
+
+  it('immediately triggers success when test bypass button is clicked', async () => {
+    const onSuccess = vi.fn();
+    const onClose = vi.fn();
+
+    vi.spyOn(quickAuthApi, 'init').mockResolvedValueOnce({
+      alreadyVerified: false,
+      sessionId: 'session-uuid-456',
+      message: 'Vui lòng nhìn thẳng vào camera.',
+    });
+
+    vi.spyOn(quickAuthApi, 'verify').mockResolvedValueOnce({
+      match: true,
+      resultId: 'bypass-result-uuid-999',
+      distance: 0.15,
+      confidenceScore: 98.0,
+      remainingAttempts: 15,
+      message: 'Xác thực thử nghiệm thành công!',
+    });
+
+    render(
+      <QuickFaceAuthModal isOpen={true} onClose={onClose} onSuccess={onSuccess} />
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const testBtn = screen.getByRole('button', { name: /Chấp thuận để Test luồng/i });
+    expect(testBtn).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(testBtn);
+      await Promise.resolve();
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+
+    expect(onSuccess).toHaveBeenCalledWith('bypass-result-uuid-999');
+    expect(onClose).toHaveBeenCalled();
+  });
 });

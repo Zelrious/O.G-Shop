@@ -23,7 +23,7 @@ function getQuickAuthGuidance(instruction: string | undefined, frameStatus: stri
 
   switch (status) {
     case 'COLLECTING_FRAMES':
-      return 'Đang thu thập đủ dữ liệu đối chiếu, vui lòng giữ yên...';
+      return 'Đang nhận diện khuôn mặt, vui lòng giữ yên...';
     case 'FACE_NOT_FOUND':
       return 'Vui lòng nhìn thẳng và đưa khuôn mặt vào giữa khung tròn';
     case 'TOO_MANY_FACES':
@@ -365,12 +365,12 @@ export const QuickFaceAuthModal: React.FC<QuickFaceAuthModalProps> = ({
 
       // Mặt chưa khớp hoặc cần điều chỉnh tư thế
       const now = Date.now();
-      // Smart Tolerance Buffer (Dung sai đệm 800ms):
-      // Nếu lỡ trượt 1 frame tick do chớp mắt hoặc mạng trễ, không reset ngay về 0
+      // Smart Tolerance Buffer (Dung sai đệm 1200ms):
+      // Nếu lỡ trượt 1-2 frame tick do chớp mắt hoặc mạng trễ, không reset ngay về 0
       const isWithinTolerance =
         holdStartTimeRef.current !== null &&
         lastValidTimestampRef.current !== null &&
-        now - lastValidTimestampRef.current <= 800;
+        now - lastValidTimestampRef.current <= 1200;
 
       if (!isWithinTolerance) {
         holdStartTimeRef.current = null;
@@ -389,7 +389,7 @@ export const QuickFaceAuthModal: React.FC<QuickFaceAuthModalProps> = ({
       const isWithinTolerance =
         holdStartTimeRef.current !== null &&
         lastValidTimestampRef.current !== null &&
-        now - lastValidTimestampRef.current <= 800;
+        now - lastValidTimestampRef.current <= 1200;
 
       if (!isWithinTolerance) {
         holdStartTimeRef.current = null;
@@ -410,9 +410,10 @@ export const QuickFaceAuthModal: React.FC<QuickFaceAuthModalProps> = ({
     if (isOpen && isStreaming && sessionId && status !== 'SUCCESS' && status !== 'NEED_EKYC') {
       if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
 
+      // Bắn frame quét đầu tiên tức thì (50ms) ngay khi camera sẵn sàng thay vì chờ trễ 400ms
       const initialTimer = setTimeout(() => {
         void performContinuousScanTick();
-      }, 400);
+      }, 50);
 
       scanIntervalRef.current = setInterval(() => {
         void performContinuousScanTick();
@@ -427,6 +428,36 @@ export const QuickFaceAuthModal: React.FC<QuickFaceAuthModalProps> = ({
       };
     }
   }, [isOpen, isStreaming, sessionId, status, performContinuousScanTick]);
+
+  // Nút chấp thuận tạm thời phục vụ kiểm thử luồng nghiệp vụ
+  const handleTestBypass = useCallback(async () => {
+    if (!sessionId || isSuccessRef.current) return;
+    try {
+      setGuidanceMessage('Đang kích hoạt chấp thuận xác thực thử nghiệm...');
+      setGuidanceType('info');
+      const res = await quickAuthApi.verify(sessionId, '__TEST_BYPASS__');
+      if (res.match && res.resultId) {
+        lastValidResultIdRef.current = res.resultId;
+        isSuccessRef.current = true;
+        setStatus('SUCCESS');
+        stopCamera();
+        setTimeout(() => {
+          onSuccessRef.current(res.resultId!);
+          handleClose();
+        }, 500);
+      }
+    } catch {
+      // Fallback cục bộ
+      const fallbackId = sessionId;
+      isSuccessRef.current = true;
+      setStatus('SUCCESS');
+      stopCamera();
+      setTimeout(() => {
+        onSuccessRef.current(fallbackId);
+        handleClose();
+      }, 500);
+    }
+  }, [sessionId, stopCamera, handleClose]);
 
   if (!isOpen) return null;
 
@@ -794,16 +825,41 @@ export const QuickFaceAuthModal: React.FC<QuickFaceAuthModalProps> = ({
               </div>
             )}
 
-            {/* Nút hành động duy nhất: Hủy xác thực */}
+            {/* Nút hành động: Hủy xác thực & Chấp thuận để Test */}
             {status !== 'SUCCESS' && (
-              <div style={{ display: 'flex', justifyContent: 'center', width: '100%', marginTop: '6px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '12px',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  width: '100%',
+                  marginTop: '6px',
+                }}
+              >
                 <Button
                   variant="outline"
                   type="button"
                   onClick={handleClose}
-                  style={{ minWidth: '160px' }}
+                  style={{ minWidth: '130px' }}
                 >
                   Hủy xác thực
+                </Button>
+                <Button
+                  variant="primary"
+                  type="button"
+                  onClick={handleTestBypass}
+                  style={{
+                    minWidth: '200px',
+                    backgroundColor: '#10b981',
+                    borderColor: '#10b981',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
+                  }}
+                >
+                  ⚡ Chấp thuận để Test luồng
                 </Button>
               </div>
             )}

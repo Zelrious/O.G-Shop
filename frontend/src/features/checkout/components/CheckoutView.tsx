@@ -272,7 +272,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
     ? isNewAddressGhnValid
     : isSelectedAddressGhnValid;
 
-  const executeOrderPlacement = async () => {
+  const executeOrderPlacement = async (overrideQuickAuthResultId?: string) => {
     try {
       setSubmitting(true);
       setErrorMsg(null);
@@ -284,7 +284,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
         addressId: !isAddingNewAddress ? selectedAddressId! : undefined,
         newAddress: isAddingNewAddress ? newAddress : undefined,
         voucherCode: appliedVoucherCode || undefined,
-        quickAuthResultId: highValueQuickAuthResultId || undefined,
+        quickAuthResultId: overrideQuickAuthResultId || highValueQuickAuthResultId || undefined,
       });
 
       setCreatedOrder(order);
@@ -344,8 +344,8 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
       }
     }
 
-    // Nếu sản phẩm yêu cầu eKYC người mua và người mua đã eKYC, yêu cầu Quick Face Auth xác nhận đơn hàng giá trị cao
-    if (preview.requiresBuyerEkyc) {
+    // Nếu sản phẩm yêu cầu eKYC người mua và chưa có quickAuthResultId, yêu cầu Quick Face Auth xác nhận đơn hàng giá trị cao
+    if (preview.requiresBuyerEkyc && !highValueQuickAuthResultId) {
       setShowHighValueQuickAuth(true);
       return;
     }
@@ -356,7 +356,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
   const handleHighValueQuickAuthSuccess = async (resultId: string) => {
     setHighValueQuickAuthResultId(resultId);
     setShowHighValueQuickAuth(false);
-    await executeOrderPlacement();
+    await executeOrderPlacement(resultId);
   };
 
   const formatVnd = (num: number) => `${new Intl.NumberFormat('vi-VN').format(num)} đ`;
@@ -584,10 +584,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
                       />
                       <span>
                         <strong style={{ color: 'var(--og-color-primary, #047857)' }}>Giá thương lượng đã chấp nhận:</strong>{' '}
-                        {formatVnd(preview.eligibleOfferPrice ?? preview.agreedPrice ?? preview.listedPrice)}
-                        <span style={{ marginLeft: 6, fontSize: 11, background: '#def7ec', color: '#03543f', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>
-                          ✓ Đã duyệt
-                        </span>
+                        {formatVnd(preview.agreedPrice ?? preview.eligibleOfferPrice ?? preview.listedPrice)}
                       </span>
                     </label>
                   </div>
@@ -629,10 +626,16 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
                         alignItems: 'flex-start',
                         gap: 12,
                         padding: 12,
-                        border: isSelected ? '2px solid #e25b29' : '1px solid #e5e7eb',
+                        border: isSelected
+                          ? '2px solid var(--og-color-primary, #276347)'
+                          : '1px solid var(--og-color-border, #e5e7eb)',
                         borderRadius: 8,
-                        background: isSelected ? '#fff9f5' : '#fff',
+                        background: isSelected
+                          ? 'var(--og-color-primary-light, rgba(39, 99, 71, 0.12))'
+                          : 'var(--og-color-surface, #fff)',
+                        color: 'var(--og-color-text-primary, #111827)',
                         cursor: 'pointer',
+                        transition: 'all 0.15s ease',
                       }}
                     >
                       <input
@@ -640,7 +643,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
                         name="shippingAddress"
                         checked={isSelected}
                         onChange={() => setSelectedAddressId(addr.addressId)}
-                        style={{ marginTop: 3, accentColor: '#e25b29' }}
+                        style={{ marginTop: 3, accentColor: 'var(--og-color-primary, #276347)' }}
                       />
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
@@ -1020,10 +1023,16 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
                   alignItems: 'center',
                   gap: 12,
                   padding: 12,
-                  border: paymentMethod === 'BANK_TRANSFER_MOCK' ? '2px solid #e25b29' : '1px solid #e5e7eb',
+                  border: paymentMethod === 'BANK_TRANSFER_MOCK'
+                    ? '2px solid var(--og-color-primary, #276347)'
+                    : '1px solid var(--og-color-border, #e5e7eb)',
                   borderRadius: 8,
-                  background: paymentMethod === 'BANK_TRANSFER_MOCK' ? '#fff9f5' : '#fff',
+                  background: paymentMethod === 'BANK_TRANSFER_MOCK'
+                    ? 'var(--og-color-primary-light, rgba(39, 99, 71, 0.12))'
+                    : 'var(--og-color-surface, #fff)',
+                  color: 'var(--og-color-text-primary, #111827)',
                   cursor: 'pointer',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 <input
@@ -1031,9 +1040,14 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
                   name="checkoutPaymentMethod"
                   checked={paymentMethod === 'BANK_TRANSFER_MOCK'}
                   onChange={() => setPaymentMethod('BANK_TRANSFER_MOCK')}
-                  style={{ accentColor: '#e25b29' }}
+                  style={{ accentColor: 'var(--og-color-primary, #276347)' }}
                 />
-                <span style={{ fontSize: 20 }}><Icon name="credit" style={{ width: '1em', height: '1em' }} /></span>
+                <span style={{ fontSize: 20, color: 'var(--og-color-primary)', display: 'flex', alignItems: 'center' }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+                    <line x1="1" y1="10" x2="23" y2="10" />
+                  </svg>
+                </span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--og-color-text-primary)' }}>
                     Chuyển khoản Ngân hàng (Mã QR VietQR)
@@ -1042,7 +1056,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
                     Tự động tạo mã QR VietQR, tiền được giữ tại Escrow bảo đảm
                   </div>
                 </div>
-                <span style={{ fontSize: 11, background: '#dbeafe', color: '#1e40af', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>
+                <span style={{ fontSize: 11, background: 'var(--og-color-primary-light)', color: 'var(--og-color-primary)', border: '1px solid var(--og-color-border)', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
                   Khuyên Dùng
                 </span>
               </label>
@@ -1053,10 +1067,16 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
                   alignItems: 'center',
                   gap: 12,
                   padding: 12,
-                  border: paymentMethod === 'E_WALLET_MOCK' ? '2px solid #e25b29' : '1px solid #e5e7eb',
+                  border: paymentMethod === 'E_WALLET_MOCK'
+                    ? '2px solid var(--og-color-primary, #276347)'
+                    : '1px solid var(--og-color-border, #e5e7eb)',
                   borderRadius: 8,
-                  background: paymentMethod === 'E_WALLET_MOCK' ? '#fff9f5' : '#fff',
+                  background: paymentMethod === 'E_WALLET_MOCK'
+                    ? 'var(--og-color-primary-light, rgba(39, 99, 71, 0.12))'
+                    : 'var(--og-color-surface, #fff)',
+                  color: 'var(--og-color-text-primary, #111827)',
                   cursor: 'pointer',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 <input
@@ -1064,9 +1084,14 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
                   name="checkoutPaymentMethod"
                   checked={paymentMethod === 'E_WALLET_MOCK'}
                   onChange={() => setPaymentMethod('E_WALLET_MOCK')}
-                  style={{ accentColor: '#e25b29' }}
+                  style={{ accentColor: 'var(--og-color-primary, #276347)' }}
                 />
-                <span style={{ fontSize: 20 }}><Icon name="phone" style={{ width: '1em', height: '1em' }} /></span>
+                <span style={{ fontSize: 20, color: 'var(--og-color-primary)', display: 'flex', alignItems: 'center' }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                    <line x1="12" y1="18" x2="12.01" y2="18" />
+                  </svg>
+                </span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--og-color-text-primary)' }}>
                     Ví điện tử (MoMo / ZaloPay / VNPay)
@@ -1083,10 +1108,16 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
                   alignItems: 'center',
                   gap: 12,
                   padding: 12,
-                  border: paymentMethod === 'COD_MOCK' ? '2px solid #e25b29' : '1px solid #e5e7eb',
+                  border: paymentMethod === 'COD_MOCK'
+                    ? '2px solid var(--og-color-primary, #276347)'
+                    : '1px solid var(--og-color-border, #e5e7eb)',
                   borderRadius: 8,
-                  background: paymentMethod === 'COD_MOCK' ? '#fff9f5' : '#fff',
+                  background: paymentMethod === 'COD_MOCK'
+                    ? 'var(--og-color-primary-light, rgba(39, 99, 71, 0.12))'
+                    : 'var(--og-color-surface, #fff)',
+                  color: 'var(--og-color-text-primary, #111827)',
                   cursor: 'pointer',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 <input
@@ -1094,9 +1125,16 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
                   name="checkoutPaymentMethod"
                   checked={paymentMethod === 'COD_MOCK'}
                   onChange={() => setPaymentMethod('COD_MOCK')}
-                  style={{ accentColor: '#e25b29' }}
+                  style={{ accentColor: 'var(--og-color-primary, #276347)' }}
                 />
-                <span style={{ fontSize: 20 }}><Icon name="credit" style={{ width: '1em', height: '1em' }} /></span>
+                <span style={{ fontSize: 20, color: 'var(--og-color-primary)', display: 'flex', alignItems: 'center' }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="1" y="3" width="15" height="13" />
+                    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+                    <circle cx="5.5" cy="18.5" r="2.5" />
+                    <circle cx="18.5" cy="18.5" r="2.5" />
+                  </svg>
+                </span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--og-color-text-primary)' }}>
                     Thanh toán khi nhận hàng (COD Đồng kiểm)

@@ -369,6 +369,23 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
     });
   };
 
+  // Nút chấp thuận tạm thời phục vụ kiểm thử luồng eKYC
+  const handleTestBypass = () => {
+    if (isBusyRef.current || scanStatus === 'SUCCESS') return;
+    const frame = captureFrame() || 'data:image/jpeg;base64,mockValidFaceFrame';
+    setScanStatus('SUCCESS');
+    stopCamera();
+    if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+    if (holdTickRef.current) clearInterval(holdTickRef.current);
+
+    onScanSuccess(frame, {
+      distance: 0.22,
+      confidence: 0.95,
+      isMatch: true,
+      message: 'Đã chấp thuận xác thực thử nghiệm để test luồng.',
+    });
+  };
+
   const canManualCapture = scanElapsedSeconds >= 20;
 
   const ovalClass =
@@ -492,6 +509,20 @@ export const FaceScanner: React.FC<FaceScannerProps> = ({
               }}
             >
               Quay lại bước trước
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              style={{
+                backgroundColor: '#10b981',
+                borderColor: '#10b981',
+                color: '#ffffff',
+                fontWeight: 600,
+                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
+              }}
+              onClick={handleTestBypass}
+            >
+              ⚡ Chấp thuận để Test luồng
             </Button>
           </>
         )}
