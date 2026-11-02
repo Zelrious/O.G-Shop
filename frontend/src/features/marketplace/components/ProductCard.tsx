@@ -67,6 +67,35 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </span>
           )}
 
+          {product.requiresBuyerEkyc && (
+            <span
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                zIndex: 2,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                color: '#1d4ed8',
+                backgroundColor: 'rgba(239, 246, 255, 0.95)',
+                border: '1px solid #bfdbfe',
+                padding: '2px 7px',
+                borderRadius: '6px',
+                backdropFilter: 'blur(4px)',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              }}
+              title="Món đồ này yêu cầu Người mua phải hoàn tất eKYC để đặt mua"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+              <span>Cần eKYC</span>
+            </span>
+          )}
+
           {/* Accessible Category Label */}
           {product.category && (
             <span className="og-visually-hidden">
@@ -82,25 +111,39 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             <span className="og-product-card__seller-name">
               {product.seller.displayName}
             </span>
-            {product.seller.trustLabel && (
+            {product.seller.trustLabel === 'Đã xác minh eKYC' ? (
               <span
-                className="og-product-card__verified-badge"
-                title={product.seller.trustLabel}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  color: '#059669',
+                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                  lineHeight: 1.2,
+                }}
+                title="Người bán đã xác thực danh tính CCCD (eKYC)"
               >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="#0284c7"
-                  aria-hidden="true"
-                >
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <polyline points="9 12 11 14 15 10" />
                 </svg>
-                <span className="og-visually-hidden">
-                  {product.seller.trustLabel}
-                </span>
+                <span>Đã eKYC</span>
               </span>
-            )}
+            ) : product.seller.trustLabel ? (
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  color: 'var(--og-color-text-muted)',
+                }}
+              >
+                {product.seller.trustLabel}
+              </span>
+            ) : null}
           </div>
 
           {/* Title: Strict 2 lines clamp */}

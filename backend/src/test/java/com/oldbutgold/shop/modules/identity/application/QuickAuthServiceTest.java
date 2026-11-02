@@ -249,4 +249,57 @@ class QuickAuthServiceTest {
         assertThat(resEmpty.hasValidResult()).isFalse();
         assertThat(resEmpty.resultId()).isNull();
     }
+
+    @Test
+    void verify_whenMultipleTicks_usesCachedReferenceAssetsWithoutReReadingStorage() {
+        UUID sessionId = UUID.randomUUID();
+        QuickAuthSessionRecord session = new QuickAuthSessionRecord(
+                sessionId, 10L, 100L, 500L, 0, null, now.plusSeconds(300), "cmd"
+        );
+        when(repository.findQuickAuthSession(sessionId)).thenReturn(Optional.of(session));
+
+        AssetRecord refAsset = new AssetRecord(
+                500L, 100L, "REFERENCE", "ref/key.jpg", "digest", now, now.plus(Duration.ofDays(60)), null
+        );
+        when(repository.findAssetById(500L)).thenReturn(Optional.of(refAsset));
+        when(storage.read("ref/key.jpg")).thenReturn("sample-ref-bytes".getBytes());
+
+        when(client.match(any(), any(), any(), any(), any())).thenReturn(
+                new EkycClient.MatchResult("NON_MATCH", false, 0.65, 50.0, 0.45, "Khuôn mặt chưa khớp", "ArcFace", "1.0", false)
+        );
+
+        // Frame tick 1
+        service.verify(10L, sessionId, "frame1");
+        // Frame tick 2
+        service.verify(10L, sessionId, "frame2");
+        // Frame tick 3
+        service.verify(10L, sessionId, "frame3");
+
+        // storage.read chỉ được gọi duy nhất 1 lần ở tick đầu tiên, các tick sau tái sử dụng cache
+        verify(storage, times(1)).read("ref/key.jpg");
+    }
+
+    @Test
+    void verify_whenTestBypass_createsValidResultWithoutCallingClient() {
+        UUID sessionId = UUID.randomUUID();
+        QuickAuthSessionRecord session = new QuickAuthSessionRecord(
+                sessionId, 10L, 100L, 500L, 0, null, now.plusSeconds(300), "cmd"
+        );
+        when(repository.findQuickAuthSession(sessionId)).thenReturn(Optional.of(session));
+
+        AssetRecord refAsset = new AssetRecord(
+                500L, 100L, "REFERENCE", "ref/key.jpg", "digest", now, now.plus(Duration.ofDays(60)), null
+        );
+        when(repository.findAssetById(500L)).thenReturn(Optional.of(refAsset));
+        when(storage.read("ref/key.jpg")).thenReturn("sample-ref-bytes".getBytes());
+
+        QuickAuthVerifyResponse res = service.verify(10L, sessionId, "__TEST_BYPASS__");
+
+        assertThat(res.match()).isTrue();
+        assertThat(res.resultId()).isNotNull();
+        verify(client, never()).match(any(), any(), any(), any(), any());
+        verify(repository).createQuickAuthResult(
+                eq(res.resultId()), eq(sessionId), eq(10L), eq(100L), eq(500L), eq(now), any(), anyString()
+        );
+    }
 }

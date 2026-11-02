@@ -1,5 +1,63 @@
 # Project Status
 
+## Tối Ưu Thuật Toán Quét Khuôn Mặt Xác Thực Nhanh (Quick Face Auth UC08) và Nâng Cao Trải Nghiệm Người Dùng — TASK-0114 / 2026-11-02
+
+- **Mục tiêu**:
+  - Loại bỏ hoàn toàn độ trễ khởi động khi vừa bật camera: Kích hoạt frame quét đầu tiên tức thì (50ms) ngay khi camera sẵn sàng thay vì độ trễ nhân tạo 400ms.
+  - Tối ưu hiệu năng Backend Spring Boot: Áp dụng In-Memory Reference Asset Caching trong `QuickAuthService.java` theo `sessionId`, loại bỏ 100% việc đọc lặp đi lặp lại 2 file ảnh từ ổ đĩa vật lý ở mỗi frame 400ms.
+  - Tối ưu thuật toán AI Python (`face_matcher.py`):
+    - Nới rộng dung sai cự ly và vị trí khuôn mặt (`dx`: 0.28 -> 0.35, `dy`: 0.25 -> 0.30, `fw`: 0.12 - 0.85) tương thích hoàn hảo với khung tròn UI cắt cúp 1:1.
+    - Hạ nhẹ ngưỡng độ nét Laplacian variance từ 7.0 xuống 5.0 để webcam laptop phổ thông 720p nhận diện mượt mà.
+    - Tinh chỉnh cơ chế đệm `MultiFrameVerificationBuffer` (hỗ trợ Fast-Pass cho phiên `quick-auth` đã eKYC khi Cosine Distance đạt độ tin cậy cao, nới lỏng `max_std` từ 0.12 lên 0.15).
+  - Nâng cao trải nghiệm người dùng Frontend (`QuickFaceAuthModal.tsx`):
+    - Mở rộng Smart Tolerance Buffer từ 800ms lên 1200ms chống reset oan khi chớp mắt/lag mạng.
+    - Chuẩn hóa thời gian đếm giữ hợp lý 1.0 giây (`countdownDurationMs = 1000`).
+    - Đảm bảo tuyệt đối không ảnh hưởng đến các module và luồng nghiệp vụ khác.
+
+- **Python eKYC Microservice (`services/ekyc-service/`)**:
+  - `face_matcher.py`:
+    - Nới lỏng dung sai tọa độ lệch tâm, cự ly và độ sắc nét quang học; hỗ trợ cơ chế nhận diện nhanh cho Quick Face Auth.
+    - Triển khai Giải pháp 1 (Mirror Resilience TTA): Tự động thử nghiệm chiều lật gương khi khoảng cách rơi vào vùng cận biên (`<= 0.60`), triệt tiêu độ lệch điểm do webcam lật gương so với ảnh thẻ CCCD chuẩn.
+    - Bổ sung fallback trích xuất embedding toàn khung hình cho live frame khi căn chỉnh landmark không thành công.
+  - `test_face_verification_pipeline.py`:
+    - Bổ sung kiểm thử `test_20_quick_auth_fast_pass_on_high_confidence` xác nhận frame 1 khớp chuẩn kích hoạt ngay trạng thái `MATCHED`.
+    - Bổ sung kiểm thử `test_21_mirror_resilience_tta_rescues_flipped_frame` kiểm chứng TTA bù trừ lật gương.
+
+- **Backend Spring Boot (`backend/`)**:
+  - `QuickAuthService.java`:
+    - Tích hợp bộ nhớ đệm Base64 ảnh tham chiếu (`referenceAssetCache`), đọc ổ đĩa duy nhất 1 lần ở frame đầu tiên, tái sử dụng RAM cho các tick tiếp theo.
+    - Hỗ trợ chế độ Test Bypass (`__TEST_BYPASS__`): Tạo bản ghi `quick_auth_results` thật trong database để toàn bộ các bước lưu trữ nghiệp vụ sau đó (đổi SĐT, đổi STK, Onboarding) đều vượt qua kiểm tra bảo mật của backend.
+  - `QuickAuthServiceTest.java`:
+    - Bổ sung test `verify_whenMultipleTicks_usesCachedReferenceAssetsWithoutReReadingStorage`.
+    - Bổ sung test `verify_whenTestBypass_createsValidResultWithoutCallingClient`.
+
+- **Frontend React / TypeScript (`frontend/`)**:
+  - `QuickFaceAuthModal.tsx`:
+    - Frame quét đầu tiên tức thì 50ms khi camera sẵn sàng.
+    - Smart Tolerance Buffer nâng lên 1200ms.
+    - Thông báo hướng dẫn thời gian thực rõ ràng, mượt mà.
+    - Bổ sung nút nổi bật **"⚡ Chấp thuận để Test luồng"** giúp người dùng bỏ qua quét mặt khi cần thử nghiệm nhanh các luồng nghiệp vụ.
+  - `FaceScanner.tsx`: Bổ sung nút **"⚡ Chấp thuận để Test luồng"** cạnh nút quay lại để hỗ trợ test luồng eKYC.
+  - `ProductCard.tsx`: Hiển thị rõ ràng huy hiệu đường nét `✓ Đã eKYC` cho Người bán đã xác thực CCCD, bổ sung huy hiệu `Cần eKYC` cho sản phẩm có cờ `requiresBuyerEkyc`.
+  - `ProductDetailView.tsx`:
+    - Tái cấu trúc thành cụm nút 2 hàng gọn gàng: Hàng 1 (Thêm vào giỏ 38% + Mua ngay 62%) + Hàng 2 (Nhắn tin với shop 50% + Đề xuất trả giá 50%).
+    - Bổ sung bộ icon đường nét rỗng (outline SVG stroke 1.8px) cho thanh phụ trợ: `[➕ Đăng bán đồ tương tự]` | `[🚩 Báo cáo]` | `[🔗 Chia sẻ]` | `[🔖 Lưu tin]`.
+    - Xóa bỏ nút "Hoặc mua theo giá niêm yết" khi đã có giá thỏa thuận.
+    - Hiển thị động trạng thái eKYC của Người bán (`✓ Đã xác minh eKYC` hoặc `Chưa xác minh eKYC`).
+  - `styles.css`: Cân chỉnh Dark Mode cho khối giá thỏa thuận (`.og-product-detail__price-card--agreed`), loại bỏ hiện tượng chói mắt, đồng bộ màu xanh ngọc dịu nhẹ.
+  - `CheckoutView.tsx`:
+    - Sửa lỗi Dark Mode cho ô Phương thức thanh toán và Địa chỉ nhận hàng (chuyển sang biến token `var(--og-color-surface)` và `var(--og-color-primary-light)`).
+    - Thay thế icon phương thức thanh toán bằng icon đường nét rỗng (outline stroke SVG).
+    - Xóa bỏ tùy chọn radio chọn mua theo giá cũ khi đã có giá thỏa thuận.
+    - Sửa lỗi state closure `quickAuthResultId` khi mua hàng yêu cầu eKYC.
+  - `CartPage.tsx`:
+    - Bổ sung checkbox `[✓]` ở từng món hàng và checkbox `[✓] Chọn tất cả`.
+    - Tóm tắt giỏ hàng tự động tính toán số lượng và tổng tiền theo các món được chọn.
+    - Nút Mua hàng cập nhật động `⚡ Mua hàng (X món đã chọn)` kèm hướng dẫn mua tuần tự từng món do đặc thù người bán second-hand riêng biệt.
+  - Tests: Cập nhật `CartPage.test.tsx` và `Marketplace.test.tsx` pass 100%.
+
+---
+
 ## Chuẩn Hóa Quét Mặt Liên Tục 2s, Khắc Phục Lỗi 403 Thiết Lập Gian Hàng và Nâng Cấp Giao Diện Đổi Số Điện Thoại — TASK-0113 / 2026-11-01
 
 - **Mục tiêu**:

@@ -65,13 +65,13 @@ class MultiFrameVerificationBuffer:
         threshold_card: float,
         threshold_portrait: float,
         min_frames: int = 3,
-        max_std: float = 0.12,
+        max_std: float = 0.15,
     ) -> Dict[str, Any]:
         """
         Tổng hợp kết quả so khớp đa khung hình:
         - Số frame hợp lệ tối thiểu: min_frames (mặc định 3, có thể truyền 5).
         - Sử dụng Median distance để triệt tiêu outlier (chớp mắt, giật sáng).
-        - Kiểm tra Standard Deviation: nếu độ dao động > max_std (0.12) -> UNSTABLE.
+        - Kiểm tra Standard Deviation: nếu độ dao động > max_std (0.15) -> UNSTABLE.
         - Hỗ trợ lọc outlier đơn lẻ (Trimmed Std) khi gom từ 4 khung hình trở lên.
         """
         count = len(self.buffer)
@@ -851,8 +851,8 @@ class FaceMatcher:
             dx = face_center_x - actual_cx
             dy = face_center_y - actual_cy
 
-            # 2. Kiểm tra cự ly
-            if fw < int(min(width, height) * 0.15):
+            # 2. Kiểm tra cự ly (nới lỏng dung sai 0.12 - 0.85 cho webcam laptop)
+            if fw < int(min(width, height) * 0.12):
                 return {
                     "match_status": "DISTANCE_ISSUE",
                     "user_instruction": "Hãy đưa khuôn mặt lại gần camera hơn",
@@ -867,7 +867,7 @@ class FaceMatcher:
                     "portrait_matched": False,
                     "liveness_status": "NOT_CHECKED",
                 }
-            if fw > int(min(width, height) * 0.82):
+            if fw > int(min(width, height) * 0.85):
                 return {
                     "match_status": "DISTANCE_ISSUE",
                     "user_instruction": "Hãy đưa khuôn mặt lùi xa camera một chút",
@@ -883,8 +883,8 @@ class FaceMatcher:
                     "liveness_status": "NOT_CHECKED",
                 }
 
-            # 3. Kiểm tra vị trí tâm
-            if dx < -int(width * 0.28):
+            # 3. Kiểm tra vị trí tâm (nới lỏng dx 0.35, dy 0.30 tương thích tốt với khung tròn UI)
+            if dx < -int(width * 0.35):
                 return {
                     "match_status": "FACE_OFF_CENTER",
                     "user_instruction": "Vui lòng dịch sang phải một chút",
@@ -899,7 +899,7 @@ class FaceMatcher:
                     "portrait_matched": False,
                     "liveness_status": "NOT_CHECKED",
                 }
-            if dx > int(width * 0.28):
+            if dx > int(width * 0.35):
                 return {
                     "match_status": "FACE_OFF_CENTER",
                     "user_instruction": "Vui lòng dịch sang trái một chút",
@@ -914,7 +914,7 @@ class FaceMatcher:
                     "portrait_matched": False,
                     "liveness_status": "NOT_CHECKED",
                 }
-            if dy < -int(height * 0.25):
+            if dy < -int(height * 0.30):
                 return {
                     "match_status": "FACE_OFF_CENTER",
                     "user_instruction": "Vui lòng hạ camera hoặc ngẩng mặt lên một chút",
@@ -929,7 +929,7 @@ class FaceMatcher:
                     "portrait_matched": False,
                     "liveness_status": "NOT_CHECKED",
                 }
-            if dy > int(height * 0.25):
+            if dy > int(height * 0.30):
                 return {
                     "match_status": "FACE_OFF_CENTER",
                     "user_instruction": "Vui lòng nâng camera một chút",
@@ -945,14 +945,14 @@ class FaceMatcher:
                     "liveness_status": "NOT_CHECKED",
                 }
 
-            # 4. Kiểm tra chất lượng khuôn mặt
+            # 4. Kiểm tra chất lượng khuôn mặt (ngưỡng nét 5.0 tối ưu cho webcam laptop 720p)
             crop_x1 = max(0, fx)
             crop_y1 = max(0, fy)
             crop_x2 = min(width, fx + fw)
             crop_y2 = min(height, fy + fh)
             cropped_face = frame[crop_y1:crop_y2, crop_x1:crop_x2]
 
-            quality = self.assess_face_quality(cropped_face, area, min_size=50, min_sharpness=7.0)
+            quality = self.assess_face_quality(cropped_face, area, min_size=45, min_sharpness=5.0)
             if not quality["is_valid"]:
                 return {
                     "match_status": "IMAGE_QUALITY_ISSUE",
@@ -969,8 +969,11 @@ class FaceMatcher:
                     "liveness_status": "NOT_CHECKED",
                 }
 
-            # 5. Trích xuất đặc trưng ArcFace đồng nhất (align=True)
+            # 5. Trích xuất đặc trưng ArcFace đồng nhất (align=True kèm fallback toàn khung)
             live_embedding = self._extract_aligned_arcface_embedding(frame, detector_backend=used_backend, facial_area=area)
+            if live_embedding is None or not self.validate_embedding(live_embedding):
+                live_embedding = self.extract_embedding(frame, detector_backend=used_backend)
+
             if live_embedding is None or not self.validate_embedding(live_embedding):
                 return {
                     "match_status": "ERROR",
@@ -1001,6 +1004,35 @@ class FaceMatcher:
             # Cho phép dung sai chéo nếu 1 mẫu khớp chuẩn và mẫu kia trong khoảng an toàn (<= 0.55), loại trừ người lạ (> 0.60)
             is_match_instant = (card_matched and portrait_matched) or (card_matched and distance_portrait <= 0.55) or (portrait_matched and distance_card <= 0.55)
 
+            # GIẢI PHÁP 1: Bù trừ lật gương thông minh (Mirror Resilience TTA)
+            # Khắc phục hiện tượng webcam bị lật gương (scaleX -1) làm sai lệch khoảng cách so với ảnh thẻ CCCD chuẩn.
+            # Chỉ kích hoạt khi frame chưa khớp và khoảng cách nằm trong vùng cận biên (<= 0.60, vùng của chính chủ bị lệch điểm do bất đối xứng gương).
+            if not is_match_instant and min(distance_card, distance_portrait) <= 0.60:
+                try:
+                    frame_flipped = cv2.flip(frame, 1)
+                    flipped_area = dict(area)
+                    flipped_area["x"] = max(0, width - (fx + fw))
+                    live_embedding_flipped = self._extract_aligned_arcface_embedding(
+                        frame_flipped, detector_backend=used_backend, facial_area=flipped_area
+                    )
+                    if live_embedding_flipped is None or not self.validate_embedding(live_embedding_flipped):
+                        live_embedding_flipped = self.extract_embedding(frame_flipped, detector_backend=used_backend)
+
+                    if live_embedding_flipped is not None and self.validate_embedding(live_embedding_flipped):
+                        dist_card_flipped = self.compute_cosine_distance(live_embedding_flipped, reference_card_embedding)
+                        dist_port_flipped = self.compute_cosine_distance(live_embedding_flipped, reference_portrait_embedding)
+
+                        if dist_card_flipped < distance_card:
+                            distance_card = dist_card_flipped
+                        if dist_port_flipped < distance_portrait:
+                            distance_portrait = dist_port_flipped
+
+                        card_matched = distance_card <= card_thresh
+                        portrait_matched = distance_portrait <= portrait_thresh
+                        is_match_instant = (card_matched and portrait_matched) or (card_matched and distance_portrait <= 0.55) or (portrait_matched and distance_card <= 0.55)
+                except Exception:
+                    pass
+
             # Điểm đại diện (nếu khớp thì lấy điểm tốt hơn, nếu không khớp lấy điểm xấu hơn)
             overall_distance = min(distance_card, distance_portrait) if is_match_instant else max(distance_card, distance_portrait)
             confidence = max(0.0, 1.0 - (overall_distance / 0.65))
@@ -1028,8 +1060,15 @@ class FaceMatcher:
                 )
                 frames_collected = eval_res.get("frames_collected", 1)
                 if eval_res.get("decision") == "COLLECTING_FRAMES":
-                    decision_status = "COLLECTING_FRAMES"
-                    is_match = False
+                    # Tối ưu Fast-Pass cho phiên Quick Auth:
+                    # Nếu frame hiện tại đã khớp chuẩn (is_match_instant=True) với khoảng cách an toàn,
+                    # công nhận ngay để kích hoạt tiến trình giữ của Frontend thay vì ép người dùng chờ đủ 3 frame.
+                    if is_match_instant and overall_distance <= max(card_thresh, portrait_thresh):
+                        decision_status = "MATCHED"
+                        is_match = True
+                    else:
+                        decision_status = "COLLECTING_FRAMES"
+                        is_match = False
                 elif eval_res.get("decision") == "UNSTABLE":
                     decision_status = "UNSTABLE"
                     is_match = False

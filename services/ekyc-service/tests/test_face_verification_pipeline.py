@@ -369,3 +369,54 @@ def test_19_bright_diffuse_lighting_not_rejected_falsely(matcher):
     quality = matcher.assess_face_quality(img, area, min_size=50, min_sharpness=5.0)
     assert quality["is_valid"] is True
     assert quality["status"] == "OK"
+
+
+# -----------------------------------------------------------------------------
+# TEST 20: Quick Auth Fast-Pass cho frame đầu tiên khi khoảng cách đạt độ tin cậy cao
+# -----------------------------------------------------------------------------
+def test_20_quick_auth_fast_pass_on_high_confidence(matcher, dummy_face_img, valid_embedding_a, monkeypatch):
+    session_id = "test-quick-auth-fast-pass"
+    # Giả lập Live frame có embedding khớp chuẩn với mẫu tham chiếu
+    monkeypatch.setattr(matcher, "_extract_aligned_arcface_embedding", lambda *args, **kwargs: valid_embedding_a)
+    monkeypatch.setattr(matcher, "extract_embedding", lambda *args, **kwargs: valid_embedding_a)
+    res = matcher.process_live_frame_dual(
+        frame=dummy_face_img,
+        reference_card_embedding=valid_embedding_a,
+        reference_portrait_embedding=valid_embedding_a,
+        session_id=session_id,
+    )
+    # Fast-pass kích hoạt ngay từ frame 1 mà không bị kẹt ở COLLECTING_FRAMES
+    assert res["is_match"] is True
+    assert res["match_status"] == "MATCHED"
+
+
+# -----------------------------------------------------------------------------
+# TEST 21: Mirror Resilience TTA - Khắc phục sai lệch khoảng cách do lật gương webcam
+# -----------------------------------------------------------------------------
+def test_21_mirror_resilience_tta_rescues_flipped_frame(matcher, dummy_face_img, valid_embedding_a, monkeypatch):
+    # Lật ngang ảnh giả lập (mô phỏng webcam lật gương scaleX(-1))
+    flipped_img = cv2.flip(dummy_face_img, 1)
+
+    # Frame gốc bị lệch khoảng cách do gương (0.58 <= 0.60), nhưng khi TTA lật lại sẽ trả về vector chuẩn (khoảng cách 0.0)
+    def mock_extract(frame, *args, **kwargs):
+        if np.array_equal(frame, flipped_img):
+            perturbation = np.random.default_rng(seed=99).normal(0, 0.08, 512).astype(np.float32)
+            skewed = valid_embedding_a + perturbation
+            return skewed / np.linalg.norm(skewed)
+        return valid_embedding_a
+
+    monkeypatch.setattr(matcher, "_extract_aligned_arcface_embedding", mock_extract)
+    monkeypatch.setattr(matcher, "extract_embedding", mock_extract)
+
+    res = matcher.process_live_frame_dual(
+        frame=flipped_img,
+        reference_card_embedding=valid_embedding_a,
+        reference_portrait_embedding=valid_embedding_a,
+        session_id="test-mirror-tta",
+    )
+    # TTA tự động thử nghiệm cả 2 chiều và chọn khoảng cách tối ưu nhất
+    assert res["is_match"] is True
+    assert res["match_status"] == "MATCHED"
+    assert res["distance"] <= 0.50
+
+

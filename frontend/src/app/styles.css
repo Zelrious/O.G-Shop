@@ -4711,8 +4711,8 @@ body.og-header-collapsed .og-listing-fixed-header-action {
 
 /* Product Detail: Agreed Price Box */
 .og-product-detail__price-card--agreed {
-  background: linear-gradient(135deg, rgba(236, 253, 245, 0.7), rgba(209, 250, 229, 0.35));
-  border: 1px solid rgba(4, 120, 87, 0.3);
+  background: var(--og-color-primary-light, rgba(4, 120, 87, 0.08));
+  border: 1px solid var(--og-color-border-strong, rgba(4, 120, 87, 0.3));
   border-radius: 12px;
   padding: 14px 16px;
   margin-bottom: 16px;
@@ -4726,13 +4726,13 @@ body.og-header-collapsed .og-listing-fixed-header-action {
 }
 
 .og-product-detail__price-value--agreed {
-  color: #047857 !important;
-  font-size: 30px;
+  color: var(--og-color-primary, #047857) !important;
+  font-size: 28px;
   font-weight: 800;
 }
 
 .og-product-detail__agreed-badge {
-  background: #047857;
+  background: var(--og-color-primary-fill, #047857);
   color: #ffffff;
   font-size: 12px;
   font-weight: 700;
@@ -4761,12 +4761,32 @@ body.og-header-collapsed .og-listing-fixed-header-action {
 }
 
 .og-product-detail__price-note--agreed {
-  color: #065f46;
+  color: var(--og-color-text-secondary);
   font-size: 13px;
   margin-top: 8px;
   line-height: 1.4;
-  border-top: 1px dashed rgba(4, 120, 87, 0.2);
+  border-top: 1px dashed var(--og-color-border);
   padding-top: 8px;
+}
+
+/* Dark mode specific override for agreed price box (dịu mắt, không bị chói sáng) */
+[data-theme="dark"] .og-product-detail__price-card--agreed,
+.dark .og-product-detail__price-card--agreed {
+  background: rgba(38, 87, 64, 0.18) !important;
+  border-color: rgba(142, 196, 161, 0.3) !important;
+}
+
+[data-theme="dark"] .og-product-detail__price-value--agreed,
+.dark .og-product-detail__price-value--agreed {
+  color: var(--og-color-primary, #8ec4a1) !important;
+}
+
+[data-theme="dark"] .og-product-detail__agreed-badge,
+.dark .og-product-detail__agreed-badge {
+  background: rgba(142, 196, 161, 0.2) !important;
+  color: var(--og-color-primary, #8ec4a1) !important;
+  border: 1px solid rgba(142, 196, 161, 0.35) !important;
+  box-shadow: none !important;
 }
 
 .og-btn-buy-now--agreed {
@@ -4858,26 +4878,26 @@ body.og-header-collapsed .og-listing-fixed-header-action {
 }
 
 .og-btn-quick-chat {
-  background: #0091ff;
-  color: #ffffff;
-  font-size: 15px;
-  font-weight: 700;
-  border-radius: 6px;
-  padding: 13px 14px;
+  background: var(--og-color-surface-subtle, #f1f2f0);
+  color: var(--og-color-text-primary, #252a2f);
+  border: 1px solid var(--og-color-border-strong, #bfc2c1);
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 10px 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: none;
   cursor: pointer;
-  box-shadow: 0 2px 5px rgba(0, 145, 255, 0.25);
-  transition: background-color 0.15s ease, transform 0.1s ease;
+  transition: all 0.15s ease;
   user-select: none;
 }
 
 .og-btn-quick-chat:hover {
-  background: #007ee6;
-  transform: translateY(-1px);
+  background: var(--og-color-surface-hover, #e5e5e3);
+  border-color: var(--og-color-primary, #276347);
+  color: var(--og-color-primary, #276347);
 }
 
 .og-btn-quick-chat:active {
@@ -4894,66 +4914,103 @@ body.og-header-collapsed .og-listing-fixed-header-action {
 
 .og-btn-add-cart {
   background: var(--og-color-surface);
-  border: 1.5px solid #e25b29;
-  color: #e25b29;
+  border: 1.5px solid var(--og-color-primary, #276347);
+  color: var(--og-color-primary, #276347);
   font-weight: 700;
   font-size: 14.5px;
-  border-radius: 6px;
-  padding: 12px 14px;
+  border-radius: 8px;
+  padding: 11px 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  gap: 8px;
+  transition: all 0.15s ease;
 }
 
 .og-btn-add-cart:hover {
-  background: #fff7ed;
+  background: var(--og-color-primary-light, rgba(39, 99, 71, 0.12));
 }
 
 .og-btn-buy-now {
-  background: #e25b29;
+  background: var(--og-color-primary-fill, #276347);
   border: none;
   color: #ffffff;
   font-weight: 700;
-  font-size: 14.5px;
-  border-radius: 6px;
-  padding: 12px 14px;
+  font-size: 15px;
+  border-radius: 8px;
+  padding: 11px 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  box-shadow: 0 2px 6px rgba(226, 91, 41, 0.3);
-  transition: background-color 0.15s ease, transform 0.1s ease;
+  gap: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: all 0.15s ease;
 }
 
 .og-btn-buy-now:hover {
-  background: #c8481a;
+  background: var(--og-color-primary-fill-hover, #1e4a36);
   transform: translateY(-1px);
 }
 
 .og-btn-make-offer {
-  background: #fafaf9;
-  border: 1px dashed #d6d3d1;
-  color: #57534e;
+  background: var(--og-color-surface-subtle, #f1f2f0);
+  border: 1px dashed var(--og-color-border-strong, #bfc2c1);
+  color: var(--og-color-text-primary, #252a2f);
   font-weight: 600;
-  font-size: 13.5px;
-  border-radius: 6px;
-  padding: 10px;
+  font-size: 14px;
+  border-radius: 8px;
+  padding: 10px 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  gap: 8px;
+  transition: all 0.15s ease;
 }
 
 .og-btn-make-offer:hover {
-  background: #f5f5f4;
-  border-color: #a8a29e;
-  color: #292524;
+  background: var(--og-color-surface-hover, #e5e5e3);
+  border-color: var(--og-color-primary, #276347);
+  color: var(--og-color-primary, #276347);
+}
+
+/* Gallery action bar buttons */
+.og-product-detail__gallery-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--og-color-border);
+  font-size: 13px;
+  color: var(--og-color-text-secondary);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.og-product-detail__action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.og-product-detail__icon-btn {
+  background: var(--og-color-surface-subtle);
+  border: 1px solid var(--og-color-border);
+  border-radius: 6px;
+  color: var(--og-color-text-secondary);
+  font-size: 12px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.og-product-detail__icon-btn:hover {
+  background: var(--og-color-surface-hover);
+  color: var(--og-color-text-primary);
+  border-color: var(--og-color-border-strong);
 }
 
 /* Seller Profile Card (Oreka Style) */

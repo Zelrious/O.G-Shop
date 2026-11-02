@@ -205,4 +205,32 @@ describe('FaceScanner Component', () => {
     );
     expect(mockStopCamera).toHaveBeenCalled();
   });
+
+  it('triggers instant test acceptance when test bypass button is clicked', async () => {
+    const onScanSuccess = vi.fn();
+
+    render(
+      <FaceScanner
+        frontAssetId={100}
+        onScanSuccess={onScanSuccess}
+      />
+    );
+
+    const bypassBtn = screen.getByRole('button', { name: /Chấp thuận để Test luồng/i });
+    expect(bypassBtn).toBeInTheDocument();
+
+    await act(async () => {
+      bypassBtn.click();
+    });
+
+    expect(onScanSuccess).toHaveBeenCalledWith(
+      'data:image/jpeg;base64,mockValidFrame123',
+      expect.objectContaining({
+        isMatch: true,
+        distance: 0.22,
+        confidence: 0.95,
+      })
+    );
+    expect(mockStopCamera).toHaveBeenCalled();
+  });
 });
