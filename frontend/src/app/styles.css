@@ -4391,6 +4391,31 @@ body.og-header-collapsed .og-listing-fixed-header-action {
   letter-spacing: 0.2px;
 }
 
+.og-product-card__badge-ekyc {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #1d4ed8;
+  background-color: rgba(239, 246, 255, 0.95);
+  border: 1px solid #bfdbfe;
+  padding: 2px 7px;
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .og-product-card__badge-ekyc {
+  color: #93c5fd !important;
+  background-color: rgba(30, 58, 138, 0.75) !important;
+  border-color: rgba(96, 165, 250, 0.4) !important;
+}
+
 .og-product-card__agreed-price-wrap {
   display: flex;
   flex-direction: column;

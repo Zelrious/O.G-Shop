@@ -69,10 +69,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
           {product.requiresBuyerEkyc && (
             <span
+              className="og-product-card__badge-ekyc"
               style={{
                 position: 'absolute',
                 top: '8px',
-                right: '8px',
+                left: '8px',
                 zIndex: 2,
                 display: 'inline-flex',
                 alignItems: 'center',
