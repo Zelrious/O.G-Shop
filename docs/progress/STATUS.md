@@ -1,5 +1,30 @@
 # Project Status
 
+## Hệ Thống Kiểm Duyệt Tin Nhắn Văn Bản Tự Động và Chống Rò Rỉ Giao Dịch Ngoại Sàn (Giai Đoạn 1) — TASK-0115 / 2026-11-07
+
+- **Mục tiêu**:
+  - Triển khai Giai đoạn 1 — Hệ thống kiểm duyệt tin nhắn văn bản tự động và chống rò rỉ giao dịch ngoại sàn (Text Moderation & Anti-Disintermediation) trong module `communication`.
+  - Chạy 100% trên CPU Laptop (< 2ms), 0 Quota AI, bộ đệm In-Memory RAM (`ConcurrentHashMap<Long, Deque<MessageSnippet>>`) 10 tin nhắn gần nhất.
+  - Tạo Flyway migration `V37__chat_moderation.sql`: thêm `chat_violation_score`, `chat_restricted_until` vào bảng `users`; tạo bảng nhật ký `chat_moderation_logs`.
+  - Xây dựng `TextModerator.java` chuẩn hóa Zero-Trust (lọc zero-width bytes, NFKC, homoglyphs O/0, l/1, S/5, B/8, từ điển số đếm tiếng Việt và từ lóng ngoại sàn Zalo/FB/Tele).
+  - Tích hợp bộ lọc chống dương tính giả (Anti-False-Positive Filter) triệt tiêu việc bắt nhầm tin nhắn trả giá tiền ("fix 500k", "bớt 200k") và hỏi kích thước ("120cm", "15kg").
+  - Tích hợp vào `ChatService.java`: tự động che nội dung vi phạm bằng `***`, ghi nhận log vào `chat_moderation_logs`, tăng `chat_violation_score`, trả cờ `moderationStatus: "MASKED"`.
+  - Nâng cấp giao diện Frontend (`ConversationWorkspace.tsx`, `chatApi.ts`, `chat.css`): hiển thị Banner Cảnh Báo An Toàn ở đầu khung chat kèm icon khiên bảo vệ (outline stroke SVG) và nhãn `[Đã ẩn thông tin liên hệ]` bên cạnh tin nhắn bị che.
+
+- **Backend Spring Boot (`backend/`)**:
+  - `V37__chat_moderation.sql`: Thêm cột điểm vi phạm và thời hạn hạn chế vào bảng `users`; tạo bảng nhật ký `chat_moderation_logs` kèm index `sender_id`, `conversation_id`.
+  - `TextModerator.java`: Triển khai pipeline chuẩn hóa, bộ đệm cửa sổ trượt có trạng thái In-Memory 10 tin nhắn gần nhất, bộ lọc chống dương tính giả và cơ chế Data Masking `***`.
+  - `ChatDtos.java`: Bổ sung `moderationStatus` và `violationType` vào `ChatDtos.Message`.
+  - `ChatRepository.java`: Bổ sung `logModeration` và `incrementViolationScore`.
+  - `ChatService.java`: Tích hợp gọi `TextModerator.moderate()` trước khi lưu tin nhắn, hỗ trợ replay idempotent an toàn.
+  - `TextModeratorTest.java`: Bộ kiểm thử toàn diện 9 test suites bao phủ TC01–TC07, TC08–TC10 (rải SĐT qua 3-5 tin), TC41 (tiếng lóng) và Anti-False-Positive tests (100% passed).
+
+- **Frontend React / TypeScript (`frontend/`)**:
+  - `chatApi.ts`: Mở rộng interface `ChatMessage` với các trường `moderationStatus?: string; violationType?: string;`.
+  - `ConversationWorkspace.tsx`: Tự động nhận diện tin nhắn bị che, hiển thị Banner cảnh báo an toàn màu vàng ở đầu khung chat và nhãn `[Đã ẩn thông tin liên hệ]` bên cạnh bong bóng chat.
+  - `chat.css`: Định dạng banner cảnh báo với token `var(--og-color-surface)` và viền `var(--og-color-warning)`, tương thích 100% Dark Mode và Light Mode.
+  - `chat.test.tsx`: Bổ sung test kiểm thử tự động hiển thị banner an toàn và nhãn ẩn thông tin liên hệ (266/266 tests passed).
+
 ## Tối Ưu Thuật Toán Quét Khuôn Mặt Xác Thực Nhanh (Quick Face Auth UC08) và Nâng Cao Trải Nghiệm Người Dùng — TASK-0114 / 2026-11-02
 
 - **Mục tiêu**:

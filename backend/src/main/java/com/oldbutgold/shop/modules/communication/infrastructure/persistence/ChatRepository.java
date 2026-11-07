@@ -91,6 +91,15 @@ public class ChatRepository {
           AND NOT public.og_has_role(u.user_id,'KTV') AND NOT public.og_has_role(u.user_id,'ADMIN')
           AND (u.full_name ILIKE '%'||?||'%' OR u.user_id::text=?) ORDER BY u.user_id DESC LIMIT 20
         """,seller,query,query);}
+    public void logModeration(long conversationId, long senderId, String originalContent, String maskedContent, String violationType, String triggeredRule) {
+        jdbc.update("""
+            INSERT INTO public.chat_moderation_logs(conversation_id, sender_id, original_content, masked_content, violation_type, triggered_rule)
+            VALUES(?, ?, ?, ?, ?, ?)
+            """, conversationId, senderId, originalContent, maskedContent, violationType, triggeredRule);
+    }
+    public void incrementViolationScore(long senderId) {
+        jdbc.update("UPDATE public.users SET chat_violation_score = chat_violation_score + 1 WHERE user_id = ?", senderId);
+    }
     public Map<String,Object> decode(String value){try{return value==null?Map.of():json.readValue(value,new TypeReference<>(){});}catch(Exception e){throw new IllegalStateException("Cannot decode chat metadata",e);}}
     public String encode(Object value){try{return json.writeValueAsString(value);}catch(Exception e){throw new IllegalStateException("Cannot encode chat metadata",e);}}
     private Instant instant(ResultSet r,String column)throws SQLException{var t=r.getTimestamp(column);return t==null?null:t.toInstant();}

@@ -74,4 +74,13 @@ describe('Negotiation and private chat', () => {
     const first = screen.getByRole('button', { name: 'Hủy bỏ' }), last = screen.getByRole('button', { name: 'Xác nhận' }); expect(first).toHaveFocus(); last.focus(); fireEvent.keyDown(last, { key: 'Tab' }); expect(first).toHaveFocus();
     last.focus(); rerender(<ConfirmDialog isOpen title="Chặn" message="QA updated" onConfirm={vi.fn()} onCancel={cancel} />); expect(last).toHaveFocus(); fireEvent.keyDown(last, { key: 'Escape' }); expect(cancel).toHaveBeenCalledOnce(); unmount(); expect(trigger).toHaveFocus();
   });
+  it('displays safety banner and masked badge when a message is flagged with MASKED moderationStatus', async () => {
+    const maskedMessage: ChatMessage = { id: 11, senderId: 2, type: 'TEXT', content: 'Alo số em *** nha', createdAt: detail.serverTime, replyTo: null, offerId: null, media: null, moderationStatus: 'MASKED', violationType: 'PHONE_LEAK' };
+    const detailWithMasked: ChatDetail = { ...detail, messages: { items: [maskedMessage], nextBefore: null } };
+    vi.mocked(chatApi.detail).mockResolvedValue(detailWithMasked);
+    render(<MemoryRouter initialEntries={['/messages?conversationId=3']}><MessagesPage /></MemoryRouter>);
+    expect(await screen.findByText(/Cảnh báo an toàn:/)).toBeInTheDocument();
+    expect(screen.getByText('[Đã ẩn thông tin liên hệ]')).toBeInTheDocument();
+    expect(screen.getByText('Alo số em *** nha')).toBeInTheDocument();
+  });
 });
