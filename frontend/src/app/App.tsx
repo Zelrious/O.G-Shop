@@ -44,6 +44,7 @@ import {
   KtvKycPage,
   KtvComplaintsPage,
   KtvVouchersPage,
+  KtvChatModerationPage,
   AdminDashboardPage,
   AdminKtvAccountsPage,
   AdminEmergencyAlertsPage,
@@ -223,6 +224,7 @@ export function App() {
                   <Route path="/ktv/kyc" element={<KtvKycPage />} />
                   <Route path="/ktv/complaints" element={<KtvComplaintsPage />} />
                   <Route path="/ktv/vouchers" element={<KtvVouchersPage />} />
+                  <Route path="/ktv/chat-moderation" element={<KtvChatModerationPage />} />
                 </Route>
 
                 {/* 5. Admin (Quản Trị Viên) Console Layout Shell */}

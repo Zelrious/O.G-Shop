@@ -4,3 +4,4 @@ export * from './KtvDisputesPage';
 export * from './KtvKycPage';
 export * from './KtvComplaintsPage';
 export * from './KtvVouchersPage';
+export * from './KtvChatModerationPage';
