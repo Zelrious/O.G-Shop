@@ -52,13 +52,14 @@ class AuthControllerTest {
         assertThat(response.getHeaders().getCacheControl()).contains("no-store");
     }
 
-    @Test void restorationDoesNotResetCookieLifetime() throws Exception {
+    @Test void restorationRenewsCookieLifetime() throws Exception {
         var request = trustedRequest();
         when(request.getCookies()).thenReturn(new Cookie[]{new Cookie("og_access", "existing")});
-        when(service.restoreSession("existing")).thenReturn(new AuthService.SessionResult(user(), "current-roles", 45));
+        when(service.restoreSession("existing")).thenReturn(new AuthService.SessionResult(user(), "current-roles", 7200));
         var response = controller.restoreSession(request);
-        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).isNull();
-        assertThat(response.getBody().expiresIn()).isEqualTo(45);
+        assertThat(response.getHeaders().getFirst(HttpHeaders.SET_COOKIE))
+                .contains("og_access=current-roles", "HttpOnly", "Secure", "SameSite=Lax", "Path=/api/v1/auth", "Max-Age=7200");
+        assertThat(response.getBody().expiresIn()).isEqualTo(7200);
         assertThat(response.getHeaders().getCacheControl()).contains("no-store");
     }
 

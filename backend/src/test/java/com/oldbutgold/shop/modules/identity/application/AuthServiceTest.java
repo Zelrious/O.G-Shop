@@ -88,16 +88,17 @@ class AuthServiceTest {
         verifyNoInteractions(users,tokenService);
     }
 
-    @Test void restoreReloadsCurrentRolesWithoutExtendingOriginalDeadline() {
+    @Test void restoreRenewsActiveSessionWithFreshTtl() {
         Jwt jwt = credential(now.plusSeconds(90));
         UserEntity user = user();
         when(jwtDecoder.decode("original")).thenReturn(jwt);
         when(users.findById(7L)).thenReturn(Optional.of(user));
-        when(tokenService.issueAccessToken(user, jwt.getIssuedAt(), jwt.getExpiresAt())).thenReturn("current-roles");
+        when(tokenService.issueAccessToken(user)).thenReturn("renewed-roles");
+        when(tokenService.accessTokenExpiresInSeconds()).thenReturn(7200L);
         var restored = service.restoreSession("original");
-        assertThat(restored.expiresIn()).isEqualTo(90);
-        assertThat(restored.accessToken()).isEqualTo("current-roles");
-        verify(tokenService, never()).issueAccessToken(any());
+        assertThat(restored.expiresIn()).isEqualTo(7200L);
+        assertThat(restored.accessToken()).isEqualTo("renewed-roles");
+        verify(tokenService).issueAccessToken(user);
     }
 
     @Test void restoreRejectsExpiredCredentialEvenIfDecoderAllowsClockTolerance() {

@@ -50,7 +50,7 @@ app:
     cleanup-enabled: true
   auth:
     jwt-signing-key: ${JWT_SIGNING_KEY:replace-with-at-least-32-random-bytes}
-    access-token-ttl: ${AUTH_ACCESS_TOKEN_TTL:PT15M}
+    access-token-ttl: ${AUTH_ACCESS_TOKEN_TTL:PT2H}
     frontend-origin: ${APP_FRONTEND_ORIGIN:http://localhost:5173}
     session-cookie-name: ${AUTH_SESSION_COOKIE_NAME:og_access}
     session-cookie-secure: ${AUTH_SESSION_COOKIE_SECURE:false}

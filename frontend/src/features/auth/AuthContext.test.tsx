@@ -73,6 +73,30 @@ describe('server authenticated sessions', () => {
     } finally { vi.useRealTimers(); }
   });
 
+  it('renews session proactively before expiration when user is active', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(authApi.restoreSession)
+        .mockResolvedValueOnce({ ...session(admin), expiresIn: 10 })
+        .mockResolvedValueOnce({ ...session(admin), expiresIn: 10 });
+      render(<AuthProvider><SessionProbe /></AuthProvider>);
+      await act(async () => { await Promise.resolve(); });
+      expect(screen.getByLabelText('session')).toHaveTextContent('ADMIN');
+
+      // User interacts with the app
+      act(() => {
+        window.dispatchEvent(new Event('mousedown'));
+      });
+
+      // Advance time toward the renewal window (timeUntilRenew = 10s - 2.5s = 7.5s = 7500ms)
+      await act(async () => { vi.advanceTimersByTime(7600); });
+
+      // Proactive sliding renewal should have been triggered
+      expect(authApi.restoreSession).toHaveBeenCalledTimes(2);
+      expect(screen.getByLabelText('session')).toHaveTextContent('ADMIN');
+    } finally { vi.useRealTimers(); }
+  });
+
   it('clears the principal after the server reports expiry', async () => {
     vi.mocked(authApi.restoreSession).mockResolvedValue(session(admin));
     render(<AuthProvider><SessionProbe /></AuthProvider>);
