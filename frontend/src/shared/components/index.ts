@@ -15,3 +15,5 @@ export * from './Select/Select';
 export * from './Pagination/Pagination';
 export * from './PageHeader/PageHeader';
 export * from './InfoTooltip/InfoTooltip';
+export * from './MediaLightboxModal';
+
