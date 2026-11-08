@@ -30,6 +30,10 @@ public class ChatService {
     public void lockParties(Thread c){identity.lockPair(c.buyer(),c.seller());}
     public void requireSending(long actor,Thread c){
         identity.requireChat(actor);
+        Instant restrictedUntil = repository.getChatRestrictedUntil(actor);
+        if (restrictedUntil != null && restrictedUntil.isAfter(clock.instant())) {
+            throw problem(403, "CHAT_RESTRICTED", "Tài khoản của bạn đang bị tạm ngưng quyền gửi tin nhắn do vi phạm chính sách kiểm duyệt.");
+        }
         if(!"ACTIVE".equals(c.status()))throw problem(409,"CONVERSATION_CLOSED","Hội thoại chỉ có thể xem lịch sử.");
         if(repository.blocked(c.buyer(),c.seller())&&!commerce.openObligations(c.buyer(),c.seller(),c.product()))throw problem(403,"SELLER_BUYER_BLOCKED","Người bán đã chặn tương tác mới. Hồ sơ và nghĩa vụ cũ vẫn được giữ.");
     }
@@ -98,6 +102,16 @@ public class ChatService {
         if(request.replyTo()!=null&&repository.message(request.replyTo()).filter(m->m.conversation()==id).isEmpty())throw problem(400,"CHAT_REPLY_INVALID","Tin được trả lời không thuộc hội thoại.");
 
         var moderation=textModerator.moderate(id,actor,text);
+        if (moderation.isViolation() && "CRITICAL".equals(moderation.severityLevel())) {
+            Instant banUntil = clock.instant().plus(Duration.ofDays(90));
+            repository.setChatRestrictedUntil(actor, banUntil);
+            repository.incrementViolationScore(actor);
+            repository.logModeration(id, actor, text, moderation.maskedText(), moderation.violationType(), moderation.reason());
+            String contextJson = repository.getRecentContextJson(id, actor, text);
+            repository.createModerationReport(id, actor, null, moderation.violationType(), "CRITICAL", "PENDING", text, contextJson);
+            throw problem(403, "MESSAGE_BLOCKED_SECURITY", "Tin nhắn bị chặn do vi phạm nghiêm trọng an ninh thông tin và chính sách pháp luật O.G Shop.");
+        }
+
         String storedText=text;
         Map<String,Object> metadata=null;
         if(moderation.isViolation()){
@@ -105,12 +119,25 @@ public class ChatService {
             metadata=new HashMap<>();
             metadata.put("moderationStatus","MASKED");
             metadata.put("violationType",moderation.violationType());
+            metadata.put("rawContent",text);
             repository.logModeration(id,actor,text,moderation.maskedText(),moderation.violationType(),moderation.reason());
             repository.incrementViolationScore(actor);
         }
 
         long message=repository.append(id,actor,request.clientId(),"TEXT",storedText,request.replyTo(),null,null,metadata,null);
         notifyMessage(c,actor,message,"Tin nhắn mới",storedText.length()>80?storedText.substring(0,80)+"…":storedText,"CHAT_MESSAGE");
+
+        if(moderation.isViolation()){
+            int newScore = repository.getViolationScore(actor);
+            boolean triggerKtv = "HIGH".equals(moderation.severityLevel()) || newScore >= 4;
+            if (triggerKtv) {
+                String contextJson = repository.getRecentContextJson(id, actor, text);
+                repository.createModerationReport(id, actor, null, message, moderation.violationType(),
+                    moderation.severityLevel() != null ? moderation.severityLevel() : "MEDIUM",
+                    "PENDING", text, contextJson);
+            }
+        }
+
         return message(repository.message(message).orElseThrow());
     }
     public Message message(StoredMessage m){
