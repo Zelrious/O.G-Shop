@@ -1,5 +1,37 @@
 # Project Status
 
+## Kiểm Duyệt Bảo Mật Tin Nhắn Đa Tầng, Bàn Làm Việc KTV 3 Cột và Xử Phạt Tập Trung (UC56 / UC74) — TASK-0116 / 2026-11-08
+
+- **Mục tiêu**:
+  - Triển khai cơ chế kiểm duyệt bảo mật tin nhắn đa tầng: rò rỉ SĐT/ngoại sàn, ngôn từ thô tục tiếng Việt/tiếng Anh, đe dọa vũ lực, phân biệt vùng miền/chủng tộc, và an ninh quốc gia/chính trị.
+  - Tạo Flyway migration `V38__chat_moderation_reports.sql`: tạo bảng `chat_moderation_reports` hỗ trợ hàng đợi KTV (UC56) và lưu vết quyết định xử phạt (UC74).
+  - Nâng cấp `TextModerator.java` bổ sung 4 nhóm vi phạm cùng cơ chế ranh giới từ chống dương tính giả và hệ thống phân cấp độ nghiêm trọng: `CRITICAL (4) > HIGH (3) > MEDIUM (2) > LOW (1)`.
+  - Tích hợp thực thi trong `ChatService.java`: chặn đứng vi phạm `CRITICAL` và khóa chat 90 ngày; che `***` và tự động trích xuất JSON 5 tin nhắn ngữ cảnh đẩy vào ticket KTV khi vi phạm `HIGH` hoặc tái phạm rải SĐT; chặn người dùng đang bị cấm chat (`chat_restricted_until`) với lỗi 403 `CHAT_RESTRICTED`.
+  - Cung cấp trọn vẹn REST API cho KTV tại `/api/v1/ktv/chat-moderation/**` với 4 chế tài xử phạt UC74 (`DISMISS`, `WARN` trừ 5 điểm uy tín, `RESTRICT_CHAT` cấm chat 7 ngày trừ 15 điểm, `LOCK_ACCOUNT` khóa tài khoản trừ 30 điểm); hỗ trợ xử phạt gộp batch-decision chỉ trừ điểm 1 lần cho nhiều tin nhắn vi phạm trong cùng cuộc trò chuyện và gửi 1 thông báo Outbox duy nhất.
+  - Xây dựng Bàn làm việc KTV Console 3 cột cố định (`KtvChatModerationPage.tsx`, `chatModerationApi.ts`, `chatModeration.css`):
+    - Cột 1 (290px): Hàng đợi vi phạm gom nhóm 1 dòng đại diện theo cuộc trò chuyện (`GROUP BY conversation_id`) kèm badge số lượng vi phạm chờ xử lý.
+    - Cột 2 (1fr): Dòng tin nhắn phân đoạn động quanh điểm neo (`aroundMessageId` 60 tin nhắn, tải 2 chiều tin cũ hơn/mới hơn), tự động đánh dấu sẵn các tin vi phạm (`og-violation-type-tag`), menu 3 chấm (`...`) trên từng tin, chế độ Chọn nhiều (Multi-Select Mode) kèm thanh Floating Action Bar đáy chat và nút 1-click "Chọn tất cả tin vi phạm" để xử lý chung 1 lần, tích hợp xem ảnh/video trực tiếp kèm Lightbox.
+    - Cột 3 (360px): Hồ sơ người vi phạm (Avatar, Email, Điểm uy tín, Điểm vi phạm chat, Nút xem lịch sử vi phạm tài khoản), xem bằng chứng văn bản gốc vs đã che, và hộp thoại ra quyết định xử phạt UC74.
+    - Tích hợp Sidebar `KtvLayoutShell.tsx` kèm badge đếm số lượng vi phạm chờ duyệt, 100% icon nét viền rỗng (outline SVG), Dark Mode dịu mắt không chói.
+
+- **Backend Spring Boot (`backend/`)**:
+  - `V38__chat_moderation_reports.sql`: Bảng lưu trữ báo cáo kiểm duyệt và hàng đợi KTV kèm indexes.
+  - `TextModerator.java`: Thêm regex 4 nhóm vi phạm, phân cấp `severityLevel`, ranh giới từ `(?<=^|[\\s\\p{Punct}])...(?=[\\s\\p{Punct}]|$)`.
+  - `ChatService.java`: Enforce `chat_restricted_until`, trigger ticket KTV theo mức độ nghiêm trọng.
+  - `ChatRepository.java`: Bổ sung `restrictChat`, `recentMessagesJson`, `createModerationReport`.
+  - `ChatModerationDtos.java`: DTOs danh sách gom nhóm, chi tiết, phân đoạn tin nhắn (`ConversationChunkResponse`), lịch sử vi phạm tài khoản, xử phạt gộp (`BatchDecisionRequest`, `BatchDecisionResponse`).
+  - `ChatModerationRepository.java`: Truy vấn danh sách hàng đợi gom nhóm theo hội thoại, phân đoạn tin nhắn KTV quanh điểm neo, truy xuất lịch sử vi phạm của người dùng, thực thi xử phạt gộp nhiều tin nhắn.
+  - `KtvChatModerationService.java` & `KtvChatModerationController.java`: Nghiệp vụ KTV xử phạt uy tín theo UC74, cấm chat, xử lý batch vi phạm và gửi thông báo `PlatformNotificationFacade`.
+  - `TextModeratorTest.java`: 32 test suites bao phủ toàn diện các kịch bản đối kháng và 4 nhóm vi phạm mới (100% passed).
+
+- **Frontend React / TypeScript (`frontend/`)**:
+  - `chatModerationApi.ts`: Mở rộng client API đầy đủ với `getConversationMessages`, `getUserViolationHistory`, `submitBatchDecision`, `submitManualFlag`.
+  - `KtvChatModerationPage.tsx`: Bàn làm việc KTV 3 cột hoàn chỉnh (Hàng đợi gom nhóm | Phân đoạn chat 2 chiều & Chọn nhiều & Menu 3 chấm | Chi tiết vi phạm & Modal UC74).
+  - `chatModeration.css`: Định dạng 3 cột cố định, badge mức độ nghiêm trọng, pill tag vi phạm, bong bóng chat resolved/violation, floating action bar đáy chat, Lightbox xem ảnh/video.
+  - `KtvLayoutShell.tsx`: Link điều hướng "Kiểm duyệt tin nhắn" với icon nét rỗng khiên bảo vệ và badge số lượng vi phạm.
+  - `App.tsx`: Định tuyến `/ktv/chat-moderation`.
+  - `KtvChatModerationPage.test.tsx` & `KtvLayoutShell.test.tsx`: Test kiểm thử giao diện KTV (268/268 vitest tests passed, 0 tsc error).
+
 ## Hệ Thống Kiểm Duyệt Tin Nhắn Văn Bản Tự Động và Chống Rò Rỉ Giao Dịch Ngoại Sàn (Giai Đoạn 1) — TASK-0115 / 2026-11-07
 
 - **Mục tiêu**:
