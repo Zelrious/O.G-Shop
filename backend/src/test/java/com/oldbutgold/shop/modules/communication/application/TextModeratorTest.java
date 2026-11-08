@@ -519,6 +519,112 @@ class TextModeratorTest {
     }
 
     @Test
+    @DisplayName("Edge Case: All Vietnam telecom prefixes with omitted leading 0 (03x, 05x, 07x, 08x, 09x)")
+    void testAllTelecomPrefixesOmittedLeadingZero() {
+        // 03x: Viettel (381234567)
+        var r3 = moderator.moderate(1L, 100L, "Nhắn 381234567 nha");
+        assertThat(r3.isViolation()).isTrue();
+        assertThat(r3.violationType()).isEqualTo("PHONE_LEAK");
+
+        // 05x: Vietnamobile (581234567)
+        var r5 = moderator.moderate(1L, 100L, "Số 581234567");
+        assertThat(r5.isViolation()).isTrue();
+        assertThat(r5.violationType()).isEqualTo("PHONE_LEAK");
+
+        // 07x: Mobifone (781234567)
+        var r7 = moderator.moderate(1L, 100L, "Gọi 781234567");
+        assertThat(r7.isViolation()).isTrue();
+        assertThat(r7.violationType()).isEqualTo("PHONE_LEAK");
+
+        // 08x: Vinaphone (881234567)
+        var r8 = moderator.moderate(1L, 100L, "Liên hệ 881234567");
+        assertThat(r8.isViolation()).isTrue();
+        assertThat(r8.violationType()).isEqualTo("PHONE_LEAK");
+
+        // 09x: Viettel / Mobifone (981234567)
+        var r9 = moderator.moderate(1L, 100L, "SĐT 981234567");
+        assertThat(r9.isViolation()).isTrue();
+        assertThat(r9.violationType()).isEqualTo("PHONE_LEAK");
+    }
+
+    @Test
+    @DisplayName("Edge Case: Various interleaved word patterns inside single tokens")
+    void testVariousInterleavedWordPatterns() {
+        var r1 = moderator.moderate(1L, 100L, "090_call_123_me_456");
+        assertThat(r1.isViolation()).isTrue();
+        assertThat(r1.violationType()).isEqualTo("PHONE_LEAK");
+
+        var r2 = moderator.moderate(1L, 100L, "090lienhe123456");
+        assertThat(r2.isViolation()).isTrue();
+        assertThat(r2.violationType()).isEqualTo("PHONE_LEAK");
+
+        var r3 = moderator.moderate(1L, 100L, "098zalo7654321");
+        assertThat(r3.isViolation()).isTrue();
+        assertThat(r3.violationType()).isEqualTo("PHONE_LEAK");
+    }
+
+    @Test
+    @DisplayName("Edge Case: Comprehensive off-platform payment phrases")
+    void testOffPlatformPaymentPhrasesComprehensive() {
+        var r1 = moderator.moderate(1L, 100L, "Chuyển lúa qua đây nha");
+        assertThat(r1.isViolation()).isTrue();
+        assertThat(r1.violationType()).isEqualTo("OFF_PLATFORM_PAYMENT");
+        assertThat(r1.maskedText()).contains("***");
+
+        var r2 = moderator.moderate(1L, 100L, "Cọc trước 50k giữ hàng nhé bạn");
+        assertThat(r2.isViolation()).isTrue();
+        assertThat(r2.violationType()).isEqualTo("OFF_PLATFORM_PAYMENT");
+
+        var r3 = moderator.moderate(1L, 100L, "Giao dịch ngoài cho nhanh shop ơi");
+        assertThat(r3.isViolation()).isTrue();
+        assertThat(r3.violationType()).isEqualTo("OFF_PLATFORM_PAYMENT");
+
+        var r4 = moderator.moderate(1L, 100L, "CK riêng giúp mình để bớt phí");
+        assertThat(r4.isViolation()).isTrue();
+        assertThat(r4.violationType()).isEqualTo("OFF_PLATFORM_PAYMENT");
+    }
+
+    @Test
+    @DisplayName("Edge Case: Defanged URLs and external link redirects")
+    void testDefangedUrlsAndRedirects() {
+        var r1 = moderator.moderate(1L, 100L, "Xem thêm tại chotot[.]vn nha");
+        assertThat(r1.isViolation()).isTrue();
+        assertThat(r1.violationType()).isEqualTo("PLATFORM_REDIRECT");
+
+        var r2 = moderator.moderate(1L, 100L, "Vào fb.com/shopcu để đặt");
+        assertThat(r2.isViolation()).isTrue();
+        assertThat(r2.violationType()).isEqualTo("PLATFORM_REDIRECT");
+
+        var r3 = moderator.moderate(1L, 100L, "Nhắn t.me/cushop nha");
+        assertThat(r3.isViolation()).isTrue();
+        assertThat(r3.violationType()).isEqualTo("PLATFORM_REDIRECT");
+
+        var r4 = moderator.moderate(1L, 100L, "https://externalsite.com/item123");
+        assertThat(r4.isViolation()).isTrue();
+        assertThat(r4.violationType()).isEqualTo("PLATFORM_REDIRECT");
+    }
+
+    @Test
+    @DisplayName("Edge Case: Extreme 25-message sliding window with filler conversation")
+    void testExtreme25MessageSlidingWindow() {
+        long convId = 222L;
+        long senderM = 888L;
+
+        // Message 1 to 20: 10 digits interspersed with 10 filler messages
+        String[] digits = {"0", "9", "0", "9", "1", "2", "3", "4", "5", "6"};
+        for (int i = 0; i < 9; i++) {
+            assertThat(moderator.moderate(convId, senderM, digits[i]).isViolation()).isFalse();
+            assertThat(moderator.moderate(convId, senderM, "tin nhắn đệm này nha").isViolation()).isFalse();
+        }
+
+        // 10th digit arrives on message 19:
+        var rFinal = moderator.moderate(convId, senderM, digits[9]);
+        assertThat(rFinal.isViolation()).isTrue();
+        assertThat(rFinal.violationType()).isEqualTo("PHONE_LEAK");
+        assertThat(rFinal.maskedText()).isEqualTo("***");
+    }
+
+    @Test
     @DisplayName("Latency and Throughput Benchmark: Verify ultra-fast processing across message lengths")
     void latencyAndThroughputBenchmark() {
         String shortClean = "Chào shop, sản phẩm này còn hàng không shop ơi?";
