@@ -90,6 +90,22 @@ class TextModeratorTest {
         assertThat(r5.violationType()).isEqualTo("PHONE_LEAK");
         assertThat(r5.reason()).isEqualTo("SLIDING_WINDOW_PHONE_SPLIT");
         assertThat(r5.maskedText()).isEqualTo("***");
+
+        // Attacker attempts evasion: tries to send the missing digits "21" in subsequent message via words
+        var rRetryWord = moderator.moderate(convId, senderA, "số đuôi là hai mốt nha");
+        assertThat(rRetryWord.isViolation()).isTrue();
+        assertThat(rRetryWord.violationType()).isEqualTo("PHONE_LEAK");
+        assertThat(rRetryWord.maskedText()).isEqualTo("***");
+
+        // Attacker tries keycap emoji evasion for missing digits
+        var rRetryEmoji = moderator.moderate(convId, senderA, "2️⃣1️⃣");
+        assertThat(rRetryEmoji.isViolation()).isTrue();
+        assertThat(rRetryEmoji.violationType()).isEqualTo("PHONE_LEAK");
+
+        // Attacker sends innocent message without digits -> must NOT be falsely blocked
+        var rInnocent = moderator.moderate(convId, senderA, "sao bị che vậy shop ơi?");
+        assertThat(rInnocent.isViolation()).isFalse();
+        assertThat(rInnocent.maskedText()).isEqualTo("sao bị che vậy shop ơi?");
     }
 
     @Test
@@ -457,6 +473,49 @@ class TextModeratorTest {
         assertThat(r5.isViolation()).isTrue();
         assertThat(r5.violationType()).isEqualTo("PHONE_LEAK");
         assertThat(r5.maskedText()).isEqualTo("***");
+    }
+
+    @Test
+    @DisplayName("Edge Case: Single digit per message with filler messages and subsequent retry with word number (Capacity 50)")
+    void testSingleDigitPerMessageWithFillerMessagesAndRetries() {
+        long convId = 105L;
+        long senderX = 999L;
+
+        // Send digits 0, 9, 0, 1, 2, 3, 4, 5, 6 with filler text in between
+        assertThat(moderator.moderate(convId, senderX, "0").isViolation()).isFalse();
+        assertThat(moderator.moderate(convId, senderX, "alo").isViolation()).isFalse();
+        assertThat(moderator.moderate(convId, senderX, "9").isViolation()).isFalse();
+        assertThat(moderator.moderate(convId, senderX, "shop ơi").isViolation()).isFalse();
+        assertThat(moderator.moderate(convId, senderX, "0").isViolation()).isFalse();
+        assertThat(moderator.moderate(convId, senderX, "1").isViolation()).isFalse();
+        assertThat(moderator.moderate(convId, senderX, "2").isViolation()).isFalse();
+        assertThat(moderator.moderate(convId, senderX, "chờ xíu").isViolation()).isFalse();
+        assertThat(moderator.moderate(convId, senderX, "3").isViolation()).isFalse();
+        assertThat(moderator.moderate(convId, senderX, "4").isViolation()).isFalse();
+        assertThat(moderator.moderate(convId, senderX, "5").isViolation()).isFalse();
+        assertThat(moderator.moderate(convId, senderX, "6").isViolation()).isFalse();
+
+        // 10th digit is sent: "7" -> completes "0901234567" (10 digits)
+        var r10 = moderator.moderate(convId, senderX, "7");
+        assertThat(r10.isViolation()).isTrue();
+        assertThat(r10.violationType()).isEqualTo("PHONE_LEAK");
+        assertThat(r10.maskedText()).isEqualTo("***");
+
+        // Attacker attempts evasion by sending the blocked last digit as a word in the next message:
+        var r11 = moderator.moderate(convId, senderX, "số cuối là bảy nha bạn");
+        assertThat(r11.isViolation()).isTrue();
+        assertThat(r11.violationType()).isEqualTo("PHONE_LEAK");
+        assertThat(r11.maskedText()).isEqualTo("***");
+
+        // Attacker tries emoji for last digit:
+        var r12 = moderator.moderate(convId, senderX, "7️⃣");
+        assertThat(r12.isViolation()).isTrue();
+        assertThat(r12.violationType()).isEqualTo("PHONE_LEAK");
+
+        // Attacker sends innocent message without digits:
+        var r13 = moderator.moderate(convId, senderX, "ok shop vậy thôi");
+        assertThat(r13.isViolation()).isFalse();
+        assertThat(r13.maskedText()).isEqualTo("ok shop vậy thôi");
     }
 
     @Test

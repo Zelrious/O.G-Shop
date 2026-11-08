@@ -3,6 +3,7 @@ package com.oldbutgold.shop.modules.communication.application;
 import org.springframework.stereotype.Component;
 
 import java.text.Normalizer;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,7 +34,9 @@ public class TextModerator {
 
     public record MessageSnippet(long senderId, String digits, Instant timestamp) {}
 
-    // In-memory sliding window buffer: conversationId -> Deque of up to 10 snippets
+    // In-memory sliding window buffer: conversationId -> Deque of up to 50 snippets with 30-minute TTL
+    public static final int SLIDING_WINDOW_CAPACITY = 50;
+    public static final Duration SLIDING_WINDOW_TTL = Duration.ofMinutes(30);
     private final ConcurrentHashMap<Long, Deque<MessageSnippet>> slidingWindow = new ConcurrentHashMap<>();
 
     // Patterns for anti-false-positive filtering (prices, sizes, weights, counts)
@@ -409,6 +412,10 @@ public class TextModerator {
         Deque<MessageSnippet> queue = slidingWindow.computeIfAbsent(conversationId, k -> new ArrayDeque<>());
 
         synchronized (queue) {
+            // Evict expired snippets older than TTL (30 minutes)
+            Instant cutoff = Instant.now().minus(SLIDING_WINDOW_TTL);
+            queue.removeIf(s -> s.timestamp().isBefore(cutoff));
+
             StringBuilder joined = new StringBuilder();
             for (MessageSnippet s : queue) {
                 if (s.senderId() == senderId && s.digits() != null && !s.digits().isEmpty()) {
@@ -420,13 +427,25 @@ public class TextModerator {
             String combined = joined.toString();
             Matcher m = SLIDING_PHONE_PATTERN.matcher(combined);
             if (m.find()) {
-                queue.removeIf(s -> s.senderId() == senderId);
-                String masked = "***";
+                // Violation detected: Fragmented phone number sequence completed.
+                // We intentionally do NOT clear the preceding snippets from the queue, nor add the current
+                // masked digits. Because earlier messages (1..N-1) are already rendered on the recipient's screen,
+                // keeping them prevents the sender from bypassing by immediately re-sending the blocked final digit
+                // using alternative formats (words, emojis, interleaved text, or extra padding).
+                String masked = rawText;
+                if (rawText.length() <= 40 || containsWordNumberSequence(rawText)) {
+                    masked = "***";
+                } else {
+                    masked = rawText.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:không|khong|ko|zero|dzo|một|mot|mốt|nhất|hai|nhị|ba|tam|bốn|bon|tư|tu|tứ|năm|nam|lăm|lam|ngũ|sáu|sau|lục|bảy|bay|bẩy|thất|tám|bát|chín|chin|cửu|\\d+)(?=[\\s\\p{Punct}]|$)", "***");
+                    if (masked.equals(rawText)) {
+                        masked = "***";
+                    }
+                }
                 return TextModerationResult.violation("PHONE_LEAK", masked, "SLIDING_WINDOW_PHONE_SPLIT");
             }
 
             queue.addLast(new MessageSnippet(senderId, currentDigits, Instant.now()));
-            while (queue.size() > 10) {
+            while (queue.size() > SLIDING_WINDOW_CAPACITY) {
                 queue.pollFirst();
             }
         }

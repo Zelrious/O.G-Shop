@@ -72,6 +72,7 @@
   - Bắt dãy 9 chữ số khi lược bỏ số 0 đầu (`987654321`, `909 123 456`).
   - Bắt chiêu trò chèn số đệm trước/sau rồi kêu lấy số ở giữa (`123450912345678999 lấy 10 số ở giữa nha`, `9990901234567888`).
   - Bắt phân mảnh số điện thoại qua cửa sổ trượt (Sliding Window) cho cả dãy `0123456789` (`01` -> `23` -> `45` -> `67` -> `89`).
+  - Nâng cấp dung lượng cửa sổ trượt (Sliding Window) từ 10 lên 50 tin nhắn với TTL 30 phút; giữ vết chuỗi số unmasked khi phát hiện vi phạm thay vì xóa sạch bộ nhớ, ngăn chặn dứt điểm chiêu trò gửi bù số cuối bị chặn bằng chữ, emoji hoặc câu văn dài.
 - [x] Sửa đổi Notification & Message Bell:
   - Loại bỏ `CHAT_MESSAGE` và `CHAT_MEDIA` khỏi `PlatformNotificationFacade` để quả chuông thông báo chung không bị rác; CHỈ nhận thông báo khi có đề nghị trả giá (`OFFER_PROPOSED`, `OFFER_COUNTERED`, `OFFER_ORDERED`).
   - Đảm bảo `MessageBell` hiển thị 1 dòng cho mỗi hội thoại kèm bản xem trước (preview) của tin nhắn mới nhất.
