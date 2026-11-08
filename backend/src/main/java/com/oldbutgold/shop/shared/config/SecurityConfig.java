@@ -79,6 +79,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/admin/fulfillment/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/ktv/users/**").hasRole("KTV")
                         .requestMatchers("/api/v1/ktv/ekyc/**").hasRole("KTV")
+                        .requestMatchers("/api/v1/ktv/chat-moderation/**").hasRole("KTV")
                         .requestMatchers("/api/v1/admin/vouchers/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/ktv/vouchers/**").hasRole("KTV")
                         .requestMatchers("/api/v1/commerce/vouchers/**").hasAnyRole("BUYER","SELLER")
