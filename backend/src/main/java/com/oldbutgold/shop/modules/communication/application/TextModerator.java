@@ -21,14 +21,23 @@ public class TextModerator {
         boolean isViolation,
         String violationType,
         String maskedText,
-        String reason
+        String reason,
+        String severityLevel
     ) {
+        public TextModerationResult(boolean isViolation, String violationType, String maskedText, String reason) {
+            this(isViolation, violationType, maskedText, reason, isViolation ? "MEDIUM" : null);
+        }
+
         public static TextModerationResult clean(String text) {
-            return new TextModerationResult(false, null, text, null);
+            return new TextModerationResult(false, null, text, null, null);
         }
 
         public static TextModerationResult violation(String violationType, String maskedText, String reason) {
-            return new TextModerationResult(true, violationType, maskedText, reason);
+            return new TextModerationResult(true, violationType, maskedText, reason, "MEDIUM");
+        }
+
+        public static TextModerationResult violation(String violationType, String maskedText, String reason, String severityLevel) {
+            return new TextModerationResult(true, violationType, maskedText, reason, severityLevel);
         }
     }
 
@@ -72,6 +81,104 @@ public class TextModerator {
     private static final Pattern KEYCAP_COMBINER = Pattern.compile("[\\uFE0F\\u20E3]");
     private static final Pattern EMOJI_AND_SYMBOLS = Pattern.compile(
         "[\\uD83C-\\uD83E][\\uDC00-\\uDFFF]|[\\u2600-\\u27BF]|[\\u2300-\\u23FF]|[\\u2B50-\\u2B55]|[\\u203C\\u2049\\u2122\\u2139\\u2194-\\u2199\\u21A9-\\u21AA\\u25AA-\\u25AB\\u25B6\\u25C0\\u25FB-\\u25FE]"
+    );
+
+    // 1. Political & Subversive (Severity: CRITICAL)
+    private static final Pattern POLITICAL_SUBVERSIVE_PATTERN = Pattern.compile(
+        "(?iu)(?<=^|[\\s\\p{Punct}])(?:" +
+        "(?:đả\\s*đảo|đà\\s*đào|da\\s*dao)(?:\\s+(?:đcs|dcs|đảng|dang|chế\\s*độ|che\\s*do|nhà\\s*nước|nha\\s*nuoc|cộng\\s*sản|cong\\s*san|chính\\s*quyền|chinh\\s*quyen))?|" +
+        "đcs|" +
+        "việt\\s*tân|viet\\s*tan|" +
+        "đào\\s*minh\\s*quân|dao\\s*minh\\s*quan|" +
+        "triều\\s*đại\\s*việt|trieu\\s*dai\\s*viet|" +
+        "chính\\s*phủ\\s*(?:quốc\\s*gia\\s*)?(?:việt\\s*nam\\s*)?lâm\\s*thời|chinh\\s*phu\\s*(?:quoc\\s*gia\\s*)?(?:viet\\s*nam\\s*)?lam\\s*thoi|" +
+        "lật\\s*đổ\\s*(?:đcs|dcs|chế\\s*độ|đảng|chính\\s*quyền|nhà\\s*nước)|lat\\s*do\\s*(?:dcs|che\\s*do|dang|chinh\\s*quyen|nha\\s*nuoc)|" +
+        "chống\\s*phá\\s*(?:đcs|dcs|chế\\s*độ|đảng|chính\\s*quyền|nhà\\s*nước)|chong\\s*pha\\s*(?:dcs|che\\s*do|dang|chinh\\s*quyen|nha\\s*nuoc)|" +
+        "tiêu\\s*diệt\\s*(?:đcs|dcs|đảng|cộng\\s*sản)|tieu\\s*diet\\s*(?:dcs|dang|cong\\s*san)|" +
+        "xóa\\s*bỏ\\s*điều\\s*4|xoa\\s*bo\\s*dieu\\s*4|" +
+        "cách\\s*mạng\\s*(?:màu|trắng)|cach\\s*mang\\s*(?:mau|trang)|" +
+        "đa\\s*đảng|da\\s*dang|" +
+        "tam\\s*quyền\\s*phân\\s*lập|tam\\s*quyen\\s*phan\\s*lap|" +
+        "đảng\\s*cộng\\s*sản\\s*bán\\s*nước|dang\\s*cong\\s*san\\s*ban\\s*nuoc|" +
+        "tà\\s*quyền|ta\\s*quyen|" +
+        "việt\\s*gian\\s*bán\\s*nước|viet\\s*gian\\s*ban\\s*nuoc|" +
+        "bò\\s*đỏ|bo\\s*do|" +
+        "dư\\s*luận\\s*viên|du\\s*luan\\s*vien|" +
+        "ngụy\\s*quyền|nguy\\s*quyen|" +
+        "cờ\\s*vàng\\s*(?:ba\\s*sọc)?|co\\s*vang\\s*(?:ba\\s*soc)?|cờ\\s*ba\\s*sọc|co\\s*ba\\s*soc|" +
+        "quân\\s*lực\\s*vnch|quan\\s*luc\\s*vnch|" +
+        "phục\\s*quốc|phuc\\s*quoc|" +
+        "xuống\\s*đường\\s*biểu\\s*tình|xuong\\s*duong\\s*bieu\\s*tinh|" +
+        "kêu\\s*gọi\\s*tổng\\s*đình\\s*công|keu\\s*goi\\s*tong\\s*dinh\\s*cong|" +
+        "bao\\s*vây\\s*ủy\\s*ban|bao\\s*vay\\s*uy\\s*ban|" +
+        "bạo\\s*động\\s*vũ\\s*trang|bao\\s*dong\\s*vu\\s*trang" +
+        ")(?=[\\s\\p{Punct}]|$)"
+    );
+
+    // 2. Hate speech & Regional discrimination (Severity: HIGH)
+    private static final Pattern HATE_SPEECH_REGIONAL_PATTERN = Pattern.compile(
+        "(?iu)(?<=^|[\\s\\p{Punct}])(?:" +
+        "bắc\\s*kỳ|bac\\s*ky|bắc\\s*cầy|bac\\s*cay|parky|bucky|bắc\\s*cụ|bac\\s*cu|pake|bake|" +
+        "nam\\s*kỳ|nam\\s*ky|nam\\s*cầy|nam\\s*cay|nammay|dân\\s*nam\\s*kỳ|dan\\s*nam\\s*ky|" +
+        "trọ\\s*trẹ|tro\\s*tre|dân\\s*trọ\\s*trẹ|dan\\s*tro\\s*tre|" +
+        "hoa\\s*thanh\\s*quế|hoa\\s*thanh\\s*que|" +
+        "(?:bọn|lũ|dân)\\s*(?:36|37)|" +
+        "(?:không\\s*bán\\s*cho\\s*(?:dân\\s*)?(?:bắc|nam|trung|trọ\\s*trẹ))|" +
+        "mọi\\s*(?:miên|rợ|da\\s*đen)|moi\\s*(?:mien|ro|da\\s*den)|" +
+        "khỉ\\s*rừng|khi\\s*rung|" +
+        "nigger|nigga|chink|gook|negro" +
+        ")(?=[\\s\\p{Punct}]|$)"
+    );
+
+    // 3. Harassment & Threat (Severity: HIGH)
+    private static final Pattern HARASSMENT_THREAT_PATTERN = Pattern.compile(
+        "(?iu)(?<=^|[\\s\\p{Punct}])(?:" +
+        "giết|giet|kill|murder|" +
+        "(?:chém(?!\\s*gió)|chem(?!\\s*gio))(?:\\s+(?:chết|chet|mày|may|nó|no|tao|người|nguoi|nhau|đứt))?|" +
+        "đâm\\s*chết|dam\\s*chet|bắn\\s*chết|ban\\s*chet|đánh\\s*chết|danh\\s*chet|" +
+        "đâm\\s+(?:mày|may|nó|no|người|nguoi)|" +
+        "bắn\\s+(?:mày|may|nó|no|người|nguoi|chết|chet)|" +
+        "thủ\\s*tiêu|thu\\s*tieu|" +
+        "xử\\s*(?:mày|may|đẹp|dep|chết|chet)|" +
+        "tao\\s*(?:sẽ\\s+|se\\s+)?(?:chém|chem|giết|giet|đập|dap|đánh|danh|bắn|ban)\\s*(?:chết|chet|mày|may|nát|cho|mất\\s*xác)|" +
+        "đập\\s*(?:nát|cho|vỡ)\\s*(?:mặt|mồm|alo|mõm)|dap\\s*(?:nat|cho|vo)\\s*(?:mat|mom|alo|moom)|" +
+        "tìm\\s*(?:tận|toi)\\s*nhà|tim\\s*(?:tan|toi)\\s*nha|" +
+        "giết\\s*(?:cả\\s*)?(?:nhà|gia\\s*đình|họ)|giet\\s*(?:ca\\s*)?(?:nha|gia\\s*dinh|ho)|" +
+        "chờ\\s*(?:đấy|day)\\s*tao\\s*(?:qua|đến|tới)\\s*tận\\s*nơi|" +
+        "mày\\s*coi\\s*chừng\\s*tao|may\\s*coi\\s*chung\\s*tao|" +
+        "bố\\s*láo\\s*tao\\s*đập|bo\\s*lao\\s*tao\\s*dap|" +
+        "cho\\s*ăn\\s*(?:đòn|chém|đập|kẹo\\s*đồng)|cho\\s*an\\s*(?:don|chem|dap|keo\\s*dong)|" +
+        "đốt\\s*(?:nhà|quán|tiệm)|dot\\s*(?:nha|quan|tiem)|" +
+        "(?:i\\s+will|i'll|imma|gonna)\\s+(?:kill|find|beat|break|shoot)\\s+(?:you|your)|" +
+        "beat\\s+your\\s+ass|kick\\s+your\\s+ass|break\\s+your\\s+face|" +
+        "óc\\s*chó|oc\\s*cho|" +
+        "đồ\\s*súc\\s*vật|do\\s*suc\\s*vat|súc\\s*sinh|suc\\s*sinh|" +
+        "não\\s*tàn|nao\\s*tan|" +
+        "đồ\\s*ngu\\s*học|do\\s*ngu\\s*hoc|" +
+        "ngu\\s*như\\s*(?:bò|chó|heo|lợn)|ngu\\s*nhu\\s*(?:bo|cho|heo|lon)|" +
+        "chó\\s*tha|đồ\\s*chó|do\\s*cho|" +
+        "retard|moron|stupid\\s*animal|scum|" +
+        "thằng\\s*lừa\\s*đảo|thang\\s*lua\\s*dao|" +
+        "con\\s*trộm\\s*cắp|con\\s*trom\\s*cap|" +
+        "ăn\\s*cướp\\s*giữa\\s*ban\\s*ngày|an\\s*cuop\\s*giua\\s*ban\\s*ngay|" +
+        "scammer|thief" +
+        ")(?=[\\s\\p{Punct}]|$)"
+    );
+
+    // 4. Offensive Profanity (Severity: LOW)
+    private static final Pattern OFFENSIVE_PROFANITY_PATTERN = Pattern.compile(
+        "(?iu)(?<=^|[\\s\\p{Punct}])(?:" +
+        "đm|dmm|đcm|dcm|đcl|vcl|vkl|dkm|vcc|vlon|" +
+        "đ\\.m|d\\.m|đ_m|v\\.c\\.l|c\\.ặ\\.c|l\\.ồ\\.n|đ-é-o|đ3o|loz|l0n|c4c|" +
+        "đéo|deo|đếch|dech|" +
+        "cặc|cak|buồi|buoi|lồn|l0n|loz|" +
+        "chó\\s*đẻ|cho\\s*de|" +
+        "đĩ|mẹ\\s*kiếp|me\\s*kiep|khốn\\s*nạn|khon\\s*nan|chết\\s*tiệt|chet\\s*tiet|" +
+        "đậu\\s*má|đụ\\s*má|đụ\\s*mẹ|dau\\s*ma|du\\s*ma|du\\s*me|" +
+        "địt\\s*mẹ|dit\\s*me|địt|dit|" +
+        "fuck|fucking|fucked|fucker|fck|f\\*ck|f\\.u\\.c\\.k|" +
+        "shit|bitch|bastard|asshole|dick|pussy|cunt|cock|motherfucker|stfu|gtfo|bullshit" +
+        ")(?=[\\s\\p{Punct}]|$)"
     );
 
     // Platform redirect slang patterns
@@ -147,6 +254,21 @@ public class TextModerator {
         "(?:\\+?84|0)[35789]\\d{8}"
     );
 
+    private static int severityRank(String level) {
+        if (level == null) return 0;
+        return switch (level) {
+            case "CRITICAL" -> 4;
+            case "HIGH" -> 3;
+            case "MEDIUM" -> 2;
+            case "LOW" -> 1;
+            default -> 0;
+        };
+    }
+
+    private static boolean isHigherSeverity(String newLevel, String currentLevel) {
+        return severityRank(newLevel) > severityRank(currentLevel);
+    }
+
     public void clearBuffer(long conversationId) {
         slidingWindow.remove(conversationId);
     }
@@ -158,7 +280,7 @@ public class TextModerator {
     /**
      * Main moderation method called before persisting a message.
      * Evaluates all violation types comprehensively across the message
-     * to ensure multiple leaks (phones, links, payment keywords, CCCD)
+     * to ensure multiple leaks (phones, links, payment keywords, CCCD, profanity, hate speech, threats, politics)
      * are all masked in a single pass.
      */
     public TextModerationResult moderate(long conversationId, long senderId, String rawText) {
@@ -170,14 +292,64 @@ public class TextModerator {
         boolean isViolation = false;
         String primaryViolationType = null;
         String primaryReason = null;
+        String severityLevel = null;
+
+        // 0a. Check & mask Political & Subversive (Severity: CRITICAL)
+        Matcher politicalMatcher = POLITICAL_SUBVERSIVE_PATTERN.matcher(currentText);
+        if (politicalMatcher.find()) {
+            currentText = politicalMatcher.replaceAll("***");
+            isViolation = true;
+            primaryViolationType = "POLITICAL_SUBVERSIVE";
+            primaryReason = "POLITICAL_SUBVERSIVE_DETECTED";
+            severityLevel = "CRITICAL";
+        }
+
+        // 0b. Check & mask Hate Speech & Regional Discrimination (Severity: HIGH)
+        Matcher hateMatcher = HATE_SPEECH_REGIONAL_PATTERN.matcher(currentText);
+        if (hateMatcher.find()) {
+            currentText = hateMatcher.replaceAll("***");
+            isViolation = true;
+            if (severityLevel == null || isHigherSeverity("HIGH", severityLevel)) {
+                primaryViolationType = "HATE_SPEECH_REGIONAL";
+                primaryReason = "HATE_SPEECH_REGIONAL_DETECTED";
+                severityLevel = "HIGH";
+            }
+        }
+
+        // 0c. Check & mask Harassment & Threats (Severity: HIGH)
+        Matcher threatMatcher = HARASSMENT_THREAT_PATTERN.matcher(currentText);
+        if (threatMatcher.find()) {
+            currentText = threatMatcher.replaceAll("***");
+            isViolation = true;
+            if (severityLevel == null || isHigherSeverity("HIGH", severityLevel)) {
+                primaryViolationType = "HARASSMENT_THREAT";
+                primaryReason = "HARASSMENT_THREAT_DETECTED";
+                severityLevel = "HIGH";
+            }
+        }
+
+        // 0d. Check & mask Offensive Profanity (Severity: LOW)
+        Matcher profanityMatcher = OFFENSIVE_PROFANITY_PATTERN.matcher(currentText);
+        if (profanityMatcher.find()) {
+            currentText = profanityMatcher.replaceAll("***");
+            isViolation = true;
+            if (severityLevel == null) {
+                primaryViolationType = "OFFENSIVE_PROFANITY";
+                primaryReason = "OFFENSIVE_PROFANITY_DETECTED";
+                severityLevel = "LOW";
+            }
+        }
 
         // 1. Check & mask Off-Platform Payment keywords
         Matcher paymentMatcher = OFF_PLATFORM_PAYMENT_PATTERN.matcher(currentText);
         if (paymentMatcher.find()) {
             currentText = paymentMatcher.replaceAll("***");
             isViolation = true;
-            primaryViolationType = "OFF_PLATFORM_PAYMENT";
-            primaryReason = "OFF_PLATFORM_PAYMENT_DETECTED";
+            if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
+                primaryViolationType = "OFF_PLATFORM_PAYMENT";
+                primaryReason = "OFF_PLATFORM_PAYMENT_DETECTED";
+                severityLevel = "MEDIUM";
+            }
         }
 
         // 2. Check & mask Platform Redirects (Zalo, FB, Tele)
@@ -185,9 +357,10 @@ public class TextModerator {
         if (zaloMatcher.find()) {
             currentText = zaloMatcher.replaceAll("***");
             isViolation = true;
-            if (primaryViolationType == null) {
+            if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
                 primaryViolationType = "PLATFORM_REDIRECT";
                 primaryReason = "SLANG_ZALO_REDIRECT";
+                severityLevel = "MEDIUM";
             }
         }
 
@@ -195,9 +368,10 @@ public class TextModerator {
         if (fbMatcher.find()) {
             currentText = fbMatcher.replaceAll("***");
             isViolation = true;
-            if (primaryViolationType == null) {
+            if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
                 primaryViolationType = "PLATFORM_REDIRECT";
                 primaryReason = "SLANG_FACEBOOK_REDIRECT";
+                severityLevel = "MEDIUM";
             }
         }
 
@@ -205,9 +379,10 @@ public class TextModerator {
         if (teleMatcher.find()) {
             currentText = teleMatcher.replaceAll("***");
             isViolation = true;
-            if (primaryViolationType == null) {
+            if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
                 primaryViolationType = "PLATFORM_REDIRECT";
                 primaryReason = "SLANG_TELEGRAM_REDIRECT";
+                severityLevel = "MEDIUM";
             }
         }
 
@@ -216,9 +391,10 @@ public class TextModerator {
         if (urlMatcher.find()) {
             currentText = urlMatcher.replaceAll("***");
             isViolation = true;
-            if (primaryViolationType == null) {
+            if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
                 primaryViolationType = "PLATFORM_REDIRECT";
                 primaryReason = "EXTERNAL_LINK_REDIRECT";
+                severityLevel = "MEDIUM";
             }
         }
 
@@ -228,9 +404,10 @@ public class TextModerator {
         if (piiKeywordMatcher.find()) {
             currentText = maskPiiKeyword(currentText);
             isViolation = true;
-            if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+            if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
                 primaryViolationType = "PII_LEAK";
                 primaryReason = "CCCD_CMND_KEYWORD_DETECTED";
+                severityLevel = "MEDIUM";
             }
         }
 
@@ -243,9 +420,10 @@ public class TextModerator {
         if (cccdMatcher.find()) {
             currentText = CCCD_PATTERN.matcher(currentText).replaceAll("***");
             isViolation = true;
-            if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+            if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
                 primaryViolationType = "PII_LEAK";
                 primaryReason = "CCCD_NUMBER_DETECTED";
+                severityLevel = "MEDIUM";
             }
         }
 
@@ -256,9 +434,10 @@ public class TextModerator {
         if (phoneMatcher.find()) {
             currentText = VIETNAMESE_PHONE_WITH_HOMOGLYPHS.matcher(currentText).replaceAll("***");
             isViolation = true;
-            if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+            if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
                 primaryViolationType = "PHONE_LEAK";
                 primaryReason = "DIRECT_PHONE_DETECTED";
+                severityLevel = "MEDIUM";
             }
         }
 
@@ -267,9 +446,10 @@ public class TextModerator {
         if (sepMatcher.find()) {
             currentText = sepMatcher.replaceAll("***");
             isViolation = true;
-            if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+            if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
                 primaryViolationType = "PHONE_LEAK";
                 primaryReason = "DIRECT_PHONE_DETECTED";
+                severityLevel = "MEDIUM";
             }
         }
 
@@ -283,13 +463,12 @@ public class TextModerator {
 
             if (isWordCccd || isWordPhone) {
                 isViolation = true;
-                if (isWordCccd) {
-                    if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+                if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
+                    severityLevel = "MEDIUM";
+                    if (isWordCccd) {
                         primaryViolationType = "PII_LEAK";
                         primaryReason = "VIETNAMESE_WORD_CCCD_LEAK";
-                    }
-                } else {
-                    if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+                    } else {
                         primaryViolationType = "PHONE_LEAK";
                         primaryReason = "VIETNAMESE_WORD_PHONE_LEAK";
                     }
@@ -307,13 +486,12 @@ public class TextModerator {
             if (digits.length() >= 10) {
                 isViolation = true;
                 boolean isCccd = digits.length() == 12 || (digits.length() >= 12 && CCCD_PATTERN.matcher(digits).find());
-                if (isCccd) {
-                    if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+                if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
+                    severityLevel = "MEDIUM";
+                    if (isCccd) {
                         primaryViolationType = "PII_LEAK";
                         primaryReason = "CCCD_NUMBER_DETECTED";
-                    }
-                } else {
-                    if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+                    } else {
                         primaryViolationType = "PHONE_LEAK";
                         primaryReason = "PADDED_DIGITS_PHONE_LEAK";
                     }
@@ -329,7 +507,8 @@ public class TextModerator {
             String tokenDigits = extractAllDigits(normalizeObfuscations(token));
             if (tokenDigits.length() >= 9) {
                 isViolation = true;
-                if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+                if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
+                    severityLevel = "MEDIUM";
                     primaryViolationType = "PHONE_LEAK";
                     primaryReason = "OBFUSCATED_PHONE_DETECTED";
                 }
@@ -346,7 +525,7 @@ public class TextModerator {
         }
 
         if (isViolation) {
-            return TextModerationResult.violation(primaryViolationType, currentText, primaryReason);
+            return TextModerationResult.violation(primaryViolationType, currentText, primaryReason, severityLevel != null ? severityLevel : "MEDIUM");
         }
 
         return TextModerationResult.clean(rawText);

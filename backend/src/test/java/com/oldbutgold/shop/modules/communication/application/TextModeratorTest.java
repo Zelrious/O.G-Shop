@@ -625,6 +625,151 @@ class TextModeratorTest {
     }
 
     @Test
+    @DisplayName("Security: Detect political subversive & terrorist organization content (CRITICAL)")
+    void politicalSubversiveDetection() {
+        String[] samples = {
+            "Ủng hộ tổ chức việt tân đòi tự do",
+            "Đào Minh Quân là tổng thống lâm thời",
+            "Kêu gọi lật đổ chính quyền nhân dân",
+            "Tham gia chính phủ quốc gia lâm thời",
+            "Kích động biểu tình bạo loạn lật đổ chế độ",
+            "đà đào đcs",
+            "đả đảo đcs",
+            "lật đổ đcs",
+            "chống phá đcs"
+        };
+
+        for (String sample : samples) {
+            var res = moderator.moderate(1L, 100L, sample);
+            assertThat(res.isViolation())
+                .withFailMessage("Expected violation for: %s", sample)
+                .isTrue();
+            assertThat(res.violationType()).isEqualTo("POLITICAL_SUBVERSIVE");
+            assertThat(res.severityLevel()).isEqualTo("CRITICAL");
+            assertThat(res.maskedText()).contains("***");
+        }
+    }
+
+    @Test
+    @DisplayName("Security: Detect regional discrimination and hate speech (HIGH)")
+    void hateSpeechRegionalDetection() {
+        String[] samples = {
+            "Đồ bắc kỳ ăn tục nói phét",
+            "Bọn nam kỳ lười biếng",
+            "Dân trọ trẹ đừng vào đây mua hàng",
+            "Bọn parky cút về nước đi",
+            "Đồ bucky cút khỏi group",
+            "Bọn namky biết gì mà nói"
+        };
+
+        for (String sample : samples) {
+            var res = moderator.moderate(1L, 100L, sample);
+            assertThat(res.isViolation())
+                .withFailMessage("Expected violation for: %s", sample)
+                .isTrue();
+            assertThat(res.violationType()).isEqualTo("HATE_SPEECH_REGIONAL");
+            assertThat(res.severityLevel()).isEqualTo("HIGH");
+            assertThat(res.maskedText()).contains("***");
+        }
+    }
+
+    @Test
+    @DisplayName("Security: Detect harassment, violent threats and humiliation (HIGH)")
+    void harassmentThreatDetection() {
+        String[] samples = {
+            "Tao sẽ chém chết cả lò nhà mày",
+            "Bố mày sẽ tìm tận nhà giải quyết",
+            "Mày ngu như con óc chó vậy",
+            "Đồ súc vật không có học thức",
+            "Tao sẽ đập nát mặt mày",
+            "Giết cả nhà mày đấy tin không",
+            "giết",
+            "kill",
+            "giet",
+            "chém chết mày",
+            "thủ tiêu mày"
+        };
+
+        for (String sample : samples) {
+            var res = moderator.moderate(1L, 100L, sample);
+            assertThat(res.isViolation())
+                .withFailMessage("Expected violation for: %s", sample)
+                .isTrue();
+            assertThat(res.violationType()).isEqualTo("HARASSMENT_THREAT");
+            assertThat(res.severityLevel()).isEqualTo("HIGH");
+            assertThat(res.maskedText()).contains("***");
+        }
+    }
+
+    @Test
+    @DisplayName("Security: Detect offensive profanity and swearing (LOW)")
+    void offensiveProfanityDetection() {
+        String[] samples = {
+            "Đ.m shop làm ăn như hạch",
+            "Vcl giá đắt cắt cổ",
+            "What the fuck are you doing?",
+            "Con bitch này bán đồ rác",
+            "Đụ má tao không nhận hàng đâu",
+            "Địt mẹ bực cả mình"
+        };
+
+        for (String sample : samples) {
+            var res = moderator.moderate(1L, 100L, sample);
+            assertThat(res.isViolation())
+                .withFailMessage("Expected violation for: %s", sample)
+                .isTrue();
+            assertThat(res.violationType()).isEqualTo("OFFENSIVE_PROFANITY");
+            assertThat(res.severityLevel()).isEqualTo("LOW");
+            assertThat(res.maskedText()).contains("***");
+        }
+    }
+
+    @Test
+    @DisplayName("Robustness: Anti-False-Positive tests for legitimate normal conversations")
+    void falsePositiveRobustness() {
+        String[] legitimateSamples = {
+            "Món gà luộc bắc thảo ăn rất ngon",
+            "Mình muốn mua 2 chục trứng cút lộn xào me",
+            "Bán cho mình 5 cái cút nối ống nước phi 21",
+            "Em học lớp 12A trường THPT Chu Văn An",
+            "Áo sơ mi nam phom dáng thời trang công sở",
+            "Bánh cuốn kỳ đồng ở đường Nguyễn Thị Minh Khai ngon lắm",
+            "Chúc mừng sinh nhật bạn hiền, chúc vạn sự như ý",
+            "Cần mua bàn học dài 120cm, nặng 10kg, giá 500k ship COD"
+        };
+
+        for (String cleanText : legitimateSamples) {
+            var res = moderator.moderate(1L, 100L, cleanText);
+            assertThat(res.isViolation())
+                .withFailMessage("False positive detected for legitimate text: %s (violation: %s)", cleanText, res.violationType())
+                .isFalse();
+            assertThat(res.maskedText()).isEqualTo(cleanText);
+        }
+    }
+
+    @Test
+    @DisplayName("Security: Severity precedence resolution (CRITICAL > HIGH > MEDIUM > LOW)")
+    void severityPrecedenceResolution() {
+        // Profanity (LOW) + Political (CRITICAL) -> CRITICAL
+        var r1 = moderator.moderate(1L, 100L, "đ.m bọn việt tân chống phá");
+        assertThat(r1.isViolation()).isTrue();
+        assertThat(r1.violationType()).isEqualTo("POLITICAL_SUBVERSIVE");
+        assertThat(r1.severityLevel()).isEqualTo("CRITICAL");
+
+        // Profanity (LOW) + Hate speech (HIGH) -> HIGH
+        var r2 = moderator.moderate(1L, 100L, "đ.m đồ bắc kỳ chó");
+        assertThat(r2.isViolation()).isTrue();
+        assertThat(r2.violationType()).isEqualTo("HATE_SPEECH_REGIONAL");
+        assertThat(r2.severityLevel()).isEqualTo("HIGH");
+
+        // Phone/Redirect (MEDIUM) + Threat (HIGH) -> HIGH
+        var r3 = moderator.moderate(1L, 100L, "Add zalo 0901234567 tao tìm tận nhà chém chết mày");
+        assertThat(r3.isViolation()).isTrue();
+        assertThat(r3.violationType()).isEqualTo("HARASSMENT_THREAT");
+        assertThat(r3.severityLevel()).isEqualTo("HIGH");
+    }
+
+    @Test
     @DisplayName("Latency and Throughput Benchmark: Verify ultra-fast processing across message lengths")
     void latencyAndThroughputBenchmark() {
         String shortClean = "Chào shop, sản phẩm này còn hàng không shop ơi?";
