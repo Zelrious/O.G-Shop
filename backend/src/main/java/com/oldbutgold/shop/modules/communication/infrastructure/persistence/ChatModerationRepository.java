@@ -24,26 +24,28 @@ public class ChatModerationRepository {
     }
 
     private void ensureReportsTableExists() {
-        jdbc.execute("""
-            CREATE TABLE IF NOT EXISTS public.chat_moderation_reports (
-              report_id BIGSERIAL PRIMARY KEY,
-              conversation_id BIGINT NOT NULL,
-              offender_id BIGINT NOT NULL,
-              reporter_id BIGINT NULL,
-              flagged_message_id BIGINT NULL,
-              violation_type VARCHAR(64) NOT NULL,
-              severity_level VARCHAR(32) NOT NULL DEFAULT 'MEDIUM',
-              status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
-              flagged_content TEXT NOT NULL,
-              context_snippet TEXT NOT NULL,
-              decision_action VARCHAR(64) NULL,
-              reputation_penalty INT NOT NULL DEFAULT 0,
-              decision_note TEXT NULL,
-              resolved_by BIGINT NULL,
-              resolved_at TIMESTAMPTZ NULL,
-              created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """);
+        try {
+            jdbc.execute("""
+                CREATE TABLE IF NOT EXISTS public.chat_moderation_reports (
+                  report_id BIGSERIAL PRIMARY KEY,
+                  conversation_id BIGINT NOT NULL,
+                  offender_id BIGINT NOT NULL,
+                  reporter_id BIGINT NULL,
+                  flagged_message_id BIGINT NULL,
+                  violation_type VARCHAR(64) NOT NULL,
+                  severity_level VARCHAR(32) NOT NULL DEFAULT 'MEDIUM',
+                  status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+                  flagged_content TEXT NOT NULL,
+                  context_snippet TEXT NOT NULL,
+                  decision_action VARCHAR(64) NULL,
+                  reputation_penalty INT NOT NULL DEFAULT 0,
+                  decision_note TEXT NULL,
+                  resolved_by BIGINT NULL,
+                  resolved_at TIMESTAMP WITH TIME ZONE NULL,
+                  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """);
+        } catch (Exception ignored) {}
         try {
             jdbc.execute("ALTER TABLE public.chat_moderation_reports ADD COLUMN IF NOT EXISTS flagged_message_id BIGINT NULL");
         } catch (Exception ignored) {}

@@ -8,7 +8,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const sessionRevision = useRef(0);
-  const lastActivityRef = useRef<number>(Date.now());
+  const lastActivityRef = useRef<number>(0);
   const hasInteractedRef = useRef<boolean>(false);
 
   const acceptSession = (session: AuthResponse) => {
@@ -17,6 +17,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    lastActivityRef.current = Date.now();
     const handleInteraction = () => {
       hasInteractedRef.current = true;
       lastActivityRef.current = Date.now();

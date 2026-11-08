@@ -1433,7 +1433,7 @@ export const KtvChatModerationPage: React.FC = () => {
                 label="Hành động xử phạt"
                 value={actionChoice}
                 onChange={(val) => {
-                  const actionVal = val as any;
+                  const actionVal = val as typeof actionChoice;
                   setActionChoice(actionVal);
                   if (actionVal === 'DISMISS') setPenaltyChoice(0);
                   else if (actionVal === 'LOCK_ACCOUNT') setPenaltyChoice(20);
@@ -1535,7 +1535,7 @@ export const KtvChatModerationPage: React.FC = () => {
                 label="Hành động xử phạt"
                 value={batchActionChoice}
                 onChange={(val) => {
-                  const actionVal = val as any;
+                  const actionVal = val as typeof batchActionChoice;
                   setBatchActionChoice(actionVal);
                   if (actionVal === 'DISMISS') setBatchPenaltyChoice(0);
                   else if (actionVal === 'LOCK_ACCOUNT') setBatchPenaltyChoice(20);
@@ -1650,7 +1650,7 @@ export const KtvChatModerationPage: React.FC = () => {
                 label="Hành động xử phạt"
                 value={manualAction}
                 onChange={(val) => {
-                  const act = val as any;
+                  const act = val as typeof manualAction;
                   setManualAction(act);
                   if (act === 'DISMISS') setManualPenalty(0);
                   else if (act === 'LOCK_ACCOUNT') setManualPenalty(20);
