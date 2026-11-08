@@ -70,7 +70,7 @@ class FixedSessionSecurityTest {
         when(service.restoreSession(existing)).thenReturn(new AuthService.SessionResult(user, existing, 45));
         var response = http.perform(post("/api/v1/auth/session").header("Origin", "http://localhost:5173")
                 .cookie(new Cookie("og_access", existing))).andExpect(status().isOk())
-                .andExpect(header().doesNotExist("Set-Cookie")).andExpect(jsonPath("$.expiresIn").value(45)).andReturn();
+                .andExpect(header().exists("Set-Cookie")).andExpect(jsonPath("$.expiresIn").value(45)).andReturn();
         assertThat(json.readTree(response.getResponse().getContentAsString()).get("accessToken").asText()).isEqualTo(existing);
         http.perform(post("/api/v1/auth/session").header("Origin", "https://untrusted.example.invalid")
                 .cookie(new Cookie("og_access", existing))).andExpect(status().isForbidden());

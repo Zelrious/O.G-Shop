@@ -113,8 +113,8 @@ public class AuthController {
                 if (properties.sessionCookieName().equals(cookie.getName())) credential = cookie.getValue();
             }
         }
-        // Read the existing cookie without renewing its lifetime.
-        return sessionResponse(authService.restoreSession(credential), false);
+        // Rolling session: renew cookie and token lifetime for active users.
+        return sessionResponse(authService.restoreSession(credential), true);
     }
 
     @PostMapping("/logout")

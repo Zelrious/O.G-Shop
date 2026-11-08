@@ -127,7 +127,7 @@ Agent phải đọc file này và tài liệu của mọi module bị tác độ
 |---|---|---|---|
 | Identity | UC-01, UC-02 | IMPLEMENTED | [identity.md](identity.md) |
 | Catalog | UC-03, UC-04 | IMPLEMENTED | [catalog.md](catalog.md) |
-| Communication | UC18, UC19, UC10 | IMPLEMENTED / VERIFIED local | [communication.md](communication.md) |
+| Communication | UC18, UC19, UC10, UC56, UC74 | IMPLEMENTED / VERIFIED local | [communication.md](communication.md) |
 | Commerce | UC-07, UC-09 | PLANNED | [commerce.md](commerce.md) |
 | Payment | UC-08, UC-14 | PLANNED | [payment.md](payment.md) |
 | Fulfillment | UC-10, UC-11, UC-14 | PLANNED | [fulfillment.md](fulfillment.md) |

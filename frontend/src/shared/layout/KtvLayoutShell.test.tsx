@@ -31,14 +31,15 @@ describe('KtvLayoutShell Component', () => {
     expect(screen.getByText('Kỹ thuật viên')).toBeInTheDocument();
     expect(screen.getByText('Nguyễn Văn KTV')).toBeInTheDocument();
 
-    // Verify all 7 KTV Navigation Links (NO AD-XX codes)
-    expect(screen.getByRole('link', { name: /Kiểm duyệt tin/i })).toBeInTheDocument();
+    // Verify KTV Navigation Links (NO AD-XX codes)
+    expect(screen.getByRole('link', { name: /^Kiểm duyệt tin$/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Dòng tiền Escrow/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Quản lý người dùng/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Phân xử tranh chấp/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Kiểm duyệt eKYC/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Xử lý khiếu nại/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Tặng & Thu hồi Voucher/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Kiểm duyệt tin nhắn/i })).toBeInTheDocument();
 
     // Verify NO "Về sàn mua sắm" link exists
     expect(screen.queryByText(/Về sàn mua sắm/i)).toBeNull();

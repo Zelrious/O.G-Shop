@@ -1,5 +1,22 @@
 # Communication Module
 
+## Kiểm Duyệt Bảo Mật Tin Nhắn Đa Tầng và Điều Phối KTV — TASK-0116 / 2026-11-08
+
+- `V38__chat_moderation_reports.sql`: Bảng `chat_moderation_reports` hỗ trợ hàng đợi KTV (UC56) và lưu vết quyết định xử phạt (UC74).
+- `TextModerator`: Bổ sung 4 nhóm vi phạm: `POLITICAL_SUBVERSIVE` (CRITICAL), `HATE_SPEECH_REGIONAL` (HIGH), `HARASSMENT_THREAT` (HIGH), `OFFENSIVE_PROFANITY` (LOW). Phân cấp độ ưu tiên nghiêm trọng, ranh giới từ chặt chẽ chống dương tính giả.
+- `ChatService`: Chặn đứng vi phạm `CRITICAL` và khóa chat khẩn cấp 90 ngày; che `***` và tự động trích xuất JSON 5 tin nhắn ngữ cảnh đưa vào ticket KTV khi vi phạm `HIGH` hoặc tái phạm rải SĐT; chặn người dùng đang bị cấm chat (`chat_restricted_until`) với lỗi 403 `CHAT_RESTRICTED`.
+- `KtvChatModerationService` & `KtvChatModerationController`: Cung cấp API hàng đợi KTV (`/api/v1/ktv/chat-moderation/**`) thực thi 4 mức chế tài UC74 (`DISMISS`, `WARN`, `RESTRICT_CHAT`, `LOCK_ACCOUNT`) đồng bộ trừ điểm uy tín qua `og_compat.penalty_ledger`.
+- `KtvChatModerationPage`: Giao diện KTV Split-View 2 cột, xem ngữ cảnh hội thoại bong bóng chat, modal xử phạt UC74, tích hợp Sidebar `KtvLayoutShell.tsx` kèm badge đếm số lượng vi phạm.
+- Kiểm chứng: 32/32 `TextModeratorTest` passed (< 0.5ms/tin trên CPU), 52 frontend test files (268/268 tests passed, 100%), typecheck 0 lỗi.
+
+## Kiểm Duyệt Tin Nhắn Văn Bản và Chống Rò Rỉ Giao Dịch — TASK-0115 / 2026-11-07
+
+- `V37__chat_moderation.sql`: Thêm `chat_violation_score` và `chat_restricted_until` vào bảng `users`; tạo bảng lưu vết `chat_moderation_logs` ghi nhận vi phạm kiểm duyệt (SĐT, nền tảng ngoài, chuyển tiền riêng).
+- `TextModerator`: Triển khai pipeline chuẩn hóa Zero-Trust (lọc zero-width bytes, NFKC, homoglyphs O/0, l/1, S/5, B/8, số đếm tiếng Việt và từ lóng ngoại sàn). Tích hợp cửa sổ trượt In-Memory 10 tin gần nhất bắt chiêu trò rải SĐT qua nhiều tin nhắn ngắn liên tiếp (TC08–TC10), kèm bộ lọc chống dương tính giả (Anti-False-Positive Filter) triệt tiêu việc bắt nhầm mặc cả giá ("fix 500k") và kích thước sản phẩm.
+- `ChatService`: Tự động che nội dung vi phạm bằng `***` (Data Masking) trước khi lưu CSDL, ghi nhận log và tăng điểm vi phạm cho người gửi, trả metadata `moderationStatus: "MASKED"`.
+- `ConversationWorkspace`: Tự động hiển thị Banner Cảnh Báo An Toàn ở đầu khung chat với icon khiên bảo vệ (outline stroke SVG) và nhãn `[Đã ẩn thông tin liên hệ]` bên cạnh tin nhắn bị che, tương thích 100% Dark/Light mode.
+- Kiểm chứng: 9/9 `TextModeratorTest` passed (0.054s), 712 backend tests passed, 266/266 frontend tests passed, frontend build đạt.
+
 ## Cung cấp Giá Thương lượng đã Chấp thuận — TASK-0099 / 2026-10-20
 
 - `OfferRepository`: Bổ sung `activeAcceptedOffersForBuyer(long buyerId)` lọc các offer có `status = 'ACCEPTED'`, chưa tạo đơn (`NOT EXISTS order_items`), theo thứ tự mới nhất.

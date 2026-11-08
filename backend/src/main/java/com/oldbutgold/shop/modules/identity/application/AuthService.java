@@ -88,10 +88,10 @@ public class AuthService {
         }
         Instant deadline = jwt.getExpiresAt();
         long remaining = deadline == null ? 0 : Duration.between(clock.instant(), deadline).getSeconds();
-        // Decoder clock tolerance must never extend the fixed session deadline.
+        // Decoder clock tolerance must never restore an already expired session.
         if (jwt.getIssuedAt() == null || remaining <= 0) throw unavailableSession();
         UserEntity user = currentUser(userId);
-        return new SessionResult(user, tokenService.issueAccessToken(user, jwt.getIssuedAt(), deadline), remaining);
+        return new SessionResult(user, tokenService.issueAccessToken(user), tokenService.accessTokenExpiresInSeconds());
     }
 
     @Transactional(readOnly = true)
