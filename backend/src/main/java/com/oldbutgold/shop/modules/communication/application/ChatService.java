@@ -121,7 +121,13 @@ public class ChatService {
         return new Message(m.id(),m.sender(),m.type(),attachment&&!managed?"":m.content(),m.created(),m.reply(),m.offer(),media,moderationStatus,violationType);
     }
     private boolean retained(StoredMessage message){Thread c=repository.thread(message.conversation()).orElseThrow();return commerce.retainMedia(c.buyer(),c.seller(),c.product())||evidence.retainsMessage(message.id());}
-    public void notifyMessage(Thread c,long actor,long message,String title,String body,String type){long peer=actor==c.buyer()?c.seller():c.buyer();notices.enqueue("chat-message:"+message,c.id(),List.of(new PlatformNotificationFacade.Notice(peer,type,title,body,PlatformNotificationFacade.Destination.CONVERSATION,c.id(),message)));}
+    public void notifyMessage(Thread c,long actor,long message,String title,String body,String type){
+        if ("CHAT_MESSAGE".equals(type) || "CHAT_MEDIA".equals(type)) {
+            return;
+        }
+        long peer=actor==c.buyer()?c.seller():c.buyer();
+        notices.enqueue("chat-message:"+message,c.id(),List.of(new PlatformNotificationFacade.Notice(peer,type,title,body,PlatformNotificationFacade.Destination.CONVERSATION,c.id(),message)));
+    }
     @Transactional public void read(long actor,long id,long message){owned(actor,id,true);repository.read(id,actor,message);}
     @Transactional(readOnly=true) public List<Block> blocks(long actor){if(!identity.customer(actor).seller())throw problem(403,"SELLER_REQUIRED","Chỉ người bán có danh sách chặn.");return repository.blocks(actor);}
     @Transactional(readOnly=true) public List<Map<String,Object>> searchBuyers(long actor,String query){if(!identity.customer(actor).seller())throw problem(403,"SELLER_REQUIRED","Chỉ người bán tìm người mua để quản lý chặn.");String q=query==null?"":query.strip();if(q.length()<2)return List.of();if(q.length()>100)throw problem(400,"CHAT_QUERY_INVALID","Từ khóa quá dài.");return repository.searchBuyers(actor,q);}

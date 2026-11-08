@@ -19,3 +19,4 @@ CREATE TABLE IF NOT EXISTS public.chat_moderation_logs (
 -- 3. Create indexes for quick lookup
 CREATE INDEX IF NOT EXISTS idx_chat_moderation_logs_sender ON public.chat_moderation_logs(sender_id);
 CREATE INDEX IF NOT EXISTS idx_chat_moderation_logs_conversation ON public.chat_moderation_logs(conversation_id);
+

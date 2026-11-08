@@ -53,6 +53,12 @@ public class TextModerator {
     private static final Pattern COUNT_UNITS = Pattern.compile(
         "(?i)(?<=^|[\\s\\p{Punct}])\\d+\\s*(?:cái|cai|chiếc|chiec|bộ|bo|đôi|doi|cặp|cap|món|mon|cuốn|cuon|quyển|quyen|tập|tap|hộp|hop)(?=[\\s\\p{Punct}]|$)"
     );
+    private static final Pattern TIME_UNITS = Pattern.compile(
+        "(?i)(?<=^|[\\s\\p{Punct}])\\d+\\s*(?:tháng|thang|ngày|ngay|giờ|gio|phút|phut|tuần|tuan|giây|giay)(?=[\\s\\p{Punct}]|$)"
+    );
+    private static final Pattern PERCENTAGE_UNITS = Pattern.compile(
+        "(?<=^|[\\s\\p{Punct}])\\d+(?:[.,]\\d+)?\\s*%(?=[\\s\\p{Punct}]|$)"
+    );
 
     // Invisible / zero-width and control characters
     private static final Pattern INVISIBLE_CHARS = Pattern.compile(
@@ -84,9 +90,53 @@ public class TextModerator {
         "(?i)(?<=^|[\\s\\p{Punct}])(?:cọc\\s*trước|coc\\s*truoc|đặt\\s*cọc\\s*trước|dat\\s*coc\\s*truoc|chuyển\\s*(?:khoản\\s*)?cọc|chuyen\\s*(?:khoan\\s*)?coc|chuyển\\s*lúa|chuyen\\s*lua|chuyển\\s*khoản\\s*riêng|ck\\s*riêng|ck\\s*rieng|ck\\s*ngoài|ck\\s*ngoai|chuyển\\s*khoản\\s*ngoài|bắn\\s*tiền\\s*ngoài|ban\\s*tien\\s*ngoai|giao\\s*dịch\\s*ngoài|gd\\s*ngoai|gd\\s*ngoài)(?=[\\s\\p{Punct}]|$)"
     );
 
-    // Direct phone regex matching 10 digits starting with 03, 05, 07, 08, 09 or +84
+    // Direct phone regex matching 10 digits starting with 0 or +84 (allows any second digit to catch 0123456789, test numbers, old 012/016 prefixes, landlines)
+    // OR 9 digits starting with [35789] (omitted leading 0, e.g. 987654321, 912345678)
     private static final Pattern VIETNAMESE_PHONE_WITH_SEPARATORS = Pattern.compile(
-        "(?i)(?:\\+?84|0)[\\s.*_()/\\-]*[35789](?:[\\s.*_()/\\-]*\\d){8}"
+        "(?i)(?<!\\d)(?:(?:\\+?84|0)[\\s.*_()/\\-]*\\d(?:[\\s.*_()/\\-]*\\d){8}|[35789](?:[\\s.*_()/\\-]*\\d){8})(?!\\d)"
+    );
+
+    // Advanced phone regex supporting homoglyphs (O/0, l/1, S/5, B/8), zero-width chars, and separators
+    private static final Pattern VIETNAMESE_PHONE_WITH_HOMOGLYPHS = Pattern.compile(
+        "(?i)(?<!\\d)(?:(?:\\+?84|[0Oo])[\\s.*_()/\\-\\u200B-\\u200D\\uFEFF]*[0-9OoLlI|SsBb](?:[\\s.*_()/\\-\\u200B-\\u200D\\uFEFF]*[0-9OoLlI|SsBb]){8}|[35Ss78Bb9](?:[\\s.*_()/\\-\\u200B-\\u200D\\uFEFF]*[0-9OoLlI|SsBb]){8})(?!\\d)"
+    );
+
+    // Padded digit sequences (10 to 20 continuous or separator-spaced digits e.g. 123450912345678999 "lấy 10 số ở giữa")
+    private static final Pattern PADDED_DIGITS_PATTERN = Pattern.compile(
+        "(?<!\\d)\\d(?:[\\s.*_()/\\-]*\\d){9,20}(?!\\d)"
+    );
+
+    // Single alphanumeric token containing interleaved letters and digits (e.g. 012345abkcsja6789, 12345abkcsja6789)
+    private static final Pattern INTERLEAVED_TOKEN_PATTERN = Pattern.compile(
+        "(?i)(?<![0-9a-zA-Z])([0-9a-zA-Z]*[0-9OoLlI|SsBb][0-9a-zA-Z]*)(?![0-9a-zA-Z])"
+    );
+
+    // Sliding window & general phone patterns
+    private static final Pattern STRICT_OR_GENERAL_10_PHONE = Pattern.compile("(?:\\+?84|0)\\d{9}");
+    private static final Pattern NINE_DIGIT_PHONE = Pattern.compile("[35789]\\d{8}");
+    private static final Pattern SLIDING_PHONE_PATTERN = Pattern.compile("(?:\\+?84|0)\\d{9}|[35789]\\d{8}|\\d{10,}");
+
+    // CCCD (Căn cước công dân): 12 digits, starts with 0 (valid Vietnam province codes 001-096),
+    // supports separators (e.g. 079199012345, 079 199 012 345, 001.201.012.345, 001-201-012345)
+    private static final Pattern CCCD_PATTERN = Pattern.compile(
+        "(?<!\\d)(?:0\\d{2}[.\\s_-]?[0-3]\\d{2}[.\\s_-]?\\d{6}|0\\d{11}|0\\d{2}[.\\s_-]?\\d{3}[.\\s_-]?\\d{3}[.\\s_-]?\\d{3})(?!\\d)"
+    );
+
+    // Identity card (CCCD / CMND) with keyword context
+    private static final Pattern PII_ID_CARD_KEYWORD = Pattern.compile(
+        "(?i)(?:cccd|căn\\s*cước(?:\\s*công\\s*dân)?|can\\s*cuoc|cmnd|chứng\\s*minh(?:\\s*nhân\\s*dân)?|chung\\s*minh)[^0-9\\r\\n]{0,35}?([0-9][0-9.\\s_-]{7,15})"
+    );
+
+    // Sequence of 8 to 15 Vietnamese number words (and digits) for surgical masking of spelled-out numbers
+    private static final String VN_NUM_WORD_TOKEN =
+        "(?:không|khong|ko|k|dzo|zero|một|mot|mốt|nhất|hai|nhị|ba|tam|bốn|bon|tư|tu|tứ|năm|nam|lăm|lam|ngũ|sáu|sau|lục|bảy|bay|bẩy|thất|tám|bát|chín|chin|cửu|\\d+)";
+
+    private static final Pattern VN_WORD_NUMBER_SEQUENCE = Pattern.compile(
+        "(?i)(?:\\b" + VN_NUM_WORD_TOKEN + "[\\s,.*_\\-/]+\\s*){7,15}\\b" + VN_NUM_WORD_TOKEN + "\\b"
+    );
+
+    private static final Pattern ANY_WORD_NUMBER_TOKEN = Pattern.compile(
+        "(?i)(?<=^|[\\s\\p{Punct}])(?:không|khong|ko|zero|dzo|một|mot|mốt|nhất|hai|nhị|ba|tam|bốn|bon|tư|tu|tứ|năm|nam|lăm|lam|ngũ|sáu|sau|lục|bảy|bay|bẩy|thất|tám|bát|chín|chin|cửu)(?=[\\s\\p{Punct}]|$)"
     );
 
     // Pure 10-digit Vietnamese phone regex
@@ -104,53 +154,212 @@ public class TextModerator {
 
     /**
      * Main moderation method called before persisting a message.
+     * Evaluates all violation types comprehensively across the message
+     * to ensure multiple leaks (phones, links, payment keywords, CCCD)
+     * are all masked in a single pass.
      */
     public TextModerationResult moderate(long conversationId, long senderId, String rawText) {
         if (rawText == null || rawText.isBlank()) {
             return TextModerationResult.clean(rawText);
         }
 
-        // 1. Check Off-Platform Payment keywords
-        Matcher paymentMatcher = OFF_PLATFORM_PAYMENT_PATTERN.matcher(rawText);
+        String currentText = rawText;
+        boolean isViolation = false;
+        String primaryViolationType = null;
+        String primaryReason = null;
+
+        // 1. Check & mask Off-Platform Payment keywords
+        Matcher paymentMatcher = OFF_PLATFORM_PAYMENT_PATTERN.matcher(currentText);
         if (paymentMatcher.find()) {
-            String masked = paymentMatcher.replaceAll("***");
-            return TextModerationResult.violation("OFF_PLATFORM_PAYMENT", masked, "OFF_PLATFORM_PAYMENT_DETECTED");
+            currentText = paymentMatcher.replaceAll("***");
+            isViolation = true;
+            primaryViolationType = "OFF_PLATFORM_PAYMENT";
+            primaryReason = "OFF_PLATFORM_PAYMENT_DETECTED";
         }
 
-        // 2. Check Platform Redirects (Zalo, FB, Tele, URLs)
-        Matcher zaloMatcher = ZALO_SLANG.matcher(rawText);
+        // 2. Check & mask Platform Redirects (Zalo, FB, Tele)
+        Matcher zaloMatcher = ZALO_SLANG.matcher(currentText);
         if (zaloMatcher.find()) {
-            String masked = zaloMatcher.replaceAll("***");
-            masked = VIETNAMESE_PHONE_WITH_SEPARATORS.matcher(masked).replaceAll("***");
-            return TextModerationResult.violation("PLATFORM_REDIRECT", masked, "SLANG_ZALO_REDIRECT");
+            currentText = zaloMatcher.replaceAll("***");
+            isViolation = true;
+            if (primaryViolationType == null) {
+                primaryViolationType = "PLATFORM_REDIRECT";
+                primaryReason = "SLANG_ZALO_REDIRECT";
+            }
         }
 
-        Matcher fbMatcher = FACEBOOK_SLANG.matcher(rawText);
+        Matcher fbMatcher = FACEBOOK_SLANG.matcher(currentText);
         if (fbMatcher.find()) {
-            String masked = fbMatcher.replaceAll("***");
-            return TextModerationResult.violation("PLATFORM_REDIRECT", masked, "SLANG_FACEBOOK_REDIRECT");
+            currentText = fbMatcher.replaceAll("***");
+            isViolation = true;
+            if (primaryViolationType == null) {
+                primaryViolationType = "PLATFORM_REDIRECT";
+                primaryReason = "SLANG_FACEBOOK_REDIRECT";
+            }
         }
 
-        Matcher teleMatcher = TELEGRAM_SLANG.matcher(rawText);
+        Matcher teleMatcher = TELEGRAM_SLANG.matcher(currentText);
         if (teleMatcher.find()) {
-            String masked = teleMatcher.replaceAll("***");
-            return TextModerationResult.violation("PLATFORM_REDIRECT", masked, "SLANG_TELEGRAM_REDIRECT");
+            currentText = teleMatcher.replaceAll("***");
+            isViolation = true;
+            if (primaryViolationType == null) {
+                primaryViolationType = "PLATFORM_REDIRECT";
+                primaryReason = "SLANG_TELEGRAM_REDIRECT";
+            }
         }
 
-        Matcher urlMatcher = EXTERNAL_URL.matcher(rawText);
+        // 3. Check & mask External URLs and defanged links
+        Matcher urlMatcher = EXTERNAL_URL.matcher(currentText);
         if (urlMatcher.find()) {
-            String masked = urlMatcher.replaceAll("***");
-            return TextModerationResult.violation("PLATFORM_REDIRECT", masked, "EXTERNAL_LINK_REDIRECT");
+            currentText = urlMatcher.replaceAll("***");
+            isViolation = true;
+            if (primaryViolationType == null) {
+                primaryViolationType = "PLATFORM_REDIRECT";
+                primaryReason = "EXTERNAL_LINK_REDIRECT";
+            }
         }
 
-        // 3. Single-message Phone Leak detection (handles obfuscation, homoglyphs, word numbers)
-        TextModerationResult singlePhoneResult = checkSingleMessagePhone(rawText);
-        if (singlePhoneResult.isViolation()) {
-            return singlePhoneResult;
+        // 4. Check & mask Citizen Identity Cards (CCCD / CMND - PII Protection)
+        // 4a. With explicit keyword (e.g. cccd: 079199012345 or cmnd số 025678912)
+        Matcher piiKeywordMatcher = PII_ID_CARD_KEYWORD.matcher(currentText);
+        if (piiKeywordMatcher.find()) {
+            currentText = maskPiiKeyword(currentText);
+            isViolation = true;
+            if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+                primaryViolationType = "PII_LEAK";
+                primaryReason = "CCCD_CMND_KEYWORD_DETECTED";
+            }
         }
 
-        // 4. Stateful Sliding Window buffer check (for fragmented numbers across messages)
-        return checkSlidingWindow(conversationId, senderId, rawText);
+        // 4. Compute anti-false text once for PII & Phone evaluation
+        String antiFalseText = stripAntiFalsePositive(currentText);
+
+        // 4b. Standalone 12-digit CCCD
+        String antiFalseForCccd = stripAntiFalsePositive(currentText);
+        Matcher cccdMatcher = CCCD_PATTERN.matcher(antiFalseForCccd);
+        if (cccdMatcher.find()) {
+            currentText = CCCD_PATTERN.matcher(currentText).replaceAll("***");
+            isViolation = true;
+            if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+                primaryViolationType = "PII_LEAK";
+                primaryReason = "CCCD_NUMBER_DETECTED";
+            }
+        }
+
+        // 5. Check & mask Phone Numbers (Separators, Homoglyphs, Emojis, Zero-width)
+        // Recompute on currentText so already-masked CCCDs won't trigger phone regex
+        String antiFalseForPhone = stripAntiFalsePositive(currentText);
+        Matcher phoneMatcher = VIETNAMESE_PHONE_WITH_HOMOGLYPHS.matcher(antiFalseForPhone);
+        if (phoneMatcher.find()) {
+            currentText = VIETNAMESE_PHONE_WITH_HOMOGLYPHS.matcher(currentText).replaceAll("***");
+            isViolation = true;
+            if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+                primaryViolationType = "PHONE_LEAK";
+                primaryReason = "DIRECT_PHONE_DETECTED";
+            }
+        }
+
+        // Check if normalized text has direct phone matching (fallback for edge cases)
+        Matcher sepMatcher = VIETNAMESE_PHONE_WITH_SEPARATORS.matcher(currentText);
+        if (sepMatcher.find()) {
+            currentText = sepMatcher.replaceAll("***");
+            isViolation = true;
+            if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+                primaryViolationType = "PHONE_LEAK";
+                primaryReason = "DIRECT_PHONE_DETECTED";
+            }
+        }
+
+        // Check Vietnamese word numbers ONLY if word number tokens exist in text
+        if (ANY_WORD_NUMBER_TOKEN.matcher(antiFalseForPhone).find()) {
+            String wordNormalized = convertVietnameseWordNumbers(normalizeObfuscations(antiFalseForPhone));
+            String allDigits = extractAllDigits(wordNormalized);
+
+            boolean isWordCccd = allDigits.length() >= 12 && CCCD_PATTERN.matcher(allDigits).find();
+            boolean isWordPhone = STRICT_OR_GENERAL_10_PHONE.matcher(allDigits).find() || NINE_DIGIT_PHONE.matcher(allDigits).find();
+
+            if (isWordCccd || isWordPhone) {
+                isViolation = true;
+                if (isWordCccd) {
+                    if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+                        primaryViolationType = "PII_LEAK";
+                        primaryReason = "VIETNAMESE_WORD_CCCD_LEAK";
+                    }
+                } else {
+                    if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+                        primaryViolationType = "PHONE_LEAK";
+                        primaryReason = "VIETNAMESE_WORD_PHONE_LEAK";
+                    }
+                }
+                currentText = maskWordNumberSequence(currentText);
+            }
+        }
+
+        // 5c. Check & mask Padded digit sequences (e.g. 123450912345678999 "lấy 10 số ở giữa", 9990901234567888)
+        String antiFalseCluster = stripAntiFalsePositive(currentText);
+        Matcher paddedMatcher = PADDED_DIGITS_PATTERN.matcher(antiFalseCluster);
+        while (paddedMatcher.find()) {
+            String padded = paddedMatcher.group();
+            String digits = extractAllDigits(padded);
+            if (digits.length() >= 10) {
+                isViolation = true;
+                boolean isCccd = digits.length() == 12 || (digits.length() >= 12 && CCCD_PATTERN.matcher(digits).find());
+                if (isCccd) {
+                    if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+                        primaryViolationType = "PII_LEAK";
+                        primaryReason = "CCCD_NUMBER_DETECTED";
+                    }
+                } else {
+                    if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+                        primaryViolationType = "PHONE_LEAK";
+                        primaryReason = "PADDED_DIGITS_PHONE_LEAK";
+                    }
+                }
+                currentText = currentText.replace(padded, "***");
+            }
+        }
+
+        // 5d. Check & mask Interleaved alphanumeric tokens (e.g. 012345abkcsja6789, 12345abkcsja6789)
+        Matcher interleavedMatcher = INTERLEAVED_TOKEN_PATTERN.matcher(antiFalseCluster);
+        while (interleavedMatcher.find()) {
+            String token = interleavedMatcher.group(1);
+            String tokenDigits = extractAllDigits(normalizeObfuscations(token));
+            if (tokenDigits.length() >= 9) {
+                isViolation = true;
+                if (primaryViolationType == null || "PLATFORM_REDIRECT".equals(primaryViolationType)) {
+                    primaryViolationType = "PHONE_LEAK";
+                    primaryReason = "OBFUSCATED_PHONE_DETECTED";
+                }
+                currentText = currentText.replace(token, "***");
+            }
+        }
+
+        // 6. Stateful Sliding Window buffer check (for fragmented numbers across messages)
+        if (!isViolation) {
+            TextModerationResult slidingResult = checkSlidingWindow(conversationId, senderId, currentText);
+            if (slidingResult.isViolation()) {
+                return slidingResult;
+            }
+        }
+
+        if (isViolation) {
+            return TextModerationResult.violation(primaryViolationType, currentText, primaryReason);
+        }
+
+        return TextModerationResult.clean(rawText);
+    }
+
+    private String maskPiiKeyword(String text) {
+        Matcher m = PII_ID_CARD_KEYWORD.matcher(text);
+        StringBuilder sb = new StringBuilder();
+        while (m.find()) {
+            String fullMatch = m.group(0);
+            String numberPart = m.group(1);
+            String replacement = fullMatch.replace(numberPart, "***");
+            m.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+        }
+        m.appendTail(sb);
+        return sb.toString();
     }
 
     /**
@@ -172,8 +381,8 @@ public class TextModerator {
 
         // Also check if translating Vietnamese word numbers yields a phone number
         String wordNormalized = convertVietnameseWordNumbers(normalized);
-        Matcher wordMatcher = STRICT_VN_PHONE.matcher(extractAllDigits(wordNormalized));
-        if (wordMatcher.find()) {
+        String allDigits = extractAllDigits(wordNormalized);
+        if (STRICT_OR_GENERAL_10_PHONE.matcher(allDigits).find() || NINE_DIGIT_PHONE.matcher(allDigits).find()) {
             String masked = rawText;
             if (rawText.length() <= 80 || containsWordNumberSequence(rawText)) {
                 masked = "***";
@@ -209,7 +418,7 @@ public class TextModerator {
             joined.append(currentDigits);
 
             String combined = joined.toString();
-            Matcher m = STRICT_VN_PHONE.matcher(combined);
+            Matcher m = SLIDING_PHONE_PATTERN.matcher(combined);
             if (m.find()) {
                 queue.removeIf(s -> s.senderId() == senderId);
                 String masked = "***";
@@ -236,6 +445,8 @@ public class TextModerator {
         s = THOUSAND_FORMAT.matcher(s).replaceAll(" ");
         s = DIMENSION_UNITS.matcher(s).replaceAll(" ");
         s = COUNT_UNITS.matcher(s).replaceAll(" ");
+        s = TIME_UNITS.matcher(s).replaceAll(" ");
+        s = PERCENTAGE_UNITS.matcher(s).replaceAll(" ");
         return s;
     }
 
@@ -319,19 +530,30 @@ public class TextModerator {
         String s = text.toLowerCase(Locale.ROOT);
 
         // Handle 'k' as 'không' when followed by phone prefixes
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])k(?=[\\s\\p{Punct}]*(?:[35789]|ba|năm|nam|bảy|bay|tám|tam|chín|chin))", "0 ");
+        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])k(?=[\\s\\p{Punct}]*(?:[035789]|ba|năm|nam|bảy|bay|tám|tam|chín|chin))", "0 ");
 
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:không|khong)(?=[\\s\\p{Punct}]|$)", "0");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:một|mot|mốt)(?=[\\s\\p{Punct}]|$)", "1");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:hai)(?=[\\s\\p{Punct}]|$)", "2");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:ba)(?=[\\s\\p{Punct}]|$)", "3");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:bốn|bon|tư|tu)(?=[\\s\\p{Punct}]|$)", "4");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:năm|nam|lăm|lam)(?=[\\s\\p{Punct}]|$)", "5");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:sáu|sau)(?=[\\s\\p{Punct}]|$)", "6");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:bảy|bay|bẩy)(?=[\\s\\p{Punct}]|$)", "7");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:tám|tam)(?=[\\s\\p{Punct}]|$)", "8");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:chín|chin)(?=[\\s\\p{Punct}]|$)", "9");
+        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:không|khong|ko|zero|dzo)(?=[\\s\\p{Punct}]|$)", "0");
+        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:một|mot|mốt|nhất)(?=[\\s\\p{Punct}]|$)", "1");
+        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:hai|nhị)(?=[\\s\\p{Punct}]|$)", "2");
+        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:ba|tam)(?=[\\s\\p{Punct}]|$)", "3");
+        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:bốn|bon|tư|tu|tứ)(?=[\\s\\p{Punct}]|$)", "4");
+        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:năm|nam|lăm|lam|ngũ)(?=[\\s\\p{Punct}]|$)", "5");
+        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:sáu|sau|lục)(?=[\\s\\p{Punct}]|$)", "6");
+        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:bảy|bay|bẩy|thất)(?=[\\s\\p{Punct}]|$)", "7");
+        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:tám|bát)(?=[\\s\\p{Punct}]|$)", "8");
+        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:chín|chin|cửu)(?=[\\s\\p{Punct}]|$)", "9");
         return s;
+    }
+
+    private String maskWordNumberSequence(String text) {
+        Matcher m = VN_WORD_NUMBER_SEQUENCE.matcher(text);
+        if (m.find()) {
+            return m.replaceAll("***");
+        }
+        if (text.length() <= 80 || containsWordNumberSequence(text)) {
+            return "***";
+        }
+        return text;
     }
 
     private boolean containsWordNumberSequence(String text) {

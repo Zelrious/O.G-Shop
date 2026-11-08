@@ -1,5 +1,13 @@
 # Communication Module
 
+## Kiểm Duyệt Tin Nhắn Văn Bản và Chống Rò Rỉ Giao Dịch — TASK-0115 / 2026-11-07
+
+- `V37__chat_moderation.sql`: Thêm `chat_violation_score` và `chat_restricted_until` vào bảng `users`; tạo bảng lưu vết `chat_moderation_logs` ghi nhận vi phạm kiểm duyệt (SĐT, nền tảng ngoài, chuyển tiền riêng).
+- `TextModerator`: Triển khai pipeline chuẩn hóa Zero-Trust (lọc zero-width bytes, NFKC, homoglyphs O/0, l/1, S/5, B/8, số đếm tiếng Việt và từ lóng ngoại sàn). Tích hợp cửa sổ trượt In-Memory 10 tin gần nhất bắt chiêu trò rải SĐT qua nhiều tin nhắn ngắn liên tiếp (TC08–TC10), kèm bộ lọc chống dương tính giả (Anti-False-Positive Filter) triệt tiêu việc bắt nhầm mặc cả giá ("fix 500k") và kích thước sản phẩm.
+- `ChatService`: Tự động che nội dung vi phạm bằng `***` (Data Masking) trước khi lưu CSDL, ghi nhận log và tăng điểm vi phạm cho người gửi, trả metadata `moderationStatus: "MASKED"`.
+- `ConversationWorkspace`: Tự động hiển thị Banner Cảnh Báo An Toàn ở đầu khung chat với icon khiên bảo vệ (outline stroke SVG) và nhãn `[Đã ẩn thông tin liên hệ]` bên cạnh tin nhắn bị che, tương thích 100% Dark/Light mode.
+- Kiểm chứng: 9/9 `TextModeratorTest` passed (0.054s), 712 backend tests passed, 266/266 frontend tests passed, frontend build đạt.
+
 ## Cung cấp Giá Thương lượng đã Chấp thuận — TASK-0099 / 2026-10-20
 
 - `OfferRepository`: Bổ sung `activeAcceptedOffersForBuyer(long buyerId)` lọc các offer có `status = 'ACCEPTED'`, chưa tạo đơn (`NOT EXISTS order_items`), theo thứ tự mới nhất.

@@ -66,3 +66,17 @@
 - [x] `chat.test.tsx`: Bổ sung ca kiểm thử tự động xác minh hiển thị Banner cảnh báo an toàn và nhãn `[Đã ẩn thông tin liên hệ]`.
 - [x] Chạy kiểm thử Frontend: 51 test files, 266 tests passed (100%).
 - [x] Chạy `npm run build`: Build thành công không có cảnh báo/lỗi TypeScript.
+- [x] Vá triệt để các lỗ hổng lách luật kiểm duyệt (Vấn đề phát hiện thực tế):
+  - Bắt dãy `0123456789` (thêm 0 trước 123456789).
+  - Bóc tách và bắt chuỗi chèn chữ cái ngẫu nhiên vào giữa các chữ số (`012345abkcsja6789`, `12345abkcsja6789`, `090abc123xyz456`).
+  - Bắt dãy 9 chữ số khi lược bỏ số 0 đầu (`987654321`, `909 123 456`).
+  - Bắt chiêu trò chèn số đệm trước/sau rồi kêu lấy số ở giữa (`123450912345678999 lấy 10 số ở giữa nha`, `9990901234567888`).
+  - Bắt phân mảnh số điện thoại qua cửa sổ trượt (Sliding Window) cho cả dãy `0123456789` (`01` -> `23` -> `45` -> `67` -> `89`).
+- [x] Sửa đổi Notification & Message Bell:
+  - Loại bỏ `CHAT_MESSAGE` và `CHAT_MEDIA` khỏi `PlatformNotificationFacade` để quả chuông thông báo chung không bị rác; CHỈ nhận thông báo khi có đề nghị trả giá (`OFFER_PROPOSED`, `OFFER_COUNTERED`, `OFFER_ORDERED`).
+  - Đảm bảo `MessageBell` hiển thị 1 dòng cho mỗi hội thoại kèm bản xem trước (preview) của tin nhắn mới nhất.
+- [x] Hoàn thiện UX/UI Chat:
+  - Tự động re-focus vào ô soạn tin nhắn sau khi gửi thành công.
+  - Sửa lỗi bong bóng tin nhắn nhanh (ChatDock) bị ngắt dọc chữ số 2 ký tự (`09`), thiết lập `min-width: 44px`, `overflow-wrap: break-word` và `max-width: 86%` đồng nhất.
+  - Cập nhật kịch bản kiểm thử thủ công lên 63 test cases bao phủ toàn bộ các trường hợp mới.
+
