@@ -12,8 +12,8 @@ vi.mock('./chatModerationApi', () => ({
 describe('KtvChatAttachment Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    global.URL.createObjectURL = vi.fn(() => 'blob:http://localhost/test-media');
-    global.URL.revokeObjectURL = vi.fn();
+    window.URL.createObjectURL = vi.fn(() => 'blob:http://localhost/test-media');
+    window.URL.revokeObjectURL = vi.fn();
   });
 
   it('renders image attachment and triggers lightbox on click without opening new window', async () => {
