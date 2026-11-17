@@ -35,7 +35,7 @@ class VnPayPaymentPostgresTest {
         p.add("spring.datasource.url", () -> url);
         p.add("spring.datasource.username", () -> System.getenv("OGSHOP_TEST_DB_USER"));
         p.add("spring.datasource.password", () -> System.getenv("OGSHOP_TEST_DB_PASSWORD"));
-        p.add("spring.flyway.enabled", () -> true);
+        p.add("spring.flyway.enabled", com.oldbutgold.shop.shared.PostgresTestSafetyGuard::isFlywayOptInEnabled);
         p.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
     }
     @Autowired VnPayPaymentService payments;

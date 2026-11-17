@@ -92,6 +92,9 @@ public class OrderEntity {
     @Column(name = "shipping_discount_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal shippingDiscountAmount = BigDecimal.ZERO;
 
+    @Column(name = "points_discount_amount", precision = 19, scale = 2)
+    private BigDecimal pointsDiscountAmount = BigDecimal.ZERO;
+
     @Column(name = "sponsor_type", nullable = false, length = 20)
     private String sponsorType = "PLATFORM";
 
@@ -127,20 +130,29 @@ public class OrderEntity {
     @Column(name = "cancellation_reason", length = 500)
     private String cancellationReason;
 
-    @Column(name = "workflow_model", length = 20, insertable = false, updatable = false)
-    private String workflowModel;
+    @Column(name = "workflow_model", length = 20)
+    private String workflowModel = "LEGACY_V14";
 
-    @Column(name = "group_id", insertable = false, updatable = false)
+    @Column(name = "group_id")
     private UUID groupId;
 
-    @Column(name = "return_allowed", insertable = false, updatable = false)
+    @Column(name = "return_allowed")
     private Boolean returnAllowed;
 
-    @Column(name = "delivery_method", length = 20, insertable = false, updatable = false)
+    @Column(name = "delivery_method", length = 20)
     private String deliveryMethod;
 
-    @Column(name = "handover_day", insertable = false, updatable = false)
+    @Column(name = "carrier_snapshot", length = 100)
+    private String carrierSnapshot;
+
+    @Column(name = "handover_day")
     private LocalDate handoverDay;
+
+    @Column(name = "paid_confirmed_at")
+    private Instant paidConfirmedAt;
+
+    @Column(name = "seller_accept_due_at")
+    private Instant sellerAcceptDueAt;
 
     @Column(name = "valid_delivered_at", insertable = false, updatable = false)
     private Instant validDeliveredAt;
@@ -208,6 +220,47 @@ public class OrderEntity {
         this.status = STATUS_PAYMENT_PENDING;
     }
 
+    public OrderEntity(UUID checkoutGroupId, Long buyerId, Long sellerId, Long sourceAddressId,
+                       String shippingRecipientName, String shippingPhoneNumber,
+                       String shippingProvince, String shippingDistrict, String shippingWard,
+                       String shippingDetailAddress, Integer shippingGhnProvinceId,
+                       Integer shippingGhnDistrictId, String shippingGhnWardCode,
+                       BigDecimal subtotal, BigDecimal shippingFee,
+                       BigDecimal buyerSystemFee, BigDecimal sellerSystemFee, BigDecimal sellerProceeds,
+                       BigDecimal voucherDiscountAmount, BigDecimal shippingDiscountAmount,
+                       BigDecimal pointsDiscountAmount,
+                       String sponsorType, BigDecimal totalAmount, Instant paymentDueAt, Instant now) {
+        this(checkoutGroupId, buyerId, sellerId, sourceAddressId, shippingRecipientName, shippingPhoneNumber,
+                shippingProvince, shippingDistrict, shippingWard, shippingDetailAddress, shippingGhnProvinceId,
+                shippingGhnDistrictId, shippingGhnWardCode, subtotal, shippingFee, buyerSystemFee, sellerSystemFee,
+                sellerProceeds, voucherDiscountAmount, shippingDiscountAmount, sponsorType, totalAmount, paymentDueAt, now);
+        this.pointsDiscountAmount = pointsDiscountAmount != null ? pointsDiscountAmount : BigDecimal.ZERO;
+    }
+
+    public OrderEntity(UUID checkoutGroupId, Long buyerId, Long sellerId, Long sourceAddressId,
+                       String shippingRecipientName, String shippingPhoneNumber,
+                       String shippingProvince, String shippingDistrict, String shippingWard,
+                       String shippingDetailAddress, Integer shippingGhnProvinceId,
+                       Integer shippingGhnDistrictId, String shippingGhnWardCode,
+                       BigDecimal subtotal, BigDecimal shippingFee,
+                       BigDecimal buyerSystemFee, BigDecimal sellerSystemFee, BigDecimal sellerProceeds,
+                       BigDecimal voucherDiscountAmount, BigDecimal shippingDiscountAmount,
+                       BigDecimal pointsDiscountAmount,
+                       String sponsorType, BigDecimal totalAmount, Instant paymentDueAt, Instant now,
+                       String workflowModel, UUID groupId, Boolean returnAllowed,
+                       String deliveryMethod, LocalDate handoverDay) {
+        this(checkoutGroupId, buyerId, sellerId, sourceAddressId, shippingRecipientName, shippingPhoneNumber,
+                shippingProvince, shippingDistrict, shippingWard, shippingDetailAddress, shippingGhnProvinceId,
+                shippingGhnDistrictId, shippingGhnWardCode, subtotal, shippingFee, buyerSystemFee, sellerSystemFee,
+                sellerProceeds, voucherDiscountAmount, shippingDiscountAmount, pointsDiscountAmount, sponsorType,
+                totalAmount, paymentDueAt, now);
+        this.workflowModel = workflowModel != null ? workflowModel : "UC83";
+        this.groupId = groupId != null ? groupId : checkoutGroupId;
+        this.returnAllowed = returnAllowed;
+        this.deliveryMethod = deliveryMethod;
+        this.handoverDay = handoverDay;
+    }
+
     public Long getId() { return id; }
     public UUID getCheckoutGroupId() { return checkoutGroupId; }
     public Long getBuyerId() { return buyerId; }
@@ -232,23 +285,39 @@ public class OrderEntity {
     public BigDecimal getSellerProceeds() { return sellerProceeds; }
     public BigDecimal getVoucherDiscountAmount() { return voucherDiscountAmount; }
     public BigDecimal getShippingDiscountAmount() { return shippingDiscountAmount; }
+    public BigDecimal getPointsDiscountAmount() { return pointsDiscountAmount != null ? pointsDiscountAmount : BigDecimal.ZERO; }
+    public void setPointsDiscountAmount(BigDecimal pointsDiscountAmount) { this.pointsDiscountAmount = pointsDiscountAmount != null ? pointsDiscountAmount : BigDecimal.ZERO; }
     public String getSponsorType() { return sponsorType; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public String getCurrency() { return currency; }
     public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
     public Instant getPaymentDueAt() { return paymentDueAt; }
+    public void setPaymentDueAt(Instant paymentDueAt) { this.paymentDueAt = paymentDueAt; }
     public Long getVersion() { return version; }
     public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public Instant getCompletedAt() { return completedAt; }
     public Instant getCancelledAt() { return cancelledAt; }
     public String getCancellationReason() { return cancellationReason; }
     public String getWorkflowModel() { return workflowModel; }
+    public void setWorkflowModel(String workflowModel) { this.workflowModel = workflowModel; }
     public UUID getGroupId() { return groupId; }
+    public void setGroupId(UUID groupId) { this.groupId = groupId; }
     public Boolean getReturnAllowed() { return returnAllowed; }
+    public void setReturnAllowed(Boolean returnAllowed) { this.returnAllowed = returnAllowed; }
     public boolean isReturnAllowed() { return Boolean.TRUE.equals(returnAllowed); }
     public String getDeliveryMethod() { return deliveryMethod; }
+    public void setDeliveryMethod(String deliveryMethod) { this.deliveryMethod = deliveryMethod; }
+    public String getCarrierSnapshot() { return carrierSnapshot; }
+    public void setCarrierSnapshot(String carrierSnapshot) { this.carrierSnapshot = carrierSnapshot; }
     public LocalDate getHandoverDay() { return handoverDay; }
+    public void setHandoverDay(LocalDate handoverDay) { this.handoverDay = handoverDay; }
+    public Instant getPaidConfirmedAt() { return paidConfirmedAt; }
+    public void setPaidConfirmedAt(Instant paidConfirmedAt) { this.paidConfirmedAt = paidConfirmedAt; }
+    public Instant getSellerAcceptDueAt() { return sellerAcceptDueAt; }
+    public void setSellerAcceptDueAt(Instant sellerAcceptDueAt) { this.sellerAcceptDueAt = sellerAcceptDueAt; }
     public Instant getValidDeliveredAt() { return validDeliveredAt; }
     public Instant getReturnDueAt() { return returnDueAt; }
     public Instant getEarlyCompletedAt() { return earlyCompletedAt; }

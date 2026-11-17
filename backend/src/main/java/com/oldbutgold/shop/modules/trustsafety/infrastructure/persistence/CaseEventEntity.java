@@ -27,6 +27,7 @@ public class CaseEventEntity {
     public static final String TYPE_COMPENSATION = "COMPENSATION";
     public static final String TYPE_DEADLINE_EXTENSION = "DEADLINE_EXTENSION";
     public static final String TYPE_CLEANUP = "CLEANUP";
+    public static final String TYPE_BUYER_WITHDRAWN = "BUYER_WITHDRAWN";
 
     @Id
     @Column(name = "event_id", nullable = false)

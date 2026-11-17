@@ -15,6 +15,20 @@ management:
   health:
     mail:
       enabled: false
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState, rewardPolicy
+          status:
+            order: DOWN, OUT_OF_SERVICE, NOT_READY, UP, UNKNOWN
+            http-mapping:
+              NOT_READY: 503
 
 app:
   environment: DEV
@@ -49,6 +63,10 @@ app:
     mode: MVP_BYPASS
   scheduling:
     order-expiry:
+      enabled: false
+    return-reconciliation:
+      enabled: false
+    ktv-sla-escalation:
       enabled: false
   ghn:
     base-url: ${GHN_BASE_URL:https://dev-online-gateway.ghn.vn/shiip/public-api/}

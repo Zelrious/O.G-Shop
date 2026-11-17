@@ -33,6 +33,12 @@ public interface OrderRepository extends JpaRepository<OrderEntity, Long> {
 
     Optional<OrderEntity> findByIdAndBuyerId(Long id, Long buyerId);
 
+    List<OrderEntity> findByCheckoutGroupId(java.util.UUID checkoutGroupId);
+
+    List<OrderEntity> findByGroupId(java.util.UUID groupId);
+
+    List<OrderEntity> findByCheckoutGroupIdAndBuyerIdOrderByIdAsc(java.util.UUID checkoutGroupId, Long buyerId);
+
     Optional<OrderEntity> findByIdAndSellerId(Long id, Long sellerId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -41,4 +47,7 @@ public interface OrderRepository extends JpaRepository<OrderEntity, Long> {
 
     @Query("SELECT o FROM OrderEntity o WHERE o.status = 'PAYMENT_PENDING' AND o.paymentDueAt < :now")
     List<OrderEntity> findOverduePendingOrders(@Param("now") Instant now);
+
+    @Query("SELECT o.id FROM OrderEntity o WHERE o.status = 'DELIVERED' AND o.validDeliveredAt IS NOT NULL AND o.validDeliveredAt <= :cutoff ORDER BY o.id ASC")
+    List<Long> findOverdueDeliveredOrderIds(@Param("cutoff") Instant cutoff);
 }

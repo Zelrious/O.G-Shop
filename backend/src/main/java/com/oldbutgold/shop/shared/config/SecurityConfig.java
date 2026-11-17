@@ -51,7 +51,7 @@ public class SecurityConfig {
                 .addFilterAfter(new com.oldbutgold.shop.modules.identity.infrastructure.security.AccountAccessFilter(accountAccess,json),
                     org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/register/verify",
@@ -76,10 +76,10 @@ public class SecurityConfig {
                                 "/api/v1/payments/vnpay-ipn",
                                 "/api/v1/shipping/master-data/**").permitAll()
                         .requestMatchers("/api/v1/admin/payments/**").hasAnyRole("ADMIN", "KTV")
+                        .requestMatchers("/api/v1/admin/cases/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/admin/fulfillment/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/ktv/users/**").hasRole("KTV")
                         .requestMatchers("/api/v1/admin/vouchers/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/ktv/vouchers/**").hasRole("KTV")
+                        .requestMatchers("/api/v1/ktv/**").hasRole("KTV")
                         .requestMatchers("/api/v1/commerce/vouchers/**").hasAnyRole("BUYER","SELLER")
                         .requestMatchers("/api/v1/account/**").hasAnyRole("BUYER","SELLER")
                         .requestMatchers("/api/v1/chat/**").hasAnyRole("BUYER","SELLER")
@@ -93,7 +93,8 @@ public class SecurityConfig {
                                 "/api/v1/notifications/**",
                                 "/api/v1/commerce/**",
                                 "/api/v1/payments/**",
-                                "/api/v1/fulfillment/**").authenticated()
+                                "/api/v1/fulfillment/**",
+                                "/api/v1/trustsafety/**").authenticated()
 
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2

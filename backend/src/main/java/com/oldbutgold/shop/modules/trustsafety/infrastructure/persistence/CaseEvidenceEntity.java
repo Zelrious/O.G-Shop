@@ -60,6 +60,9 @@ public class CaseEvidenceEntity {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @Column(name = "request_id")
+    private UUID requestId;
+
     protected CaseEvidenceEntity() {
     }
 
@@ -175,5 +178,13 @@ public class CaseEvidenceEntity {
 
     public void setDeletedAt(Instant deletedAt) {
         this.deletedAt = deletedAt;
+    }
+
+    public UUID getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(UUID requestId) {
+        this.requestId = requestId;
     }
 }

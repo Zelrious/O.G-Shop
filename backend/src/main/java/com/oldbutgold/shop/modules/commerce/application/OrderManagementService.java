@@ -17,7 +17,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +42,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -62,6 +65,13 @@ public class OrderManagementService {
     private final Clock clock;
     private final JdbcTemplate jdbcTemplate;
     private final EntityManager entityManager;
+
+    @Autowired(required = false)
+    @Lazy
+    private OrderManagementService self;
+
+    @Autowired(required = false)
+    private ObjectProvider<OrderManagementService> selfProvider;
 
     @Autowired
     public OrderManagementService(
@@ -92,27 +102,8 @@ public class OrderManagementService {
         this.simulationGuard = simulationGuard;
         this.transactionTemplate = transactionTemplate;
         this.clock = clock;
-        this.jdbcTemplate = jdbcTemplate;
+        this.jdbcTemplate = Objects.requireNonNull(jdbcTemplate, "jdbcTemplate must not be null");
         this.entityManager = entityManager;
-    }
-
-    public OrderManagementService(
-            OrderRepository orderRepository,
-            OrderItemRepository orderItemRepository,
-            OrderVoucherRepository orderVoucherRepository,
-            CatalogCommerceFacade catalogCommerceFacade,
-            PaymentRepository paymentRepository,
-            IdentityCommerceFacade identityCommerceFacade,
-            ShipmentRepository shipmentRepository,
-            FulfillmentService fulfillmentService,
-            FulfillmentStateService fulfillmentStateService,
-            FulfillmentSimulationGuard simulationGuard,
-            TransactionTemplate transactionTemplate,
-            Clock clock
-    ) {
-        this(orderRepository, orderItemRepository, orderVoucherRepository, catalogCommerceFacade,
-                paymentRepository, identityCommerceFacade, shipmentRepository, fulfillmentService,
-                fulfillmentStateService, simulationGuard, transactionTemplate, clock, null, null);
     }
 
     @Transactional(readOnly = true)
@@ -697,6 +688,23 @@ public class OrderManagementService {
             }
         }
 
+        // Điều kiện 5 (Financial Safety Guard): Không giải ngân COMPLETION nếu đơn có phán quyết cuối hoàn tiền hoặc miễn hoàn tiền hàng (Fail-closed)
+        Boolean hasRefundDecision = jdbcTemplate.queryForObject("""
+                SELECT EXISTS(
+                    SELECT 1 FROM og_compat.case_decisions cd
+                    JOIN og_compat.case_rounds cr ON cr.round_id = cd.round_id
+                    JOIN og_compat.cases c ON c.case_id = cr.case_id
+                    WHERE c.order_id = ?
+                      AND c.case_type = 'RETURN'
+                      AND cd.is_final = true
+                      AND cd.outcome IN ('FULL_GOODS_REFUND', 'EXEMPT_GOODS_REFUND')
+                )
+                """, Boolean.class, orderId);
+
+        if (Boolean.TRUE.equals(hasRefundDecision)) {
+            throw new IllegalStateException("Đơn hàng đã có quyết định hoàn tiền hoặc miễn hoàn tiền hàng (FULL_GOODS_REFUND/EXEMPT_GOODS_REFUND), không thể giải ngân theo hoàn tất.");
+        }
+
         if (isLegacy) {
             return disburseLegacyOrder(order, now);
         } else {
@@ -934,6 +942,79 @@ public class OrderManagementService {
             }
         }
         return count;
+    }
+
+    public void setSelf(OrderManagementService self) {
+        this.self = self;
+    }
+
+    private OrderManagementService getSelf() {
+        if (self != null) {
+            return self;
+        }
+        if (selfProvider != null) {
+            OrderManagementService providerBean = selfProvider.getIfAvailable();
+            if (providerBean != null) {
+                return providerBean;
+            }
+        }
+        return this;
+    }
+
+    /**
+     * Tự động giải ngân cho các đơn hàng ở trạng thái DELIVERED đã quá thời hạn 3 ngày (Task 3.3 / UC71).
+     * <p>
+     * Transaction Isolation: Method này KHÔNG mang annotation @Transactional cấp batch để bảo đảm
+     * mỗi đơn hàng được xử lý trong một transaction độc lập qua Spring proxy của {@link #disburseSellerFunds(Long)}.
+     * Một đơn hàng phát sinh lỗi/exception sẽ rollback riêng biệt và không làm gián đoạn hay rollback các đơn hàng khác.
+     */
+    public OrderManagementDtos.OverdueDeliveryBatchResult reconcileOverdueDeliveries() {
+        Instant now = clock.instant();
+        Instant cutoff = now.minus(Duration.ofDays(3));
+        List<Long> overdueOrderIds = orderRepository.findOverdueDeliveredOrderIds(cutoff);
+
+        List<Long> processedOrderIds = new ArrayList<>();
+        List<Long> skippedOrderIds = new ArrayList<>();
+        List<Long> failedOrderIds = new ArrayList<>();
+
+        if (overdueOrderIds == null || overdueOrderIds.isEmpty()) {
+            return new OrderManagementDtos.OverdueDeliveryBatchResult(0, List.of(), List.of(), List.of());
+        }
+
+        OrderManagementService proxy = getSelf();
+
+        for (Long orderId : overdueOrderIds) {
+            try {
+                OrderManagementDtos.DisbursementResponse response = proxy.disburseSellerFunds(orderId);
+                if (response != null) {
+                    if ("Đơn hàng đã được giải ngân và hoàn tất trước đó.".equals(response.message())) {
+                        skippedOrderIds.add(orderId);
+                    } else {
+                        processedOrderIds.add(orderId);
+                    }
+                } else {
+                    skippedOrderIds.add(orderId);
+                }
+            } catch (IllegalStateException | NoSuchElementException ex) {
+                // Expected business guard rejections (e.g., blocking case, not delivered, money hold, refund decision)
+                log.warn("Overdue delivery auto-disbursement skipped/rejected for order #{}: {}", orderId, ex.getMessage());
+                skippedOrderIds.add(orderId);
+            } catch (Exception ex) {
+                // Unexpected execution or data errors
+                log.error("Overdue delivery auto-disbursement failed for order #{}: {}", orderId, ex.getMessage(), ex);
+                failedOrderIds.add(orderId);
+            }
+        }
+
+        log.info("Completed overdue deliveries reconciliation: scanned={}, processed={}, skipped={}, failed={}",
+                overdueOrderIds.size(), processedOrderIds.size(), skippedOrderIds.size(), failedOrderIds.size());
+
+        return new OrderManagementDtos.OverdueDeliveryBatchResult(
+                overdueOrderIds.size(),
+                processedOrderIds,
+                skippedOrderIds,
+                failedOrderIds
+        );
     }
 
     private OrderManagementDtos.OrderSummaryResponse mapToSummary(OrderEntity order, boolean forBuyer) {

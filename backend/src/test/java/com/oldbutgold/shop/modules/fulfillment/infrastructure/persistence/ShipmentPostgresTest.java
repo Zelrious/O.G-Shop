@@ -44,7 +44,7 @@ class ShipmentPostgresTest {
         registry.add("spring.datasource.url", () -> url);
         registry.add("spring.datasource.username", () -> System.getenv("OGSHOP_TEST_DB_USER"));
         registry.add("spring.datasource.password", () -> System.getenv("OGSHOP_TEST_DB_PASSWORD"));
-        registry.add("spring.flyway.enabled", () -> true);
+        registry.add("spring.flyway.enabled", PostgresTestSafetyGuard::isFlywayOptInEnabled);
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
     }
 

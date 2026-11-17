@@ -11,5 +11,9 @@ public interface CaseEventRepository extends JpaRepository<CaseEventEntity, UUID
     List<CaseEventEntity> findByCaseIdOrderByOccurredAtAsc(Long caseId);
 
     Optional<CaseEventEntity> findByCommandKey(String commandKey);
+
+    Optional<CaseEventEntity> findByCaseIdAndRoundIdAndEventType(Long caseId, Long roundId, String eventType);
+
+    boolean existsByCaseIdAndRoundIdAndEventType(Long caseId, Long roundId, String eventType);
 }
 

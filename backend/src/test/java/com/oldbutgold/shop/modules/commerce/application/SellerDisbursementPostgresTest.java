@@ -41,7 +41,7 @@ class SellerDisbursementPostgresTest {
         registry.add("spring.datasource.username", () -> System.getenv("OGSHOP_TEST_DB_USER"));
         registry.add("spring.datasource.password", () -> System.getenv("OGSHOP_TEST_DB_PASSWORD"));
         registry.add("spring.datasource.hikari.connection-init-sql", () -> "SET search_path TO og_compat,public");
-        registry.add("spring.flyway.enabled", () -> true);
+        registry.add("spring.flyway.enabled", PostgresTestSafetyGuard::isFlywayOptInEnabled);
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
     }
 
@@ -62,16 +62,32 @@ class SellerDisbursementPostgresTest {
 
     private Long buyerId;
     private Long sellerId;
+    private Long ktvId;
 
     @BeforeEach
     void setUp() {
         buyerId = createTestUser("buyer");
         sellerId = createTestUser("seller");
+        ktvId = createTestUser("ktv");
+        grantRole(buyerId, "BUYER");
+        grantRole(sellerId, "SELLER");
+        grantRole(ktvId, "KTV");
+
+        Boolean isKtv = jdbcTemplate.queryForObject("SELECT og_has_role(?, 'KTV')", Boolean.class, ktvId);
+        assertThat(isKtv).isTrue();
+    }
+
+    private void grantRole(Long userId, String roleName) {
+        jdbcTemplate.update("""
+                INSERT INTO og_compat.user_roles(user_id, role_id)
+                SELECT ?, role_id FROM og_compat.roles WHERE role_name = ?
+                ON CONFLICT DO NOTHING
+                """, userId, roleName);
     }
 
     private Long createTestUser(String prefix) {
         return jdbcTemplate.queryForObject(
-                "INSERT INTO og_compat.users(email, password_hash, full_name) VALUES (?, 'fixture_pass', ?) RETURNING user_id",
+                "INSERT INTO og_compat.users(email, password_hash, full_name, status) VALUES (?, 'fixture_pass', ?, 'ACTIVE') RETURNING user_id",
                 Long.class,
                 prefix + "_" + UUID.randomUUID() + "@example.test",
                 "User " + prefix
@@ -114,13 +130,14 @@ class SellerDisbursementPostgresTest {
                     shipping_province, shipping_district, shipping_ward, shipping_detail_address,
                     subtotal, shipping_fee, total_amount, voucher_discount_amount, buyer_system_fee, seller_system_fee,
                     seller_proceeds, payment_due_at, workflow_model, return_allowed, delivery_method, handover_day,
-                    status, valid_delivered_at
+                    status, valid_delivered_at, version, created_at, updated_at
                 ) VALUES (
                     ?, ?, ?, ?, 'Recipient', '0912345678',
                     'HN', 'BD', 'Ward', 'Detail address',
                     ?, 0, ?, ?, 0, 0,
                     ?, CURRENT_TIMESTAMP + INTERVAL '1 hour', 'UC83', true, 'SELF_PICKUP', CURRENT_DATE,
-                    'PAYMENT_PENDING', CURRENT_TIMESTAMP - (? || ' days')::INTERVAL
+                    'PAYMENT_PENDING', CURRENT_TIMESTAMP - (? || ' days')::INTERVAL,
+                    0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 ) RETURNING order_id
                 """,
                 Long.class,
@@ -164,7 +181,7 @@ class SellerDisbursementPostgresTest {
                 allocationId, intentId, confirmationId, orderId, totalAmount
         );
 
-        jdbcTemplate.update("""
+        int affected = jdbcTemplate.update("""
                 UPDATE og_compat.orders
                 SET status = 'DELIVERED',
                     paid_confirmed_at = (SELECT confirmed_at FROM og_compat.payment_confirmations WHERE confirmation_id = ?)
@@ -172,6 +189,19 @@ class SellerDisbursementPostgresTest {
                 """,
                 confirmationId, orderId
         );
+        if (affected == 0) {
+            affected = jdbcTemplate.update("""
+                    UPDATE public.orders
+                    SET status = 'DELIVERED',
+                        paid_confirmed_at = (SELECT confirmed_at FROM og_compat.payment_confirmations WHERE confirmation_id = ?)
+                    WHERE order_id = ?
+                    """,
+                    confirmationId, orderId
+            );
+        }
+        assertThat(affected).as("Order must be updated to DELIVERED").isGreaterThan(0);
+        String finalStatus = jdbcTemplate.queryForObject("SELECT status FROM og_compat.orders WHERE order_id = ?", String.class, orderId);
+        assertThat(finalStatus).as("Order status in database must be DELIVERED").isEqualTo("DELIVERED");
 
         UUID cashComponentId = UUID.randomUUID();
         jdbcTemplate.update("""
@@ -205,14 +235,16 @@ class SellerDisbursementPostgresTest {
                     shipping_province, shipping_district, shipping_ward, shipping_detail_address,
                     subtotal, shipping_fee, total_amount, seller_proceeds,
                     voucher_discount_amount, buyer_system_fee, seller_system_fee,
-                    payment_due_at, status, workflow_model, valid_delivered_at
+                    payment_due_at, status, workflow_model, valid_delivered_at,
+                    version, created_at, updated_at
                 ) VALUES (
                     ?, ?, ?, 'Legacy Buyer', '0912345678',
                     'HN', 'BD', 'Ward', 'Detail address',
                     100000, 20000, 120000, 100000,
                     0, 0, 0,
                     CURRENT_TIMESTAMP + INTERVAL '1 hour', 'DELIVERED', 'LEGACY_V14',
-                    CURRENT_TIMESTAMP - (? || ' days')::INTERVAL
+                    CURRENT_TIMESTAMP - (? || ' days')::INTERVAL,
+                    0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 ) RETURNING order_id
                 """,
                 Long.class,
@@ -237,6 +269,148 @@ class SellerDisbursementPostgresTest {
                 Long.class,
                 orderId, buyerId, "CMD_CASE_" + UUID.randomUUID()
         );
+    }
+
+    private record ReturnCaseOrderFixture(Long orderId, Long caseId, UUID cashComponentId, UUID subsidyComponentId) {}
+
+    /**
+     * Shared helper tạo đơn hàng UC83 và mở RETURN Case hợp lệ qua view og_compat.cases:
+     * 1. Đơn hàng ban đầu được tạo với valid_delivered_at cách 1 ngày trước (trong cửa sổ 3 ngày
+     *    để thỏa mãn trigger og70_row_cases_og_guard_return_case).
+     * 2. Mở RETURN Case qua og_compat.cases (kích hoạt trigger kiểm tra quyền mở Case và tự động sinh money_holds).
+     * 3. Cập nhật valid_delivered_at thành 4 ngày trước để đáp ứng điều kiện thời hạn giao hàng > 3 ngày của UC71 disburseSellerFunds.
+     */
+    private ReturnCaseOrderFixture createDeliveredOrderWithReturnCase(Long buyerId, Long sellerId) {
+        Uc83OrderFixture orderFixture = createDeliveredUc83Order(buyerId, sellerId, 1);
+        Long orderId = orderFixture.orderId();
+
+        Long caseId = jdbcTemplate.queryForObject("""
+                INSERT INTO og_compat.cases(case_type, order_id, created_by, description, state, command_key)
+                VALUES ('RETURN', ?, ?, 'Return request', 'OPEN', ?) RETURNING case_id
+                """, Long.class, orderId, buyerId, "CMD_CASE_" + UUID.randomUUID());
+
+        int validDeliveredRows = jdbcTemplate.update("UPDATE og_compat.orders SET valid_delivered_at = CURRENT_TIMESTAMP - INTERVAL '4 days' WHERE order_id = ?", orderId);
+        if (validDeliveredRows == 0) {
+            jdbcTemplate.update("UPDATE public.orders SET valid_delivered_at = CURRENT_TIMESTAMP - INTERVAL '4 days' WHERE order_id = ?", orderId);
+        }
+
+        return new ReturnCaseOrderFixture(orderId, caseId, orderFixture.cashComponentId(), orderFixture.subsidyComponentId());
+    }
+
+    /**
+     * Shared helper tạo và xác nhận giao nhận trực tiếp hai chiều cho leg RETURN của shipment.
+     * Kiểm tra chặt chẽ các bất biến nghiệp vụ và validator cases_check2:
+     * - approved_at IS NOT NULL trước khi tạo shipment và trước khi giao hàng.
+     * - confirmed_at > approved_at (được đảm bảo qua confirmed_at = CURRENT_TIMESTAMP + INTERVAL '1 minute').
+     * - delivered >= approved_at trước khi gọi og_confirm_direct_handover.
+     * - Sau khi cập nhật: state = 'POST_RETURN', valid_returned_at = delivered,
+     *   và seller_response_due_at = valid_returned_at + INTERVAL '2 days'.
+     */
+    private Long createAndConfirmReturnShipment(Long orderId, Long caseId, Long buyerId, Long sellerId) {
+        // 1. Kiểm tra precondition: approved_at IS NOT NULL
+        Instant approvedAt = jdbcTemplate.queryForObject(
+                "SELECT approved_at FROM og_compat.cases WHERE case_id = ?", Instant.class, caseId);
+        assertThat(approvedAt).as("Case must have approved_at before return shipment").isNotNull();
+
+        // 2. Tạo shipment leg = 'RETURN' qua og_compat.shipments
+        Long shipmentId = jdbcTemplate.queryForObject("""
+                INSERT INTO og_compat.shipments(order_id, carrier, status, workflow_model, leg, return_case_id, delivery_method, fee_snapshot, fee_payer)
+                VALUES (?, 'SELF_PICKUP', 'PENDING', 'UC83', 'RETURN', ?, 'SELF_PICKUP', 0, 'BUYER') RETURNING shipment_id
+                """, Long.class, orderId, caseId);
+
+        // 3. Ghi nhận handover confirmations với confirmed_at sau approved_at
+        for (String party : List.of("BUYER", "SELLER")) {
+            jdbcTemplate.update("""
+                    INSERT INTO og_compat.handover_confirmations(
+                        confirmation_id, shipment_id, party, user_id, outcome, confirmed_at, command_key
+                    ) VALUES (?, ?, ?, ?, 'SUCCESS', CURRENT_TIMESTAMP + INTERVAL '1 minute', ?)
+                    """, UUID.randomUUID(), shipmentId, party, "BUYER".equals(party) ? buyerId : sellerId, "CMD_HO_" + UUID.randomUUID());
+        }
+
+        // 4. Kiểm tra dữ liệu trước khi gọi og_confirm_direct_handover(): delivered >= approved_at
+        Instant delivered = jdbcTemplate.queryForObject("""
+                SELECT MAX(confirmed_at) FROM og_compat.handover_confirmations WHERE shipment_id = ?
+                """, Instant.class, shipmentId);
+        assertThat(delivered).as("Delivered timestamp must be present").isNotNull();
+        assertThat(delivered).as("delivered must be >= approved_at").isAfterOrEqualTo(approvedAt);
+
+        // 5. Xác nhận direct handover
+        Boolean confirmed = jdbcTemplate.queryForObject("SELECT og_confirm_direct_handover(?)", Boolean.class, shipmentId);
+        assertThat(confirmed).as("og_confirm_direct_handover must return true").isTrue();
+
+        // 6. Kiểm tra dữ liệu Case sau khi cập nhật:
+        //    - state = 'POST_RETURN'
+        //    - valid_returned_at IS NOT NULL
+        //    - seller_response_due_at = valid_returned_at + INTERVAL '2 days'
+        Boolean invariantHolds = jdbcTemplate.queryForObject("""
+                SELECT (state = 'POST_RETURN' AND valid_returned_at IS NOT NULL
+                        AND seller_response_due_at = valid_returned_at + INTERVAL '2 days')
+                FROM og_compat.cases WHERE case_id = ?
+                """, Boolean.class, caseId);
+        assertThat(invariantHolds).as("Post-return constraint cases_check2 must be satisfied").isTrue();
+
+        return shipmentId;
+    }
+
+    /**
+     * Helper thực hiện quyết định APPROVE_RETURN ở Round 1 bởi KTV qua view og_compat.case_decisions.
+     * Kích hoạt trigger og_apply_case_decision cập nhật approved_at trên og_compat.cases.
+     */
+    private void approveReturnRound1(Long caseId, Long reviewerKtvId) {
+        Long r1 = jdbcTemplate.queryForObject("""
+                INSERT INTO og_compat.case_rounds(case_id, round_no, stage)
+                VALUES (?, 1, 'RETURN_APPROVAL') RETURNING round_id
+                """, Long.class, caseId);
+        jdbcTemplate.update("""
+                INSERT INTO og_compat.case_decisions(round_id, reviewed_by, actor_type, outcome, is_final, reason, command_key)
+                VALUES (?, ?, 'USER', 'APPROVE_RETURN', true, 'KTV approves return', ?)
+                """, r1, reviewerKtvId, "CMD_DEC_" + UUID.randomUUID());
+    }
+
+    /**
+     * Helper thực hiện quyết định REJECT_RETURN ở Round 1 bởi KTV qua view og_compat.case_decisions.
+     * Kích hoạt trigger og_apply_case_decision cập nhật state = 'REJECTED' và đóng holds.
+     */
+    private void rejectReturnRound1(Long caseId, Long reviewerKtvId) {
+        Long r1 = jdbcTemplate.queryForObject("""
+                INSERT INTO og_compat.case_rounds(case_id, round_no, stage)
+                VALUES (?, 1, 'RETURN_APPROVAL') RETURNING round_id
+                """, Long.class, caseId);
+        jdbcTemplate.update("""
+                INSERT INTO og_compat.case_decisions(round_id, reviewed_by, actor_type, outcome, is_final, reason, command_key)
+                VALUES (?, ?, 'USER', 'REJECT_RETURN', true, 'KTV rejects return request', ?)
+                """, r1, reviewerKtvId, "CMD_DEC_" + UUID.randomUUID());
+    }
+
+    /**
+     * Helper thực hiện quyết định FULL_GOODS_REFUND ở Round 2 bởi KTV qua view og_compat.case_decisions.
+     * Kích hoạt trigger og_apply_case_decision cập nhật state = 'CLOSED' và đóng holds.
+     */
+    private void resolveRound2FullRefund(Long caseId, Long reviewerKtvId) {
+        Long r2 = jdbcTemplate.queryForObject("""
+                INSERT INTO og_compat.case_rounds(case_id, round_no, stage)
+                VALUES (?, 2, 'POST_RETURN_RESOLUTION') RETURNING round_id
+                """, Long.class, caseId);
+        jdbcTemplate.update("""
+                INSERT INTO og_compat.case_decisions(round_id, reviewed_by, actor_type, outcome, is_final, reason, command_key)
+                VALUES (?, ?, 'USER', 'FULL_GOODS_REFUND', true, 'KTV full refund to buyer', ?)
+                """, r2, reviewerKtvId, "CMD_DEC_" + UUID.randomUUID());
+    }
+
+    /**
+     * Helper thực hiện quyết định EXEMPT_GOODS_REFUND ở Round 2 bởi KTV qua view og_compat.case_decisions.
+     * Cập nhật valid_damage_request_at trên case_rounds và đóng Case.
+     */
+    private void resolveRound2ExemptRefund(Long caseId, Long reviewerKtvId) {
+        Long r2 = jdbcTemplate.queryForObject("""
+                INSERT INTO og_compat.case_rounds(case_id, round_no, stage)
+                VALUES (?, 2, 'POST_RETURN_RESOLUTION') RETURNING round_id
+                """, Long.class, caseId);
+        jdbcTemplate.update("UPDATE og_compat.case_rounds SET valid_damage_request_at = CURRENT_TIMESTAMP WHERE round_id = ?", r2);
+        jdbcTemplate.update("""
+                INSERT INTO og_compat.case_decisions(round_id, reviewed_by, actor_type, outcome, is_final, reason, command_key)
+                VALUES (?, ?, 'USER', 'EXEMPT_GOODS_REFUND', true, 'KTV exempt goods refund', ?)
+                """, r2, reviewerKtvId, "CMD_DEC_" + UUID.randomUUID());
     }
 
     @Test
@@ -373,7 +547,10 @@ class SellerDisbursementPostgresTest {
     void testUc83Order_BlockingCaseOpen_Rejected() {
         Uc83OrderFixture fixture = createDeliveredUc83Order(buyerId, sellerId, 1);
         createActiveCase(fixture.orderId(), buyerId, sellerId);
-        jdbcTemplate.update("UPDATE og_compat.orders SET valid_delivered_at = CURRENT_TIMESTAMP - INTERVAL '4 days' WHERE order_id = ?", fixture.orderId());
+        int blockingUpdateRows = jdbcTemplate.update("UPDATE og_compat.orders SET valid_delivered_at = CURRENT_TIMESTAMP - INTERVAL '4 days' WHERE order_id = ?", fixture.orderId());
+        if (blockingUpdateRows == 0) {
+            jdbcTemplate.update("UPDATE public.orders SET valid_delivered_at = CURRENT_TIMESTAMP - INTERVAL '4 days' WHERE order_id = ?", fixture.orderId());
+        }
 
         assertThatThrownBy(() -> orderManagementService.disburseSellerFunds(fixture.orderId()))
                 .isInstanceOf(IllegalStateException.class)
@@ -434,13 +611,14 @@ class SellerDisbursementPostgresTest {
                     shipping_province, shipping_district, shipping_ward, shipping_detail_address,
                     subtotal, shipping_fee, total_amount, voucher_discount_amount, buyer_system_fee, seller_system_fee,
                     seller_proceeds, payment_due_at, workflow_model, return_allowed, delivery_method, handover_day,
-                    status, valid_delivered_at
+                    status, valid_delivered_at, version, created_at, updated_at
                 ) VALUES (
                     ?, ?, ?, ?, 'Recipient', '0912345678',
                     'HN', 'BD', 'Ward', 'Detail address',
                     ?, 0, ?, 0, 0, 0,
                     ?, CURRENT_TIMESTAMP + INTERVAL '1 hour', 'UC83', true, 'SELF_PICKUP', CURRENT_DATE,
-                    'PAYMENT_PENDING', CURRENT_TIMESTAMP - INTERVAL '4 days'
+                    'PAYMENT_PENDING', CURRENT_TIMESTAMP - INTERVAL '4 days',
+                    0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 ) RETURNING order_id
                 """,
                 Long.class,
@@ -477,7 +655,7 @@ class SellerDisbursementPostgresTest {
                 """, allocationId, intentId, confirmationId, orderId, totalAmount
         );
 
-        jdbcTemplate.update("""
+        int affectedZero = jdbcTemplate.update("""
                 UPDATE og_compat.orders
                 SET status = 'DELIVERED',
                     paid_confirmed_at = (SELECT confirmed_at FROM og_compat.payment_confirmations WHERE confirmation_id = ?)
@@ -485,6 +663,19 @@ class SellerDisbursementPostgresTest {
                 """,
                 confirmationId, orderId
         );
+        if (affectedZero == 0) {
+            affectedZero = jdbcTemplate.update("""
+                    UPDATE public.orders
+                    SET status = 'DELIVERED',
+                        paid_confirmed_at = (SELECT confirmed_at FROM og_compat.payment_confirmations WHERE confirmation_id = ?)
+                    WHERE order_id = ?
+                    """,
+                    confirmationId, orderId
+            );
+        }
+        assertThat(affectedZero).as("Order must be updated to DELIVERED").isGreaterThan(0);
+        String finalStatusZero = jdbcTemplate.queryForObject("SELECT status FROM og_compat.orders WHERE order_id = ?", String.class, orderId);
+        assertThat(finalStatusZero).as("Order status in database must be DELIVERED").isEqualTo("DELIVERED");
 
         // Chỉ tạo 1 component GOODS_CASH (không có subsidy)
         UUID cashComponentId = UUID.randomUUID();
@@ -512,5 +703,199 @@ class SellerDisbursementPostgresTest {
                 """, BigDecimal.class, orderId);
         assertThat(amounts).hasSize(1);
         assertThat(amounts.getFirst()).isGreaterThan(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("Financial Safety Guard: UC83 order with final FULL_GOODS_REFUND decision blocks disburseSellerFunds")
+    void testFinancialSafetyGuard_FullGoodsRefund_BlocksDisbursement() {
+        ReturnCaseOrderFixture fixture = createDeliveredOrderWithReturnCase(buyerId, sellerId);
+        Long orderId = fixture.orderId();
+        Long caseId = fixture.caseId();
+
+        // 1. Round 1: KTV APPROVE_RETURN
+        approveReturnRound1(caseId, ktvId);
+
+        // 2. Return shipment & direct handover confirmation
+        createAndConfirmReturnShipment(orderId, caseId, buyerId, sellerId);
+
+        // 3. Round 2: KTV FULL_GOODS_REFUND
+        resolveRound2FullRefund(caseId, ktvId);
+
+        // Verify trigger closed the holds and case
+        Boolean hasBlocking = jdbcTemplate.queryForObject("SELECT og_order_has_blocking_case(?)", Boolean.class, orderId);
+        assertThat(hasBlocking).isFalse();
+        Integer activeHolds = jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM og_compat.money_holds mh
+                JOIN og_compat.order_fund_components ofc ON ofc.component_id = mh.component_id
+                WHERE ofc.order_id = ? AND mh.closed_at IS NULL
+                """, Integer.class, orderId);
+        assertThat(activeHolds).isZero();
+
+        // 4. Attempt disburseSellerFunds -> must be rejected by Financial Safety Guard
+        assertThatThrownBy(() -> orderManagementService.disburseSellerFunds(orderId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("FULL_GOODS_REFUND/EXEMPT_GOODS_REFUND");
+
+        entityManager.flush();
+        entityManager.clear();
+
+        // Order remains DELIVERED
+        OrderEntity reloadedOrder = orderRepository.findById(orderId).orElseThrow();
+        assertThat(reloadedOrder.getStatus()).isEqualTo(OrderEntity.STATUS_DELIVERED);
+        assertThat(reloadedOrder.getCompletedAt()).isNull();
+
+        // No settlement operations created, released_amount remains 0
+        List<BigDecimal> amounts = jdbcTemplate.queryForList("""
+                SELECT so.amount FROM og_compat.settlement_operations so
+                JOIN og_compat.order_fund_components ofc ON ofc.component_id = so.component_id
+                WHERE ofc.order_id = ?
+                """, BigDecimal.class, orderId);
+        assertThat(amounts).isEmpty();
+
+        BigDecimal releasedAmount = jdbcTemplate.queryForObject("""
+                SELECT COALESCE(SUM(released_amount), 0) FROM og_compat.order_fund_components WHERE order_id = ?
+                """, BigDecimal.class, orderId);
+        assertThat(releasedAmount).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("Financial Safety Guard: UC83 order with final EXEMPT_GOODS_REFUND decision blocks disburseSellerFunds")
+    void testFinancialSafetyGuard_ExemptGoodsRefund_BlocksDisbursement() {
+        ReturnCaseOrderFixture fixture = createDeliveredOrderWithReturnCase(buyerId, sellerId);
+        Long orderId = fixture.orderId();
+        Long caseId = fixture.caseId();
+
+        // 1. Round 1: KTV APPROVE_RETURN
+        approveReturnRound1(caseId, ktvId);
+
+        // 2. Return shipment & direct handover confirmation
+        createAndConfirmReturnShipment(orderId, caseId, buyerId, sellerId);
+
+        // 3. Round 2: KTV EXEMPT_GOODS_REFUND (after valid_damage_request_at)
+        resolveRound2ExemptRefund(caseId, ktvId);
+
+        // 4. Attempt disburseSellerFunds -> must be rejected by Financial Safety Guard
+        assertThatThrownBy(() -> orderManagementService.disburseSellerFunds(orderId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("FULL_GOODS_REFUND/EXEMPT_GOODS_REFUND");
+
+        entityManager.flush();
+        entityManager.clear();
+
+        OrderEntity reloadedOrder = orderRepository.findById(orderId).orElseThrow();
+        assertThat(reloadedOrder.getStatus()).isEqualTo(OrderEntity.STATUS_DELIVERED);
+        assertThat(reloadedOrder.getCompletedAt()).isNull();
+
+        List<BigDecimal> amounts = jdbcTemplate.queryForList("""
+                SELECT so.amount FROM og_compat.settlement_operations so
+                JOIN og_compat.order_fund_components ofc ON ofc.component_id = so.component_id
+                WHERE ofc.order_id = ?
+                """, BigDecimal.class, orderId);
+        assertThat(amounts).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Financial Safety Guard: UC83 order with REJECT_RETURN allows disbursement when UC71 conditions are met")
+    void testFinancialSafetyGuard_RejectReturn_AllowsDisbursement() {
+        ReturnCaseOrderFixture fixture = createDeliveredOrderWithReturnCase(buyerId, sellerId);
+        Long orderId = fixture.orderId();
+        Long caseId = fixture.caseId();
+
+        // 1. Round 1: REJECT_RETURN decided by verified KTV user
+        rejectReturnRound1(caseId, ktvId);
+
+        // 2. Call disburseSellerFunds -> Should succeed because REJECT_RETURN is not in ('FULL_GOODS_REFUND', 'EXEMPT_GOODS_REFUND')
+        var response = orderManagementService.disburseSellerFunds(orderId);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(response.orderId()).isEqualTo(orderId);
+        assertThat(response.status()).isEqualTo(OrderEntity.STATUS_COMPLETED);
+        assertThat(response.totalDisbursedAmount()).isEqualByComparingTo(new BigDecimal("300000.00"));
+
+        OrderEntity reloadedOrder = orderRepository.findById(orderId).orElseThrow();
+        assertThat(reloadedOrder.getStatus()).isEqualTo(OrderEntity.STATUS_COMPLETED);
+        assertThat(reloadedOrder.getCompletedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Financial Safety Guard: Trigger closed holds and og_order_has_blocking_case=false, guard still blocks")
+    void testFinancialSafetyGuard_HoldClosedByTrigger_GuardStillBlocks() {
+        ReturnCaseOrderFixture fixture = createDeliveredOrderWithReturnCase(buyerId, sellerId);
+        Long orderId = fixture.orderId();
+        Long caseId = fixture.caseId();
+
+        // 1. Round 1: KTV APPROVE_RETURN
+        approveReturnRound1(caseId, ktvId);
+
+        // 2. Return shipment & direct handover confirmation
+        createAndConfirmReturnShipment(orderId, caseId, buyerId, sellerId);
+
+        // 3. Round 2: KTV FULL_GOODS_REFUND
+        resolveRound2FullRefund(caseId, ktvId);
+
+        // Explicitly verify the root bug condition:
+        // Trigger closed the holds, blocking case check is false
+        Boolean hasBlockingCase = jdbcTemplate.queryForObject("SELECT og_order_has_blocking_case(?)", Boolean.class, orderId);
+        assertThat(hasBlockingCase).isFalse();
+
+        Boolean hasActiveHold = jdbcTemplate.queryForObject("""
+                SELECT EXISTS(
+                    SELECT 1 FROM og_compat.money_holds mh
+                    JOIN og_compat.order_fund_components ofc ON ofc.component_id = mh.component_id
+                    WHERE ofc.order_id = ? AND mh.closed_at IS NULL
+                )
+                """, Boolean.class, orderId);
+        assertThat(hasActiveHold).isFalse();
+
+        // The guard must block here even though hasBlockingCase == false and hasActiveHold == false
+        assertThatThrownBy(() -> orderManagementService.disburseSellerFunds(orderId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("FULL_GOODS_REFUND/EXEMPT_GOODS_REFUND");
+    }
+
+    @Test
+    @DisplayName("Financial Safety Guard: Repeated calls after block maintain stable state and do not create stray records")
+    void testFinancialSafetyGuard_RepeatedCalls_RemainStable() {
+        ReturnCaseOrderFixture fixture = createDeliveredOrderWithReturnCase(buyerId, sellerId);
+        Long orderId = fixture.orderId();
+        Long caseId = fixture.caseId();
+
+        // 1. Round 1: KTV APPROVE_RETURN
+        approveReturnRound1(caseId, ktvId);
+
+        // 2. Return shipment & direct handover confirmation
+        createAndConfirmReturnShipment(orderId, caseId, buyerId, sellerId);
+
+        // 3. Round 2: KTV FULL_GOODS_REFUND
+        resolveRound2FullRefund(caseId, ktvId);
+
+        // Call 1
+        assertThatThrownBy(() -> orderManagementService.disburseSellerFunds(orderId))
+                .isInstanceOf(IllegalStateException.class);
+
+        // Call 2
+        assertThatThrownBy(() -> orderManagementService.disburseSellerFunds(orderId))
+                .isInstanceOf(IllegalStateException.class);
+
+        // Call 3
+        assertThatThrownBy(() -> orderManagementService.disburseSellerFunds(orderId))
+                .isInstanceOf(IllegalStateException.class);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        // Verify zero settlement_operations
+        List<BigDecimal> amounts = jdbcTemplate.queryForList("""
+                SELECT so.amount FROM og_compat.settlement_operations so
+                JOIN og_compat.order_fund_components ofc ON ofc.component_id = so.component_id
+                WHERE ofc.order_id = ?
+                """, BigDecimal.class, orderId);
+        assertThat(amounts).isEmpty();
+
+        // Order is still DELIVERED
+        OrderEntity reloadedOrder = orderRepository.findById(orderId).orElseThrow();
+        assertThat(reloadedOrder.getStatus()).isEqualTo(OrderEntity.STATUS_DELIVERED);
     }
 }

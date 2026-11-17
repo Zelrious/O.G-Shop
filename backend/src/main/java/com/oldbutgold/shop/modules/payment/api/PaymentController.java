@@ -1,5 +1,7 @@
 package com.oldbutgold.shop.modules.payment.api;
 
+import com.oldbutgold.shop.modules.payment.application.GroupPaymentDtos;
+import com.oldbutgold.shop.modules.payment.application.GroupPaymentService;
 import com.oldbutgold.shop.modules.payment.application.IpnReceiptService;
 import com.oldbutgold.shop.modules.payment.application.PaymentDtos.PaymentInfoResponse;
 import com.oldbutgold.shop.modules.payment.application.PaymentDtos.PaymentProcessResultResponse;
@@ -32,17 +34,20 @@ public class PaymentController {
     private final PaymentService paymentService;
     private final VnPayService vnPayService;
     private final IpnReceiptService ipnReceiptService;
+    private final GroupPaymentService groupPaymentService;
     private final Clock clock;
 
     public PaymentController(
             PaymentService paymentService,
             VnPayService vnPayService,
             IpnReceiptService ipnReceiptService,
+            GroupPaymentService groupPaymentService,
             Clock clock
     ) {
         this.paymentService = paymentService;
         this.vnPayService = vnPayService;
         this.ipnReceiptService = ipnReceiptService;
+        this.groupPaymentService = groupPaymentService;
         this.clock = clock;
     }
 
@@ -73,6 +78,17 @@ public class PaymentController {
         long buyerId = extractUserId(jwt);
         String clientIp = servletRequest.getRemoteAddr();
         return ResponseEntity.ok(paymentService.createVnPayUrl(buyerId, request.orderId(), clientIp));
+    }
+
+    @PostMapping("/group-pay")
+    public ResponseEntity<GroupPaymentDtos.GroupPaymentResponse> createGroupPayment(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody GroupPaymentDtos.CreateGroupPaymentRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        long buyerId = extractUserId(jwt);
+        String clientIp = servletRequest.getRemoteAddr();
+        return ResponseEntity.ok(groupPaymentService.createGroupPayment(buyerId, request.groupId(), clientIp));
     }
 
     @GetMapping("/vnpay-ipn")
@@ -113,8 +129,13 @@ public class PaymentController {
             return PaymentDtos.VnPayIpnResponse.invalidChecksum();
         }
 
-        // 6. TxnRef and OrderId extraction
+        // 6. TxnRef check
         String txnRef = parseResult.cleanParams().get("vnp_TxnRef");
+        if (txnRef != null && txnRef.startsWith("GRP_")) {
+            GroupPaymentDtos.GroupPaymentIpnResult groupResult = groupPaymentService.processGroupPaymentIpn(parseResult.cleanParams(), clientIp);
+            return mapIpnResponse(groupResult.rspCode());
+        }
+
         if (txnRef == null || !txnRef.startsWith("OG_")) {
             log.warn("[VNPAY_IPN_UNLINKED] Receipt #{} TxnRef không hợp lệ hoặc thiếu tiền tố OG_: {}", receiptId, txnRef);
             ipnReceiptService.markSignatureValidUnlinked(receiptId);

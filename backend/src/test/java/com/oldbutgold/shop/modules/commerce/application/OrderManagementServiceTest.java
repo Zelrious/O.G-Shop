@@ -13,6 +13,7 @@ import com.oldbutgold.shop.modules.payment.infrastructure.persistence.PaymentEnt
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.PaymentRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -846,6 +847,369 @@ class OrderManagementServiceTest {
         assertThat(response.totalDisbursedAmount()).isEqualByComparingTo(new BigDecimal("120000.00"));
         assertThat(response.message()).contains("trước đó");
         verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    void disburseSellerFunds_hasFinalFullGoodsRefund_throwsIllegalStateExceptionAndNoDisbursement() throws Exception {
+        setField(order, "workflowModel", "UC83");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        setField(order, "validDeliveredAt", now.minus(Duration.ofDays(4)));
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_order_has_blocking_case(?)"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("money_holds"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("case_decisions"), eq(Boolean.class), eq(1L)))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.disburseSellerFunds(1L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("FULL_GOODS_REFUND/EXEMPT_GOODS_REFUND");
+
+        verify(paymentRepository, never()).findByOrderIdForUpdate(any());
+        verify(paymentRepository, never()).save(any());
+        verify(orderRepository, never()).save(any());
+        verify(jdbcTemplate, never()).update(contains("INSERT INTO settlement_operations"), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void disburseSellerFunds_hasFinalExemptGoodsRefund_throwsIllegalStateExceptionAndNoDisbursement() throws Exception {
+        setField(order, "workflowModel", "UC83");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        setField(order, "validDeliveredAt", now.minus(Duration.ofDays(4)));
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_order_has_blocking_case(?)"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("money_holds"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("case_decisions"), eq(Boolean.class), eq(1L)))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.disburseSellerFunds(1L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("FULL_GOODS_REFUND/EXEMPT_GOODS_REFUND");
+
+        verify(paymentRepository, never()).findByOrderIdForUpdate(any());
+        verify(paymentRepository, never()).save(any());
+        verify(orderRepository, never()).save(any());
+        verify(jdbcTemplate, never()).update(contains("INSERT INTO settlement_operations"), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void disburseSellerFunds_hasFinalRejectReturn_allowsDisbursement() throws Exception {
+        setField(order, "workflowModel", "LEGACY_V14");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        setField(order, "validDeliveredAt", now.minus(Duration.ofDays(4)));
+
+        PaymentEntity payment = new PaymentEntity(1L, new BigDecimal("120000.00"), PaymentEntity.METHOD_VNPAY, now);
+        payment.markHeld("TX_123", now);
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_order_has_blocking_case(?)"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("money_holds"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("case_decisions"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(paymentRepository.findByOrderIdForUpdate(1L)).thenReturn(Optional.of(payment));
+
+        var response = service.disburseSellerFunds(1L);
+
+        assertThat(response.orderId()).isEqualTo(1L);
+        assertThat(response.status()).isEqualTo(OrderEntity.STATUS_COMPLETED);
+        assertThat(payment.getStatus()).isEqualTo(PaymentEntity.STATUS_RELEASED);
+        verify(orderRepository).save(order);
+        verify(paymentRepository).save(payment);
+    }
+
+    @Test
+    void disburseSellerFunds_sellerDeclinedNotFinal_notBlockedByGuard() throws Exception {
+        setField(order, "workflowModel", "LEGACY_V14");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        setField(order, "validDeliveredAt", now.minus(Duration.ofDays(4)));
+
+        PaymentEntity payment = new PaymentEntity(1L, new BigDecimal("120000.00"), PaymentEntity.METHOD_VNPAY, now);
+        payment.markHeld("TX_123", now);
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_order_has_blocking_case(?)"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("money_holds"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("case_decisions"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(paymentRepository.findByOrderIdForUpdate(1L)).thenReturn(Optional.of(payment));
+
+        var response = service.disburseSellerFunds(1L);
+
+        assertThat(response.orderId()).isEqualTo(1L);
+        assertThat(response.status()).isEqualTo(OrderEntity.STATUS_COMPLETED);
+        verify(paymentRepository).save(payment);
+    }
+
+    @Test
+    void disburseSellerFunds_approveReturn_notBlockedByGuard() throws Exception {
+        setField(order, "workflowModel", "LEGACY_V14");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        setField(order, "validDeliveredAt", now.minus(Duration.ofDays(4)));
+
+        PaymentEntity payment = new PaymentEntity(1L, new BigDecimal("120000.00"), PaymentEntity.METHOD_VNPAY, now);
+        payment.markHeld("TX_123", now);
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_order_has_blocking_case(?)"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("money_holds"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("case_decisions"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(paymentRepository.findByOrderIdForUpdate(1L)).thenReturn(Optional.of(payment));
+
+        var response = service.disburseSellerFunds(1L);
+
+        assertThat(response.orderId()).isEqualTo(1L);
+        assertThat(response.status()).isEqualTo(OrderEntity.STATUS_COMPLETED);
+        verify(paymentRepository).save(payment);
+    }
+
+    @Test
+    void disburseSellerFunds_noCase_bothLegacyAndUc83_behaviorUnchanged() throws Exception {
+        setField(order, "workflowModel", "LEGACY_V14");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        setField(order, "validDeliveredAt", now.minus(Duration.ofDays(4)));
+
+        PaymentEntity payment = new PaymentEntity(1L, new BigDecimal("120000.00"), PaymentEntity.METHOD_VNPAY, now);
+        payment.markHeld("TX_123", now);
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_order_has_blocking_case(?)"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("money_holds"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("case_decisions"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(paymentRepository.findByOrderIdForUpdate(1L)).thenReturn(Optional.of(payment));
+
+        var response = service.disburseSellerFunds(1L);
+
+        assertThat(response.orderId()).isEqualTo(1L);
+        assertThat(response.status()).isEqualTo(OrderEntity.STATUS_COMPLETED);
+    }
+
+    @Test
+    void disburseSellerFunds_lockBeforeGuardQuery_verifiedByInOrder() throws Exception {
+        setField(order, "workflowModel", "LEGACY_V14");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        setField(order, "validDeliveredAt", now.minus(Duration.ofDays(4)));
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_order_has_blocking_case(?)"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("money_holds"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("case_decisions"), eq(Boolean.class), eq(1L)))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.disburseSellerFunds(1L))
+                .isInstanceOf(IllegalStateException.class);
+
+        InOrder inOrder = inOrder(orderRepository, entityManager, jdbcTemplate);
+        inOrder.verify(orderRepository).findByIdForUpdate(1L);
+        inOrder.verify(entityManager).refresh(order);
+        inOrder.verify(jdbcTemplate).queryForObject(contains("case_decisions"), eq(Boolean.class), eq(1L));
+    }
+
+    @Test
+    void disburseSellerFunds_queryThrowsDataAccessException_propagatesAndAborts() throws Exception {
+        setField(order, "workflowModel", "UC83");
+        order.markPaidHeld(now);
+        order.confirmBySeller(now);
+        order.markShipped(now);
+        order.markDelivered(now);
+        setField(order, "validDeliveredAt", now.minus(Duration.ofDays(4)));
+
+        when(orderRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(order));
+        when(jdbcTemplate.queryForObject(eq("SELECT og_order_has_blocking_case(?)"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("money_holds"), eq(Boolean.class), eq(1L)))
+                .thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("case_decisions"), eq(Boolean.class), eq(1L)))
+                .thenThrow(new org.springframework.dao.QueryTimeoutException("DB query failure"));
+
+        assertThatThrownBy(() -> service.disburseSellerFunds(1L))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class)
+                .hasMessageContaining("DB query failure")
+                .isNotInstanceOf(IllegalStateException.class);
+
+        verify(paymentRepository, never()).findByOrderIdForUpdate(any());
+        verify(paymentRepository, never()).save(any());
+        verify(orderRepository, never()).save(any());
+        verify(jdbcTemplate, never()).update(contains("INSERT INTO settlement_operations"), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void constructor_nullJdbcTemplate_throwsNullPointerException() {
+        assertThatThrownBy(() -> new OrderManagementService(
+                orderRepository,
+                orderItemRepository,
+                orderVoucherRepository,
+                catalogCommerceFacade,
+                paymentRepository,
+                identityCommerceFacade,
+                shipmentRepository,
+                fulfillmentService,
+                fulfillmentStateService,
+                simulationGuard,
+                transactionTemplate,
+                clock,
+                null,
+                entityManager
+        ))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("jdbcTemplate must not be null");
+    }
+
+    // =========================================================================
+    // Task 3.3: Overdue Delivery Auto-Disbursement Worker Tests (UC71)
+    // =========================================================================
+
+    @Test
+    @DisplayName("Task 3.3: reconcileOverdueDeliveries returns empty result when no overdue orders found")
+    void reconcileOverdueDeliveries_noOverdueOrders_returnsEmpty() {
+        when(orderRepository.findOverdueDeliveredOrderIds(any())).thenReturn(List.of());
+
+        OrderManagementDtos.OverdueDeliveryBatchResult result = service.reconcileOverdueDeliveries();
+
+        assertThat(result.totalScanned()).isZero();
+        assertThat(result.processedOrderIds()).isEmpty();
+        assertThat(result.skippedOrderIds()).isEmpty();
+        assertThat(result.failedOrderIds()).isEmpty();
+        verify(orderRepository).findOverdueDeliveredOrderIds(now.minus(Duration.ofDays(3)));
+    }
+
+    @Test
+    @DisplayName("Task 3.3: reconcileOverdueDeliveries processes each eligible order through proxy")
+    void reconcileOverdueDeliveries_multipleOrders_processesEach() {
+        when(orderRepository.findOverdueDeliveredOrderIds(any())).thenReturn(List.of(101L, 102L));
+
+        OrderManagementService mockProxy = mock(OrderManagementService.class);
+        service.setSelf(mockProxy);
+
+        OrderManagementDtos.DisbursementResponse resp101 = new OrderManagementDtos.DisbursementResponse(
+                101L, "COMPLETED", List.of(), new BigDecimal("100000"), "Giải ngân thành công"
+        );
+        OrderManagementDtos.DisbursementResponse resp102 = new OrderManagementDtos.DisbursementResponse(
+                102L, "COMPLETED", List.of(), new BigDecimal("200000"), "Giải ngân thành công"
+        );
+        when(mockProxy.disburseSellerFunds(101L)).thenReturn(resp101);
+        when(mockProxy.disburseSellerFunds(102L)).thenReturn(resp102);
+
+        OrderManagementDtos.OverdueDeliveryBatchResult result = service.reconcileOverdueDeliveries();
+
+        assertThat(result.totalScanned()).isEqualTo(2);
+        assertThat(result.processedOrderIds()).containsExactly(101L, 102L);
+        assertThat(result.skippedOrderIds()).isEmpty();
+        assertThat(result.failedOrderIds()).isEmpty();
+        verify(mockProxy).disburseSellerFunds(101L);
+        verify(mockProxy).disburseSellerFunds(102L);
+    }
+
+    @Test
+    @DisplayName("Task 3.3: One failing order does not abort subsequent orders (Batch Error Isolation)")
+    void reconcileOverdueDeliveries_errorIsolation_continuesProcessing() {
+        when(orderRepository.findOverdueDeliveredOrderIds(any())).thenReturn(List.of(101L, 102L, 103L));
+
+        OrderManagementService mockProxy = mock(OrderManagementService.class);
+        service.setSelf(mockProxy);
+
+        OrderManagementDtos.DisbursementResponse resp101 = new OrderManagementDtos.DisbursementResponse(
+                101L, "COMPLETED", List.of(), new BigDecimal("100000"), "Giải ngân thành công"
+        );
+        OrderManagementDtos.DisbursementResponse resp103 = new OrderManagementDtos.DisbursementResponse(
+                103L, "COMPLETED", List.of(), new BigDecimal("300000"), "Giải ngân thành công"
+        );
+        when(mockProxy.disburseSellerFunds(101L)).thenReturn(resp101);
+        when(mockProxy.disburseSellerFunds(102L)).thenThrow(new RuntimeException("Transient DB lock timeout"));
+        when(mockProxy.disburseSellerFunds(103L)).thenReturn(resp103);
+
+        OrderManagementDtos.OverdueDeliveryBatchResult result = service.reconcileOverdueDeliveries();
+
+        assertThat(result.totalScanned()).isEqualTo(3);
+        assertThat(result.processedOrderIds()).containsExactly(101L, 103L);
+        assertThat(result.failedOrderIds()).containsExactly(102L);
+        assertThat(result.skippedOrderIds()).isEmpty();
+        verify(mockProxy).disburseSellerFunds(101L);
+        verify(mockProxy).disburseSellerFunds(102L);
+        verify(mockProxy).disburseSellerFunds(103L);
+    }
+
+    @Test
+    @DisplayName("Task 3.3: Business guard rejection (IllegalStateException) is categorized as skipped")
+    void reconcileOverdueDeliveries_businessGuardRejection_skipped() {
+        when(orderRepository.findOverdueDeliveredOrderIds(any())).thenReturn(List.of(101L, 102L));
+
+        OrderManagementService mockProxy = mock(OrderManagementService.class);
+        service.setSelf(mockProxy);
+
+        // Order 101 has blocking case (Guard 3)
+        when(mockProxy.disburseSellerFunds(101L)).thenThrow(
+                new IllegalStateException("Đơn hàng đang có hồ sơ khiếu nại/trả hàng chưa đóng, không thể giải ngân")
+        );
+        // Order 102 has refund decision (Guard 5)
+        when(mockProxy.disburseSellerFunds(102L)).thenThrow(
+                new IllegalStateException("Đơn hàng đã có quyết định hoàn tiền hoặc miễn hoàn tiền hàng")
+        );
+
+        OrderManagementDtos.OverdueDeliveryBatchResult result = service.reconcileOverdueDeliveries();
+
+        assertThat(result.totalScanned()).isEqualTo(2);
+        assertThat(result.processedOrderIds()).isEmpty();
+        assertThat(result.skippedOrderIds()).containsExactly(101L, 102L);
+        assertThat(result.failedOrderIds()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Task 3.3: Idempotent replay response is categorized as skipped")
+    void reconcileOverdueDeliveries_idempotentReplay_skipped() {
+        when(orderRepository.findOverdueDeliveredOrderIds(any())).thenReturn(List.of(101L));
+
+        OrderManagementService mockProxy = mock(OrderManagementService.class);
+        service.setSelf(mockProxy);
+
+        OrderManagementDtos.DisbursementResponse idempotentResp = new OrderManagementDtos.DisbursementResponse(
+                101L, "COMPLETED", List.of(), new BigDecimal("100000"), "Đơn hàng đã được giải ngân và hoàn tất trước đó."
+        );
+        when(mockProxy.disburseSellerFunds(101L)).thenReturn(idempotentResp);
+
+        OrderManagementDtos.OverdueDeliveryBatchResult result = service.reconcileOverdueDeliveries();
+
+        assertThat(result.totalScanned()).isEqualTo(1);
+        assertThat(result.processedOrderIds()).isEmpty();
+        assertThat(result.skippedOrderIds()).containsExactly(101L);
+        assertThat(result.failedOrderIds()).isEmpty();
     }
 
     private static void setId(Object target, Long id) throws Exception {

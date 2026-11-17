@@ -49,7 +49,7 @@ class LegacyCheckoutPersistencePostgresTest {
         registry.add("spring.datasource.username", () -> System.getenv("OGSHOP_TEST_DB_USER"));
         registry.add("spring.datasource.password", () -> System.getenv("OGSHOP_TEST_DB_PASSWORD"));
         registry.add("spring.datasource.hikari.connection-init-sql", () -> "SET search_path TO og_compat,public");
-        registry.add("spring.flyway.enabled", () -> true);
+        registry.add("spring.flyway.enabled", PostgresTestSafetyGuard::isFlywayOptInEnabled);
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
     }
 
@@ -112,7 +112,7 @@ class LegacyCheckoutPersistencePostgresTest {
         createAddress(sellerId, "Seller QA", "0900000002");
 
         // 2. Buy now via existing CheckoutService
-        var request = new BuyNowRequest(productId, buyerAddressId, null, null);
+        var request = new BuyNowRequest(productId, buyerAddressId, null, null, "LEGACY-" + UUID.randomUUID());
         var response = checkoutService.buyNow(buyerId, request);
         assertThat(response).isNotNull();
         assertThat(response.orderId()).isNotNull();
@@ -155,5 +155,177 @@ class LegacyCheckoutPersistencePostgresTest {
         assertThat(row.get("return_due_at")).isNull();
         assertThat(row.get("early_completed_at")).isNull();
         assertThat(row.get("early_completion_warning_version")).isNull();
+    }
+
+    @Test
+    @DisplayName("Legacy Checkout with Coins records DEBIT_CHECKOUT in reward_ledger with valid dynamic policy_id")
+    void legacyCheckoutWithCoinsSucceedsAndPersistsDebitRecord() {
+        // 1. Fixture setup: Admin, Buyer with Coin Balance, Seller, Product, Addresses
+        long adminId = createUser("ADMIN");
+        Long canonicalPolicyId = jdbcTemplate.queryForObject(
+                "SELECT public.og_provision_canonical_reward_policy(?)",
+                Long.class,
+                adminId
+        );
+        assertThat(canonicalPolicyId).isNotNull();
+
+        long buyerId = createUser("BUYER");
+        long sellerId = createUser("SELLER");
+        long productId = createProduct(sellerId);
+        long buyerAddressId = createAddress(buyerId, "Buyer QA", "0900000001");
+        createAddress(sellerId, "Seller QA", "0900000002");
+
+        // Fund buyer reward account with 50,000 coins via Admin CORRECTION
+        jdbcTemplate.update("INSERT INTO og_compat.reward_accounts(user_id) VALUES(?)", buyerId);
+        jdbcTemplate.update(
+                "INSERT INTO og_compat.reward_ledger(entry_id, user_id, policy_id, entry_type, points_delta, actor_id, reason, command_key, created_at) " +
+                "VALUES (?, ?, ?, 'CORRECTION', 50000, ?, 'Initial QA grant', ?, CURRENT_TIMESTAMP)",
+                UUID.randomUUID(), buyerId, canonicalPolicyId, adminId, "GRANT-" + UUID.randomUUID()
+        );
+
+        // 2. Buy now via CheckoutService with 5,000 coins redeemed
+        long coinsToRedeem = 5000L;
+        System.setProperty("app.reward.canonical-policy-code", "REWARD_CHECKOUT_STANDARD");
+        // DEC-10.7A: cap must be configured; using 50% for this test scenario
+        checkoutService.setMaxRedemptionPercentage("50");
+        CheckoutDtos.OrderCreatedResponse response;
+        try {
+            var request = new BuyNowRequest(productId, buyerAddressId, null, null, null, coinsToRedeem, "LEGACY-COIN-" + UUID.randomUUID());
+            response = checkoutService.buyNow(buyerId, request);
+        } finally {
+            System.clearProperty("app.reward.canonical-policy-code");
+            checkoutService.setMaxRedemptionPercentage(null);
+        }
+
+        assertThat(response).isNotNull();
+        assertThat(response.orderId()).isNotNull();
+        assertThat(response.pointsDiscountAmount()).isEqualByComparingTo(new java.math.BigDecimal(coinsToRedeem));
+
+        // 3. Flush & clear entity manager
+        entityManager.flush();
+        entityManager.clear();
+
+        // 4. Assert OrderEntity reloaded has points discount
+        OrderEntity order = orderRepository.findById(response.orderId()).orElseThrow();
+        assertThat(order.getPointsDiscountAmount()).isEqualByComparingTo(new java.math.BigDecimal(coinsToRedeem));
+        assertThat(order.getWorkflowModel()).isEqualTo("LEGACY_V14");
+
+        // 5. Assert raw SQL in og_compat.reward_ledger for DEBIT_CHECKOUT entry
+        Map<String, Object> ledgerEntry = jdbcTemplate.queryForMap(
+                "SELECT entry_type, points_delta, order_id, group_id, policy_id, command_key " +
+                "FROM og_compat.reward_ledger WHERE order_id = ? AND entry_type = 'DEBIT_CHECKOUT'",
+                response.orderId()
+        );
+        assertThat(ledgerEntry.get("entry_type")).isEqualTo("DEBIT_CHECKOUT");
+        assertThat(((Number) ledgerEntry.get("points_delta")).longValue()).isEqualTo(-coinsToRedeem);
+        assertThat(ledgerEntry.get("order_id")).isEqualTo(response.orderId());
+        assertThat(ledgerEntry.get("group_id")).isNull();
+        assertThat(ledgerEntry.get("policy_id")).isEqualTo(canonicalPolicyId);
+        assertThat(ledgerEntry.get("command_key")).isEqualTo("CHECKOUT:DEBIT:" + response.orderId());
+    }
+
+    @Test
+    @DisplayName("Legacy Checkout with Coins fails-closed when canonical reward policy is not found")
+    void legacyCheckoutWithCoinsFailsClosedWhenCanonicalPolicyNotFound() {
+        long adminId = createUser("ADMIN");
+        long buyerId = createUser("BUYER");
+        long sellerId = createUser("SELLER");
+        long productId = createProduct(sellerId);
+        long buyerAddressId = createAddress(buyerId, "Buyer QA", "0900000001");
+        createAddress(sellerId, "Seller QA", "0900000002");
+
+        Long policyId = jdbcTemplate.queryForObject(
+                "SELECT public.og_provision_canonical_reward_policy(?)",
+                Long.class,
+                adminId
+        );
+        jdbcTemplate.update("INSERT INTO og_compat.reward_accounts(user_id) VALUES(?)", buyerId);
+        jdbcTemplate.update(
+                "INSERT INTO og_compat.reward_ledger(entry_id, user_id, policy_id, entry_type, points_delta, actor_id, reason, command_key, created_at) " +
+                "VALUES (?, ?, ?, 'CORRECTION', 50000, ?, 'Initial QA grant', ?, CURRENT_TIMESTAMP)",
+                UUID.randomUUID(), buyerId, policyId, adminId, "GRANT-" + UUID.randomUUID()
+        );
+
+        System.setProperty("app.reward.canonical-policy-code", "NON_EXISTENT_POLICY_CODE");
+        checkoutService.setMaxRedemptionPercentage("50");
+        try {
+            var request = new BuyNowRequest(productId, buyerAddressId, null, null, null, 5000L, "FAIL-COIN-" + UUID.randomUUID());
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> checkoutService.buyNow(buyerId, request))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Canonical reward policy not found for policy_code: NON_EXISTENT_POLICY_CODE");
+        } finally {
+            System.clearProperty("app.reward.canonical-policy-code");
+            checkoutService.setMaxRedemptionPercentage(null);
+        }
+    }
+
+    @Test
+    @DisplayName("Legacy Checkout with Coins fails-closed when canonical reward policy code is not configured")
+    void legacyCheckoutWithCoinsFailsClosedWhenPolicyCodeNotConfigured() {
+        long adminId = createUser("ADMIN");
+        long buyerId = createUser("BUYER");
+        long sellerId = createUser("SELLER");
+        long productId = createProduct(sellerId);
+        long buyerAddressId = createAddress(buyerId, "Buyer QA", "0900000001");
+        createAddress(sellerId, "Seller QA", "0900000002");
+
+        Long policyId = jdbcTemplate.queryForObject(
+                "SELECT public.og_provision_canonical_reward_policy(?)",
+                Long.class,
+                adminId
+        );
+        jdbcTemplate.update("INSERT INTO og_compat.reward_accounts(user_id) VALUES(?)", buyerId);
+        jdbcTemplate.update(
+                "INSERT INTO og_compat.reward_ledger(entry_id, user_id, policy_id, entry_type, points_delta, actor_id, reason, command_key, created_at) " +
+                "VALUES (?, ?, ?, 'CORRECTION', 50000, ?, 'Initial QA grant', ?, CURRENT_TIMESTAMP)",
+                UUID.randomUUID(), buyerId, policyId, adminId, "GRANT-" + UUID.randomUUID()
+        );
+
+        checkoutService.setMaxRedemptionPercentage("50");
+        System.clearProperty("app.reward.canonical-policy-code");
+        checkoutService.setCanonicalRewardPolicyCode(null);
+        try {
+            var request = new BuyNowRequest(productId, buyerAddressId, null, null, null, 5000L, "FAIL-NO-CONFIG-" + UUID.randomUUID());
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> checkoutService.buyNow(buyerId, request))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Missing explicit configuration for canonical reward policy code");
+        } finally {
+            checkoutService.setMaxRedemptionPercentage(null);
+        }
+    }
+
+    @Test
+    @DisplayName("DEC-10.7A: Legacy Checkout with Coins fails-closed on PostgreSQL when max redemption percentage is not configured")
+    void legacyCheckoutWithCoinsFailsClosedWhenCapNotConfigured() {
+        long adminId = createUser("ADMIN");
+        long buyerId = createUser("BUYER");
+        long sellerId = createUser("SELLER");
+        long productId = createProduct(sellerId);
+        long buyerAddressId = createAddress(buyerId, "Buyer QA", "0900000001");
+        createAddress(sellerId, "Seller QA", "0900000002");
+
+        Long policyId = jdbcTemplate.queryForObject(
+                "SELECT public.og_provision_canonical_reward_policy(?)",
+                Long.class,
+                adminId
+        );
+        jdbcTemplate.update("INSERT INTO og_compat.reward_accounts(user_id) VALUES(?)", buyerId);
+        jdbcTemplate.update(
+                "INSERT INTO og_compat.reward_ledger(entry_id, user_id, policy_id, entry_type, points_delta, actor_id, reason, command_key, created_at) " +
+                "VALUES (?, ?, ?, 'CORRECTION', 50000, ?, 'Initial QA grant', ?, CURRENT_TIMESTAMP)",
+                UUID.randomUUID(), buyerId, policyId, adminId, "GRANT-" + UUID.randomUUID()
+        );
+
+        System.setProperty("app.reward.canonical-policy-code", "REWARD_CHECKOUT_STANDARD");
+        checkoutService.setMaxRedemptionPercentage(null);
+        try {
+            var request = new BuyNowRequest(productId, buyerAddressId, null, null, null, 5000L, "FAIL-NO-CAP-" + UUID.randomUUID());
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> checkoutService.buyNow(buyerId, request))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("REWARD_MAX_REDEMPTION_PERCENTAGE")
+                    .hasMessageContaining("DEC-10.7A");
+        } finally {
+            System.clearProperty("app.reward.canonical-policy-code");
+        }
     }
 }

@@ -47,7 +47,7 @@ class AuthFlowsPostgresTest {
         new JdbcTemplate(source(database)).update("INSERT INTO og_compat.users(email,password_hash,full_name) VALUES('v25-preserved@example.invalid','{noop}legacy','Preserved')");
         p.add("spring.datasource.url",()->url(database)+"?currentSchema=og_compat,public");
         p.add("spring.datasource.username",()->System.getenv("OGSHOP_TEST_DB_USER"));p.add("spring.datasource.password",()->System.getenv("OGSHOP_TEST_DB_PASSWORD"));
-        p.add("spring.jpa.hibernate.ddl-auto",()->"validate");p.add("spring.flyway.enabled",()->true);p.add("app.google.client-id",()->"test-client.apps.googleusercontent.com");
+        p.add("spring.jpa.hibernate.ddl-auto",()->"validate");p.add("spring.flyway.enabled",com.oldbutgold.shop.shared.PostgresTestSafetyGuard::isFlywayOptInEnabled);p.add("app.google.client-id",()->"test-client.apps.googleusercontent.com");
     }
     @AfterAll static void cleanup() { if(root!=null && database!=null && database.matches("ogshop_auth_test_[0-9a-f]{32}")) root.execute("DROP DATABASE "+database+" WITH (FORCE)"); }
     @TestConfiguration static class TimeConfig { @Bean @Primary TestClock authTestClock() { return new TestClock(); } }
