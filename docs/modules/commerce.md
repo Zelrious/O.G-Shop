@@ -1,5 +1,12 @@
 # Commerce Module
 
+## Order dispute & review integration — TASK-0117 / 2026-11-17
+
+- Thêm `CommerceDisputeFacade` và `DefaultCommerceDisputeFacade` xử lý chuyển trạng thái đơn hàng và ký quỹ khi có khiếu nại (`markOrderDisputed`, `resolveDisputeReturnApproved`, `resolveDisputeRefund`, `resolveDisputeRelease`).
+- Khóa thứ tự bất biến (`Order -> Shipment -> Payment`) ngăn ngừa deadlock và vi phạm tính toàn vẹn khi hoàn tiền hoặc giải ngân.
+- Cập nhật `OrderEntity` với các trạng thái `STATUS_DISPUTED` và `STATUS_REFUNDED`, cho phép chuyển từ `STATUS_DISPUTED` sang `STATUS_COMPLETED` hoặc `STATUS_REFUNDED`.
+- Frontend: Tích hợp `BuyerDisputeModal` (UC62) khi đơn hàng đã giao (`DELIVERED`), `SellerDisputeResponseModal` (UC63) khi đơn hàng có khiếu nại (`DISPUTED`), và `OrderReviewModal` (UC61) khi đơn hàng hoàn tất (`COMPLETED`).
+
 ## Console selects and eKYC — TASK-0096 / 2026-10-13
 
 KTV/Admin:18 native selects chuyển sang shared Select; upward popover neo sát trigger6px, theo dõi vị trí khi sidebar chuyển động; sidebar chờ320ms, transition360ms. Cột queue360–400px; eKYC list/detail và masked list; voucher tự chọn campaign đầu API, bỏ option rỗng. API/handler/rules giữ nguyên.204 tests/43 files, lint/TypeScript/build đạt;82 browser checks không overflow/JS error, menu lệch ngang0px/gap6px. [Ảnh và giới hạn](../../output/ui-0096/README.md).

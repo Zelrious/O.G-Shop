@@ -1,5 +1,14 @@
 # Trust & Safety Module
 
+## Dispute arbitration, refund, and review center — TASK-0117 / 2026-11-17
+
+- Hoàn thiện luồng phân xử tranh chấp KTV (`/api/v1/ktv/disputes/**`), khiếu nại Người mua (`/api/v1/commerce/orders/{orderId}/dispute`), giải trình Người bán (`/api/v1/commerce/orders/{orderId}/dispute/seller-response`), và đánh giá đơn hàng (`/api/v1/commerce/orders/{orderId}/review`).
+- Triển khai kiểm tra đối soát 2 chiều (Video Unboxing của Người mua vs Bộ ảnh đóng gói của Người bán có hỗ trợ `MediaLightboxModal`).
+- Phán quyết KTV 3 phương án chuẩn theo UC62, UC71, UC75, UC83: `RETURN_APPROVED` (chấp thuận trả hàng, chưa hoàn tiền ngay), `RESOLVED_REFUND` (hoàn 100% tiền hàng, không hoàn phí ship, hoàn 100% xu), `RESOLVED_RELEASE` (bác khiếu nại, giải ngân Escrow cho người bán). Trừ điểm uy tín 0-20đ theo UC74/TASK-0071.
+- Cơ chế đánh giá đơn hàng 1-5 sao: thưởng 500 xu cho người gửi, thưởng 400/500 xu cho người nhận 4/5 sao, phục hồi điểm uy tín theo quy định (+3đ, +4đ, +5đ).
+- Khóa thứ tự bất biến (`Order -> Shipment -> Payment`) qua `CommerceDisputeFacade`.
+- 13 backend unit tests đạt 100%, frontend typecheck 0 lỗi, 17 frontend vitest tests đạt.
+
 ## Console selects and eKYC — TASK-0096 / 2026-10-13
 
 KTV/Admin:18 native selects chuyển sang shared Select; upward popover neo sát trigger6px, theo dõi vị trí khi sidebar chuyển động; sidebar chờ320ms, transition360ms. Cột queue360–400px; eKYC list/detail và masked list; voucher tự chọn campaign đầu API, bỏ option rỗng. API/handler/rules giữ nguyên.204 tests/43 files, lint/TypeScript/build đạt;82 browser checks không overflow/JS error, menu lệch ngang0px/gap6px. [Ảnh và giới hạn](../../output/ui-0096/README.md).
