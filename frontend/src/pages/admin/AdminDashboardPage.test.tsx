@@ -45,4 +45,27 @@ describe('AdminDashboardPage Component', () => {
     expect(screen.getByText('iPhone 13 / 14 cũ 99%')).toBeInTheDocument();
     expect(screen.getByText('Máy ảnh Fujifilm X-T series')).toBeInTheDocument();
   });
+
+  it('handles multi-select on category returns table and triggers category export', () => {
+    const exportReturnSpy = vi.spyOn(managementStore, 'exportReturnComplaintCsv').mockImplementation(() => {});
+
+    render(
+      <MemoryRouter>
+        <AdminDashboardPage />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Điện thoại & Máy tính bảng')).toBeInTheDocument();
+    expect(screen.getByText('Máy ảnh & Quang học')).toBeInTheDocument();
+
+    // Select category checkbox
+    const selectAllCheckbox = screen.getByLabelText('Chọn tất cả danh mục');
+    fireEvent.click(selectAllCheckbox);
+
+    // Click bulk export button
+    const bulkExportBtn = screen.getByRole('button', { name: /Kết xuất dữ liệu đã chọn/i });
+    expect(bulkExportBtn).toBeInTheDocument();
+    fireEvent.click(bulkExportBtn);
+    expect(exportReturnSpy).toHaveBeenCalled();
+  });
 });

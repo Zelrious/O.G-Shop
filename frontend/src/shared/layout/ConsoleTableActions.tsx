@@ -13,16 +13,35 @@ export interface ActionMenuItem {
 export interface TableActionDropdownProps {
   items: ActionMenuItem[];
   align?: 'right' | 'left';
+  direction?: 'auto' | 'down' | 'up';
   ariaLabel?: string;
 }
 
 export const TableActionDropdown: React.FC<TableActionDropdownProps> = ({
   items,
   align = 'right',
+  direction = 'auto',
   ariaLabel = 'Tùy chọn thao tác',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isOpen && containerRef.current) {
+      if (direction === 'up') {
+        setOpenUpward(true);
+      } else if (direction === 'down') {
+        setOpenUpward(false);
+      } else {
+        const rect = containerRef.current.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        setOpenUpward(spaceBelow < 220 && rect.top > 200);
+      }
+    }
+    setIsOpen((prev) => !prev);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -54,10 +73,7 @@ export const TableActionDropdown: React.FC<TableActionDropdownProps> = ({
         aria-label={ariaLabel}
         aria-haspopup="true"
         aria-expanded={isOpen}
-        onClick={(e) => {
-          e.stopPropagation();
-          setIsOpen(!isOpen);
-        }}
+        onClick={handleToggle}
         style={{
           width: '32px',
           height: '32px',
@@ -87,7 +103,9 @@ export const TableActionDropdown: React.FC<TableActionDropdownProps> = ({
           role="menu"
           style={{
             position: 'absolute',
-            top: 'calc(100% + 4px)',
+            ...(openUpward
+              ? { bottom: 'calc(100% + 4px)' }
+              : { top: 'calc(100% + 4px)' }),
             [align === 'right' ? 'right' : 'left']: 0,
             zIndex: 100,
             minWidth: '180px',
@@ -103,7 +121,8 @@ export const TableActionDropdown: React.FC<TableActionDropdownProps> = ({
           onClick={(e) => e.stopPropagation()}
         >
           {items.map((item, idx) => (
-            <Button key={idx}
+            <button
+              key={idx}
               type="button"
               role="menuitem"
               disabled={item.disabled}
@@ -111,20 +130,56 @@ export const TableActionDropdown: React.FC<TableActionDropdownProps> = ({
                 setIsOpen(false);
                 item.onClick();
               }}
-              variant={item.variant === 'danger' ? 'danger-outline' : 'ghost'}>
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-start',
+                width: '100%',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                border: item.variant === 'danger' ? '1px solid var(--og-color-danger-border, rgba(239, 68, 68, 0.25))' : '1px solid transparent',
+                background: item.variant === 'danger' ? 'var(--og-color-danger-subtle, rgba(239, 68, 68, 0.05))' : 'transparent',
+                color: item.variant === 'danger' ? 'var(--og-color-danger, #ef4444)' : 'var(--og-color-text-primary, #1f2937)',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: item.disabled ? 'not-allowed' : 'pointer',
+                opacity: item.disabled ? 0.5 : 1,
+                textAlign: 'left',
+                gap: '10px',
+                transition: 'all 0.15s ease',
+                boxSizing: 'border-box',
+              }}
+              onMouseEnter={(e) => {
+                if (!item.disabled) {
+                  e.currentTarget.style.background =
+                    item.variant === 'danger'
+                      ? 'var(--og-color-danger-subtle-hover, rgba(239, 68, 68, 0.12))'
+                      : 'var(--og-color-surface-hover, rgba(0, 0, 0, 0.05))';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background =
+                  item.variant === 'danger'
+                    ? 'var(--og-color-danger-subtle, rgba(239, 68, 68, 0.05))'
+                    : 'transparent';
+              }}
+            >
               {item.icon && (
                 <span
                   style={{
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    color: item.variant === 'danger' ? 'var(--og-color-danger)' : 'var(--og-color-text-secondary)',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    width: '18px',
+                    color: item.variant === 'danger' ? 'var(--og-color-danger, #ef4444)' : 'var(--og-color-text-secondary, #6b7280)',
                   }}
                 >
                   {item.icon}
                 </span>
               )}
-              <span>{item.label}</span>
-            </Button>
+              <span style={{ textAlign: 'left', flex: 1, whiteSpace: 'nowrap' }}>{item.label}</span>
+            </button>
           ))}
         </div>
       )}

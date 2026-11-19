@@ -4,6 +4,10 @@ import { Link } from 'react-router-dom';
 import { ordersApi } from '../ordersApi';
 import { OrderDetail } from '../types';
 import { TrackingResponse, formatGhnStatus } from '../../fulfillment/fulfillmentApi';
+import { SellerDisputeResponseModal } from '../../disputes/SellerDisputeResponseModal';
+import { OrderReviewModal } from '../../disputes/OrderReviewModal';
+import { reviewApi } from '../../disputes/reviewApi';
+import type { OrderReviewsResponse } from '../../disputes/types';
 
 interface SellerOrderDetailViewProps {
   orderId: number;
@@ -28,6 +32,9 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
   const [length, setLength] = useState(20);
   const [width, setWidth] = useState(15);
   const [height, setHeight] = useState(10);
+  const [showDisputeResponseModal, setShowDisputeResponseModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviews, setReviews] = useState<OrderReviewsResponse | null>(null);
   const [shipmentNote, setShipmentNote] = useState('Cho xem hàng không cho thử');
   const [creatingShipment, setCreatingShipment] = useState(false);
   const [shipmentError, setShipmentError] = useState<string | null>(null);
@@ -54,6 +61,9 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
       .then((data) => {
         setOrder(data);
         loadTracking();
+        reviewApi.getOrderReviews(orderId)
+          .then((res) => setReviews(res))
+          .catch(() => setReviews(null));
       })
       .catch((err) => {
         setErrorMsg(err.message || 'Không thể tải chi tiết đơn bán.');
@@ -501,17 +511,96 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
                 </div>
               )}
 
-              {order.status === 'COMPLETED' && (
+              {order.status === 'DISPUTED' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{
+                    background: '#fef3c7',
+                    border: '1px solid #fde68a',
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: '0.85rem',
+                    color: '#b45309',
+                    lineHeight: 1.5,
+                  }}>
+                    <strong>Đơn hàng đang có tranh chấp (UC62/UC63):</strong> Người mua đã gửi yêu cầu khiếu nại. Bạn cần gửi phản hồi giải trình và ảnh kiện hàng để bảo vệ quyền lợi.
+                  </div>
+                  <button
+                    type="button"
+                    style={{
+                      width: '100%',
+                      padding: '10px 16px',
+                      background: '#ea580c',
+                      border: 'none',
+                      color: '#fff',
+                      borderRadius: 8,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setShowDisputeResponseModal(true)}
+                  >
+                    Gửi phản hồi giải trình & Bằng chứng (UC63)
+                  </button>
+                </div>
+              )}
+
+              {order.status === 'REFUNDED' && (
                 <div style={{
-                  background: '#dcfce7',
-                  border: '1px solid #86efac',
+                  background: '#fee2e2',
+                  border: '1px solid #fecaca',
                   borderRadius: 8,
                   padding: 12,
                   fontSize: '0.85rem',
-                  color: '#166534',
+                  color: '#b91c1c',
                   lineHeight: 1.5,
                 }}>
-                  <strong>Đơn hàng đã hoàn tất!</strong> Tiền bán hàng đã được giải ngân thành công.
+                  <strong>Đã hoàn tiền cho người mua (UC83):</strong> Đơn hàng đã kết thúc với phán quyết hoàn tiền hàng cho người mua.
+                </div>
+              )}
+
+              {order.status === 'COMPLETED' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{
+                    background: '#dcfce7',
+                    border: '1px solid #86efac',
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: '0.85rem',
+                    color: '#166534',
+                    lineHeight: 1.5,
+                  }}>
+                    <strong>Đơn hàng đã hoàn tất!</strong> Tiền bán hàng đã được giải ngân thành công.
+                  </div>
+                  {reviews?.sellerReview ? (
+                    <div style={{
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 8,
+                      padding: '10px 12px',
+                      fontSize: '0.84rem',
+                      color: '#334155',
+                    }}>
+                      <div><strong>Đánh giá của bạn:</strong> {'★'.repeat(reviews.sellerReview.rating)}{'☆'.repeat(5 - reviews.sellerReview.rating)} ({reviews.sellerReview.rating}/5 sao)</div>
+                      {reviews.sellerReview.comment && (
+                        <div style={{ marginTop: 4, color: '#64748b', fontStyle: 'italic' }}>
+                          "{reviews.sellerReview.comment}"
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="og-button og-button--primary"
+                      style={{
+                        width: '100%',
+                        padding: '10px 16px',
+                        fontWeight: 600,
+                        fontSize: '0.9rem',
+                      }}
+                      onClick={() => setShowReviewModal(true)}
+                    >
+                      ⭐ Đánh giá Người mua (+500 xu thưởng)
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -696,6 +785,28 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
             </form>
           </div>
         </div>
+      )}
+      {/* Seller Dispute Response Modal (UC63) */}
+      {showDisputeResponseModal && (
+        <SellerDisputeResponseModal
+          isOpen={showDisputeResponseModal}
+          orderId={order.orderId}
+          productTitle={order.productTitle}
+          onClose={() => setShowDisputeResponseModal(false)}
+          onSuccess={() => loadOrder()}
+        />
+      )}
+
+      {/* Seller Review Modal (UC61) */}
+      {showReviewModal && (
+        <OrderReviewModal
+          isOpen={showReviewModal}
+          orderId={order.orderId}
+          partnerName={order.buyerName}
+          isBuyer={false}
+          onClose={() => setShowReviewModal(false)}
+          onSuccess={() => loadOrder()}
+        />
       )}
     </div>
   );

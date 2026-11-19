@@ -1,5 +1,28 @@
 # Project Backlog
 
+## TASK-0117 — Trung Tâm Phân Xử Tranh Chấp KTV, Cơ Chế Hoàn Tiền Escrow và Đánh Giá Đơn Hàng (UC61, UC62, UC63, UC71, UC74, UC75, UC83) / COMPLETE
+
+- [x] Backend `V40__dispute_arbitration_and_reviews.sql`: Tạo bảng `dispute_cases` và indexes.
+- [x] Backend `OrderEntity.java`: Hỗ trợ `markDisputed`, `markRefunded`, cho phép hoàn tất từ trạng thái `STATUS_DISPUTED`.
+- [x] Backend `CommerceDisputeFacade.java` & `DefaultCommerceDisputeFacade.java`: Điều phối khóa thứ tự bất biến nguyên tử `Order -> Shipment -> Payment`.
+- [x] Backend `DisputeDtos.java` & `ReviewDtos.java`: DTOs phân trang, chi tiết, phán quyết, khiếu nại, phản hồi giải trình và đánh giá đơn hàng.
+- [x] Backend `DisputeRepository.java`: Lưu vết phán quyết, trừ điểm uy tín `penalty_ledger`, lưu đánh giá `reviews` với fallback `ensureTablesExist()` cho chế độ kiểm thử H2.
+- [x] Backend `KtvDisputeService.java` & `KtvDisputeController.java`: API KTV phân xử (`/api/v1/ktv/disputes/**`).
+- [x] Backend `OrderReviewService.java` & `OrderReviewController.java`: API đánh giá đơn hàng (`/api/v1/commerce/orders/{orderId}/review`).
+- [x] Backend `BuyerDisputeService.java` & `OrderDisputeController.java`: API khiếu nại Người mua và phản hồi Người bán.
+- [x] Backend `SecurityConfig.java`: Phân quyền `/api/v1/ktv/disputes/**` cho KTV và ADMIN.
+- [x] Frontend `disputeApi.ts` & `reviewApi.ts`: Client API phân xử tranh chấp và đánh giá đối tác.
+- [x] Frontend `KtvDisputesPage.tsx`: Kết nối API thực tế, đối soát 2 chiều (Video unboxing vs Ảnh đóng gói), tích hợp `MediaLightboxModal` và modal phán quyết.
+- [x] Frontend `BuyerDisputeModal.tsx` & `SellerDisputeResponseModal.tsx`: Modal nộp khiếu nại (UC62) và gửi giải trình (UC63).
+- [x] Frontend `OrderReviewModal.tsx`: Modal đánh giá 1-5 sao kèm thông báo thưởng 500 xu.
+- [x] Frontend `BuyerOrderDetailView.tsx` & `SellerOrderDetailView.tsx`: Tích hợp các nút hành động khiếu nại, giải trình, đánh giá.
+- [x] Kiểm thử tự động:
+  - Backend Spring Boot: `KtvDisputeServiceTest`, `OrderReviewServiceTest`, `BuyerDisputeServiceTest` (13/13 tests PASS, 100%).
+  - Frontend typecheck: `npm run typecheck --prefix frontend` (0 errors).
+  - Frontend vitest: `KtvDisputesPage.test.tsx`, `OrderReviewModal.test.tsx`, `Orders.test.tsx` (17/17 tests PASS, 100%).
+
+---
+
 ## TASK-0110 — Phân Tách Giao Diện Người Bán, Bảo Vệ Định Danh Quick Face Auth (UC08) và Chuẩn Hóa eKYC / COMPLETE
 
 - [x] Backend `ProfileDtos.java`: Thêm `quickAuthResultId`, `challengeId`, `otpCode` vào `UpdateProfileRequest`; thêm `PhoneOtpChallengeResponse`.
