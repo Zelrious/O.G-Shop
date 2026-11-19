@@ -232,6 +232,24 @@ class RefundSettlementPostgresTest {
         return new OrderFixture(orderId, cashCompId);
     }
 
+    private Long ensureAnyRewardPolicyId(Long existingAdminId) {
+        // Resolve an existing policy or lazily insert the canonical policy so rolled-back @Transactional tests remain order-independent.
+        List<Long> pList = jdbcTemplate.queryForList("SELECT policy_id FROM og_compat.reward_policies WHERE policy_code = 'REWARD_CHECKOUT_STANDARD'", Long.class);
+        if (!pList.isEmpty()) {
+            return pList.getFirst();
+        }
+        List<Long> anyList = jdbcTemplate.queryForList("SELECT policy_id FROM og_compat.reward_policies LIMIT 1", Long.class);
+        if (!anyList.isEmpty()) {
+            return anyList.getFirst();
+        }
+        Long creatorId = existingAdminId != null ? existingAdminId : createAdminUser();
+        return jdbcTemplate.queryForObject(
+                "INSERT INTO og_compat.reward_policies(policy_code, point_value, policy_snapshot, created_by) " +
+                "VALUES ('REWARD_CHECKOUT_STANDARD', 1.00, '{\"type\":\"STANDARD\"}'::jsonb, ?) RETURNING policy_id",
+                Long.class, creatorId
+        );
+    }
+
     private void fundBuyerCoinsAndInsertGroupDebit(Long buyerId, UUID groupId, long pointsAmount) {
         Long adminId = createAdminUser();
         jdbcTemplate.update("""
@@ -242,22 +260,7 @@ class RefundSettlementPostgresTest {
                 UUID.randomUUID(), buyerId, pointsAmount, adminId, "CMD_INIT_BAL_" + UUID.randomUUID()
         );
 
-        Long policyId = null;
-        List<Long> pList = jdbcTemplate.queryForList("SELECT policy_id FROM og_compat.reward_policies WHERE policy_code = 'REWARD_CHECKOUT_STANDARD'", Long.class);
-        if (!pList.isEmpty()) {
-            policyId = pList.getFirst();
-        } else {
-            List<Long> anyList = jdbcTemplate.queryForList("SELECT policy_id FROM og_compat.reward_policies LIMIT 1", Long.class);
-            policyId = anyList.isEmpty() ? null : anyList.getFirst();
-        }
-
-        if (policyId == null) {
-            policyId = jdbcTemplate.queryForObject(
-                    "INSERT INTO og_compat.reward_policies(policy_code, point_value, policy_snapshot, created_by) " +
-                    "VALUES ('REWARD_CHECKOUT_STANDARD', 1.00, '{\"type\":\"STANDARD\"}'::jsonb, ?) RETURNING policy_id",
-                    Long.class, adminId
-            );
-        }
+        Long policyId = ensureAnyRewardPolicyId(adminId);
 
         // DEC-10-POLICY-PINNING: Pin reward_policy_id on checkout_groups at T1
         jdbcTemplate.update("UPDATE og_compat.checkout_groups SET reward_policy_id = ? WHERE group_id = ?", policyId, groupId);
@@ -968,7 +971,7 @@ class RefundSettlementPostgresTest {
     @DisplayName("C-8b: DEBIT_CHECKOUT with non-negative delta is rejected by preserved validator")
     void testDebitCheckout_nonNegativeDelta_rejected() {
         Long buyerId = createBuyerUser();
-        Long policyId = jdbcTemplate.queryForObject("SELECT policy_id FROM og_compat.reward_policies LIMIT 1", Long.class);
+        Long policyId = ensureAnyRewardPolicyId(null);
 
         assertThatThrownBy(() -> jdbcTemplate.update("""
                 INSERT INTO og_compat.reward_ledger(

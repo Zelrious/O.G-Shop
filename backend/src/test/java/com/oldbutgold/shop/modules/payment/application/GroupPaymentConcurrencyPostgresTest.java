@@ -173,8 +173,17 @@ class GroupPaymentConcurrencyPostgresTest {
         }
     }
 
+    private Long ensureCanonicalRewardPolicyId() {
+        // Idempotent provisioning so tests do not depend on prior test classes committing reward_policies.
+        return jdbcTemplate.queryForObject(
+                "SELECT public.og_provision_canonical_reward_policy(?)",
+                Long.class,
+                adminId
+        );
+    }
+
     private void seedCoins(long userId, long points) {
-        Long policyId = jdbcTemplate.queryForObject("SELECT policy_id FROM og_compat.reward_policies WHERE policy_code = 'REWARD_CHECKOUT_STANDARD'", Long.class);
+        Long policyId = ensureCanonicalRewardPolicyId();
         Integer accCount = jdbcTemplate.queryForObject("SELECT count(*) FROM og_compat.reward_accounts WHERE user_id = ?", Integer.class, userId);
         if (accCount == null || accCount == 0) {
             jdbcTemplate.update("INSERT INTO og_compat.reward_accounts(user_id) VALUES (?)", userId);
@@ -186,7 +195,7 @@ class GroupPaymentConcurrencyPostgresTest {
     }
 
     private void adjustCoins(long userId, long delta) {
-        Long policyId = jdbcTemplate.queryForObject("SELECT policy_id FROM og_compat.reward_policies WHERE policy_code = 'REWARD_CHECKOUT_STANDARD'", Long.class);
+        Long policyId = ensureCanonicalRewardPolicyId();
         jdbcTemplate.update("""
                 INSERT INTO og_compat.reward_ledger(entry_id, user_id, policy_id, entry_type, points_delta, actor_id, reason, command_key)
                 VALUES (?, ?, ?, 'CORRECTION', ?, ?, 'Admin adjust', ?)
