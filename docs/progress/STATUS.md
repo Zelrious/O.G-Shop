@@ -1,5 +1,63 @@
 # Project Status
 
+## Phân Hệ Báo Cáo Thống Kê Quản Trị & Kết Xuất Dữ Liệu Admin (Row 67) — TASK-0118 / 2026-11-17
+
+- **Mục tiêu**:
+  - Triển khai toàn diện phân hệ Báo cáo thống kê & Kết xuất dữ liệu cho Admin theo yêu cầu Row 67 trong bảng phân công công việc.
+  - Cung cấp REST API `/api/v1/admin/dashboard/stats` tổng hợp doanh thu phí sàn, GMV, số dư Escrow đang giữ, tăng trưởng người dùng, tỷ lệ tranh chấp, biểu đồ tháng, xu hướng tìm kiếm và bảng tỷ lệ hoàn trả theo danh mục.
+  - Cung cấp hệ thống kết xuất báo cáo CSV chuẩn quốc tế (`/api/v1/admin/dashboard/export/**`) kèm UTF-8 BOM (`\uFEFF`) chống lỗi font tiếng Việt khi mở bằng Microsoft Excel.
+  - Kết nối giao diện `AdminDashboardPage.tsx` với API thực tế, vẽ biểu đồ và xuất dữ liệu động.
+
+- **Backend Spring Boot (`backend/`)**:
+  - `AdminDashboardDtos.java`: Records DTOs tổng hợp số liệu tài chính, biểu đồ 10 tháng, tăng trưởng người dùng, thị hiếu tìm kiếm và hoàn hàng theo danh mục.
+  - `AdminDashboardRepository.java`: Truy vấn tổng hợp từ `public.orders`, `public.order_items`, `public.payments`, `public.users`, `public.dispute_cases` kèm cơ chế Hybrid Fallback.
+  - `AdminDashboardService.java`: Tính toán tỷ lệ tăng/giảm so với tháng trước, định dạng số liệu và tạo file CSV chuẩn UTF-8 BOM.
+  - `AdminDashboardController.java`: Endpoints `/api/v1/admin/dashboard/stats` và 4 endpoints `/export/{revenue, users, searches, returns}`.
+  - `SecurityConfig.java`: Phân quyền `/api/v1/admin/dashboard/**` cho `ADMIN` và `KTV`.
+  - Unit tests: `AdminDashboardServiceTest` (5/5 tests PASS, 18/18 backend tests PASS, `BUILD SUCCESS`).
+
+- **Frontend React / TypeScript (`frontend/`)**:
+  - `adminDashboardApi.ts`: Client API gọi endpoints dashboard và tải blob CSV.
+  - `AdminDashboardPage.tsx`: Kết nối API thực tế, vẽ biểu đồ động, 4 nút kết xuất CSV tải file thật. Nâng cấp biểu đồ đường gấp khúc SVG sắc sảo (Polyline & Area Chart với gradient đổ bóng mờ), điểm dữ liệu tròn rõ nét và nhãn nổi bật cho mốc đỉnh (Peak Marker).
+  - Tích hợp tương tác Hover chi tiết: đường dóng thẳng đứng (dashed guide line), chấm tròn phát sáng (glowing halo node) và Floating Tooltip hiển thị đầy đủ Doanh thu, GMV, Số đơn hàng và % tăng/giảm so với tháng trước.
+  - Bổ sung các badge trạng thái tăng/giảm nhanh dạng pill trực quan (`▲ +18.4%`, `▲ +5.7%`, `▼ -0.8%`, `▼ Giảm 56,6%`) cho các nội dung tiêu biểu.
+  - Nâng cấp đồng bộ biểu đồ đường gấp khúc Tăng trưởng người dùng nền tảng.
+  - `AdminDashboardPage.test.tsx`: Bổ sung test kiểm chứng multi-select category và export triggers (3/3 tests PASS, 56/56 frontend test files PASS, 294/294 tests PASS).
+  - Typecheck: `tsc -b --pretty false` (0 errors).
+
+## Trung Tâm Phân Xử Tranh Chấp KTV, Cơ Chế Hoàn Tiền Escrow và Đánh Giá Đơn Hàng (UC61, UC62, UC63, UC71, UC74, UC75, UC83) — TASK-0117 / 2026-11-17
+
+- **Mục tiêu**:
+  - Triển khai toàn diện trung tâm phân xử tranh chấp & khiếu nại giao dịch cho Kỹ thuật viên (KTV), kết nối REST API thực tế với cơ sở dữ liệu thay thế mock store.
+  - Xây dựng giao diện kiểm tra đối soát 2 chiều trực quan: Video unboxing của Người mua vs Bộ ảnh đóng gói của Người bán có tích hợp `MediaLightboxModal` hỗ trợ phóng to, zoom, pan chi tiết.
+  - Ban hành 3 phán quyết chuẩn theo đặc tả UC62, UC71, UC75, UC83: `RETURN_APPROVED` (chấp thuận trả hàng, chưa hoàn tiền ngay), `RESOLVED_REFUND` (hoàn tiền 100% tiền hàng, không hoàn phí ship, hoàn 100% xu), `RESOLVED_RELEASE` (bác khiếu nại, giải phóng Escrow cho người bán). Hỗ trợ trừ điểm uy tín 0-20đ theo UC74/TASK-0071 ghi vào `og_compat.penalty_ledger`.
+  - Điều phối dòng tiền Escrow liên module qua `CommerceDisputeFacade` tuân thủ nghiêm ngặt Invariant Lock Order: `Order -> Shipment -> Payment`.
+  - Triển khai cơ chế đánh giá đơn hàng đối tác (UC61): đánh giá 1-5 sao, thưởng 500 xu cho người gửi, thưởng 400/500 xu cho người nhận 4/5 sao, phục hồi điểm uy tín (+3đ, +4đ, +5đ).
+  - Tích hợp modal Yêu cầu trả hàng / Khiếu nại (UC62) khi đơn `DELIVERED`, modal Phản hồi giải trình (UC63) khi đơn `DISPUTED`, và modal Đánh giá (UC61) khi đơn `COMPLETED`.
+
+- **Backend Spring Boot (`backend/`)**:
+  - `V40__dispute_arbitration_and_reviews.sql`: Bảng `dispute_cases` và indexes.
+  - `OrderEntity.java`: Cập nhật trạng thái `STATUS_DISPUTED`, `STATUS_REFUNDED`, cho phép chuyển đổi hợp lệ sang `STATUS_COMPLETED` hoặc `STATUS_REFUNDED`.
+  - `CommerceDisputeFacade.java` & `DefaultCommerceDisputeFacade.java`: Điều phối chuyển trạng thái đơn hàng và thanh toán với khóa thứ tự `Order -> Shipment -> Payment`.
+  - `DisputeDtos.java` & `ReviewDtos.java`: DTOs phân trang, chi tiết, phán quyết KTV, khiếu nại Người mua, giải trình Người bán và đánh giá đơn hàng.
+  - `DisputeRepository.java`: Truy vấn, cập nhật trạng thái tranh chấp, ghi nhận biên bản và điểm phạt `penalty_ledger`, lưu và thống kê đánh giá `reviews`.
+  - `KtvDisputeService.java` & `KtvDisputeController.java`: Phân xử tranh chấp cho KTV (`/api/v1/ktv/disputes/**`).
+  - `OrderReviewService.java` & `OrderReviewController.java`: Đánh giá đơn hàng (`/api/v1/commerce/orders/{orderId}/review`, `/commerce/users/{userId}/reviews`).
+  - `BuyerDisputeService.java` & `OrderDisputeController.java`: Khiếu nại Người mua (`/api/v1/commerce/orders/{orderId}/dispute`) và giải trình Người bán (`/seller-response`).
+  - `SecurityConfig.java`: Phân quyền `/api/v1/ktv/disputes/**` cho KTV và ADMIN.
+  - Unit tests: `KtvDisputeServiceTest`, `OrderReviewServiceTest`, `BuyerDisputeServiceTest` (13/13 tests PASS, BUILD SUCCESS).
+
+- **Frontend React / TypeScript (`frontend/`)**:
+  - `types.ts`, `disputeApi.ts`, `reviewApi.ts`, `index.ts`: Client API và types cho phân xử tranh chấp và đánh giá.
+  - `KtvDisputesPage.tsx`: Bàn làm việc phân xử tranh chấp KTV kết nối API thực tế, lọc trạng thái kèm badge đếm số lượng động, ô tìm kiếm debounced chống giật layout tích hợp nút xóa nhanh ✕, empty state trực quan kèm nút reset, bảng min-height 440px chống co rút khi ít dòng, đối soát 2 chiều (Video unboxing vs Ảnh đóng gói), tích hợp `MediaLightboxModal` và modal phán quyết.
+  - `ConsoleTableActions.tsx`: Nâng cấp dropdown thao tác bảng (`direction="auto"`) thông minh tự động mở trồi lên trên khi dòng ở sát đáy viewport/bảng; căn trái hoàn toàn icon và nhãn hành động giúp giao diện gọn gàng, tự nhiên.
+  - `BuyerDisputeModal.tsx`: Modal tạo yêu cầu trả hàng / khiếu nại (UC62) với lý do, mô tả, video unboxing và link ảnh.
+  - `SellerDisputeResponseModal.tsx`: Modal gửi giải trình và ảnh kiện hàng (UC63).
+  - `OrderReviewModal.tsx`: Modal đánh giá sao từ 1 đến 5 sao, thông báo thưởng 500 xu, nhận xét đối tác.
+  - `BuyerOrderDetailView.tsx` & `SellerOrderDetailView.tsx`: Tích hợp các nút mở modal khiếu nại, giải trình, đánh giá và hiển thị trạng thái tranh chấp.
+  - Typecheck: `tsc -b --pretty false` (0 errors).
+  - Vitest: `KtvDisputesPage.test.tsx`, `OrderReviewModal.test.tsx`, `Orders.test.tsx` (19/19 tests PASS; toàn bộ 56 test files 293/293 tests PASS).
+
 ## Kiểm Duyệt Bảo Mật Tin Nhắn Đa Tầng, Bàn Làm Việc KTV 3 Cột và Xử Phạt Tập Trung (UC56 / UC74) — TASK-0116 / 2026-11-08
 
 - **Mục tiêu**:

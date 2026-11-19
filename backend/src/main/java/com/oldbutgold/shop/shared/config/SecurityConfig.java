@@ -76,10 +76,12 @@ public class SecurityConfig {
                                 "/api/v1/payments/vnpay-ipn",
                                 "/api/v1/shipping/master-data/**").permitAll()
                         .requestMatchers("/api/v1/admin/payments/**").hasAnyRole("ADMIN", "KTV")
+                        .requestMatchers("/api/v1/admin/dashboard/**").hasAnyRole("ADMIN", "KTV")
                         .requestMatchers("/api/v1/admin/fulfillment/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/ktv/users/**").hasRole("KTV")
                         .requestMatchers("/api/v1/ktv/ekyc/**").hasRole("KTV")
                         .requestMatchers("/api/v1/ktv/chat-moderation/**").hasRole("KTV")
+                        .requestMatchers("/api/v1/ktv/disputes/**").hasAnyRole("KTV", "ADMIN")
                         .requestMatchers("/api/v1/admin/vouchers/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/ktv/vouchers/**").hasRole("KTV")
                         .requestMatchers("/api/v1/commerce/vouchers/**").hasAnyRole("BUYER","SELLER")
