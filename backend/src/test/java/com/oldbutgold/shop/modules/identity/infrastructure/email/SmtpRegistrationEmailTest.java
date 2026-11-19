@@ -70,6 +70,7 @@ class SmtpRegistrationEmailTest {
             });
             var sender=new JavaMailSenderImpl();
             sender.setHost("127.0.0.1");sender.setPort(listener.getLocalPort());sender.setDefaultEncoding("UTF-8");
+            sender.getJavaMailProperties().put("mail.from","no-reply@example.invalid");
             sender.getJavaMailProperties().put("mail.smtp.localhost","localhost");
             sender.getJavaMailProperties().put("mail.smtp.connectiontimeout","2000");
             sender.getJavaMailProperties().put("mail.smtp.timeout","2000");

@@ -56,6 +56,21 @@ public class OrderItemEntity {
     @Column(name = "pricing_source", nullable = false, length = 20)
     private String pricingSource = "LIST_PRICE";
 
+    @Column(name = "voucher_allocation", precision = 19, scale = 2)
+    private BigDecimal voucherAllocation = BigDecimal.ZERO;
+
+    @Column(name = "points_allocation", precision = 19, scale = 2)
+    private BigDecimal pointsAllocation = BigDecimal.ZERO;
+
+    @Column(name = "workflow_model", length = 20)
+    private String workflowModel = "LEGACY_V14";
+
+    @Column(name = "product_revision_id")
+    private Long productRevisionId;
+
+    @Column(name = "return_allowed")
+    private Boolean returnAllowed;
+
     protected OrderItemEntity() {}
 
     public OrderItemEntity(Long orderId, Long productId, String productTitle, int quantity,
@@ -77,6 +92,31 @@ public class OrderItemEntity {
         this.pricingSource = pricingSource;
     }
 
+    public OrderItemEntity(Long orderId, Long productId, String productTitle, int quantity,
+                           BigDecimal listedPrice, BigDecimal agreedPrice, BigDecimal buyerSystemFee,
+                           BigDecimal sellerSystemFee, BigDecimal buyerLineTotal, BigDecimal sellerLineProceeds,
+                           Long feePolicyId, Long acceptedOfferId, String pricingSource,
+                           BigDecimal voucherAllocation, BigDecimal pointsAllocation) {
+        this(orderId, productId, productTitle, quantity, listedPrice, agreedPrice, buyerSystemFee,
+                sellerSystemFee, buyerLineTotal, sellerLineProceeds, feePolicyId, acceptedOfferId, pricingSource);
+        this.voucherAllocation = voucherAllocation != null ? voucherAllocation : BigDecimal.ZERO;
+        this.pointsAllocation = pointsAllocation != null ? pointsAllocation : BigDecimal.ZERO;
+    }
+
+    public OrderItemEntity(Long orderId, Long productId, String productTitle, int quantity,
+                           BigDecimal listedPrice, BigDecimal agreedPrice, BigDecimal buyerSystemFee,
+                           BigDecimal sellerSystemFee, BigDecimal buyerLineTotal, BigDecimal sellerLineProceeds,
+                           Long feePolicyId, Long acceptedOfferId, String pricingSource,
+                           BigDecimal voucherAllocation, BigDecimal pointsAllocation,
+                           String workflowModel, Long productRevisionId, Boolean returnAllowed) {
+        this(orderId, productId, productTitle, quantity, listedPrice, agreedPrice, buyerSystemFee,
+                sellerSystemFee, buyerLineTotal, sellerLineProceeds, feePolicyId, acceptedOfferId, pricingSource,
+                voucherAllocation, pointsAllocation);
+        this.workflowModel = workflowModel != null ? workflowModel : "UC83";
+        this.productRevisionId = productRevisionId;
+        this.returnAllowed = returnAllowed;
+    }
+
     public Long getId() { return id; }
     public Long getOrderId() { return orderId; }
     public Long getProductId() { return productId; }
@@ -91,4 +131,15 @@ public class OrderItemEntity {
     public Long getFeePolicyId() { return feePolicyId; }
     public Long getAcceptedOfferId() { return acceptedOfferId; }
     public String getPricingSource() { return pricingSource; }
+    public BigDecimal getVoucherAllocation() { return voucherAllocation != null ? voucherAllocation : BigDecimal.ZERO; }
+    public void setVoucherAllocation(BigDecimal voucherAllocation) { this.voucherAllocation = voucherAllocation != null ? voucherAllocation : BigDecimal.ZERO; }
+    public BigDecimal getPointsAllocation() { return pointsAllocation != null ? pointsAllocation : BigDecimal.ZERO; }
+    public void setPointsAllocation(BigDecimal pointsAllocation) { this.pointsAllocation = pointsAllocation != null ? pointsAllocation : BigDecimal.ZERO; }
+    public String getWorkflowModel() { return workflowModel; }
+    public void setWorkflowModel(String workflowModel) { this.workflowModel = workflowModel; }
+    public Long getProductRevisionId() { return productRevisionId; }
+    public void setProductRevisionId(Long productRevisionId) { this.productRevisionId = productRevisionId; }
+    public Boolean getReturnAllowed() { return returnAllowed; }
+    public void setReturnAllowed(Boolean returnAllowed) { this.returnAllowed = returnAllowed; }
+    public boolean isReturnAllowed() { return Boolean.TRUE.equals(returnAllowed); }
 }

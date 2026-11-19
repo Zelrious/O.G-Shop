@@ -110,6 +110,7 @@ Authentication implementation, payment provider và shipment provider.
 ## Completed tasks
 
 - [x] Tạo package boundary và tài liệu module.
+- [x] **Tích hợp PR #17 UC83 Return Cases, Vá Bảo mật KTV/Carrier & Đóng xung đột PO-CHOICE-3/D-08 theo Phương án A (TASK-0119)**: Hợp nhất Dual-Track `ReturnCaseService` (`UC83`) song song `KtvDisputeService` (`LEGACY_V14`); vá lỗ hổng `ReturnCaseController.confirmReturnDeliveryByCarrier` (`@PreAuthorize("hasRole('ADMIN')")` + fail-closed simulation guard); giữ nguyên phân quyền `/api/v1/ktv/disputes/**` trong `SecurityConfig`; sửa `OrderReviewService` cho `UC61` (`CREDIT_REVIEW`); cập nhật `assignCaseToKtv` + `decided_at` cho `ReturnCaseServicePostgresTest` (63/63 PASS); chốt **Phương án A** (`PO-CHOICE-3` chặn 409 khi còn hạn 48h, `D-08` tự hủy `PENDING` sau khi quá hạn) cho `CaseEvidenceRequestPostgresTest` (13/13), `CaseEvidenceRequestConcurrencyPostgresTest` (5/5) và `ReturnCaseServiceTest` (143/143).
 
 ## Remaining tasks
 

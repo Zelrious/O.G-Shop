@@ -86,4 +86,39 @@ public class OrderManagementDtos {
             String carrier,
             String message
     ) {}
+
+    public record EarlyCompleteRequest(
+            Boolean warningConsent,
+            String commandKey
+    ) {}
+
+    public record DisbursementOperationDto(
+            UUID operationId,
+            UUID componentId,
+            String componentType,
+            BigDecimal amount,
+            String state,
+            String commandKey
+    ) {}
+
+    public record DisbursementResponse(
+            Long orderId,
+            String status,
+            java.util.List<DisbursementOperationDto> operations,
+            BigDecimal totalDisbursedAmount,
+            String message
+    ) {}
+
+    public record OverdueDeliveryBatchResult(
+            int totalScanned,
+            java.util.List<Long> processedOrderIds,
+            java.util.List<Long> skippedOrderIds,
+            java.util.List<Long> failedOrderIds
+    ) {
+        public OverdueDeliveryBatchResult {
+            processedOrderIds = processedOrderIds != null ? java.util.List.copyOf(processedOrderIds) : java.util.List.of();
+            skippedOrderIds = skippedOrderIds != null ? java.util.List.copyOf(skippedOrderIds) : java.util.List.of();
+            failedOrderIds = failedOrderIds != null ? java.util.List.copyOf(failedOrderIds) : java.util.List.of();
+        }
+    }
 }

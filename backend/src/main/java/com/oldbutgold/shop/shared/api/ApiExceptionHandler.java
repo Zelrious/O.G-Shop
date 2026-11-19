@@ -25,6 +25,10 @@ import java.util.UUID;
 public class ApiExceptionHandler {
     @ExceptionHandler(com.oldbutgold.shop.modules.communication.application.CommunicationException.class)
     ResponseEntity<ApiError> communicationFailure(com.oldbutgold.shop.modules.communication.application.CommunicationException error,HttpServletRequest request){return response(HttpStatus.valueOf(error.status()),error.code(),error.getMessage(),request,List.of());}
+    @ExceptionHandler(com.oldbutgold.shop.modules.trustsafety.application.TrustSafetyBusinessException.class)
+    ResponseEntity<ApiError> trustSafetyFailure(com.oldbutgold.shop.modules.trustsafety.application.TrustSafetyBusinessException error, HttpServletRequest request) {
+        return response(error.getStatus(), error.getCode(), error.getMessage(), request, List.of());
+    }
     @ExceptionHandler(com.oldbutgold.shop.modules.identity.application.AccountRestrictedException.class)
     ResponseEntity<?> accountRestricted(com.oldbutgold.shop.modules.identity.application.AccountRestrictedException error) {
         return ResponseEntity.status(403).header("Cache-Control","no-store").body(java.util.Map.of(
@@ -46,12 +50,14 @@ public class ApiExceptionHandler {
         return response(HttpStatus.UNAUTHORIZED, "AUTHENTICATION_FAILED", "Phiên đăng nhập không hợp lệ.", request, List.of());
     }
 
-    @ExceptionHandler(AccessDeniedException.class)
-    ResponseEntity<ApiError> forbidden(AccessDeniedException exception, HttpServletRequest request) {
-        String msg = (exception.getMessage() != null && !exception.getMessage().isBlank() && !exception.getMessage().equalsIgnoreCase("Access Denied"))
+    @ExceptionHandler({AccessDeniedException.class, SecurityException.class})
+    ResponseEntity<ApiError> forbidden(Exception exception, HttpServletRequest request) {
+        String message = (exception.getMessage() != null
+                && !exception.getMessage().isBlank()
+                && !exception.getMessage().equalsIgnoreCase("Access Denied"))
                 ? exception.getMessage()
                 : "Yêu cầu không được phép.";
-        return response(HttpStatus.FORBIDDEN, "ACCESS_DENIED", msg, request, List.of());
+        return response(HttpStatus.FORBIDDEN, "ACCESS_DENIED", message, request, List.of());
     }
 
     @ExceptionHandler(DuplicateEmailException.class)
@@ -138,7 +144,9 @@ public class ApiExceptionHandler {
     @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
     ResponseEntity<ApiError> responseStatus(org.springframework.web.server.ResponseStatusException exception, HttpServletRequest request) {
         HttpStatus status = HttpStatus.valueOf(exception.getStatusCode().value());
-        String code = status.name();
+        String code = (exception.getReason() != null && exception.getReason().contains("COMMAND_KEY_CONFLICT"))
+                ? "COMMAND_KEY_CONFLICT"
+                : status.name();
         String message = exception.getReason() != null ? exception.getReason() : exception.getMessage();
         return response(status, code, message, request, List.of());
     }

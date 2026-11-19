@@ -23,11 +23,14 @@ public class PaymentAttemptEntity {
     @Column(name = "attempt_id")
     private Long id;
 
-    @Column(name = "order_id", nullable = false)
+    @Column(name = "order_id")
     private Long orderId;
 
-    @Column(name = "payment_id", nullable = false)
+    @Column(name = "payment_id")
     private Long paymentId;
+
+    @Column(name = "intent_id")
+    private java.util.UUID intentId;
 
     @Column(name = "txn_ref", nullable = false, unique = true, length = 100)
     private String txnRef;
@@ -89,6 +92,16 @@ public class PaymentAttemptEntity {
     public PaymentAttemptEntity(Long orderId, Long paymentId, String txnRef, BigDecimal amount, Instant now) {
         this.orderId = orderId;
         this.paymentId = paymentId;
+        this.txnRef = txnRef;
+        this.amount = amount;
+        this.currency = "VND";
+        this.provider = "VNPAY";
+        this.status = STATUS_PENDING;
+        this.createdAt = now;
+    }
+
+    public PaymentAttemptEntity(java.util.UUID intentId, String txnRef, BigDecimal amount, Instant now) {
+        this.intentId = intentId;
         this.txnRef = txnRef;
         this.amount = amount;
         this.currency = "VND";
@@ -181,8 +194,12 @@ public class PaymentAttemptEntity {
     }
 
     public Long getId() { return id; }
+    public java.util.UUID getIntentId() { return intentId; }
+    public void setIntentId(java.util.UUID intentId) { this.intentId = intentId; }
     public Long getOrderId() { return orderId; }
+    public void setOrderId(Long orderId) { this.orderId = orderId; }
     public Long getPaymentId() { return paymentId; }
+    public void setPaymentId(Long paymentId) { this.paymentId = paymentId; }
     public String getTxnRef() { return txnRef; }
     public BigDecimal getAmount() { return amount; }
     public String getCurrency() { return currency; }

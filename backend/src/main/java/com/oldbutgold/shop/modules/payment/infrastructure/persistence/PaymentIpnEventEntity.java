@@ -31,11 +31,14 @@ public class PaymentIpnEventEntity {
     @Column(name = "attempt_id", nullable = false)
     private Long attemptId;
 
-    @Column(name = "order_id", nullable = false)
+    @Column(name = "order_id")
     private Long orderId;
 
-    @Column(name = "payment_id", nullable = false)
+    @Column(name = "payment_id")
     private Long paymentId;
+
+    @Column(name = "intent_id")
+    private java.util.UUID intentId;
 
     @Column(name = "txn_ref", nullable = false, length = 100)
     private String txnRef;
@@ -124,6 +127,30 @@ public class PaymentIpnEventEntity {
         this.receivedAt = receivedAt;
     }
 
+    public PaymentIpnEventEntity(Long receiptId,
+                                Long attemptId,
+                                java.util.UUID intentId,
+                                String txnRef,
+                                String vnpTransactionNo,
+                                String vnpResponseCode,
+                                String vnpTransactionStatus,
+                                String vnpCurrCode,
+                                String vnpAmountText,
+                                Long vnpAmountRaw,
+                                BigDecimal vnpAmount,
+                                String vnpBankCode,
+                                String vnpBankTranNo,
+                                String vnpCardType,
+                                String vnpPayDate,
+                                String ipAddress,
+                                String processingOutcome,
+                                Instant receivedAt) {
+        this(receiptId, attemptId, null, null, txnRef, vnpTransactionNo, vnpResponseCode, vnpTransactionStatus,
+                vnpCurrCode, vnpAmountText, vnpAmountRaw, vnpAmount, vnpBankCode, vnpBankTranNo, vnpCardType,
+                vnpPayDate, ipAddress, processingOutcome, receivedAt);
+        this.intentId = intentId;
+    }
+
     public Long getId() {
         return id;
     }
@@ -134,6 +161,14 @@ public class PaymentIpnEventEntity {
 
     public Long getAttemptId() {
         return attemptId;
+    }
+
+    public java.util.UUID getIntentId() {
+        return intentId;
+    }
+
+    public void setIntentId(java.util.UUID intentId) {
+        this.intentId = intentId;
     }
 
     public Long getOrderId() {
@@ -198,6 +233,10 @@ public class PaymentIpnEventEntity {
 
     public String getProcessingOutcome() {
         return processingOutcome;
+    }
+
+    public void setProcessingOutcome(String processingOutcome) {
+        this.processingOutcome = processingOutcome;
     }
 
     public Instant getReceivedAt() {

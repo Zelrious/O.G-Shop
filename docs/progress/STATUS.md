@@ -1,5 +1,26 @@
 # Project Status
 
+## Tích Hợp PR #17 Hệ Sinh Thái UC83 Return Cases, Group Checkout/Settlement & Vá Bảo Mật/Deadlock (Đợt 1) — TASK-0119 / 2026-11-19
+
+- **Mục tiêu**:
+  - Hợp nhất PR #17 (`origin/feature/return-case-entities` @ `3e391f6`) vào `origin/main` (`24897c2`) trên nhánh `integration/pr17-return-cases-uc83` theo kiến trúc Dual-Track (`LEGACY_V14` + `UC83`).
+  - Hòa hợp chuỗi Flyway (`V37`–`V51` của PR #17 đánh số lại thành `V41`–`V55` sau `V37`–`V40` của `main`, vá `V48`/`V49`/`V55` và thêm `V56` cho `CREDIT_REVIEW` UC61).
+  - Bổ sung kiểm tra eKYC + Quick Face Auth trong `GroupCheckoutService`, cập nhật tối thiểu `commandKey` tại Checkout UI, vá 2 lỗ hổng bảo mật (`ReturnCaseController` carrier endpoint + `SecurityConfig`), sửa deadlock `GroupPaymentService`, bật Flyway CI và sắp xếp tài liệu `tasks/` của PR #17 vào `docs/`.
+
+- **Backend, Database & CI (`backend/`, `.github/`)**:
+  - Giải quyết toàn bộ 6 file xung đột Git và `application.yml` (`55432`); `git grep` xác nhận 0 marker xung đột còn sót.
+  - Flyway `V41`–`V56`: neo `public.reward_ledger` trong `V48` + idempotent invariant guard trong `V55`; sửa bug match xuyên nhánh của `V49` trên `og70_dispatch()` (PostgreSQL 17); thêm `V56__support_reward_ledger_credit_review.sql` và sửa `OrderReviewService.java` truyền `order.getId()` + bỏ nuốt lỗi `reward_ledger`.
+  - Bảo mật & eKYC: `ReturnCaseController.confirmReturnDeliveryByCarrier` yêu cầu `hasRole('ADMIN')` và fail-closed simulation guard (`ReturnCaseCarrierSecurityTest`: 6/6 PASS); `SecurityConfig` giữ matcher `/api/v1/ktv/disputes/**`; `GroupCheckoutService` + `GroupCheckoutDtos` bổ sung `quickAuthResultId` và kiểm tra `IdentityCommerceFacade` (`GroupCheckoutServiceEkycTest`: 2/2 PASS).
+  - Sửa concurrency & CI: sửa thứ tự khóa trong `GroupPaymentService.processGroupPaymentIpn` (`CheckoutGroup -> PaymentAttempt -> rawReceipt`) giúp `GroupPaymentConcurrencyPostgresTest` PASS 4/4; nạp `og_provision_canonical_reward_policy` ở `CheckoutIdempotencyPostgresTest.scenario7` (7/7 PASS); đồng bộ `assignCaseToKtv` + `decided_at` trong `ReturnCaseServicePostgresTest` (63/63 PASS); chốt **Phương án A** cho xung đột `PO-CHOICE-3` vs `D-08` (chặn `409 EVIDENCE_REQUEST_IN_PROGRESS` khi còn hạn 48h, tự hủy `PENDING -> CANCELLED` khi quá hạn) và đồng bộ `CaseEvidenceRequestPostgresTest` (13/13), `CaseEvidenceRequestConcurrencyPostgresTest` (5/5, bổ sung đủ ảnh theo quota `1–5` ở `scenarioE`), `ReturnCaseServiceTest` (143/143); thêm `hikari.maximum-pool-size: 4` trong `application-test.yml`; bật `OGSHOP_TEST_ENABLE_FLYWAY: "true"` trong `.github/workflows/backend-ci.yml`; `@Disabled` cho `DemoDataSeedTaskTest`.
+
+- **Frontend (`frontend/`)**:
+  - `CheckoutView.tsx`, `checkoutApi.ts`, `types.ts`, `CheckoutOffer.test.tsx`: Sinh và gửi `commandKey` idempotent cho buy-now checkout.
+  - Kiểm chứng: `eslint` (0 lỗi/0 cảnh báo), `tsc -b` (0 lỗi), Vitest (**56/56 files, 294/294 tests PASS**), `vite build` sạch.
+
+- **Kiểm thử Backend**:
+  - CI-mode trên PostgreSQL 17 sạch (`OGSHOP_TEST_ENABLE_FLYWAY=true`): **1,473 tests — 0 Failures, 0 Errors, 140 Skipped**, `jar` + `spring-boot:repackage` -> **BUILD SUCCESS** (các suite `V55DualMigrationVerificationPostgresTest` 5/5, `V51ValidatorChainPostgresTest` 14/14, `V52ReceiptVerificationPostgresTest` 6/6, `ReturnCaseServicePostgresTest` 63/63, `CaseEvidenceRequestPostgresTest` 13/13, `CaseEvidenceRequestConcurrencyPostgresTest` 5/5, `ReturnCaseServiceTest` 143/143, `CheckoutIdempotencyPostgresTest` 7/7, `GroupPaymentConcurrencyPostgresTest` 4/4, `GroupCheckoutPostgresTest` 6/6, `GroupPaymentPostgresTest` 7/7, `LegacyCheckoutPersistencePostgresTest` 5/5, `GroupCheckoutServiceEkycTest` 2/2, `ReturnCaseCarrierSecurityTest` 6/6 đều PASS).
+  - Offline mặc định (`.\mvnw.cmd verify` không `OGSHOP_TEST_DB_URL`): **1,473 tests — 0 Failures, 0 Errors, 392 Skipped**, **BUILD SUCCESS**.
+
 ## Phân Hệ Báo Cáo Thống Kê Quản Trị & Kết Xuất Dữ Liệu Admin (Row 67) — TASK-0118 / 2026-11-17
 
 - **Mục tiêu**:

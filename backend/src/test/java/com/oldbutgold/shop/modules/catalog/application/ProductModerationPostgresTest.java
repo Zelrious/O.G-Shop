@@ -74,7 +74,7 @@ class ProductModerationPostgresTest {
             if (p == null || p.isBlank()) p = System.getenv("OGSHOP_TEST_DB_PASSWORD");
             return (p != null && !p.isBlank()) ? p : "root";
         });
-        properties.add("spring.flyway.enabled", () -> true);
+        properties.add("spring.flyway.enabled", com.oldbutgold.shop.shared.PostgresTestSafetyGuard::isFlywayOptInEnabled);
         properties.add("spring.datasource.hikari.connection-init-sql", () -> "SET search_path TO og_compat,public");
         properties.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
     }

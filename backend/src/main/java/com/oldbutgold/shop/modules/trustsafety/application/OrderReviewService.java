@@ -57,13 +57,13 @@ public class OrderReviewService {
 
         // Thưởng xu theo BR-UC61-05 và TASK-0071:
         // Người gửi nhận 500 xu:
-        rewardCoins(userId, 500, "Thưởng gửi đánh giá đơn #" + order.getId(), "REVIEW_SUBMIT:" + order.getId() + ":" + userId);
+        rewardCoins(userId, order.getId(), 500, "Thưởng gửi đánh giá đơn #" + order.getId(), "REVIEW_SUBMIT:" + order.getId() + ":" + userId);
 
         // Người nhận được 4 sao: 400 xu; 5 sao: 500 xu:
         if (request.rating() == 4) {
-            rewardCoins(revieweeId, 400, "Thưởng nhận 4 sao đơn #" + order.getId(), "REVIEW_RECEIVE_4:" + order.getId() + ":" + revieweeId);
+            rewardCoins(revieweeId, order.getId(), 400, "Thưởng nhận 4 sao đơn #" + order.getId(), "REVIEW_RECEIVE_4:" + order.getId() + ":" + revieweeId);
         } else if (request.rating() == 5) {
-            rewardCoins(revieweeId, 500, "Thưởng nhận 5 sao đơn #" + order.getId(), "REVIEW_RECEIVE_5:" + order.getId() + ":" + revieweeId);
+            rewardCoins(revieweeId, order.getId(), 500, "Thưởng nhận 5 sao đơn #" + order.getId(), "REVIEW_RECEIVE_5:" + order.getId() + ":" + revieweeId);
         }
 
         List<ReviewResponse> reviews = disputeRepository.findReviewsForOrder(order.getId());
@@ -100,20 +100,23 @@ public class OrderReviewService {
         return new UserReviewsSummaryResponse(userId, Math.round(avg * 10.0) / 10.0, (long) list.size(), list);
     }
 
-    private void rewardCoins(long userId, int coins, String reason, String commandKey) {
-        try {
-            Long count = jdbc.queryForObject("SELECT count(*) FROM og_compat.reward_ledger WHERE command_key = ?", Long.class, commandKey);
-            if (count != null && count > 0) return; // Idempotent
+    private void rewardCoins(long userId, long orderId, int coins, String reason, String commandKey) {
+        if (jdbc == null) {
+            return;
+        }
+        Long count = jdbc.queryForObject("SELECT count(*) FROM og_compat.reward_ledger WHERE command_key = ?", Long.class, commandKey);
+        if (count != null && count > 0) {
+            return; // Idempotent
+        }
 
-            Long accCount = jdbc.queryForObject("SELECT count(*) FROM og_compat.reward_accounts WHERE user_id = ?", Long.class, userId);
-            if (accCount == null || accCount == 0) {
-                jdbc.update("INSERT INTO og_compat.reward_accounts(user_id) VALUES(?)", userId);
-            }
+        Long accCount = jdbc.queryForObject("SELECT count(*) FROM og_compat.reward_accounts WHERE user_id = ?", Long.class, userId);
+        if (accCount == null || accCount == 0) {
+            jdbc.update("INSERT INTO og_compat.reward_accounts(user_id) VALUES(?)", userId);
+        }
 
-            jdbc.update("""
-                INSERT INTO og_compat.reward_ledger(entry_id, user_id, entry_type, points_delta, reason, command_key)
-                VALUES(?, ?, 'CREDIT_REVIEW', ?, ?, ?)
-                """, UUID.randomUUID(), userId, coins, reason, commandKey);
-        } catch (Exception ignored) {}
+        jdbc.update("""
+            INSERT INTO og_compat.reward_ledger(entry_id, user_id, entry_type, points_delta, order_id, reason, command_key)
+            VALUES(?, ?, 'CREDIT_REVIEW', ?, ?, ?, ?)
+            """, UUID.randomUUID(), userId, coins, orderId, reason, commandKey);
     }
 }
