@@ -259,7 +259,11 @@ class FulfillmentStateIntegrationTest {
         String clientReturned = "OG_CLIENT_RET_" + UUID.randomUUID().toString().substring(0, 8);
         createTestShipment(orderIdReturned, trackingReturned, clientReturned, "RETURNED");
 
-        assertThatThrownBy(() -> fulfillmentStateService.applyCarrierDelivered(trackingReturned, Instant.now(), "delivered"))
+        // Webhook bỏ qua an toàn không chuyển trạng thái (idempotent/ignored để GHN không retry vô hạn)
+        fulfillmentStateService.applyCarrierDelivered(trackingReturned, Instant.now(), "delivered");
+
+        // Luồng mô phỏng ném lỗi xung đột rõ ràng
+        assertThatThrownBy(() -> fulfillmentStateService.markOrderDelivered(orderIdReturned, Instant.now(), "DEMO_SIMULATION"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("trạng thái xung đột");
 

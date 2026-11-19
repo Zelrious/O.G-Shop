@@ -107,12 +107,14 @@ class GroupPaymentConcurrencyPostgresTest {
         adminId = createUser("ADMIN");
         ktvId = createUser("KTV");
         groupCheckoutService.setConfiguredMaxRedemptionPercentage("50");
+        groupCheckoutService.setCapPoApproved(true);
         groupCheckoutService.setConfiguredCanonicalPolicyCode("REWARD_CHECKOUT_STANDARD");
     }
 
     @AfterEach
     void tearDown() {
         groupCheckoutService.setConfiguredMaxRedemptionPercentage(null);
+        groupCheckoutService.setCapPoApproved(false);
         groupCheckoutService.setConfiguredCanonicalPolicyCode(null);
     }
 

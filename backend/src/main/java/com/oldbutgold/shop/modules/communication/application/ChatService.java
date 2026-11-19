@@ -22,13 +22,18 @@ public class ChatService {
     private final InteractionAuditFacade audit;
     private final ChatRepository repository;private final OfferRepository offers;private final ConversationCatalogFacade catalog;
     private final ConversationCommerceFacade commerce;private final ConversationIdentityFacade identity;private final PlatformNotificationFacade notices;private final ConversationEvidenceFacade evidence;private final Clock clock;
+    private final TextModerator textModerator;
     public ChatService(ChatRepository repository,OfferRepository offers,ConversationCatalogFacade catalog,ConversationCommerceFacade commerce,
-      ConversationIdentityFacade identity,PlatformNotificationFacade notices,ConversationEvidenceFacade evidence,Clock clock,InteractionAuditFacade audit){this.repository=repository;this.offers=offers;this.catalog=catalog;this.commerce=commerce;this.identity=identity;this.notices=notices;this.evidence=evidence;this.clock=clock;this.audit=audit;}
+      ConversationIdentityFacade identity,PlatformNotificationFacade notices,ConversationEvidenceFacade evidence,Clock clock,InteractionAuditFacade audit,TextModerator textModerator){this.repository=repository;this.offers=offers;this.catalog=catalog;this.commerce=commerce;this.identity=identity;this.notices=notices;this.evidence=evidence;this.clock=clock;this.audit=audit;this.textModerator=textModerator;}
     public Thread owned(long actor,long id,boolean lock){identity.customer(actor);return repository.owned(actor,id,lock).orElseThrow(()->problem(404,"CONVERSATION_NOT_FOUND","Không có hội thoại trong phạm vi của bạn."));}
     public Product product(long id,boolean lock){return catalog.product(id,lock).orElseThrow(()->problem(404,"CHAT_PRODUCT_NOT_FOUND","Không tìm thấy thông tin sản phẩm."));}
     public void lockParties(Thread c){identity.lockPair(c.buyer(),c.seller());}
     public void requireSending(long actor,Thread c){
         identity.requireChat(actor);
+        Instant restrictedUntil = repository.getChatRestrictedUntil(actor);
+        if (restrictedUntil != null && restrictedUntil.isAfter(clock.instant())) {
+            throw problem(403, "CHAT_RESTRICTED", "Tài khoản của bạn đang bị tạm ngưng quyền gửi tin nhắn do vi phạm chính sách kiểm duyệt.");
+        }
         if(!"ACTIVE".equals(c.status()))throw problem(409,"CONVERSATION_CLOSED","Hội thoại chỉ có thể xem lịch sử.");
         if(repository.blocked(c.buyer(),c.seller())&&!commerce.openObligations(c.buyer(),c.seller(),c.product()))throw problem(403,"SELLER_BUYER_BLOCKED","Người bán đã chặn tương tác mới. Hồ sơ và nghĩa vụ cũ vẫn được giữ.");
     }
@@ -87,18 +92,69 @@ public class ChatService {
         Thread initial=owned(actor,id,false);lockParties(initial);Thread c=owned(actor,id,true);
         String text=request.text()==null?"":request.text().strip();if(text.isEmpty()||text.length()>2000)throw problem(400,"CHAT_TEXT_INVALID","Nội dung từ1 đến2000 ký tự.");
         var replay=repository.replay(id,request.clientId());
-        if(replay.isPresent()){var m=replay.get();if(m.sender()!=actor||!m.type().equals("TEXT")||!m.content().equals(text)||!Objects.equals(m.reply(),request.replyTo()))throw problem(409,"CHAT_CLIENT_ID_CONFLICT","Mã gửi đã dùng cho nội dung khác.");return message(m);}
+        if(replay.isPresent()){
+            var m=replay.get();
+            boolean contentMatch=m.content().equals(text)||"MASKED".equals(m.metadata().get("moderationStatus"));
+            if(m.sender()!=actor||!m.type().equals("TEXT")||!contentMatch||!Objects.equals(m.reply(),request.replyTo()))throw problem(409,"CHAT_CLIENT_ID_CONFLICT","Mã gửi đã dùng cho nội dung khác.");
+            return message(m);
+        }
         requireSending(actor,c);
         if(request.replyTo()!=null&&repository.message(request.replyTo()).filter(m->m.conversation()==id).isEmpty())throw problem(400,"CHAT_REPLY_INVALID","Tin được trả lời không thuộc hội thoại.");
-        long message=repository.append(id,actor,request.clientId(),"TEXT",text,request.replyTo(),null,null,null,null);
-        notifyMessage(c,actor,message,"Tin nhắn mới",text.length()>80?text.substring(0,80)+"…":text,"CHAT_MESSAGE");
+
+        var moderation=textModerator.moderate(id,actor,text);
+        if (moderation.isViolation() && "CRITICAL".equals(moderation.severityLevel())) {
+            Instant banUntil = clock.instant().plus(Duration.ofDays(90));
+            repository.setChatRestrictedUntil(actor, banUntil);
+            repository.incrementViolationScore(actor);
+            repository.logModeration(id, actor, text, moderation.maskedText(), moderation.violationType(), moderation.reason());
+            String contextJson = repository.getRecentContextJson(id, actor, text);
+            repository.createModerationReport(id, actor, null, moderation.violationType(), "CRITICAL", "PENDING", text, contextJson);
+            throw problem(403, "MESSAGE_BLOCKED_SECURITY", "Tin nhắn bị chặn do vi phạm nghiêm trọng an ninh thông tin và chính sách pháp luật O.G Shop.");
+        }
+
+        String storedText=text;
+        Map<String,Object> metadata=null;
+        if(moderation.isViolation()){
+            storedText=moderation.maskedText();
+            metadata=new HashMap<>();
+            metadata.put("moderationStatus","MASKED");
+            metadata.put("violationType",moderation.violationType());
+            metadata.put("rawContent",text);
+            repository.logModeration(id,actor,text,moderation.maskedText(),moderation.violationType(),moderation.reason());
+            repository.incrementViolationScore(actor);
+        }
+
+        long message=repository.append(id,actor,request.clientId(),"TEXT",storedText,request.replyTo(),null,null,metadata,null);
+        notifyMessage(c,actor,message,"Tin nhắn mới",storedText.length()>80?storedText.substring(0,80)+"…":storedText,"CHAT_MESSAGE");
+
+        if(moderation.isViolation()){
+            int newScore = repository.getViolationScore(actor);
+            boolean triggerKtv = "HIGH".equals(moderation.severityLevel()) || newScore >= 4;
+            if (triggerKtv) {
+                String contextJson = repository.getRecentContextJson(id, actor, text);
+                repository.createModerationReport(id, actor, null, message, moderation.violationType(),
+                    moderation.severityLevel() != null ? moderation.severityLevel() : "MEDIUM",
+                    "PENDING", text, contextJson);
+            }
+        }
+
         return message(repository.message(message).orElseThrow());
     }
-    public Message message(StoredMessage m){Media media=null;boolean attachment=Set.of("IMAGE","VIDEO").contains(m.type());boolean managed="CHAT_V31".equals(m.metadata().get("managedBy"));if(attachment){var data=m.metadata();boolean available=managed&&!"EXPIRED".equals(m.mediaStatus())&&(m.expires()==null||m.expires().isAfter(clock.instant())||retained(m));media=new Media(Objects.toString(data.get("mime"),m.type().equals("IMAGE")?"image/jpeg":"video/mp4"),((Number)data.getOrDefault("bytes",0)).longValue(),data.get("duration") instanceof Number n?n.doubleValue():null,available);}
-        return new Message(m.id(),m.sender(),m.type(),attachment&&!managed?"":m.content(),m.created(),m.reply(),m.offer(),media);
+    public Message message(StoredMessage m){
+        Media media=null;boolean attachment=Set.of("IMAGE","VIDEO").contains(m.type());boolean managed="CHAT_V31".equals(m.metadata().get("managedBy"));
+        if(attachment){var data=m.metadata();boolean available=managed&&!"EXPIRED".equals(m.mediaStatus())&&(m.expires()==null||m.expires().isAfter(clock.instant())||retained(m));media=new Media(Objects.toString(data.get("mime"),m.type().equals("IMAGE")?"image/jpeg":"video/mp4"),((Number)data.getOrDefault("bytes",0)).longValue(),data.get("duration") instanceof Number n?n.doubleValue():null,available);}
+        String moderationStatus=m.metadata()!=null?Objects.toString(m.metadata().get("moderationStatus"),null):null;
+        String violationType=m.metadata()!=null?Objects.toString(m.metadata().get("violationType"),null):null;
+        return new Message(m.id(),m.sender(),m.type(),attachment&&!managed?"":m.content(),m.created(),m.reply(),m.offer(),media,moderationStatus,violationType);
     }
     private boolean retained(StoredMessage message){Thread c=repository.thread(message.conversation()).orElseThrow();return commerce.retainMedia(c.buyer(),c.seller(),c.product())||evidence.retainsMessage(message.id());}
-    public void notifyMessage(Thread c,long actor,long message,String title,String body,String type){long peer=actor==c.buyer()?c.seller():c.buyer();notices.enqueue("chat-message:"+message,c.id(),List.of(new PlatformNotificationFacade.Notice(peer,type,title,body,PlatformNotificationFacade.Destination.CONVERSATION,c.id(),message)));}
+    public void notifyMessage(Thread c,long actor,long message,String title,String body,String type){
+        if ("CHAT_MESSAGE".equals(type) || "CHAT_MEDIA".equals(type)) {
+            return;
+        }
+        long peer=actor==c.buyer()?c.seller():c.buyer();
+        notices.enqueue("chat-message:"+message,c.id(),List.of(new PlatformNotificationFacade.Notice(peer,type,title,body,PlatformNotificationFacade.Destination.CONVERSATION,c.id(),message)));
+    }
     @Transactional public void read(long actor,long id,long message){owned(actor,id,true);repository.read(id,actor,message);}
     @Transactional(readOnly=true) public List<Block> blocks(long actor){if(!identity.customer(actor).seller())throw problem(403,"SELLER_REQUIRED","Chỉ người bán có danh sách chặn.");return repository.blocks(actor);}
     @Transactional(readOnly=true) public List<Map<String,Object>> searchBuyers(long actor,String query){if(!identity.customer(actor).seller())throw problem(403,"SELLER_REQUIRED","Chỉ người bán tìm người mua để quản lý chặn.");String q=query==null?"":query.strip();if(q.length()<2)return List.of();if(q.length()>100)throw problem(400,"CHAT_QUERY_INVALID","Từ khóa quá dài.");return repository.searchBuyers(actor,q);}

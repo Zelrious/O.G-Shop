@@ -4,6 +4,7 @@ import com.oldbutgold.shop.modules.identity.application.ProfileService;
 import com.oldbutgold.shop.modules.identity.application.ProfileAvatarService;
 import com.oldbutgold.shop.modules.identity.application.AvatarImage;
 import com.oldbutgold.shop.modules.identity.application.InvalidAvatarException;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -66,6 +67,46 @@ public class ProfileController {
     ) {
         long userId = extractUserId(jwt);
         profileService.changePassword(userId, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/bank/otp-challenge")
+    public ResponseEntity<ProfileDtos.BankOtpChallengeResponse> requestBankOtp(
+            @AuthenticationPrincipal Jwt jwt,
+            HttpServletRequest request
+    ) {
+        long userId = extractUserId(jwt);
+        String requester = request.getRemoteAddr();
+        return ResponseEntity.ok(profileService.issueBankChangeOtp(userId, requester));
+    }
+
+    @PostMapping("/phone/otp-challenge")
+    public ResponseEntity<ProfileDtos.PhoneOtpChallengeResponse> requestPhoneOtp(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(value = "newPhone", required = false) String newPhone,
+            HttpServletRequest request
+    ) {
+        long userId = extractUserId(jwt);
+        String requester = request.getRemoteAddr();
+        return ResponseEntity.ok(profileService.issuePhoneChangeOtp(userId, newPhone, requester));
+    }
+
+    @GetMapping("/phone/check-availability")
+    public ResponseEntity<ProfileService.PhoneAvailabilityResult> checkPhoneAvailability(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam("phoneNumber") String phoneNumber
+    ) {
+        long userId = extractUserId(jwt);
+        return ResponseEntity.ok(profileService.checkPhoneAvailability(userId, phoneNumber));
+    }
+
+    @PostMapping("/phone/verify")
+    public ResponseEntity<Void> verifyPhoneOtp(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody ProfileDtos.PhoneVerificationVerifyRequest request
+    ) {
+        long userId = extractUserId(jwt);
+        profileService.verifyPhoneOtp(userId, request.challengeId(), request.code());
         return ResponseEntity.noContent().build();
     }
 

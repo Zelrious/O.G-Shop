@@ -13,3 +13,5 @@ export * from './components/ForgotPasswordStepIndicator';
 export * from './components/OtpBoxes';
 export * from './components/GoogleSignInButton';
 export * from './components/AuthOtpForm';
+export * from './components/BankSelect';
+export * from './data/vietnameseBanks';

@@ -14,10 +14,13 @@ export interface BiometricScanResult {
   isMatch: boolean;
   distance: number;
   confidenceScore?: number;
+  thresholdUsed?: number;
   userInstruction?: string;
   capturedImageBase64: string;
   isSimulated: boolean;
   ocrData?: CccdOcrData;
+  frameStatus?: string;
+  directionalCue?: string;
 }
 
 export interface VerificationRecord {

@@ -4,3 +4,5 @@ export * from './components/ProfileInfoTab';
 export * from './components/AddressBookTab';
 export * from './components/SecurityTab';
 export * from './components/SellerBankTab';
+export * from './components/ChangePhoneModal';
+export * from './components/ChangeBankModal';

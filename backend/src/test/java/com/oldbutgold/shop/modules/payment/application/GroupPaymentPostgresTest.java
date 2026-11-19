@@ -273,6 +273,7 @@ class GroupPaymentPostgresTest {
                 """, UUID.randomUUID(), buyerId, policyId, adminId, "CMD_COIN_SEED_" + UUID.randomUUID());
 
         groupCheckoutService.setConfiguredMaxRedemptionPercentage("50");
+        groupCheckoutService.setCapPoApproved(true);
         groupCheckoutService.setConfiguredCanonicalPolicyCode("REWARD_CHECKOUT_STANDARD");
 
         try {
@@ -389,6 +390,7 @@ class GroupPaymentPostgresTest {
 
         } finally {
             groupCheckoutService.setConfiguredMaxRedemptionPercentage(null);
+            groupCheckoutService.setCapPoApproved(false);
             groupCheckoutService.setConfiguredCanonicalPolicyCode(null);
         }
     }
@@ -476,6 +478,7 @@ class GroupPaymentPostgresTest {
         CreatedProduct p = createUc83Product(sellerId, "Insufficient Coin Item", new BigDecimal("100000"), 5, true);
 
         groupCheckoutService.setConfiguredMaxRedemptionPercentage("50");
+        groupCheckoutService.setCapPoApproved(true);
         groupCheckoutService.setConfiguredCanonicalPolicyCode("REWARD_CHECKOUT_STANDARD");
 
         try {
@@ -560,6 +563,7 @@ class GroupPaymentPostgresTest {
                     .count()).isEqualTo(1);
         } finally {
             groupCheckoutService.setConfiguredMaxRedemptionPercentage(null);
+            groupCheckoutService.setCapPoApproved(false);
             groupCheckoutService.setConfiguredCanonicalPolicyCode(null);
         }
     }

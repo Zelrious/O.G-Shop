@@ -39,6 +39,14 @@ public class AuthService {
     @Transactional
     public UserEntity createVerifiedAccount(RegistrationDraft draft) {
         if (users.existsByEmail(draft.email())) throw new DuplicateEmailException();
+        if (draft.phoneNumber() != null && !draft.phoneNumber().isBlank()) {
+            String p = draft.phoneNumber().trim();
+            String local = p.startsWith("+84") ? "0" + p.substring(3) : p;
+            String intl = p.startsWith("0") ? "+84" + p.substring(1) : p;
+            if (users.existsByPhoneNumber(local) || users.existsByPhoneNumber(intl)) {
+                throw new DuplicatePhoneException();
+            }
+        }
         UserEntity user = new UserEntity(draft.email(), draft.passwordHash(), draft.fullName(),
                 draft.phoneNumber(), clock.instant());
         user.verifyRegistrationEmail(clock.instant());
@@ -80,10 +88,10 @@ public class AuthService {
         }
         Instant deadline = jwt.getExpiresAt();
         long remaining = deadline == null ? 0 : Duration.between(clock.instant(), deadline).getSeconds();
-        // Decoder clock tolerance must never extend the fixed session deadline.
+        // Decoder clock tolerance must never restore an already expired session.
         if (jwt.getIssuedAt() == null || remaining <= 0) throw unavailableSession();
         UserEntity user = currentUser(userId);
-        return new SessionResult(user, tokenService.issueAccessToken(user, jwt.getIssuedAt(), deadline), remaining);
+        return new SessionResult(user, tokenService.issueAccessToken(user), tokenService.accessTokenExpiresInSeconds());
     }
 
     @Transactional(readOnly = true)

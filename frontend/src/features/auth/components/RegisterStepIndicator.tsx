@@ -17,19 +17,26 @@ export const RegisterStepIndicator: React.FC<RegisterStepIndicatorProps> = ({
   const step1Completed = currentStep > 1;
   const step1Active = currentStep === 1;
 
-  // Step 2 (Seller): Hồ sơ người bán
+  // Step 2 (Seller): Địa chỉ lấy hàng
   const step2Completed = isSeller && currentStep > 2;
   const step2Active = isSeller && currentStep === 2;
 
-  // Final Step: Xác thực email (step 2 for buyer, step 3 for seller)
-  const isFinalStepActive = (!isSeller && currentStep === 2) || (isSeller && currentStep === 3);
+  // Step 3 (Seller): Tài khoản ngân hàng
+  const step3Completed = isSeller && currentStep > 3;
+  const step3Active = isSeller && currentStep === 3;
+
+  // Final Step: Xác thực email (step 2 for buyer, step 4 for seller)
+  const isFinalStepActive = (!isSeller && currentStep === 2) || (isSeller && currentStep === 4);
 
   return (
     <nav className="og-fluid-stepper" aria-label="Tiến trình đăng ký tài khoản">
-      <div className={`og-fluid-stepper-track ${isSeller ? 'og-stepper--seller' : 'og-stepper--buyer'}`}>
+      <div
+        key={isSeller ? 'stepper-seller' : 'stepper-buyer'}
+        className={`og-fluid-stepper-track ${isSeller ? 'og-stepper--seller' : 'og-stepper--buyer'}`}
+      >
         {/* STEP 1: Tài khoản */}
         <div
-          className={`og-step-node og-step-node--first ${step1Active ? 'og-step-node--active' : ''} ${
+          className={`og-step-node ${step1Active ? 'og-step-node--active' : ''} ${
             step1Completed ? 'og-step-node--completed og-step-node--clickable' : ''
           }`}
           aria-current={step1Active ? 'step' : undefined}
@@ -48,63 +55,95 @@ export const RegisterStepIndicator: React.FC<RegisterStepIndicatorProps> = ({
           </button>
         </div>
 
-        {/* CONNECTOR 1: luôn nối từ Bước 1 sang bước tiếp theo */}
+        {/* CONNECTOR 1: Nối Bước 1 sang Bước tiếp theo */}
         <div
-          className={`og-step-line og-step-line--1 ${step1Completed ? 'og-step-line--completed' : ''}`}
+          className={`og-step-line ${step1Completed ? 'og-step-line--completed' : ''}`}
           aria-hidden="true"
         >
           <div className="og-step-line-fill" />
         </div>
 
-        {/* MIDDLE SECTION (SELLER ONLY): Hồ sơ người bán + Connector 2 */}
-        <div
-          className={`og-step-middle-slot ${isSeller ? 'og-step-middle-slot--expanded' : ''}`}
-          aria-hidden={!isSeller}
-        >
-          <div
-            className={`og-step-node og-step-node--seller ${step2Active ? 'og-step-node--active' : ''} ${
-              step2Completed ? 'og-step-node--completed og-step-node--clickable' : ''
-            }`}
-            aria-current={step2Active ? 'step' : undefined}
-          >
-            <button
-              type="button"
-              className="og-step-node-btn"
-              onClick={() => {
-                if (step2Completed) onStepClick?.(2);
-              }}
-              disabled={!step2Completed || !isSeller}
-              tabIndex={isSeller ? 0 : -1}
-              aria-label={`Bước 2: Hồ sơ người bán ${
-                step2Completed ? '(Đã hoàn thành)' : step2Active ? '(Đang thực hiện)' : ''
+        {/* CÁC BƯỚC DÀNH CHO NGƯỜI BÁN (ĐỊA CHỈ & NGÂN HÀNG) */}
+        {isSeller && (
+          <>
+            {/* STEP 2 (Seller): Địa chỉ lấy hàng */}
+            <div
+              className={`og-step-node ${step2Active ? 'og-step-node--active' : ''} ${
+                step2Completed ? 'og-step-node--completed og-step-node--clickable' : ''
               }`}
+              aria-current={step2Active ? 'step' : undefined}
             >
-              <span className="og-step-circle">{step2Completed ? '✓' : '2'}</span>
-              <span className="og-step-title">Hồ sơ người bán</span>
-            </button>
-          </div>
+              <button
+                type="button"
+                className="og-step-node-btn"
+                onClick={() => {
+                  if (step2Completed) onStepClick?.(2);
+                }}
+                disabled={!step2Completed}
+                tabIndex={0}
+                aria-label={`Bước 2: Địa chỉ lấy hàng ${
+                  step2Completed ? '(Đã hoàn thành)' : step2Active ? '(Đang thực hiện)' : ''
+                }`}
+              >
+                <span className="og-step-circle">{step2Completed ? '✓' : '2'}</span>
+                <span className="og-step-title">Địa chỉ</span>
+              </button>
+            </div>
 
-          {/* CONNECTOR 2: nối từ Hồ sơ người bán sang Xác thực email */}
-          <div
-            className={`og-step-line og-step-line--2 ${step2Completed ? 'og-step-line--completed' : ''}`}
-            aria-hidden="true"
-          >
-            <div className="og-step-line-fill" />
-          </div>
-        </div>
+            {/* CONNECTOR 2: Nối Địa chỉ sang Ngân hàng */}
+            <div
+              className={`og-step-line ${step2Completed ? 'og-step-line--completed' : ''}`}
+              aria-hidden="true"
+            >
+              <div className="og-step-line-fill" />
+            </div>
 
-        {/* FINAL STEP: Xác thực email (trượt sang phải khi chọn Người bán, số chuyển 2 -> 3) */}
+            {/* STEP 3 (Seller): Tài khoản ngân hàng */}
+            <div
+              className={`og-step-node ${step3Active ? 'og-step-node--active' : ''} ${
+                step3Completed ? 'og-step-node--completed og-step-node--clickable' : ''
+              }`}
+              aria-current={step3Active ? 'step' : undefined}
+            >
+              <button
+                type="button"
+                className="og-step-node-btn"
+                onClick={() => {
+                  if (step3Completed) onStepClick?.(3);
+                }}
+                disabled={!step3Completed}
+                tabIndex={0}
+                aria-label={`Bước 3: Tài khoản ngân hàng ${
+                  step3Completed ? '(Đã hoàn thành)' : step3Active ? '(Đang thực hiện)' : ''
+                }`}
+              >
+                <span className="og-step-circle">{step3Completed ? '✓' : '3'}</span>
+                <span className="og-step-title">Ngân hàng</span>
+              </button>
+            </div>
+
+            {/* CONNECTOR 3: Nối Ngân hàng sang Xác thực */}
+            <div
+              className={`og-step-line ${step3Completed ? 'og-step-line--completed' : ''}`}
+              aria-hidden="true"
+            >
+              <div className="og-step-line-fill" />
+            </div>
+          </>
+        )}
+
+        {/* FINAL STEP: Xác thực */}
         <div
           className={`og-step-node og-step-node--final ${isFinalStepActive ? 'og-step-node--active' : ''}`}
           aria-current={isFinalStepActive ? 'step' : undefined}
         >
           <div className="og-step-node-btn" style={{ cursor: 'default' }}>
             <span className="og-step-circle">
-              <span key={isSeller ? 'seller-step-3' : 'buyer-step-2'} className="og-step-digit-anim">
-                {isSeller ? '3' : '2'}
-              </span>
+              {isSeller ? '4' : '2'}
             </span>
-            <span className="og-step-title">Xác thực email</span>
+            <span className="og-step-title">
+              {isSeller ? 'Xác thực' : 'Xác thực email'}
+            </span>
           </div>
         </div>
       </div>

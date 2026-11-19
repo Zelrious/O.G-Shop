@@ -9,6 +9,7 @@ export interface UserPrincipal {
   roles: UserRole[];
   createdAt: string;
   sellerApprovalRequired?: boolean;
+  verifiedSeller?: boolean;
 }
 
 export interface TokenPair {

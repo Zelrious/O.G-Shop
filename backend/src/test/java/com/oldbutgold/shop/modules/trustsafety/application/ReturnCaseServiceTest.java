@@ -4241,8 +4241,8 @@ class ReturnCaseServiceTest {
     // =========================================================================
 
     @Test
-    @DisplayName("D-08 / PO APPROVED: ktvDecideRound2 thành công khi có Request PENDING -> Request chuyển sang CANCELLED")
-    void ktvDecideRound2_D08_whenPendingRequestExists_cancelsRequestInSameTx() {
+    @DisplayName("PO-CHOICE-3: ktvDecideRound2 chặn 409 EVIDENCE_REQUEST_IN_PROGRESS khi Request PENDING vẫn còn hạn 48h")
+    void ktvDecideRound2_POChoice3_whenActiveUnexpiredPendingRequestExists_throws409() {
         Long caseId = 501L;
         Long ktvId = 300L;
         CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "Detail", "CMD_CASE");
@@ -4265,12 +4265,7 @@ class ReturnCaseServiceTest {
                 .thenReturn(Boolean.TRUE);
         when(caseDecisionRepository.findByCommandKey(anyString())).thenReturn(Optional.empty());
 
-        CaseDecisionEntity savedDecision = new CaseDecisionEntity(round2.getId(), ktvId, CaseDecisionEntity.ACTOR_USER,
-                CaseDecisionEntity.OUTCOME_FULL_GOODS_REFUND, true, new BigDecimal("250000.00"), "Lý do hợp lệ", "CMD_DEC_01");
-        savedDecision.setId(991L);
-        when(caseDecisionRepository.saveAndFlush(any())).thenReturn(savedDecision);
-
-        // Setup active PENDING evidence request
+        // Setup active unexpired PENDING evidence request
         CaseEvidenceRequestEntity pendingReq = new CaseEvidenceRequestEntity();
         pendingReq.setId(UUID.randomUUID());
         pendingReq.setCaseId(caseId);
@@ -4280,27 +4275,27 @@ class ReturnCaseServiceTest {
         pendingReq.setIssuedAt(fixedNow.minus(Duration.ofHours(10)));
         pendingReq.setDeadlineAt(fixedNow.plus(Duration.ofHours(38)));
         pendingReq.setCommandKey("REQ-CMD-001");
-        assertThat(pendingReq.getStatus()).isEqualTo(CaseEvidenceRequestEntity.STATUS_PENDING);
 
-        when(caseEvidenceRequestRepository.findByCaseIdOrderByIssuedAtAsc(caseId))
-                .thenReturn(List.of(pendingReq));
+        when(caseEvidenceRequestRepository.findByCaseIdAndStatus(caseId, CaseEvidenceRequestEntity.STATUS_PENDING))
+                .thenReturn(Optional.of(pendingReq));
 
         ReturnCaseDtos.KtvRound2DecisionRequest decReq = new ReturnCaseDtos.KtvRound2DecisionRequest(
                 CaseDecisionEntity.OUTCOME_FULL_GOODS_REFUND,
-                "Đã kiểm tra bằng chứng đầy đủ, duyệt hoàn tiền",
+                "Thử phán quyết khi request còn hiệu lực",
                 "CMD_DEC_01"
         );
 
-        ReturnCaseDtos.ReturnCaseDetailResponse resp = service.ktvDecideRound2(ktvId, caseId, decReq);
+        assertThatThrownBy(() -> service.ktvDecideRound2(ktvId, caseId, decReq))
+                .isInstanceOf(TrustSafetyBusinessException.class)
+                .satisfies(ex -> {
+                    TrustSafetyBusinessException tsEx = (TrustSafetyBusinessException) ex;
+                    assertThat(tsEx.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(tsEx.getCode()).isEqualTo("EVIDENCE_REQUEST_IN_PROGRESS");
+                });
 
-        assertThat(resp).isNotNull();
-        // D-08 Assertion: Request MUST be CANCELLED and updated
-        assertThat(pendingReq.getStatus()).isEqualTo(CaseEvidenceRequestEntity.STATUS_CANCELLED);
-        assertThat(pendingReq.getUpdatedAt()).isEqualTo(fixedNow);
-        verify(caseEvidenceRequestRepository).save(pendingReq);
-        verify(caseEvidenceRequestRepository).flush();
-        verify(caseDecisionRepository).saveAndFlush(any());
-        verify(settlementPort).requestSettlement(eq(orderId), eq(caseId), eq(991L), eq(CaseDecisionEntity.OUTCOME_FULL_GOODS_REFUND), eq("CMD_DEC_01"));
+        assertThat(pendingReq.getStatus()).isEqualTo(CaseEvidenceRequestEntity.STATUS_PENDING);
+        verify(caseDecisionRepository, never()).saveAndFlush(any());
+        verify(settlementPort, never()).requestSettlement(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -4366,6 +4361,8 @@ class ReturnCaseServiceTest {
         alreadyCancelledReq.setCommandKey("CMD-3");
         alreadyCancelledReq.setStatus(CaseEvidenceRequestEntity.STATUS_CANCELLED);
 
+        when(caseEvidenceRequestRepository.findByCaseIdAndStatus(caseId, CaseEvidenceRequestEntity.STATUS_PENDING))
+                .thenReturn(Optional.empty());
         when(caseEvidenceRequestRepository.findByCaseIdOrderByIssuedAtAsc(caseId))
                 .thenReturn(List.of(fulfilledReq, expiredReq, alreadyCancelledReq));
 
@@ -4422,8 +4419,8 @@ class ReturnCaseServiceTest {
         req1.setRoundId(round2.getId());
         req1.setKtvId(ktvId);
         req1.setReason("Req 1");
-        req1.setIssuedAt(fixedNow.minus(Duration.ofHours(10)));
-        req1.setDeadlineAt(fixedNow.plus(Duration.ofHours(38)));
+        req1.setIssuedAt(fixedNow.minus(Duration.ofHours(60)));
+        req1.setDeadlineAt(fixedNow.minus(Duration.ofHours(12)));
         req1.setCommandKey("CMD-1");
         req1.setStatus(CaseEvidenceRequestEntity.STATUS_PENDING);
 
@@ -4433,11 +4430,13 @@ class ReturnCaseServiceTest {
         req2.setRoundId(round2.getId());
         req2.setKtvId(ktvId);
         req2.setReason("Req 2");
-        req2.setIssuedAt(fixedNow.minus(Duration.ofHours(5)));
-        req2.setDeadlineAt(fixedNow.plus(Duration.ofHours(43)));
+        req2.setIssuedAt(fixedNow.minus(Duration.ofHours(55)));
+        req2.setDeadlineAt(fixedNow.minus(Duration.ofHours(7)));
         req2.setCommandKey("CMD-2");
         req2.setStatus(CaseEvidenceRequestEntity.STATUS_PENDING);
 
+        when(caseEvidenceRequestRepository.findByCaseIdAndStatus(caseId, CaseEvidenceRequestEntity.STATUS_PENDING))
+                .thenReturn(Optional.of(req1));
         when(caseEvidenceRequestRepository.findByCaseIdOrderByIssuedAtAsc(caseId))
                 .thenReturn(List.of(req1, req2));
 
@@ -4499,6 +4498,8 @@ class ReturnCaseServiceTest {
         overduePendingReq.setCommandKey("CMD-OVERDUE");
         overduePendingReq.setStatus(CaseEvidenceRequestEntity.STATUS_PENDING);
 
+        when(caseEvidenceRequestRepository.findByCaseIdAndStatus(caseId, CaseEvidenceRequestEntity.STATUS_PENDING))
+                .thenReturn(Optional.of(overduePendingReq));
         when(caseEvidenceRequestRepository.findByCaseIdOrderByIssuedAtAsc(caseId))
                 .thenReturn(List.of(overduePendingReq));
 

@@ -1,5 +1,5 @@
 import { Icon } from '../shared/components/Icon/Icon';
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../shared/context';
 
@@ -7,13 +7,83 @@ const CONDITION_MAP: Record<string, string> = {
   LIKE_NEW: 'Như mới',
   GOOD: 'Khá tốt',
   FAIR: 'Chấp nhận được',
-  POOR: 'Kém',
+  POOR: 'Cũ',
   VINTAGE: 'Đồ cổ',
 };
 
 export const CartPage: React.FC = () => {
-  const { items, totalCount, totalAmount, removeFromCart, clearCart } = useCart();
+  const { items, totalCount, removeFromCart, clearCart } = useCart();
   const navigate = useNavigate();
+
+  // State: các sản phẩm được chọn (mặc định chọn tất cả)
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<number>>(() => new Set(items.map((i) => i.productId)));
+  const [showMultiSellerNotice, setShowMultiSellerNotice] = useState(false);
+
+  // Đồng bộ khi số lượng items thay đổi
+  useEffect(() => {
+    setSelectedProductIds((prev) => {
+      const validIds = new Set<number>();
+      for (const item of items) {
+        if (prev.has(item.productId)) {
+          validIds.add(item.productId);
+        } else if (prev.size === 0) {
+          validIds.add(item.productId);
+        }
+      }
+      return validIds.size > 0 ? validIds : new Set(items.map((i) => i.productId));
+    });
+  }, [items]);
+
+  const selectedItems = useMemo(
+    () => items.filter((item) => selectedProductIds.has(item.productId)),
+    [items, selectedProductIds]
+  );
+
+  const selectedCount = selectedItems.length;
+  const selectedAmount = useMemo(
+    () => selectedItems.reduce((sum, item) => sum + (item.price || 0), 0),
+    [selectedItems]
+  );
+
+  const isAllSelected = totalCount > 0 && selectedCount === totalCount;
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedProductIds(new Set());
+    } else {
+      setSelectedProductIds(new Set(items.map((i) => i.productId)));
+    }
+  };
+
+  const handleToggleItem = (productId: number) => {
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedCount === 0) return;
+    if (window.confirm(`Bạn có chắc muốn xóa ${selectedCount} món đồ đã chọn khỏi giỏ hàng?`)) {
+      selectedItems.forEach((i) => removeFromCart(i.productId));
+      setSelectedProductIds(new Set());
+    }
+  };
+
+  const handleCheckoutSelected = () => {
+    if (selectedCount === 0) return;
+    if (selectedCount === 1) {
+      navigate(`/checkout?productId=${selectedItems[0].productId}`);
+    } else {
+      // Khi chọn nhiều món khác nhau, thông báo cho người dùng
+      setShowMultiSellerNotice(true);
+    }
+  };
 
   const formatPrice = (price: number) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
@@ -128,6 +198,49 @@ export const CartPage: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 340px', gap: '24px', alignItems: 'start' }}>
             {/* Items Column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Select All & Batch Actions Bar */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 16px',
+                  background: 'var(--og-color-surface)',
+                  borderRadius: 'var(--og-radius-md)',
+                  border: '1px solid var(--og-color-border)',
+                }}
+              >
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.92rem', fontWeight: 600, color: 'var(--og-color-text-primary)' }}>
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={handleToggleSelectAll}
+                    style={{ width: '18px', height: '18px', accentColor: 'var(--og-color-primary)', cursor: 'pointer' }}
+                  />
+                  <span>Chọn tất cả ({totalCount} món)</span>
+                </label>
+
+                {selectedCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteSelected}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#ef4444',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <span>Xóa các món đã chọn ({selectedCount})</span>
+                  </button>
+                )}
+              </div>
+
               {items.map((item) => (
                 <div
                   key={item.productId}
@@ -138,10 +251,24 @@ export const CartPage: React.FC = () => {
                     padding: '16px',
                     background: 'var(--og-color-surface)',
                     borderRadius: 'var(--og-radius-md)',
-                    border: '1px solid var(--og-color-border)',
+                    border: selectedProductIds.has(item.productId)
+                      ? '1px solid var(--og-color-primary)'
+                      : '1px solid var(--og-color-border)',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                    transition: 'border-color 0.15s ease',
                   }}
                 >
+                  {/* Item Selection Checkbox */}
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedProductIds.has(item.productId)}
+                      onChange={() => handleToggleItem(item.productId)}
+                      aria-label={`Chọn sản phẩm ${item.title}`}
+                      style={{ width: '18px', height: '18px', accentColor: 'var(--og-color-primary)', cursor: 'pointer' }}
+                    />
+                  </label>
+
                   {/* Thumbnail */}
                   <Link
                     to={`/products/${item.productId}`}
@@ -282,8 +409,10 @@ export const CartPage: React.FC = () => {
               </h2>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '0.9rem', color: 'var(--og-color-text-secondary)' }}>
-                <span>Tổng số lượng:</span>
-                <span style={{ fontWeight: 600, color: 'var(--og-color-text-primary)' }}>{totalCount} món đồ</span>
+                <span>Đã chọn:</span>
+                <span style={{ fontWeight: 700, color: selectedCount > 0 ? 'var(--og-color-primary)' : 'var(--og-color-text-muted)' }}>
+                  {selectedCount} / {totalCount} món đồ
+                </span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', fontSize: '0.9rem', color: 'var(--og-color-text-secondary)' }}>
@@ -303,13 +432,38 @@ export const CartPage: React.FC = () => {
               >
                 <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--og-color-text-primary)' }}>Tổng tiền tạm tính:</span>
                 <span style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--og-color-primary)' }}>
-                  {formatPrice(totalAmount)}
+                  {formatPrice(selectedAmount)}
                 </span>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <button
+                  type="button"
+                  className="og-button og-button--primary"
+                  disabled={selectedCount === 0}
+                  onClick={handleCheckoutSelected}
+                  style={{
+                    width: '100%',
+                    height: '46px',
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: selectedCount > 0 ? '0 4px 12px rgba(0,0,0,0.15)' : 'none',
+                    cursor: selectedCount > 0 ? 'pointer' : 'not-allowed',
+                    opacity: selectedCount > 0 ? 1 : 0.6,
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                  </svg>
+                  <span>Mua hàng ({selectedCount} món đã chọn)</span>
+                </button>
+
                 <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--og-color-text-muted)', lineHeight: 1.4 }}>
-                   Lưu ý: Do mỗi món đồ cũ thuộc một người bán khác nhau, bạn sẽ tiến hành thanh toán từng đơn hàng riêng biệt.
+                   Lưu ý: Do mỗi món đồ cũ thuộc một người bán độc lập, bạn sẽ tiến hành thanh toán từng đơn hàng riêng biệt.
                 </p>
                 <Link
                   to="/marketplace"
@@ -319,6 +473,84 @@ export const CartPage: React.FC = () => {
                   Mua thêm đồ khác
                 </Link>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Multi-Seller Sequential Checkout Notice Modal */}
+      {showMultiSellerNotice && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10000,
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--og-color-surface)',
+              borderRadius: '16px',
+              maxWidth: '480px',
+              width: '100%',
+              padding: '24px',
+              border: '1px solid var(--og-color-border)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+            }}
+          >
+            <h3 style={{ margin: '0 0 10px', fontSize: '1.2rem', fontWeight: 700, color: 'var(--og-color-text-primary)' }}>
+              Thanh toán {selectedCount} món đồ đã chọn
+            </h3>
+            <p style={{ fontSize: '0.92rem', color: 'var(--og-color-text-secondary)', lineHeight: 1.5, margin: '0 0 16px' }}>
+              Do mỗi món đồ cũ thuộc một người bán độc lập (với địa chỉ kho và phí giao hàng riêng), hệ thống sẽ mở thanh toán tuần tự cho từng món đồ.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px', maxHeight: '200px', overflowY: 'auto' }}>
+              {selectedItems.map((item, idx) => (
+                <div
+                  key={item.productId}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--og-color-surface-subtle)',
+                    fontSize: '0.88rem',
+                  }}
+                >
+                  <span style={{ fontWeight: 600, color: 'var(--og-color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '280px' }}>
+                    {idx + 1}. {item.title}
+                  </span>
+                  <span style={{ fontWeight: 700, color: 'var(--og-color-primary)', flexShrink: 0 }}>
+                    {formatPrice(item.price)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="og-button og-button--outline og-button--sm"
+                onClick={() => setShowMultiSellerNotice(false)}
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                className="og-button og-button--primary og-button--sm"
+                onClick={() => {
+                  setShowMultiSellerNotice(false);
+                  navigate(`/checkout?productId=${selectedItems[0].productId}`);
+                }}
+              >
+                Tiến hành mua món 1 →
+              </button>
             </div>
           </div>
         </div>

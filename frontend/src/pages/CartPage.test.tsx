@@ -54,4 +54,47 @@ describe('CartPage Component (Requirement 5)', () => {
     // Cart is now empty
     expect(screen.getByText('Giỏ hàng của bạn đang trống')).toBeInTheDocument();
   });
+
+  it('supports selecting individual items and batch selection', () => {
+    const mockItems = [
+      {
+        productId: 101,
+        title: 'Áo khoác da vintage',
+        price: 500000,
+        condition: 'LIKE_NEW',
+        sellerName: 'Nguyễn Văn A',
+        location: 'Hà Nội',
+        addedAt: new Date().toISOString(),
+      },
+      {
+        productId: 102,
+        title: 'Bàn phím cơ cũ',
+        price: 300000,
+        condition: 'GOOD',
+        sellerName: 'Trần Văn B',
+        location: 'Đà Nẵng',
+        addedAt: new Date().toISOString(),
+      },
+    ];
+    localStorage.setItem('og_cart_items', JSON.stringify(mockItems));
+
+    render(
+      <MemoryRouter>
+        <CartProvider>
+          <CartPage />
+        </CartProvider>
+      </MemoryRouter>
+    );
+
+    // Initial state: all selected (2 items)
+    expect(screen.getByText(/Chọn tất cả \(2 món\)/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mua hàng \(2 món đã chọn\)/i })).toBeInTheDocument();
+
+    // Uncheck first item
+    const itemCheckbox = screen.getByLabelText(/Chọn sản phẩm Áo khoác da vintage/i);
+    fireEvent.click(itemCheckbox);
+
+    // Now 1 item selected
+    expect(screen.getByRole('button', { name: /Mua hàng \(1 món đã chọn\)/i })).toBeInTheDocument();
+  });
 });

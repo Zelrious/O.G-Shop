@@ -17,7 +17,7 @@ spring:
     deserialization:
       fail-on-unknown-properties: true
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:54432/og_shop}
+    url: ${DB_URL:jdbc:postgresql://localhost:55432/og_shop}
     username: ${DB_USERNAME:og_shop}
     password: ${DB_PASSWORD:}
   jpa:
@@ -54,16 +54,16 @@ app:
     cleanup-enabled: true
   auth:
     jwt-signing-key: ${JWT_SIGNING_KEY:replace-with-at-least-32-random-bytes}
-    access-token-ttl: ${AUTH_ACCESS_TOKEN_TTL:PT15M}
+    access-token-ttl: ${AUTH_ACCESS_TOKEN_TTL:PT2H}
     frontend-origin: ${APP_FRONTEND_ORIGIN:http://localhost:5173}
     session-cookie-name: ${AUTH_SESSION_COOKIE_NAME:og_access}
     session-cookie-secure: ${AUTH_SESSION_COOKIE_SECURE:false}
     session-cookie-path: ${AUTH_SESSION_COOKIE_PATH:/api/v1/auth}
   ekyc:
     base-url: ${EKYC_SERVICE_URL:http://localhost:8001}
-    internal-token: ${EKYC_INTERNAL_TOKEN:replace-with-a-long-random-internal-token}
-    connect-timeout: ${EKYC_CONNECT_TIMEOUT:PT3S}
-    read-timeout: ${EKYC_READ_TIMEOUT:PT60S}
+    internal-token: ${EKYC_INTERNAL_TOKEN:ogshop_ekyc_internal_secret_token_secure_random_12345}
+    connect-timeout: ${EKYC_CONNECT_TIMEOUT:PT5S}
+    read-timeout: ${EKYC_READ_TIMEOUT:PT120S}
   cloudinary:
     cloud-name: ${CLOUDINARY_CLOUD_NAME:}
     api-key: ${CLOUDINARY_API_KEY:}

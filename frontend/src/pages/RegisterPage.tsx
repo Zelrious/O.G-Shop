@@ -2,7 +2,7 @@ import { Icon } from '../shared/components/Icon/Icon';
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import type { GoogleRegistration } from '../features/auth/types';
-import { RegisterForm, RegisterVisualPanel } from '../features/auth';
+import { RegisterForm } from '../features/auth';
 
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
@@ -11,28 +11,28 @@ export const RegisterPage: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [role, setRole] = useState<'BUYER' | 'SELLER'>('BUYER');
 
-  const isSellerStep = role === 'SELLER' && currentStep === 2;
-  const isOtpStep = (role === 'BUYER' && currentStep === 2) || (role === 'SELLER' && currentStep === 3);
+  const isAddressStep = role === 'SELLER' && currentStep === 2;
+  const isBankStep = role === 'SELLER' && currentStep === 3;
+  const isOtpStep = (role === 'BUYER' && currentStep === 2) || (role === 'SELLER' && currentStep === 4);
 
   const getPageTitle = () => {
     if (isOtpStep) return 'Xác thực địa chỉ email';
-    if (isSellerStep) return 'Thiết lập thông tin người bán';
+    if (isBankStep) return 'Thiết lập tài khoản ngân hàng';
+    if (isAddressStep) return 'Thiết lập địa chỉ lấy hàng';
     return 'Tạo tài khoản O.G Shop';
   };
 
   const getPageSubtitle = () => {
     if (isOtpStep) return 'Nhập mã xác thực 6 chữ số để kích hoạt tài khoản của bạn.';
-    if (isSellerStep) return 'Hoàn thiện thông tin để O.G Shop có thể hỗ trợ giao hàng và thanh toán cho gian hàng của bạn.';
+    if (isBankStep) return 'Nhập tài khoản ngân hàng để nhận tiền bán hàng an toàn từ O.G Shop Escrow.';
+    if (isAddressStep) return 'Cung cấp địa chỉ lấy hàng để bưu tá (GHN) đến nhận món đồ cần giao.';
     return 'Tham gia cộng đồng mua bán đồ cũ an toàn và minh bạch.';
   };
 
   return (
-    <div className="og-register-split-container">
-      {/* LEFT VISUAL STORYTELLING PANEL */}
-      <RegisterVisualPanel accountType={role} step={currentStep} />
-
-      {/* RIGHT FUNCTIONAL FORM PANEL */}
-      <div className="og-register-form-panel">
+    <div className="og-register-page-container">
+      {/* CENTERED CARD */}
+      <div className="og-register-glass-card">
         <div className="og-form-panel-header">
           <div className="og-form-panel-top-row">
             <div className="og-form-panel-title-group">

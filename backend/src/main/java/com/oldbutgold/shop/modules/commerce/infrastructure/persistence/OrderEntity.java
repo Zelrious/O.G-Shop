@@ -417,11 +417,33 @@ public class OrderEntity {
         if (STATUS_COMPLETED.equals(this.status)) {
             return; // idempotent
         }
-        if (!STATUS_DELIVERED.equals(this.status)) {
-            throw new IllegalStateException("Chỉ có thể hoàn thành đơn hàng khi đang ở trạng thái DELIVERED. Trạng thái hiện tại: " + this.status);
+        if (!STATUS_DELIVERED.equals(this.status) && !STATUS_DISPUTED.equals(this.status)) {
+            throw new IllegalStateException("Chỉ có thể hoàn thành đơn hàng khi đang ở trạng thái DELIVERED hoặc DISPUTED. Trạng thái hiện tại: " + this.status);
         }
         this.status = STATUS_COMPLETED;
         this.completedAt = now;
+        this.updatedAt = now;
+    }
+
+    public void markDisputed(Instant now) {
+        if (STATUS_DISPUTED.equals(this.status)) {
+            return; // idempotent
+        }
+        if (!STATUS_DELIVERED.equals(this.status) && !STATUS_SHIPPED.equals(this.status)) {
+            throw new IllegalStateException("Chỉ có thể khiếu nại tranh chấp khi đơn hàng đang ở trạng thái SHIPPED hoặc DELIVERED. Trạng thái hiện tại: " + this.status);
+        }
+        this.status = STATUS_DISPUTED;
+        this.updatedAt = now;
+    }
+
+    public void markRefunded(Instant now) {
+        if (STATUS_REFUNDED.equals(this.status)) {
+            return; // idempotent
+        }
+        if (!STATUS_DISPUTED.equals(this.status) && !STATUS_DELIVERED.equals(this.status)) {
+            throw new IllegalStateException("Chỉ có thể chuyển sang REFUNDED khi đơn hàng đang ở trạng thái DISPUTED hoặc DELIVERED. Trạng thái hiện tại: " + this.status);
+        }
+        this.status = STATUS_REFUNDED;
         this.updatedAt = now;
     }
 }

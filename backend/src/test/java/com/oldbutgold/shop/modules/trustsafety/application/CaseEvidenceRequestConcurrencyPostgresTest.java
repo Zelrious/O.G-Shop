@@ -832,12 +832,15 @@ class CaseEvidenceRequestConcurrencyPostgresTest {
                 decCmdKey
         );
 
+        byte[] imgContent = "image test content for scenario e concurrency".getBytes(StandardCharsets.UTF_8);
+        String imgDigest = sha256Hex(imgContent);
         byte[] vidContent = "video test content for scenario e concurrency".getBytes(StandardCharsets.UTF_8);
         String vidDigest = sha256Hex(vidContent);
         String resubCmdKey = "CMD_RESUB_SCENARIO_E_" + UUID.randomUUID();
         ReturnCaseDtos.SellerDamageExemptionRequest resubReq = new ReturnCaseDtos.SellerDamageExemptionRequest(
-                "Seller giải trình và cung cấp video",
+                "Seller giải trình và cung cấp ảnh và video",
                 List.of(
+                        new ReturnCaseDtos.EvidenceItemDto("IMAGE", "evidence/box_front.jpg", "Ảnh kiện hàng", imgDigest, 2048L, null),
                         new ReturnCaseDtos.EvidenceItemDto("VIDEO", "evidence/box_open.mp4", "Video mở gói", vidDigest, 10485760L, 15)
                 ),
                 resubCmdKey,
@@ -872,19 +875,20 @@ class CaseEvidenceRequestConcurrencyPostgresTest {
         fDecision.get(15, TimeUnit.SECONDS);
         fResub.get(15, TimeUnit.SECONDS);
 
-        // 4. Assert: Không bị deadlock (cả 2 bên không ném lỗi 40P01 deadlock hay 55P03 lock timeout)
+        // 4. Assert: Không bị deadlock (40P01 / 55P03) và hành vi đúng theo PO-CHOICE-3
+        assertThat(resubErr.get()).as("Seller resubmission must succeed cleanly without deadlock").isNull();
         if (decisionErr.get() != null) {
             assertThat(decisionErr.get().getMessage()).doesNotContain("deadlock").doesNotContain("lock timeout");
-        }
-        if (resubErr.get() != null) {
-            assertThat(resubErr.get().getMessage()).doesNotContain("deadlock").doesNotContain("lock timeout");
+            assertThat(decisionErr.get()).isInstanceOf(TrustSafetyBusinessException.class);
+            assertThat(((TrustSafetyBusinessException) decisionErr.get()).getCode()).isEqualTo("EVIDENCE_REQUEST_IN_PROGRESS");
         }
 
-        // 5. Kiểm tra tính toàn vẹn trạng thái trong PostgreSQL
+        // 5. Kiểm tra tính toàn vẹn trạng thái trong PostgreSQL:
+        // Dù KTV chạy trước (bị PO-CHOICE-3 chặn 409) hay Seller chạy trước (FULFILLED rồi KTV quyết định), request đều FULFILLED và evidence submission 2 được lưu
         String finalStatus = jdbcTemplate.queryForObject(
                 "SELECT status FROM og_compat.case_evidence_requests WHERE request_id = ?",
                 String.class, requestId);
-        assertThat(finalStatus).isIn("CANCELLED", "FULFILLED");
+        assertThat(finalStatus).isEqualTo("FULFILLED");
 
         // Case phải có quyết định nếu decision thành công
         if (decisionResult.get() != null) {
@@ -894,13 +898,12 @@ class CaseEvidenceRequestConcurrencyPostgresTest {
             assertThat(decisionCount).isGreaterThanOrEqualTo(1);
         }
 
-        // Nếu resubmission thành công, evidence phải được lưu đầy đủ
-        if (resubResult.get() != null) {
-            Integer evCount = jdbcTemplate.queryForObject(
-                    "SELECT count(*) FROM og_compat.case_evidence WHERE round_id = ? AND submission_no = 2",
-                    Integer.class, fix.round2Id());
-            assertThat(evCount).isEqualTo(1);
-        }
+        // Evidence resubmission luôn thành công đầy đủ 2 items (1 IMAGE + 1 VIDEO)
+        assertThat(resubResult.get()).isNotNull();
+        Integer evCount = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM og_compat.case_evidence WHERE round_id = ? AND submission_no = 2",
+                Integer.class, fix.round2Id());
+        assertThat(evCount).isEqualTo(2);
     }
 }
 

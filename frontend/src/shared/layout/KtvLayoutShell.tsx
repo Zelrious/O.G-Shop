@@ -1,18 +1,28 @@
 import { useConsoleHover } from './useConsoleHover';
 import { ThemeSwitch } from './ThemeSwitch';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../features/auth';
 import { ConsoleIcons } from './ConsoleIcons';
 import { ConfirmDialog } from '../components';
 import { useManagementStore } from '../../features/management/useManagementStore';
 import { NotificationBell } from '../../features/notifications/NotificationBell';
+import { chatModerationApi } from '../../features/chat-moderation/chatModerationApi';
 
 export const KtvLayoutShell: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { complaints, kycList, disputes } = useManagementStore();
+  const [pendingChatReportsCount, setPendingChatReportsCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    chatModerationApi.getStats()
+      .then(res => { if (active) setPendingChatReportsCount(res.pendingCount || 0); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
   const { isHovered, onMouseEnter, onMouseLeave } = useConsoleHover();
   const [isFocused, setIsFocused] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
@@ -291,6 +301,34 @@ export const KtvLayoutShell: React.FC = () => {
           >
             <ConsoleIcons.Gift size={19} />
             <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Tặng & Thu hồi Voucher</span>
+          </NavLink>
+
+          {/* 8. Kiểm duyệt tin nhắn */}
+          <NavLink
+            to="/ktv/chat-moderation"
+            title="Kiểm duyệt tin nhắn"
+            className={({ isActive }) =>
+              `og-admin-sidebar__item ${isActive ? 'og-admin-sidebar__item--active' : ''}`
+            }
+          >
+            <ConsoleIcons.MessageAlert size={19} />
+            <span className="og-admin-sidebar__label" style={{ flex: 1 }}>Kiểm duyệt tin nhắn</span>
+            {pendingChatReportsCount > 0 && (
+              <span
+                className="og-admin-sidebar__badge"
+                style={{
+                  background: 'var(--og-color-danger-bg)',
+                  color: 'var(--og-color-danger)',
+                  border: '1px solid #fca5a5',
+                  fontSize: '0.72rem',
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                }}
+              >
+                {pendingChatReportsCount}
+              </span>
+            )}
           </NavLink>
         </nav>
 

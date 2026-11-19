@@ -62,7 +62,7 @@ public class OfferService {
             chat.notifyMessage(c,actor,message,"Đề nghị trả giá khác","Đối tác đã đưa ra giá khác.","OFFER_COUNTERED");
         }else{
             long message=messages.append(c.id(),actor,UUID.nameUUIDFromBytes(("offer-decision:"+body.commandKey()).getBytes(java.nio.charset.StandardCharsets.UTF_8)),"SYSTEM",switch(body.action()){case ACCEPT->"Đã chấp nhận giá. Chưa giữ hàng; người mua cần đặt đơn.";case REJECT->"Đã từ chối đề nghị giá.";case WITHDRAW->"Đã rút đề nghị giá.";default->"Đã phản hồi giá.";},null,null,null,null,null);
-            noticeBoth(c,"offer-decision:"+id+":"+body.commandKey(),"OFFER_DECIDED","Kết quả thương lượng",state.equals("ACCEPTED")?"Giá đã được chấp nhận. Chưa giữ hàng hoặc tạo đơn; mở hội thoại để đặt mua.":"Đề nghị đã được "+(state.equals("REJECTED")?"từ chối.":"rút lại."),message);
+            noticePeer(c,actor,"offer-decision:"+id+":"+body.commandKey(),"OFFER_DECIDED","Kết quả thương lượng",state.equals("ACCEPTED")?"Giá đã được chấp nhận. Chưa giữ hàng hoặc tạo đơn; mở hội thoại để đặt mua.":"Đề nghị đã được "+(state.equals("REJECTED")?"từ chối.":"rút lại."),message);
         }
         return repository.get(result,false).orElseThrow().offer();
     }
@@ -70,5 +70,6 @@ public class OfferService {
     @Transactional(readOnly=true) public List<Long> expiredConversations(){return repository.expiredConversations();}
     @Transactional public void expireConversation(long conversation){var thread=messages.thread(conversation);if(thread.isPresent()){chat.lockParties(thread.get());messages.thread(conversation).ifPresent(this::expire);}}
     private void noticeBoth(Thread c,String key,String type,String title,String content,long revision){notices.enqueue(key,c.id(),List.of(new PlatformNotificationFacade.Notice(c.buyer(),type,title,content,PlatformNotificationFacade.Destination.CONVERSATION,c.id(),revision),new PlatformNotificationFacade.Notice(c.seller(),type,title,content,PlatformNotificationFacade.Destination.CONVERSATION,c.id(),revision)));}
+    private void noticePeer(Thread c,long actor,String key,String type,String title,String content,long revision){long peer=actor==c.buyer()?c.seller():c.buyer();notices.enqueue(key,c.id(),List.of(new PlatformNotificationFacade.Notice(peer,type,title,content,PlatformNotificationFacade.Destination.CONVERSATION,c.id(),revision)));}
     private UUID offerMessageKey(UUID client){return UUID.nameUUIDFromBytes(("offer-message:"+client).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
 }

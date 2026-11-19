@@ -54,6 +54,19 @@ public class AuthFlowRepository {
     public void attempt(UUID id) { jdbc.update("UPDATE public.auth_challenges SET attempt_count=attempt_count+1 WHERE challenge_id=? AND record_type='auth_challenges'",id); }
     public void consume(UUID id,Instant now) { jdbc.update("UPDATE public.auth_challenges SET attempt_count=attempt_count+1,state='CONSUMED',consumed_at=?,auth_data=NULL WHERE challenge_id=? AND record_type='auth_challenges'",Timestamp.from(now),id); }
     public void invalidate(UUID id,Instant now) { jdbc.update("UPDATE public.auth_challenges SET state='INVALIDATED',invalidated_at=?,auth_data=NULL WHERE challenge_id=? AND state='OPEN' AND record_type='auth_challenges'",Timestamp.from(now),id); }
+    public boolean isRecentlyConsumed(UUID id, long userId, String purpose, Instant since) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+            SELECT EXISTS(
+                SELECT 1 FROM public.auth_challenges
+                WHERE challenge_id = ?
+                  AND user_id = ?
+                  AND purpose = ?
+                  AND state = 'CONSUMED'
+                  AND consumed_at >= ?
+                  AND record_type = 'auth_challenges'
+            )
+            """, Boolean.class, id, userId, purpose, Timestamp.from(since)));
+    }
     public boolean twoFactor(long id) {
         return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM og_compat.user_security_settings WHERE user_id=? AND email_2fa_enabled)",Boolean.class,id));
     }

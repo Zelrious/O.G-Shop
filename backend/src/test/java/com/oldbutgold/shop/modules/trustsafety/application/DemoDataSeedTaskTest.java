@@ -4,6 +4,7 @@ import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseDe
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseEntity;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseRoundEntity;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.ReturnReasonCode;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +20,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@Disabled("Manual developer seed script targeting local og_shop on port 55432; enable manually only when seeding demo data")
 @SpringBootTest
 @TestPropertySource(properties = {
         "spring.datasource.url=jdbc:postgresql://localhost:55432/og_shop",

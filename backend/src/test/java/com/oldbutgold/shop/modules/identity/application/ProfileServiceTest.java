@@ -3,6 +3,7 @@ package com.oldbutgold.shop.modules.identity.application;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.AddressEntity;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.AddressRepository;
 import com.oldbutgold.shop.modules.identity.api.ProfileDtos;
+import com.oldbutgold.shop.modules.identity.infrastructure.persistence.EkycRepository;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.SellerVerificationRepository;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.UserEntity;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.UserRepository;
@@ -21,6 +22,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,6 +44,12 @@ class ProfileServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private EkycRepository ekycRepository;
+
+    @Mock
+    private AuthFlowService authFlowService;
+
     private Clock clock;
     private ProfileService profileService;
 
@@ -53,7 +61,9 @@ class ProfileServiceTest {
                 addressRepository,
                 sellerVerificationRepository,
                 passwordEncoder,
-                clock
+                clock,
+                ekycRepository,
+                authFlowService
         );
     }
 
@@ -64,7 +74,7 @@ class ProfileServiceTest {
         user.updateBankAccount("MB Bank", "0388654321", "NGUYEN VAN A", clock.instant());
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-        when(sellerVerificationRepository.findFirstByUserIdAndStatus(1L, "VERIFIED")).thenReturn(Optional.empty());
+        when(ekycRepository.hasVerifiedProfile(1L)).thenReturn(false);
 
         ProfileDtos.ProfileResponse response = profileService.getProfile(1L);
 
@@ -145,13 +155,13 @@ class ProfileServiceTest {
         UserEntity user = new UserEntity("buyer@example.com", "hash", "Nguyễn Văn A", "0901234567", clock.instant());
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
-        ProfileDtos.AvatarProfileRequest request = new ProfileDtos.AvatarProfileRequest("Nguyễn Văn Mới", "0909999888");
+        ProfileDtos.AvatarProfileRequest request = new ProfileDtos.AvatarProfileRequest("Nguyễn Văn Mới");
         String avatarUrl = "https://res.cloudinary.com/demo/image/upload/v1/avatar.jpg";
 
         ProfileDtos.ProfileResponse response = profileService.updateProfileWithAvatar(1L, request, avatarUrl);
 
         assertThat(response.fullName()).isEqualTo("Nguyễn Văn Mới");
-        assertThat(response.phoneNumber()).isEqualTo("0909999888");
+        assertThat(response.phoneNumber()).isEqualTo("0901234567");
         assertThat(response.avatarUrl()).isEqualTo(avatarUrl);
         verify(userRepository).save(user);
     }
@@ -249,5 +259,279 @@ class ProfileServiceTest {
         assertThat(response.ghnDistrictId()).isEqualTo(1441);
         assertThat(response.ghnWardCode()).isEqualTo("10001");
         assertThat(existing.hasValidGhnCodes()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Lần đầu thiết lập STK ngân hàng thành công mà không cần mã xác thực")
+    void updateBankAccount_FirstTimeSetup_SuccessWithoutVerification() {
+        UserEntity user = new UserEntity("buyer@example.com", "hash", "Nguyễn Văn A", "0901234567", clock.instant());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        ProfileDtos.UpdateBankRequest request = new ProfileDtos.UpdateBankRequest(
+                "Vietcombank", "0123456789", "NGUYEN VAN A", null, null, null
+        );
+
+        ProfileDtos.ProfileResponse response = profileService.updateBankAccount(1L, request);
+
+        assertThat(response.bankName()).isEqualTo("Vietcombank");
+        assertThat(user.getBankAccountNumber()).isEqualTo("0123456789");
+    }
+
+    @Test
+    @DisplayName("Thay đổi STK với tài khoản đã eKYC bị từ chối nếu thiếu kết quả Quick Face Auth")
+    void updateBankAccount_ChangeBank_KycVerified_WithoutQuickAuth_ThrowsException() {
+        UserEntity user = new UserEntity("seller@example.com", "hash", "Nguyễn Văn B", "0901234568", clock.instant());
+        user.updateBankAccount("MB Bank", "11112222", "NGUYEN VAN B", clock.instant());
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(ekycRepository.findApprovedReferenceAsset(1L)).thenReturn(Optional.of(mock(EkycRepository.AssetRecord.class)));
+
+        ProfileDtos.UpdateBankRequest request = new ProfileDtos.UpdateBankRequest(
+                "Techcombank", "99998888", "NGUYEN VAN B", null, null, null
+        );
+
+        assertThatThrownBy(() -> profileService.updateBankAccount(1L, request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("yêu cầu xác thực nhanh khuôn mặt (UC08)");
+    }
+
+    @Test
+    @DisplayName("Thay đổi STK với tài khoản đã eKYC thành công khi có kết quả Quick Face Auth hợp lệ")
+    void updateBankAccount_ChangeBank_KycVerified_WithValidQuickAuth_Success() {
+        UserEntity user = new UserEntity("seller@example.com", "hash", "Nguyễn Văn B", "0901234568", clock.instant());
+        user.updateBankAccount("MB Bank", "11112222", "NGUYEN VAN B", clock.instant());
+
+        UUID resultId = UUID.randomUUID();
+        EkycRepository.QuickAuthResultRecord resultRecord = new EkycRepository.QuickAuthResultRecord(
+                resultId, 1L, 10L, 100L, clock.instant(), clock.instant().plusSeconds(900), "cmd-key", UUID.randomUUID()
+        );
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(ekycRepository.findApprovedReferenceAsset(1L)).thenReturn(Optional.of(mock(EkycRepository.AssetRecord.class)));
+        when(ekycRepository.findValidQuickAuthResult(1L)).thenReturn(Optional.of(resultRecord));
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        ProfileDtos.UpdateBankRequest request = new ProfileDtos.UpdateBankRequest(
+                "Techcombank", "99998888", "NGUYEN VAN B", resultId, null, null
+        );
+
+        ProfileDtos.ProfileResponse response = profileService.updateBankAccount(1L, request);
+
+        assertThat(response.bankName()).isEqualTo("Techcombank");
+        assertThat(user.getBankAccountNumber()).isEqualTo("99998888");
+    }
+
+    @Test
+    @DisplayName("Thay đổi STK với tài khoản chưa eKYC bị từ chối nếu thiếu mã OTP Email")
+    void updateBankAccount_ChangeBank_NonKyc_WithoutOtp_ThrowsException() {
+        UserEntity user = new UserEntity("buyer@example.com", "hash", "Nguyễn Văn C", "0901234569", clock.instant());
+        user.updateBankAccount("VPBank", "33334444", "NGUYEN VAN C", clock.instant());
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(ekycRepository.findApprovedReferenceAsset(1L)).thenReturn(Optional.empty());
+
+        ProfileDtos.UpdateBankRequest request = new ProfileDtos.UpdateBankRequest(
+                "VietinBank", "55556666", "NGUYEN VAN C", null, null, null
+        );
+
+        assertThatThrownBy(() -> profileService.updateBankAccount(1L, request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("yêu cầu nhập mã OTP xác thực gửi qua email");
+    }
+
+    @Test
+    @DisplayName("Thay đổi STK với tài khoản chưa eKYC thành công khi có OTP hợp lệ")
+    void updateBankAccount_ChangeBank_NonKyc_WithValidOtp_Success() {
+        UserEntity user = new UserEntity("buyer@example.com", "hash", "Nguyễn Văn C", "0901234569", clock.instant());
+        user.updateBankAccount("VPBank", "33334444", "NGUYEN VAN C", clock.instant());
+
+        UUID challengeId = UUID.randomUUID();
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(ekycRepository.findApprovedReferenceAsset(1L)).thenReturn(Optional.empty());
+        doNothing().when(authFlowService).verifySecuritySetting(challengeId, "123456", 1L);
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        ProfileDtos.UpdateBankRequest request = new ProfileDtos.UpdateBankRequest(
+                "VietinBank", "55556666", "NGUYEN VAN C", null, challengeId, "123456"
+        );
+
+        ProfileDtos.ProfileResponse response = profileService.updateBankAccount(1L, request);
+
+        assertThat(response.bankName()).isEqualTo("VietinBank");
+        assertThat(user.getBankAccountNumber()).isEqualTo("55556666");
+        verify(authFlowService).verifySecuritySetting(challengeId, "123456", 1L);
+    }
+
+    @Test
+    @DisplayName("issueBankChangeOtp phát hành thử thách OTP qua email chính chủ")
+    void issueBankChangeOtp_Success() {
+        UserEntity user = new UserEntity("buyer@example.com", "hash", "Nguyễn Văn C", "0901234569", clock.instant());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        UUID challengeId = UUID.randomUUID();
+        AuthFlowService.Pending pending = new AuthFlowService.Pending(
+                "OTP_REQUIRED", challengeId, "buyer@example.com",
+                clock.instant().plusSeconds(600), clock.instant().plusSeconds(60), 5, "SECURITY_SETTING"
+        );
+        when(authFlowService.startSecuritySetting(1L, "buyer@example.com", "requester-ip")).thenReturn(pending);
+
+        ProfileDtos.BankOtpChallengeResponse response = profileService.issueBankChangeOtp(1L, "requester-ip");
+
+        assertThat(response.challengeId()).isEqualTo(challengeId);
+        assertThat(response.maskedEmail()).isEqualTo("bu***@example.com");
+    }
+
+    @Test
+    @DisplayName("Thay đổi SĐT với tài khoản đã eKYC bị từ chối nếu thiếu kết quả Quick Face Auth")
+    void updateProfile_ChangePhone_KycVerified_WithoutQuickAuth_ThrowsException() {
+        UserEntity user = new UserEntity("seller@example.com", "hash", "Nguyễn Văn B", "0901234568", clock.instant());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(ekycRepository.findApprovedReferenceAsset(1L)).thenReturn(Optional.of(mock(EkycRepository.AssetRecord.class)));
+
+        ProfileDtos.UpdateProfileRequest request = new ProfileDtos.UpdateProfileRequest(
+                "Nguyễn Văn B", "0909999888", null, null, null, null
+        );
+
+        assertThatThrownBy(() -> profileService.updateProfile(1L, request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("yêu cầu xác thực nhanh khuôn mặt (UC08) hoặc mã OTP");
+    }
+
+    @Test
+    @DisplayName("Thay đổi SĐT với tài khoản đã eKYC thành công khi có kết quả Quick Face Auth hợp lệ")
+    void updateProfile_ChangePhone_KycVerified_WithValidQuickAuth_Success() {
+        UserEntity user = new UserEntity("seller@example.com", "hash", "Nguyễn Văn B", "0901234568", clock.instant());
+        UUID resultId = UUID.randomUUID();
+        EkycRepository.QuickAuthResultRecord resultRecord = new EkycRepository.QuickAuthResultRecord(
+                resultId, 1L, 10L, 100L, clock.instant(), clock.instant().plusSeconds(900), "cmd-key", UUID.randomUUID()
+        );
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(ekycRepository.findApprovedReferenceAsset(1L)).thenReturn(Optional.of(mock(EkycRepository.AssetRecord.class)));
+        when(ekycRepository.findValidQuickAuthResult(1L)).thenReturn(Optional.of(resultRecord));
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        ProfileDtos.UpdateProfileRequest request = new ProfileDtos.UpdateProfileRequest(
+                "Nguyễn Văn B", "0909999888", null, resultId, null, null
+        );
+
+        ProfileDtos.ProfileResponse response = profileService.updateProfile(1L, request);
+
+        assertThat(response.phoneNumber()).isEqualTo("0909999888");
+        assertThat(user.getPhoneNumber()).isEqualTo("0909999888");
+    }
+
+    @Test
+    @DisplayName("Thay đổi SĐT với tài khoản chưa eKYC bị từ chối nếu thiếu OTP")
+    void updateProfile_ChangePhone_NonKyc_WithoutOtp_ThrowsException() {
+        UserEntity user = new UserEntity("buyer@example.com", "hash", "Nguyễn Văn C", "0901234569", clock.instant());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(ekycRepository.findApprovedReferenceAsset(1L)).thenReturn(Optional.empty());
+
+        ProfileDtos.UpdateProfileRequest request = new ProfileDtos.UpdateProfileRequest(
+                "Nguyễn Văn C", "0909999777", null, null, null, null
+        );
+
+        assertThatThrownBy(() -> profileService.updateProfile(1L, request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("yêu cầu nhập mã OTP");
+    }
+
+    @Test
+    @DisplayName("Thay đổi SĐT thành công với mã OTP Email hợp lệ")
+    void updateProfile_ChangePhone_WithValidOtp_Success() {
+        UserEntity user = new UserEntity("buyer@example.com", "hash", "Nguyễn Văn C", "0901234569", clock.instant());
+        UUID challengeId = UUID.randomUUID();
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(ekycRepository.findApprovedReferenceAsset(1L)).thenReturn(Optional.empty());
+        doNothing().when(authFlowService).verifySecuritySetting(challengeId, "654321", 1L);
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        ProfileDtos.UpdateProfileRequest request = new ProfileDtos.UpdateProfileRequest(
+                "Nguyễn Văn C", "0909999777", null, null, challengeId, "654321"
+        );
+
+        ProfileDtos.ProfileResponse response = profileService.updateProfile(1L, request);
+
+        assertThat(response.phoneNumber()).isEqualTo("0909999777");
+        verify(authFlowService).verifySecuritySetting(challengeId, "654321", 1L);
+    }
+
+    @Test
+    @DisplayName("Thay đổi SĐT bị từ chối nếu số điện thoại đã thuộc về tài khoản khác")
+    void updateProfile_ChangePhone_WhenPhoneBelongsToAnotherUser_ThrowsDuplicatePhoneException() {
+        UserEntity user = new UserEntity("buyer@example.com", "hash", "Nguyễn Văn C", "0901234569", clock.instant());
+        UserEntity otherUser = new UserEntity("other@example.com", "hash", "Người Khác", "0909999777", clock.instant());
+        org.springframework.test.util.ReflectionTestUtils.setField(otherUser, "id", 2L);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findByPhoneNumber("0909999777")).thenReturn(Optional.of(otherUser));
+
+        ProfileDtos.UpdateProfileRequest request = new ProfileDtos.UpdateProfileRequest(
+                "Nguyễn Văn C", "0909999777", null, null, UUID.randomUUID(), "654321"
+        );
+
+        assertThatThrownBy(() -> profileService.updateProfile(1L, request))
+                .isInstanceOf(DuplicatePhoneException.class)
+                .hasMessageContaining("đã được sử dụng bởi một tài khoản khác");
+    }
+
+    @Test
+    @DisplayName("issuePhoneChangeOtp bị từ chối nếu số điện thoại dự kiến đổi đã thuộc về tài khoản khác")
+    void issuePhoneChangeOtp_WhenPhoneBelongsToAnotherUser_ThrowsDuplicatePhoneException() {
+        UserEntity user = new UserEntity("buyer@example.com", "hash", "Nguyễn Văn C", "0901234569", clock.instant());
+        UserEntity otherUser = new UserEntity("other@example.com", "hash", "Người Khác", "0909999777", clock.instant());
+        org.springframework.test.util.ReflectionTestUtils.setField(otherUser, "id", 2L);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findByPhoneNumber("0909999777")).thenReturn(Optional.of(otherUser));
+
+        assertThatThrownBy(() -> profileService.issuePhoneChangeOtp(1L, "0909999777"))
+                .isInstanceOf(DuplicatePhoneException.class)
+                .hasMessageContaining("đã được sử dụng bởi một tài khoản khác");
+    }
+
+    @Test
+    @DisplayName("issuePhoneChangeOtp phát hành thử thách OTP qua email cho thao tác đổi SĐT")
+    void issuePhoneChangeOtp_Success() {
+        UserEntity user = new UserEntity("buyer@example.com", "hash", "Nguyễn Văn C", "0901234569", clock.instant());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        UUID challengeId = UUID.randomUUID();
+        AuthFlowService.Pending pending = new AuthFlowService.Pending(
+                "OTP_REQUIRED", challengeId, "buyer@example.com",
+                clock.instant().plusSeconds(600), clock.instant().plusSeconds(60), 5, "SECURITY_SETTING"
+        );
+        when(authFlowService.startPhoneVerification(1L, "0909999777", "req-ip")).thenReturn(pending);
+
+        ProfileDtos.PhoneOtpChallengeResponse response = profileService.issuePhoneChangeOtp(1L, "0909999777", "req-ip");
+
+        assertThat(response.challengeId()).isEqualTo(challengeId);
+        assertThat(response.maskedPhone()).isEqualTo("090***77");
+    }
+
+    @Test
+    @DisplayName("Thay đổi STK với tài khoản đã eKYC thành công khi chọn phương thức dự phòng OTP Email")
+    void updateBankAccount_ChangeBank_KycVerified_WithFallbackOtp_Success() {
+        UserEntity user = new UserEntity("seller@example.com", "hash", "Nguyễn Văn B", "0901234568", clock.instant());
+        user.updateBankAccount("MB Bank", "11112222", "NGUYEN VAN B", clock.instant());
+
+        UUID challengeId = UUID.randomUUID();
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(ekycRepository.findApprovedReferenceAsset(1L)).thenReturn(Optional.of(mock(EkycRepository.AssetRecord.class)));
+        doNothing().when(authFlowService).verifySecuritySetting(challengeId, "999888", 1L);
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        ProfileDtos.UpdateBankRequest request = new ProfileDtos.UpdateBankRequest(
+                "Techcombank", "99998888", "NGUYEN VAN B", null, challengeId, "999888"
+        );
+
+        ProfileDtos.ProfileResponse response = profileService.updateBankAccount(1L, request);
+
+        assertThat(response.bankName()).isEqualTo("Techcombank");
+        assertThat(user.getBankAccountNumber()).isEqualTo("99998888");
+        verify(authFlowService).verifySecuritySetting(challengeId, "999888", 1L);
     }
 }

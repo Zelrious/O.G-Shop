@@ -164,6 +164,11 @@ public class GroupPaymentService {
             return new GroupPaymentIpnResult("01", "Order/attempt not found", null, null);
         }
 
+        // Enforce strict lock hierarchy: CheckoutGroup -> PaymentAttempt -> rawReceipt (og70_write_view advisory lock)
+        // to prevent deadlocks when concurrent callbacks hit attempts sharing a group or og_compat dual-write locks.
+        paymentAttemptRepository.findGroupIdByTxnRef(txnRef)
+                .ifPresent(checkoutGroupRepository::findByIdForUpdate);
+
         Optional<PaymentAttemptEntity> attemptOpt = paymentAttemptRepository.findByTxnRefForUpdate(txnRef);
         if (attemptOpt.isEmpty()) {
             return new GroupPaymentIpnResult("01", "Attempt not found for txnRef " + txnRef, null, null);

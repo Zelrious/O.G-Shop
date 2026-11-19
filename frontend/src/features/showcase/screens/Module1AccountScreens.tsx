@@ -572,7 +572,7 @@ export function Module1AccountScreens({ screenId }: ModuleProps) {
           <div className="og-form-group">
             <label className="og-label">{language === 'vi' ? 'Chọn hình thức chế tài' : 'Select Penalty Action'}</label>
             <select className="og-select" value={penaltyAction} onChange={e => setPenaltyAction(e.target.value)}>
-              <option value="WARN">{language === 'vi' ? 'Gửi cảnh báo vi phạm qua Email/SMS (Trừ 5 điểm uy tín)' : 'Issue Warning (-5 points)'}</option>
+              <option value="WARN">{language === 'vi' ? 'Gửi cảnh báo vi phạm qua Email (Trừ 5 điểm uy tín)' : 'Issue Warning (-5 points)'}</option>
               <option value="FREEZE_7D">{language === 'vi' ? 'Tạm đình chỉ đăng tin 7 ngày (Trừ 15 điểm uy tín)' : 'Freeze listings for 7 days (-15 points)'}</option>
               <option value="BAN">{language === 'vi' ? 'Khóa tài khoản vĩnh viễn & Đóng băng Escrow' : 'Permanent Account Ban & Freeze Escrow'}</option>
             </select>

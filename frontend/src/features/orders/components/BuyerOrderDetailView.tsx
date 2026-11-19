@@ -5,6 +5,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ordersApi } from '../ordersApi';
 import { OrderDetail } from '../types';
 import { TrackingResponse, formatGhnStatus } from '../../fulfillment/fulfillmentApi';
+import { BuyerDisputeModal } from '../../disputes/BuyerDisputeModal';
+import { OrderReviewModal } from '../../disputes/OrderReviewModal';
+import { reviewApi } from '../../disputes/reviewApi';
+import type { OrderReviewsResponse } from '../../disputes/types';
 
 interface BuyerOrderDetailViewProps {
   orderId: number;
@@ -21,6 +25,9 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [tracking, setTracking] = useState<TrackingResponse | null>(null);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviews, setReviews] = useState<OrderReviewsResponse | null>(null);
 
   const loadOrder = useCallback(() => {
     setLoading(true);
@@ -31,6 +38,9 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
         ordersApi.getTracking(orderId)
           .then((res) => setTracking(res))
           .catch(() => setTracking(null));
+        reviewApi.getOrderReviews(orderId)
+          .then((res) => setReviews(res))
+          .catch(() => setReviews(null));
       })
       .catch((err) => {
         setErrorMsg(err.message || 'Không thể tải chi tiết đơn hàng.');
@@ -457,20 +467,97 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
                   >
                     Đã nhận được hàng (Hoàn tất)
                   </button>
+                  <button
+                    type="button"
+                    style={{
+                      width: '100%',
+                      padding: '10px 16px',
+                      background: 'transparent',
+                      border: '1px solid #f87171',
+                      color: '#dc2626',
+                      borderRadius: 8,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setShowDisputeModal(true)}
+                  >
+                    Yêu cầu Trả hàng / Khiếu nại (UC62)
+                  </button>
+                </div>
+              )}
+
+              {order.status === 'DISPUTED' && (
+                <div style={{
+                  background: '#fef3c7',
+                  border: '1px solid #fde68a',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: '0.85rem',
+                  color: '#b45309',
+                  lineHeight: 1.5,
+                }}>
+                  <strong>Đang xử lý tranh chấp (UC62/UC75):</strong> Hồ sơ khiếu nại của bạn đã được chuyển đến Kỹ thuật viên đối soát 2 chiều để ra phán quyết hoàn tiền hoặc trả hàng.
+                </div>
+              )}
+
+              {order.status === 'REFUNDED' && (
+                <div style={{
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: '0.85rem',
+                  color: '#1d4ed8',
+                  lineHeight: 1.5,
+                }}>
+                  <strong>Đã hoàn tiền (UC83):</strong> Đơn hàng đã được hoàn tiền hàng về cho bạn. Tiền ký quỹ Escrow đã được giải phóng.
                 </div>
               )}
 
               {order.status === 'COMPLETED' && (
-                <div style={{
-                  background: '#dcfce7',
-                  border: '1px solid #86efac',
-                  borderRadius: 8,
-                  padding: 12,
-                  fontSize: '0.85rem',
-                  color: '#166534',
-                  lineHeight: 1.5,
-                }}>
-                  <strong>Đơn hàng đã hoàn tất!</strong> Cảm ơn bạn đã mua sắm tại O.G-Shop. Tiền ký quỹ đã được giải ngân cho người bán.
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{
+                    background: '#dcfce7',
+                    border: '1px solid #86efac',
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: '0.85rem',
+                    color: '#166534',
+                    lineHeight: 1.5,
+                  }}>
+                    <strong>Đơn hàng đã hoàn tất!</strong> Cảm ơn bạn đã mua sắm tại O.G-Shop. Tiền ký quỹ đã được giải ngân cho người bán.
+                  </div>
+                  {reviews?.buyerReview ? (
+                    <div style={{
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 8,
+                      padding: '10px 12px',
+                      fontSize: '0.84rem',
+                      color: '#334155',
+                    }}>
+                      <div><strong>Đánh giá của bạn:</strong> {'★'.repeat(reviews.buyerReview.rating)}{'☆'.repeat(5 - reviews.buyerReview.rating)} ({reviews.buyerReview.rating}/5 sao)</div>
+                      {reviews.buyerReview.comment && (
+                        <div style={{ marginTop: 4, color: '#64748b', fontStyle: 'italic' }}>
+                          "{reviews.buyerReview.comment}"
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="og-button og-button--primary"
+                      style={{
+                        width: '100%',
+                        padding: '10px 16px',
+                        fontWeight: 600,
+                        fontSize: '0.9rem',
+                      }}
+                      onClick={() => setShowReviewModal(true)}
+                    >
+                      ⭐ Đánh giá Người bán (+500 xu thưởng)
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -645,6 +732,28 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
             </div>
           </div>
         </div>
+      )}
+      {/* Buyer Return/Dispute Modal (UC62) */}
+      {showDisputeModal && (
+        <BuyerDisputeModal
+          isOpen={showDisputeModal}
+          orderId={order.orderId}
+          productTitle={order.productTitle}
+          onClose={() => setShowDisputeModal(false)}
+          onSuccess={() => loadOrder()}
+        />
+      )}
+
+      {/* Buyer Review Modal (UC61) */}
+      {showReviewModal && (
+        <OrderReviewModal
+          isOpen={showReviewModal}
+          orderId={order.orderId}
+          partnerName={order.sellerName}
+          isBuyer={true}
+          onClose={() => setShowReviewModal(false)}
+          onSuccess={() => loadOrder()}
+        />
       )}
     </div>
   );

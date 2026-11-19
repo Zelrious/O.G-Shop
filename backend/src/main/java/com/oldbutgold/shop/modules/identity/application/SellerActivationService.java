@@ -1,8 +1,7 @@
 package com.oldbutgold.shop.modules.identity.application;
 
+import com.oldbutgold.shop.modules.identity.infrastructure.persistence.EkycRepository;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.RoleRepository;
-import com.oldbutgold.shop.modules.identity.infrastructure.persistence.SellerVerificationEntity;
-import com.oldbutgold.shop.modules.identity.infrastructure.persistence.SellerVerificationRepository;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.UserEntity;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.UserRepository;
 import com.oldbutgold.shop.shared.config.SellerVerificationProperties;
@@ -17,17 +16,17 @@ import java.time.Instant;
 public class SellerActivationService {
     private final UserRepository users;
     private final RoleRepository roles;
-    private final SellerVerificationRepository verifications;
+    private final EkycRepository ekycRepository;
     private final SellerVerificationProperties properties;
     private final Clock clock;
 
     public SellerActivationService(UserRepository users, RoleRepository roles,
-                                   SellerVerificationRepository verifications,
+                                   EkycRepository ekycRepository,
                                    SellerVerificationProperties properties,
                                    Clock clock) {
         this.users = users;
         this.roles = roles;
-        this.verifications = verifications;
+        this.ekycRepository = ekycRepository;
         this.properties = properties;
         this.clock = clock;
     }
@@ -36,6 +35,11 @@ public class SellerActivationService {
     public ActivationResult activate(long userId) {
         if (!properties.isMvpBypass()) {
             throw new SellerActivationDisabledException("Chế độ kích hoạt Seller tức thì hiện không khả dụng.");
+        }
+
+        // Require verified eKYC before granting SELLER role
+        if (!ekycRepository.hasVerifiedProfile(userId)) {
+            throw new SellerActivationDisabledException("Bạn phải hoàn tất xác thực eKYC và được KTV duyệt trước khi đăng ký làm Người bán.");
         }
 
         UserEntity user = users.findById(userId)
@@ -47,23 +51,7 @@ public class SellerActivationService {
         Instant now = clock.instant();
         grantSellerRole(user);
 
-        var existingVerified = verifications.findFirstByUserIdAndStatus(userId, "VERIFIED");
-        if (existingVerified.isPresent()) {
-            SellerVerificationEntity v = existingVerified.get();
-            return new ActivationResult(v.getId(), v.getStatus(), v.getVerificationMethod());
-        }
-
-        var existingPending = verifications.findFirstByUserIdAndStatus(userId, "PENDING");
-        if (existingPending.isPresent()) {
-            SellerVerificationEntity v = existingPending.get();
-            v.upgradeToMvpBypass(now);
-            return new ActivationResult(v.getId(), v.getStatus(), v.getVerificationMethod());
-        }
-
-        SellerVerificationEntity newVerification = verifications.save(
-                new SellerVerificationEntity(user, "MVP_BYPASS", now)
-        );
-        return new ActivationResult(newVerification.getId(), newVerification.getStatus(), newVerification.getVerificationMethod());
+        return new ActivationResult(0L, "VERIFIED", "AI_EKYC");
     }
 
     private void grantSellerRole(UserEntity user) {

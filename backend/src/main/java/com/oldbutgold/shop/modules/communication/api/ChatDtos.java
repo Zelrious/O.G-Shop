@@ -17,7 +17,9 @@ public final class ChatDtos {
                                String partnerName,String role,Instant lastActivity,String preview,long unread,boolean blocked) {}
     public record Conversations(List<Conversation> items,int page,int size,long total,long unread) {}
     public record Media(String mime,long bytes,Double duration,boolean available) {}
-    public record Message(long id,long senderId,String type,String content,Instant createdAt,Long replyTo,Long offerId,Media media) {}
+    public record Message(long id,long senderId,String type,String content,Instant createdAt,Long replyTo,Long offerId,Media media,String moderationStatus,String violationType) {
+        public Message(long id,long senderId,String type,String content,Instant createdAt,Long replyTo,Long offerId,Media media){this(id,senderId,type,content,createdAt,replyTo,offerId,media,null,null);}
+    }
     public record Messages(List<Message> items,Long nextBefore) {}
     public record Offer(long id,long conversationId,long proposerId,Long parentId,BigDecimal price,String status,
                         Instant createdAt,Instant expiresAt,Instant respondedAt,Long respondedBy,long version,

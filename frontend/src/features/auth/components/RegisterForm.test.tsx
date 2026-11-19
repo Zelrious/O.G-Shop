@@ -18,9 +18,10 @@ const pending = (): RegistrationChallenge => ({ status: 'OTP_REQUIRED', challeng
 const completed: RegistrationCompletion = { user: { userId: 1, email: 'buyer@example.invalid',
   fullName: 'Buyer', roles: ['BUYER'], createdAt: '2026-10-10' }, accessToken: 'fixture', expiresIn: 900,
   nextStep: 'PROFILE', awardedCoins: 3000 };
-function enterBuyer(password = 'Password123@') {
+function enterBuyer(password = 'Password123@', phone = '0901234567') {
   fireEvent.change(screen.getByLabelText(/Họ và tên/), { target: { value: 'Buyer' } });
   fireEvent.change(screen.getByLabelText(/Địa chỉ Email/), { target: { value: 'buyer@example.invalid' } });
+  fireEvent.change(screen.getByLabelText(/^Số điện thoại/), { target: { value: phone } });
   fireEvent.change(screen.getByLabelText(/^Mật khẩu/), { target: { value: password } });
   fireEvent.change(screen.getByLabelText(/Xác nhận mật khẩu/), { target: { value: password } });
 }
@@ -33,6 +34,7 @@ function enterSeller() {
   for (const [label, value] of [['Tỉnh / Thành phố', 'P'], ['Quận / Huyện', 'D'], ['Phường / Xã', 'W'], ['Địa chỉ chi tiết', 'A']]) {
     fireEvent.change(pickup.getByLabelText(new RegExp(label)), { target: { value } });
   }
+  fireEvent.click(screen.getByText('Tiếp tục →'));
   fireEvent.change(screen.getByLabelText(/^Ngân hàng/), { target: { value: 'Mock Bank' } });
   fireEvent.change(screen.getByLabelText(/Số tài khoản ngân hàng/), { target: { value: '12345678' } });
   fireEvent.change(screen.getByLabelText(/Tên chủ tài khoản/), { target: { value: 'TEST SELLER' } });
@@ -47,10 +49,12 @@ describe('email registration', () => {
   it('keeps Seller fields after Back without reusing the submit form', () => {
     render(<RegisterForm />);
     enterBuyer(); enterSeller();
-    const sellerForm = screen.getByText('← Quay lại').closest('form');
+    const sellerBankForm = screen.getByText('← Quay lại').closest('form');
+    fireEvent.click(screen.getByText('← Quay lại'));
+    expect(screen.getByLabelText(/Tên cửa hàng/)).toHaveValue('Test Store');
     fireEvent.click(screen.getByText('← Quay lại'));
     expect(screen.getByLabelText(/Họ và tên/)).toHaveValue('Buyer');
-    expect(screen.getByText('Tiếp tục →').closest('form')).not.toBe(sellerForm);
+    expect(screen.getByText('Tiếp tục →').closest('form')).not.toBe(sellerBankForm);
     expect(auth.register).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText('Tiếp tục →'));
     expect(screen.getByLabelText(/Tên cửa hàng/)).toHaveValue('Test Store');
@@ -70,8 +74,8 @@ describe('email registration', () => {
     await act(async () => { fireEvent.click(send); });
     expect(screen.getByRole('timer')).toHaveTextContent('Bạn có thể gửi lại mã sau 60 giây.');
     expect(send).toBeDisabled();
-    expect(screen.getByLabelText(accountType === 'SELLER' ? /Tên cửa hàng/ : /Địa chỉ Email/))
-      .toHaveValue(accountType === 'SELLER' ? 'Test Store' : 'buyer@example.invalid');
+    expect(screen.getByLabelText(accountType === 'SELLER' ? /Tên chủ tài khoản/ : /Địa chỉ Email/))
+      .toHaveValue(accountType === 'SELLER' ? 'TEST SELLER' : 'buyer@example.invalid');
     expect(screen.queryByLabelText(/Mã xác thực email/)).not.toBeInTheDocument();
     await act(async () => { fireEvent.submit(form); });
     expect(auth.register).toHaveBeenCalledTimes(1);
@@ -110,13 +114,23 @@ describe('email registration', () => {
     expect(screen.getByLabelText(/Mã xác thực email/)).toHaveValue('');
   });
 
-  it('allows buyer without phone and waits for OTP before completing', async () => {
+  it('requires phone number and waits for OTP before completing', async () => {
     const success = vi.fn();
     render(<RegisterForm onSuccess={success} />);
-    enterBuyer();
-    fireEvent.click(screen.getByText('Gửi mã xác thực email'));
+    // Without phone
+    fireEvent.change(screen.getByLabelText(/Họ và tên/), { target: { value: 'Buyer' } });
+    fireEvent.change(screen.getByLabelText(/Địa chỉ Email/), { target: { value: 'buyer@example.invalid' } });
+    fireEvent.change(screen.getByLabelText(/^Mật khẩu/), { target: { value: 'Password123@' } });
+    fireEvent.change(screen.getByLabelText(/Xác nhận mật khẩu/), { target: { value: 'Password123@' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi mã xác thực email' }));
+    expect(screen.getByText('Vui lòng nhập số điện thoại.')).toBeInTheDocument();
+    expect(auth.register).not.toHaveBeenCalled();
+
+    // With phone
+    fireEvent.change(screen.getByLabelText(/^Số điện thoại/), { target: { value: '0901234567' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi mã xác thực email' }));
     await screen.findByLabelText(/Mã xác thực email/);
-    expect(auth.register).toHaveBeenCalledWith(expect.objectContaining({ accountType: 'BUYER', phoneNumber: undefined }));
+    expect(auth.register).toHaveBeenCalledWith(expect.objectContaining({ accountType: 'BUYER', phoneNumber: '0901234567' }));
     expect(success).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText(/Mã xác thực email/), { target: { value: '123456' } });
     fireEvent.click(screen.getByText('Xác nhận và tạo tài khoản'));
@@ -167,6 +181,7 @@ describe('email registration', () => {
     for (const [label, value] of [['Tỉnh / Thành phố', 'P'], ['Quận / Huyện', 'D'], ['Phường / Xã', 'W'], ['Địa chỉ chi tiết', 'A']]) {
       fireEvent.change(pickup.getByLabelText(new RegExp(label)), { target: { value } });
     }
+    fireEvent.click(screen.getByText('Tiếp tục →'));
     fireEvent.change(screen.getByLabelText(/^Ngân hàng/), { target: { value: 'Mock Bank' } });
     fireEvent.change(screen.getByLabelText(/Số tài khoản ngân hàng/), { target: { value: '12345678' } });
     fireEvent.change(screen.getByLabelText(/Tên chủ tài khoản/), { target: { value: 'TEST SELLER' } });
@@ -197,8 +212,8 @@ describe('email registration', () => {
     fireEvent.click(screen.getByText('Tiếp tục →'));
     fireEvent.change(screen.getByLabelText(/Tên cửa hàng/), { target: { value: 'My Shop' } });
     fireEvent.click(screen.getByText('← Quay lại'));
-    // Switch to BUYER
-    fireEvent.click(screen.getByLabelText('Mua hàng'));
+    // Uncheck to switch back to BUYER
+    fireEvent.click(screen.getByLabelText('Mua và bán hàng'));
     fireEvent.click(screen.getByText('Gửi mã xác thực email'));
     await screen.findByLabelText(/Mã xác thực email/);
     expect(auth.register).toHaveBeenCalledWith(expect.objectContaining({
@@ -210,6 +225,7 @@ describe('email registration', () => {
     render(<RegisterForm />);
     fireEvent.change(screen.getByLabelText(/Họ và tên/), { target: { value: 'Test User' } });
     fireEvent.change(screen.getByLabelText(/Địa chỉ Email/), { target: { value: 'test@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^Số điện thoại/), { target: { value: '0901234567' } });
     fireEvent.change(screen.getByLabelText(/^Mật khẩu/), { target: { value: 'Password123@' } });
     fireEvent.change(screen.getByLabelText(/Xác nhận mật khẩu/), { target: { value: 'Mismatch123@' } });
     fireEvent.click(screen.getByLabelText('Mua và bán hàng'));

@@ -1,5 +1,12 @@
 # Decisions Pending
 
+## Đã chốt Phương án A cho xung đột PR #17 (`PO-CHOICE-3` vs `D-08`) — TASK-0119 / 2026-11-19
+
+- **Quyết định chủ dự án ("dùng phương án A")**:
+  - **Còn hạn (`now <= deadlineAt`)**: Giữ rào `PO-CHOICE-3` trong `ReturnCaseService.ktvDecideRound2` trả `409 EVIDENCE_REQUEST_IN_PROGRESS` (khớp `UC75 Alt 4a` & Diagram dừng phiên xử lý khi đang chờ bổ sung bằng chứng).
+  - **Quá hạn (`now > deadlineAt`)**: Giữ logic `D-08` tự động chuyển `case_evidence_requests` đang `PENDING` sang `CANCELLED` trong cùng transaction khi KTV chốt phán quyết (`"hết hạn thì xét nội dung đã nhận"`).
+  - Đã cập nhật đồng bộ `CaseEvidenceRequestPostgresTest` (13/13 PASS), `CaseEvidenceRequestConcurrencyPostgresTest` (`scenarioE` bổ sung đủ quota 1–5 ảnh, 5/5 PASS) và `ReturnCaseServiceTest` (143/143 PASS); toàn bộ CI PostgreSQL 17 `mvnw verify` đạt `Tests run: 1473, Failures: 0, Errors: 0`. Không còn quyết định code chờ trong phạm vi Đợt 1.
+
 ## TASK-0090 đã được giao hoàn tất — 2026-10-13
 
 Người dùng yêu cầu hoàn thành toàn bộ năm task rồi tự test; không còn approval pending cho chat/offer/kiểm thử/rollout local. REST polling theo kiến trúc hiện hành; offer cho1 món và optional hạn phản hồi; không tự thêm WebSocket/Redis/full UC83. [Thiết kế](../architecture/CHAT_OFFER_V31_20261013.md). Nghiệm thu provider thực và các UC ngoài phạm vi là công việc tiếp nối riêng, không cản bàn giao năm task.

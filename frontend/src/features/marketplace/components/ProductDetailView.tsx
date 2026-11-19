@@ -2,7 +2,7 @@ import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CONDITION_LABELS, ProductDetail } from '../types';
 import { AuthContext } from '../../auth/context';
-import { ConditionBadge, VerificationBadge } from '../../../shared/components';
+import { ConditionBadge } from '../../../shared/components';
 import { ChatContext } from '../../chat-offer/chatContext';
 import { Icon } from '../../../shared/components/Icon/Icon';
 import { useCart } from '../../../shared/context';
@@ -198,21 +198,34 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
             </div>
           )}
 
-          {/* Utility Action Bar under Gallery (Oreka style) */}
+          {/* Utility Action Bar under Gallery (Oreka style with outline icons) */}
           <div className="og-product-detail__gallery-actions">
             <div>
-              <span>Bạn có sản phẩm tương tự? </span>
-              <Link to="/seller/listings/new" className="og-product-detail__action-link">
-                Đăng bán
+              <Link
+                to="/seller/listings/new"
+                className="og-product-detail__action-link"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="16" />
+                  <line x1="8" y1="12" x2="16" y2="12" />
+                </svg>
+                <span>Đăng bán đồ tương tự</span>
               </Link>
             </div>
             <div className="og-product-detail__action-buttons">
               <button
                 type="button"
                 className="og-product-detail__icon-btn"
-                title="Báo cáo tin đăng"
+                title="Báo cáo tin đăng vi phạm"
                 onClick={() => alert('Đã ghi nhận yêu cầu báo cáo tin đăng vi phạm.')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
               >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                  <line x1="4" y1="22" x2="4" y2="15" />
+                </svg>
                 <span>Báo cáo</span>
               </button>
               <button
@@ -223,16 +236,32 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
                   navigator.clipboard?.writeText(window.location.href);
                   alert('Đã sao chép liên kết sản phẩm vào bộ nhớ tạm!');
                 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
               >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                </svg>
                 <span>Chia sẻ</span>
               </button>
               <button
                 type="button"
                 className="og-product-detail__icon-btn"
-                style={{ color: isFavorited ? '#ef4444' : undefined }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  color: isFavorited ? '#ef4444' : undefined,
+                }}
                 title="Lưu tin yêu thích"
                 onClick={() => setIsFavorited(!isFavorited)}
               >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill={isFavorited ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                </svg>
                 <span>{isFavorited ? 'Đã lưu' : 'Lưu tin'}</span>
               </button>
             </div>
@@ -250,8 +279,25 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
             ))}
             <ConditionBadge condition={product.condition} />
             {product.requiresBuyerEkyc && (
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '3px 10px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.4)' }}>
-                Yêu cầu xác thực eKYC
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  padding: '3px 10px',
+                  borderRadius: '12px',
+                  background: 'rgba(59, 130, 246, 0.12)',
+                  color: 'var(--og-color-primary, #2563eb)',
+                  border: '1px solid rgba(59, 130, 246, 0.35)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+                title="Sản phẩm giá trị cao yêu cầu Người mua phải hoàn tất định danh eKYC trước khi đặt mua"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <span>Yêu cầu Người mua eKYC</span>
               </span>
             )}
           </div>
@@ -317,73 +363,110 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
             </div>
           </div>
 
-          {/* Contact Row (Bảo mật thông tin cá nhân & Trao đổi chính thức) */}
-          <div className="og-quick-contact-row" aria-label="Liên hệ nhanh với người bán">
-            <button
-              type="button"
-              className="og-btn-quick-chat"
-              onClick={handleChat}
-              style={{ width: '100%', justifyContent: 'center' }}
-              aria-label="Nhắn tin trao đổi bảo mật với người bán"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-              </svg>
-              <span>Nhắn tin bảo mật với {product.seller.displayName}</span>
-            </button>
-          </div>
-
-          {/* Primary Purchase Buttons (Add to cart & Buy now) */}
-          <div className="og-purchase-row">
-            <button
-              type="button"
-              className="og-btn-add-cart"
-              onClick={handleAddToCart}
-            >
-              <span><Icon name="cart" /></span>
-              <span>Thêm vào giỏ</span>
-            </button>
-
-            <button
-              type="button"
-              className={`og-btn-buy-now${hasAgreedPrice ? ' og-btn-buy-now--agreed' : ''}`}
-              onClick={() => handleBuyNow(true)}
-              title={hasAgreedPrice ? `Mua ngay với giá thỏa thuận ${formattedAgreedPrice}` : 'Mua ngay'}
-            >
-              <span>{hasAgreedPrice ? `Mua ngay (${formattedAgreedPrice})` : 'Mua ngay'}</span>
-            </button>
-          </div>
-
-          {/* If agreed price is active, offer option to buy at listed price */}
-          {hasAgreedPrice && (
-            <div style={{ textAlign: 'center', marginTop: '6px' }}>
+          {/* Compact Action Buttons Grid: 2 Rows (Thao tác mua hàng & Trao đổi) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
+            {/* Hàng 1: Nút Mua hàng chính (Thêm vào giỏ 38% + Mua ngay 62%) */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(130px, 38%) 1fr', gap: '10px' }}>
               <button
                 type="button"
-                onClick={() => handleBuyNow(false)}
+                className="og-btn-add-cart"
+                onClick={handleAddToCart}
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--og-color-text-secondary)',
-                  fontSize: '12px',
-                  textDecoration: 'underline',
-                  cursor: 'pointer',
-                  padding: '4px 8px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  height: '46px',
+                  borderRadius: '10px',
+                  fontSize: '0.94rem',
+                  fontWeight: 600,
+                  padding: '0 12px',
                 }}
               >
-                Hoặc mua theo giá niêm yết ({formattedPrice})
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="9" cy="21" r="1" />
+                  <circle cx="20" cy="21" r="1" />
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                </svg>
+                <span>Thêm vào giỏ</span>
+              </button>
+
+              <button
+                type="button"
+                className={`og-btn-buy-now${hasAgreedPrice ? ' og-btn-buy-now--agreed' : ''}`}
+                onClick={() => handleBuyNow(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  height: '46px',
+                  borderRadius: '10px',
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  padding: '0 16px',
+                }}
+                title={hasAgreedPrice ? `Mua ngay với giá thỏa thuận ${formattedAgreedPrice}` : 'Mua ngay'}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                </svg>
+                <span>{hasAgreedPrice ? `Mua ngay (${formattedAgreedPrice})` : 'Mua ngay'}</span>
               </button>
             </div>
-          )}
 
-          {/* Make Offer Button */}
-          <button
-            type="button"
-            className="og-btn-make-offer"
-            onClick={handleOpenOffer}
-          >
-            <span><Icon name="tag" /></span>
-            <span>{hasAgreedPrice ? 'Thương lượng lại (Xem đề xuất)' : 'Đề xuất Trả giá (Make an Offer)'}</span>
-          </button>
+            {/* Hàng 2: Trao đổi & Thương lượng (Nhắn tin 50% + Trả giá 50%) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <button
+                type="button"
+                className="og-btn-quick-chat"
+                onClick={handleChat}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  height: '42px',
+                  borderRadius: '10px',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  padding: '0 10px',
+                  width: '100%',
+                }}
+                aria-label="Nhắn tin bảo mật với người bán"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                <span>Nhắn tin với shop</span>
+              </button>
+
+              <button
+                type="button"
+                className="og-btn-make-offer"
+                onClick={handleOpenOffer}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  height: '42px',
+                  borderRadius: '10px',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  padding: '0 10px',
+                  margin: 0,
+                  width: '100%',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                  <circle cx="7" cy="7" r="1" fill="currentColor" />
+                </svg>
+                <span>{hasAgreedPrice ? 'Xem đề xuất trả giá' : 'Đề xuất Trả giá'}</span>
+              </button>
+            </div>
+          </div>
         </section>
       </div>
 
@@ -392,12 +475,52 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
         <div className="og-seller-left">
           <div className="og-seller-avatar-wrap">
             <span>{product.seller.displayName.charAt(0).toUpperCase()}</span>
-            <span className="og-seller-avatar-badge">Đã xác minh</span>
+            {product.seller.trustLabel === 'Đã xác minh eKYC' && (
+              <span className="og-seller-avatar-badge" title="Đã xác thực eKYC">Đã eKYC</span>
+            )}
           </div>
           <div className="og-seller-info">
-            <div className="og-seller-name-row">
+            <div className="og-seller-name-row" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span className="og-seller-name">{product.seller.displayName}</span>
-              <VerificationBadge status="VERIFIED" showLabel={false} />
+              {product.seller.trustLabel === 'Đã xác minh eKYC' ? (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    color: '#059669',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                  }}
+                  title="Người bán đã hoàn tất xác thực danh tính căn cước công dân (eKYC)"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    <polyline points="9 12 11 14 15 10" />
+                  </svg>
+                  <span>Đã xác minh eKYC</span>
+                </span>
+              ) : (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '0.78rem',
+                    color: 'var(--og-color-text-secondary)',
+                    backgroundColor: 'var(--og-color-surface-subtle)',
+                    border: '1px solid var(--og-color-border)',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                  }}
+                >
+                  <span>Chưa xác minh eKYC</span>
+                </span>
+              )}
             </div>
             <div className="og-seller-stats">
               <span><Icon name="star" size={15} /> 5.0 (18 đánh giá)</span>

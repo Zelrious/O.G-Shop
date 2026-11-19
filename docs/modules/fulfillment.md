@@ -81,6 +81,7 @@ Quyết định tranh chấp và lệnh chuyển tiền cuối cùng.
 ## Completed tasks
 
 - [x] Tạo package boundary và tài liệu module.
+- [x] **Tích hợp PR #17 Return Shipment & Simulation Guard (TASK-0119)**: Đồng bộ luồng vận chuyển trả hàng `UC83` và ràng buộc fail-closed cho endpoint xác nhận giao hàng trả bởi carrier mô phỏng (`ReturnCaseController`).
 
 ## Remaining tasks
 

@@ -84,6 +84,27 @@ describe('ProductCard Component', () => {
     expect(screen.getByText('Đã thỏa thuận')).toBeInTheDocument();
     expect(screen.getByText(/15\.500\.000/)).toBeInTheDocument();
   });
+
+  it('renders "Đã eKYC" badge for verified seller and "Cần eKYC" badge when requiresBuyerEkyc is true', () => {
+    const ekycProduct: ProductSummary = {
+      ...mockProductSummary,
+      seller: {
+        sellerId: 7,
+        displayName: 'Minh Shop',
+        trustLabel: 'Đã xác minh eKYC',
+      },
+      requiresBuyerEkyc: true,
+    };
+
+    render(
+      <MemoryRouter>
+        <ProductCard product={ekycProduct} />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Đã eKYC')).toBeInTheDocument();
+    expect(screen.getByText('Cần eKYC')).toBeInTheDocument();
+  });
 });
 
 describe('MarketplaceFilters Component', () => {

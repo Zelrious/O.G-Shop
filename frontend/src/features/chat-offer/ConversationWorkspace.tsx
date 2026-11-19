@@ -84,14 +84,17 @@ export function ConversationWorkspace({ compact = false, initialQuery = '', isAc
     if (!detail || !isActive || active.current || memory.sending.has(detail.conversation.id) || !detail.canSend || !online || (!draft.trim() && !file)) return; const id = detail.conversation.id, owner = userId, text = draft.trim(), chosen = file;
     const signature = JSON.stringify({ id, text, file: chosen ? { name: chosen.name, size: chosen.size, lastModified: chosen.lastModified } : null }); const previous = client.current.get(id); if (previous?.signature !== signature || previous?.file !== (chosen ?? undefined)) client.current.set(id, { signature, id: crypto.randomUUID(), file: chosen ?? undefined }); const command = client.current.get(id)!;
     active.current = true; memory.sending.add(id); setBusy(true); setSendError(null); setNotice(null);
-    try { if (chosen) await chatApi.media(id, command.id, chosen, text); else await chatApi.send(id, command.id, text); drafts.current.delete(id); files.current.delete(id); client.current.delete(id); if (actor.current !== owner) return; if (!validAction(id, owner)) { setRefresh(n => n + 1); return; } setDraft(''); setFile(null); atBottom.current = true; setNotice(chosen ? 'Tệp đã được gửi.' : 'Tin nhắn đã được gửi.'); setRefresh(n => n + 1); if (isActive) editor.current?.focus(); }
-    catch (e: unknown) { if (validAction(id, owner)) setSendError(e instanceof Error ? e.message : 'Chưa gửi được. Bản soạn đã được giữ.'); } finally { memory.sending.delete(id); window.dispatchEvent(new Event('og-chat-updated')); if (actor.current === owner) { active.current = false; setBusy(false); } }
+    try { if (chosen) await chatApi.media(id, command.id, chosen, text); else await chatApi.send(id, command.id, text); drafts.current.delete(id); files.current.delete(id); client.current.delete(id); if (actor.current !== owner) return; if (!validAction(id, owner)) { setRefresh(n => n + 1); return; } setDraft(''); setFile(null); atBottom.current = true; setNotice(chosen ? 'Tệp đã được gửi.' : 'Tin nhắn đã được gửi.'); setRefresh(n => n + 1); }
+    catch (e: unknown) { if (validAction(id, owner)) setSendError(e instanceof Error ? e.message : 'Chưa gửi được. Bản soạn đã được giữ.'); } finally { memory.sending.delete(id); window.dispatchEvent(new Event('og-chat-updated')); if (actor.current === owner) { active.current = false; setBusy(false); setTimeout(() => { if (isActive) editor.current?.focus(); }, 30); } }
   };
   const refreshThread = () => { setRefresh(n => n + 1); window.dispatchEvent(new Event('og-chat-updated')); };
   const offers = new Map(detail?.offers.map(o => [o.id, o]) ?? []);
   const activeAcceptedOffer = useMemo(() => {
     if (!detail || detail.conversation.role !== 'BUYER') return null;
     return [...detail.offers].reverse().find(o => o.status === 'ACCEPTED' && o.orderId === null) ?? null;
+  }, [detail]);
+  const hasMaskedMessage = useMemo(() => {
+    return detail?.messages.items.some(m => m.moderationStatus === 'MASKED' || m.content.includes('***')) ?? false;
   }, [detail]);
   return <section className={"og-chat-page" + (compact ? " og-chat-page--compact" : "")}><header className="og-chat-heading" hidden={compact}><h1 className="og-chat-accessible-title">Tin nhắn</h1><Link className="og-chat-return-link" to={returnTo} state={{ restoreScroll: true }}><Icon name="back" size={17} />Trở lại trang đang xem</Link><div className="og-chat-heading-actions"><span className={'og-chat-connection' + (!online || connectionError ? ' og-chat-connection--offline' : '')}><i aria-hidden="true" />{!online ? 'Đang ngoại tuyến' : connectionError ? 'Đang kết nối lại' : 'Tự cập nhật định kỳ (2.5 giây/lần)'}</span>{user?.roles.includes('SELLER') && <Link className="og-button og-button--outline" to="/seller/blocked">Danh sách chặn</Link>}</div></header>
     <div className={'og-chat-workspace' + (selectedId ? ' og-chat-workspace--selected' : '')}><aside className="og-chat-inbox" aria-label="Hộp thư" hidden={compact}><form className="og-chat-search" onSubmit={e => { e.preventDefault(); setFilter(query); setPage(0); }}><label htmlFor="chat-search">Tìm hội thoại</label><div><input id="chat-search" type="search" maxLength={100} placeholder="Tên món đồ..." value={query} onChange={e => setQuery(e.target.value)} /><button className="og-button og-button--outline">Tìm</button></div></form><div className="og-chat-inbox-meta"><strong>{list?.total ?? 0} hội thoại</strong><span>{list?.unread ?? 0} chưa đọc</span></div>
@@ -135,11 +138,34 @@ export function ConversationWorkspace({ compact = false, initialQuery = '', isAc
             )}
           </div>
         </div>
+        {hasMaskedMessage && (
+          <div className="og-chat-safety-banner" role="alert">
+            <Icon name="shield" size={18} />
+            <span>
+              <strong>Cảnh báo an toàn:</strong> Nhằm phòng tránh rủi ro lừa đảo mất tiền cọc, vui lòng không chia sẻ số điện thoại hoặc giao dịch qua Zalo/Facebook ngoài sàn O.G Shop.
+            </span>
+          </div>
+        )}
         {detail.restrictionReason && <div className="og-chat-restriction"><Alert type="warning">{detail.restrictionReason} {detail.canSend ? <Link to={'/products/' + detail.conversation.productId}>Xem tình trạng món đồ</Link> : <Link to="/account/status">Xem tình trạng và hồ sơ cũ</Link>}</Alert></div>}
         <div className="og-chat-log" role="log" aria-label="Lịch sử tin nhắn" aria-live="polite" ref={log} onScroll={() => { if (log.current) { atBottom.current = log.current.scrollHeight - log.current.scrollTop - log.current.clientHeight < 90; markRead(); } }}>
           {detail.messages.nextBefore && <div className="og-chat-load-older"><button className="og-button og-button--outline" disabled={olderLoading} onClick={() => void loadOlder()}>{olderLoading ? 'Đang tải...' : 'Xem tin cũ hơn'}</button></div>}
           {!detail.messages.items.length && <div className="og-chat-empty"><h3>Chào {detail.conversation.partnerName}</h3><p>Hỏi về tình trạng, phụ kiện hoặc cách nhận món đồ để giao dịch rõ ràng hơn.</p></div>}
-          {detail.messages.items.map(m => { const mine = m.senderId === userId; const offer = m.offerId ? offers.get(m.offerId) : null; return <div key={m.id} className={'og-chat-message' + (mine ? ' og-chat-message--mine' : '') + (m.type === 'SYSTEM' ? ' og-chat-message--system' : '')}><div className="og-chat-bubble">{offer ? <OfferCard offer={offer} productId={detail.conversation.productId} sellerView={detail.conversation.role === 'SELLER'} onCounter={o => setDialog({ conversation: detail.conversation.id, counter: o })} onChanged={refreshThread} /> : m.type === 'IMAGE' || m.type === 'VIDEO' ? <><PrivateAttachment message={m} userId={userId} />{m.content && <p>{m.content}</p>}</> : <p>{m.content}</p>}</div><small>{mine ? 'Bạn' : m.type === 'SYSTEM' ? 'Cập nhật' : detail.conversation.partnerName} · {new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}{mine && m.id <= detail.peerReadMessageId ? ' · Đã xem' : ''}</small></div>; })}
+          {detail.messages.items.map(m => {
+            const mine = m.senderId === userId;
+            const offer = m.offerId ? offers.get(m.offerId) : null;
+            const isMasked = m.moderationStatus === 'MASKED' || m.content.includes('***');
+            return (
+              <div key={m.id} className={'og-chat-message' + (mine ? ' og-chat-message--mine' : '') + (m.type === 'SYSTEM' ? ' og-chat-message--system' : '')}>
+                <div className="og-chat-bubble-container">
+                  <div className="og-chat-bubble">
+                    {offer ? <OfferCard offer={offer} productId={detail.conversation.productId} sellerView={detail.conversation.role === 'SELLER'} onCounter={o => setDialog({ conversation: detail.conversation.id, counter: o })} onChanged={refreshThread} /> : m.type === 'IMAGE' || m.type === 'VIDEO' ? <><PrivateAttachment message={m} userId={userId} />{m.content && <p>{m.content}</p>}</> : <p>{m.content}</p>}
+                  </div>
+                  {isMasked && <span className="og-chat-masked-badge">[Đã ẩn thông tin liên hệ]</span>}
+                </div>
+                <small>{mine ? 'Bạn' : m.type === 'SYSTEM' ? 'Cập nhật' : detail.conversation.partnerName} · {new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}{mine && m.id <= detail.peerReadMessageId ? ' · Đã xem' : ''}</small>
+              </div>
+            );
+          })}
         </div>
         <div className="og-chat-composer">{!online && <Alert type="warning">Bạn đang ngoại tuyến. Bản soạn vẫn ở đây để gửi lại khi có kết nối.</Alert>}{sendError && <div role="alert"><Alert type="danger">{sendError}</Alert><small>Bản soạn được giữ để thử lại.</small></div>}{notice && <div role="status" className="og-chat-sent">{notice}</div>}
           {file && <div className="og-chat-selected-file"><span>{file.name} · {(file.size / 1048576).toFixed(2)} MB</span><button className="og-button og-button--ghost" disabled={busy} onClick={() => { files.current.delete(detail.conversation.id); setFile(null); }} aria-label="Bỏ tệp đính kèm"><Icon name="close" size={16} /></button></div>}

@@ -37,8 +37,22 @@ public class GroupCheckoutDtos {
             @NotBlank String paymentMethod,
             String voucherCode,
             Long coinsRequested,
-            @NotEmpty List<@Valid GroupCheckoutItemRequest> items
-    ) {}
+            @NotEmpty List<@Valid GroupCheckoutItemRequest> items,
+            UUID quickAuthResultId
+    ) {
+        public GroupCheckoutRequest(
+                String commandKey,
+                ShippingAddressDto shippingAddress,
+                String deliveryMethod,
+                String carrier,
+                String paymentMethod,
+                String voucherCode,
+                Long coinsRequested,
+                List<GroupCheckoutItemRequest> items
+        ) {
+            this(commandKey, shippingAddress, deliveryMethod, carrier, paymentMethod, voucherCode, coinsRequested, items, null);
+        }
+    }
 
     public record OrderItemResponse(
             Long orderItemId,

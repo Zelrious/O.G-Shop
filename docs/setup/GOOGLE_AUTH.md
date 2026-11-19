@@ -5,7 +5,7 @@ Backend dùng Google Identity Services với Web Client ID, kiểm ID token bằ
 1. Mở [Google Cloud Console](https://console.cloud.google.com/) và chọn dự án.
 2. Trong Google Auth Platform, cấu hình Branding (tên ứng dụng/email hỗ trợ), Audience External và Test users cho các email dùng thử nếu dự án đang Testing.
 3. Vào Clients → Create client → Web application.
-4. Authorized JavaScript origins: thêm `http://localhost:5173` và `http://localhost`. Thêm đúng origin nếu dùng cổng khác; origin không chứa `/login` hay `/register`. Dùng HTTPS khi triển khai thật.
+4. Authorized JavaScript origins: thêm `http://localhost:5174`, `http://localhost:5173`, `http://127.0.0.1:5174` và `http://localhost`. Thêm đúng origin nếu dùng cổng khác; origin không chứa dấu gạch chéo cuối (`/`), không chứa path như `/login` hay `/register`. Dùng HTTPS khi triển khai thật.
 5. Điền `GOOGLE_CLIENT_ID=...apps.googleusercontent.com` trong tệp `.env` backend đang nạp rồi restart backend. Frontend không cần thêm biến VITE cho Client ID.
 
 Người dùng đã cung cấp Client ID và TASK-0086 đã thêm vào `.env` root và `backend/.env`, giữ các khóa khác. Biến môi trường/system properties vẫn ưu tiên hơn `.env`. Nút Google bị vô hiệu khi Client ID trống; tệp template không chứa giá trị tài khoản thật.

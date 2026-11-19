@@ -131,6 +131,7 @@ public class UserEntity {
     public Instant getUpdatedAt() { return updatedAt; }
     public Instant getEmailVerifiedAt() { return emailVerifiedAt; }
     public String getIdentityWorkflow() { return identityWorkflow; }
+    public void setIdentityWorkflow(String identityWorkflow) { this.identityWorkflow = identityWorkflow; }
     public String getBankName() { return bankName; }
     public String getBankAccountNumber() { return bankAccountNumber; }
     public String getBankAccountHolder() { return bankAccountHolder; }

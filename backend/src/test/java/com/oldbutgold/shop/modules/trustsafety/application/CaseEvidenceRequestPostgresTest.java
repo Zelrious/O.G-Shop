@@ -398,31 +398,31 @@ class CaseEvidenceRequestPostgresTest {
     // ==================== 1. FLYWAY MIGRATION & SCHEMA VERIFICATION ====================
 
     @Test
-    @DisplayName("PostgreSQL: Flyway migration V38, V42 và V43 đã thực thi thành công")
-    void testFlywayMigration_v38_appliedSuccessfully() {
-        Map<String, Object> v38Record = jdbcTemplate.queryForMap(
-                "SELECT installed_rank, version, description, success FROM public.flyway_schema_history WHERE version = '38'"
-        );
-        assertThat(v38Record).isNotNull();
-        assertThat(v38Record.get("version")).isEqualTo("38");
-        assertThat(v38Record.get("success")).isEqualTo(true);
-        assertThat(v38Record.get("description").toString()).containsIgnoringCase("bd5");
-
+    @DisplayName("PostgreSQL: Flyway migration V42, V46 và V47 đã thực thi thành công")
+    void testFlywayMigration_v42_appliedSuccessfully() {
         Map<String, Object> v42Record = jdbcTemplate.queryForMap(
                 "SELECT installed_rank, version, description, success FROM public.flyway_schema_history WHERE version = '42'"
         );
         assertThat(v42Record).isNotNull();
         assertThat(v42Record.get("version")).isEqualTo("42");
         assertThat(v42Record.get("success")).isEqualTo(true);
-        assertThat(v42Record.get("description").toString()).containsIgnoringCase("hardening");
+        assertThat(v42Record.get("description").toString()).containsIgnoringCase("bd5");
 
-        Map<String, Object> v43Record = jdbcTemplate.queryForMap(
-                "SELECT installed_rank, version, description, success FROM public.flyway_schema_history WHERE version = '43'"
+        Map<String, Object> v46Record = jdbcTemplate.queryForMap(
+                "SELECT installed_rank, version, description, success FROM public.flyway_schema_history WHERE version = '46'"
         );
-        assertThat(v43Record).isNotNull();
-        assertThat(v43Record.get("version")).isEqualTo("43");
-        assertThat(v43Record.get("success")).isEqualTo(true);
-        assertThat(v43Record.get("description").toString()).containsIgnoringCase("request id");
+        assertThat(v46Record).isNotNull();
+        assertThat(v46Record.get("version")).isEqualTo("46");
+        assertThat(v46Record.get("success")).isEqualTo(true);
+        assertThat(v46Record.get("description").toString()).containsIgnoringCase("hardening");
+
+        Map<String, Object> v47Record = jdbcTemplate.queryForMap(
+                "SELECT installed_rank, version, description, success FROM public.flyway_schema_history WHERE version = '47'"
+        );
+        assertThat(v47Record).isNotNull();
+        assertThat(v47Record.get("version")).isEqualTo("47");
+        assertThat(v47Record.get("success")).isEqualTo(true);
+        assertThat(v47Record.get("description").toString()).containsIgnoringCase("request id");
     }
 
     @Test
@@ -756,7 +756,7 @@ class CaseEvidenceRequestPostgresTest {
     // ==================== D-08 & BD-5 ACCEPTANCE GAP CLOSURE ====================
 
     @Test
-    @DisplayName("D-08 / PO APPROVED: KTV Final Decision chốt vòng 2 -> chuyển PENDING request sang CANCELLED trong cùng transaction trên PostgreSQL")
+    @DisplayName("PO-CHOICE-3 + D-08: Khi còn hạn 48h -> chặn KTV với 409 EVIDENCE_REQUEST_IN_PROGRESS; khi quá hạn -> KTV chốt vòng 2 và chuyển PENDING sang CANCELLED cùng transaction")
     void testD08_ktvDecideRound2_cancelsPendingEvidenceRequestInSameTx() {
         TestFixture fix = createEligibleCaseFixture(false);
         String reqCmdKey = "CMD_REQ_" + UUID.randomUUID();
@@ -774,7 +774,35 @@ class CaseEvidenceRequestPostgresTest {
                 String.class, requestId);
         assertThat(statusBefore).isEqualTo("PENDING");
 
-        // 2. KTV executes Round 2 Final Decision
+        // 2. PO-CHOICE-3: While PENDING request is still within 48h deadline, ktvDecideRound2 must be rejected with 409
+        String blockedCmdKey = "CMD_DEC_BLOCKED_" + UUID.randomUUID();
+        ReturnCaseDtos.KtvRound2DecisionRequest blockedReq = new ReturnCaseDtos.KtvRound2DecisionRequest(
+                CaseDecisionEntity.OUTCOME_FULL_GOODS_REFUND,
+                "Thử phán quyết khi yêu cầu bổ sung bằng chứng vẫn còn hạn",
+                blockedCmdKey
+        );
+        assertThatThrownBy(() -> returnCaseService.ktvDecideRound2(ktvId, fix.caseId(), blockedReq))
+                .isInstanceOf(TrustSafetyBusinessException.class)
+                .satisfies(ex -> {
+                    TrustSafetyBusinessException tsEx = (TrustSafetyBusinessException) ex;
+                    assertThat(tsEx.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(tsEx.getCode()).isEqualTo("EVIDENCE_REQUEST_IN_PROGRESS");
+                });
+
+        String statusAfterBlock = jdbcTemplate.queryForObject(
+                "SELECT status FROM og_compat.case_evidence_requests WHERE request_id = ?",
+                String.class, requestId);
+        assertThat(statusAfterBlock).isEqualTo("PENDING");
+
+        // 3. Advance request past 48h deadline (UC75 Alt 4a: "hết hạn thì xét nội dung đã nhận")
+        jdbcTemplate.update("""
+                UPDATE og_compat.case_evidence_requests
+                SET issued_at = issued_at - INTERVAL '49 hours',
+                    deadline_at = CURRENT_TIMESTAMP - INTERVAL '1 hour'
+                WHERE request_id = ?
+                """, requestId);
+
+        // 4. KTV executes Round 2 Final Decision after deadline -> succeeds & D-08 cancels PENDING request
         String decCmdKey = "CMD_DEC_" + UUID.randomUUID();
         ReturnCaseDtos.KtvRound2DecisionRequest decReq = new ReturnCaseDtos.KtvRound2DecisionRequest(
                 CaseDecisionEntity.OUTCOME_FULL_GOODS_REFUND,
@@ -784,7 +812,7 @@ class CaseEvidenceRequestPostgresTest {
         ReturnCaseDtos.ReturnCaseDetailResponse decResp = returnCaseService.ktvDecideRound2(ktvId, fix.caseId(), decReq);
         assertThat(decResp).isNotNull();
 
-        // 3. Verify in PostgreSQL that request is now CANCELLED in og_compat view and physical table
+        // 5. Verify in PostgreSQL that request is now CANCELLED in og_compat view and physical table
         Map<String, Object> reqAfter = jdbcTemplate.queryForMap(
                 "SELECT status, updated_at FROM og_compat.case_evidence_requests WHERE request_id = ?",
                 requestId);
@@ -798,7 +826,7 @@ class CaseEvidenceRequestPostgresTest {
     }
 
     @Test
-    @DisplayName("D-08 / PO APPROVED: Nếu transaction của KTV Final Decision bị rollback -> Request vẫn giữ nguyên PENDING trên PostgreSQL")
+    @DisplayName("PO-CHOICE-3 + D-08: Khi request quá hạn bị hủy trong KTV Final Decision nhưng transaction rollback -> Request vẫn giữ nguyên PENDING trên PostgreSQL")
     void testD08_ktvDecideRound2_rollbackRevertsRequestCancellation() {
         TestFixture fix = createEligibleCaseFixture(false);
         String reqCmdKey = "CMD_REQ_" + UUID.randomUUID();
@@ -810,11 +838,18 @@ class CaseEvidenceRequestPostgresTest {
         CaseEvidenceRequestService.KtvRequestEvidenceResult reqResp = service.requestEvidence(ktvId, fix.caseId(), reqDto);
         UUID requestId = reqResp.response().requestId();
 
-        // 1. Verify request is PENDING
+        // 1. Verify request is PENDING & move past deadline so PO-CHOICE-3 permits decision
         String statusBefore = jdbcTemplate.queryForObject(
                 "SELECT status FROM og_compat.case_evidence_requests WHERE request_id = ?",
                 String.class, requestId);
         assertThat(statusBefore).isEqualTo("PENDING");
+
+        jdbcTemplate.update("""
+                UPDATE og_compat.case_evidence_requests
+                SET issued_at = issued_at - INTERVAL '49 hours',
+                    deadline_at = CURRENT_TIMESTAMP - INTERVAL '1 hour'
+                WHERE request_id = ?
+                """, requestId);
 
         // 2. Execute ktvDecideRound2 inside a tx and deliberately force rollback
         TransactionTemplate tx = new TransactionTemplate(transactionManager);

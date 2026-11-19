@@ -8,6 +8,7 @@ import com.oldbutgold.shop.modules.catalog.infrastructure.persistence.ProductRev
 import com.oldbutgold.shop.modules.catalog.infrastructure.persistence.ProductRevisionRepository;
 import com.oldbutgold.shop.modules.commerce.application.GroupCheckoutDtos.*;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.*;
+import com.oldbutgold.shop.modules.identity.application.IdentityCommerceFacade;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.RewardPolicyEntity;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.RewardPolicyRepository;
 import org.slf4j.Logger;
@@ -49,6 +50,7 @@ public class GroupCheckoutService {
     private final JdbcTemplate jdbcTemplate;
     private final Clock clock;
     private final ObjectMapper objectMapper;
+    private final IdentityCommerceFacade identityCommerceFacade;
 
     @Value("${app.reward.canonical-policy-code:}")
     private String configuredCanonicalPolicyCode;
@@ -61,6 +63,21 @@ public class GroupCheckoutService {
     // DevOps configuration alone CANNOT open Coin checkout while this gate is closed.
     private boolean capPoApproved = false;
 
+    public GroupCheckoutService(ProductRepository productRepository,
+                                ProductRevisionRepository productRevisionRepository,
+                                CheckoutGroupRepository checkoutGroupRepository,
+                                OrderRepository orderRepository,
+                                OrderItemRepository orderItemRepository,
+                                InventoryReservationRepository inventoryReservationRepository,
+                                RewardPolicyRepository rewardPolicyRepository,
+                                JdbcTemplate jdbcTemplate,
+                                Clock clock,
+                                ObjectMapper objectMapper) {
+        this(productRepository, productRevisionRepository, checkoutGroupRepository,
+                orderRepository, orderItemRepository, inventoryReservationRepository,
+                rewardPolicyRepository, jdbcTemplate, clock, objectMapper, null);
+    }
+
     @Autowired
     public GroupCheckoutService(ProductRepository productRepository,
                                 ProductRevisionRepository productRevisionRepository,
@@ -71,7 +88,8 @@ public class GroupCheckoutService {
                                 RewardPolicyRepository rewardPolicyRepository,
                                 @Autowired(required = false) JdbcTemplate jdbcTemplate,
                                 Clock clock,
-                                ObjectMapper objectMapper) {
+                                ObjectMapper objectMapper,
+                                @Autowired(required = false) IdentityCommerceFacade identityCommerceFacade) {
         this.productRepository = productRepository;
         this.productRevisionRepository = productRevisionRepository;
         this.checkoutGroupRepository = checkoutGroupRepository;
@@ -82,6 +100,7 @@ public class GroupCheckoutService {
         this.jdbcTemplate = jdbcTemplate;
         this.clock = clock;
         this.objectMapper = objectMapper;
+        this.identityCommerceFacade = identityCommerceFacade;
     }
 
     public GroupCheckoutResponse checkout(long buyerId, GroupCheckoutRequest request) {
@@ -147,6 +166,7 @@ public class GroupCheckoutService {
 
         List<ValidatedItem> validatedItems = new ArrayList<>();
         BigDecimal groupSubtotal = BigDecimal.ZERO;
+        boolean anyRequiresBuyerEkyc = false;
 
         for (GroupCheckoutItemRequest itemReq : request.items()) {
             ProductEntity product = productRepository.findById(itemReq.productId())
@@ -157,6 +177,12 @@ public class GroupCheckoutService {
             }
             if (!"UC83".equals(product.getWorkflowModel())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sản phẩm " + product.getTitle() + " không thuộc mô hình UC83.");
+            }
+            if (identityCommerceFacade != null) {
+                identityCommerceFacade.requirePurchaseAllowed(buyerId, product.getSellerId(), product.isRequiresBuyerEkyc());
+            }
+            if (product.isRequiresBuyerEkyc()) {
+                anyRequiresBuyerEkyc = true;
             }
             if (product.getQuantityAvailable() < itemReq.quantity()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sản phẩm " + product.getTitle() + " không đủ số lượng khả dụng.");
@@ -183,6 +209,17 @@ public class GroupCheckoutService {
             groupSubtotal = groupSubtotal.add(lineSubtotal);
 
             validatedItems.add(new ValidatedItem(product, revision, itemReq, agreedPrice, lineSubtotal));
+        }
+
+        // UC24 / UC08: Fail-closed Buyer eKYC + Quick Face Auth guard for high-value items
+        if (anyRequiresBuyerEkyc) {
+            if (identityCommerceFacade == null) {
+                throw new IllegalStateException("Không thể xác minh trạng thái eKYC cho sản phẩm yêu cầu xác thực.");
+            }
+            if (!identityCommerceFacade.isUserVerified(buyerId)) {
+                throw new IllegalStateException("Đơn hàng có sản phẩm yêu cầu Người mua phải hoàn tất xác thực eKYC CCCD để đặt mua.");
+            }
+            identityCommerceFacade.requireQuickAuthResult(buyerId, request.quickAuthResultId());
         }
 
         // 3. Voucher calculation
@@ -715,8 +752,8 @@ public class GroupCheckoutService {
         this.configuredMaxRedemptionPercentage = configuredMaxRedemptionPercentage;
     }
 
-    /** For package-internal unit testing / simulated future PO approval gate transition (GAP-1 / DEC-10.7A). */
-    void setCapPoApproved(boolean capPoApproved) {
+    /** For testing / simulated future PO approval gate transition (GAP-1 / DEC-10.7A). */
+    public void setCapPoApproved(boolean capPoApproved) {
         this.capPoApproved = capPoApproved;
     }
 

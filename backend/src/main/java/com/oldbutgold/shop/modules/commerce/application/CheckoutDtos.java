@@ -90,6 +90,7 @@ public final class CheckoutDtos {
             Long eligibleOfferId,
             BigDecimal eligibleOfferPrice,
             String voucherRejectionReason,
+            Boolean requiresBuyerEkyc,
             Long buyerCoinBalance,
             Long maxRedeemableCoins,
             BigDecimal coinDiscount
@@ -104,7 +105,7 @@ public final class CheckoutDtos {
         ) {
             this(productId, productTitle, thumbnailUrl, sellerId, sellerName, listedPrice, shippingFee,
                  buyerSystemFee, voucherDiscount, shippingDiscount, totalAmount, addresses, selectedAddress,
-                 availableVouchers, appliedVoucher, agreedPrice, acceptedOfferId, null, null, null, 0L, 0L, BigDecimal.ZERO);
+                 availableVouchers, appliedVoucher, agreedPrice, acceptedOfferId, null, null, null, false, 0L, 0L, BigDecimal.ZERO);
         }
 
         public CheckoutPreviewResponse(
@@ -119,7 +120,7 @@ public final class CheckoutDtos {
             this(productId, productTitle, thumbnailUrl, sellerId, sellerName, listedPrice, shippingFee,
                  buyerSystemFee, voucherDiscount, shippingDiscount, totalAmount, addresses, selectedAddress,
                  availableVouchers, appliedVoucher, agreedPrice, acceptedOfferId, eligibleOfferId,
-                 eligibleOfferPrice, voucherRejectionReason, 0L, 0L, BigDecimal.ZERO);
+                 eligibleOfferPrice, voucherRejectionReason, false, 0L, 0L, BigDecimal.ZERO);
         }
     }
 
@@ -133,22 +134,27 @@ public final class CheckoutDtos {
             Long coinsToRedeem,
             @NotBlank(message = "Mã thao tác (commandKey) là bắt buộc.")
             @jakarta.validation.constraints.Size(max = 150, message = "Mã thao tác (commandKey) không được vượt quá 150 ký tự.")
-            String commandKey
+            String commandKey,
+            java.util.UUID quickAuthResultId
     ) {
         public BuyNowRequest(Long productId, Long addressId, CreateAddressRequest newAddress, String voucherCode) {
-            this(productId, addressId, newAddress, voucherCode, null, 0L, null);
+            this(productId, addressId, newAddress, voucherCode, null, 0L, null, null);
         }
 
         public BuyNowRequest(Long productId, Long addressId, CreateAddressRequest newAddress, String voucherCode, Long offerId) {
-            this(productId, addressId, newAddress, voucherCode, offerId, 0L, null);
+            this(productId, addressId, newAddress, voucherCode, offerId, 0L, null, null);
         }
 
         public BuyNowRequest(Long productId, Long addressId, CreateAddressRequest newAddress, String voucherCode, Long offerId, Long coinsToRedeem) {
-            this(productId, addressId, newAddress, voucherCode, offerId, coinsToRedeem, null);
+            this(productId, addressId, newAddress, voucherCode, offerId, coinsToRedeem, null, null);
         }
 
         public BuyNowRequest(Long productId, Long addressId, CreateAddressRequest newAddress, String voucherCode, String commandKey) {
-            this(productId, addressId, newAddress, voucherCode, null, 0L, commandKey);
+            this(productId, addressId, newAddress, voucherCode, null, 0L, commandKey, null);
+        }
+
+        public BuyNowRequest(Long productId, Long addressId, CreateAddressRequest newAddress, String voucherCode, Long offerId, Long coinsToRedeem, String commandKey) {
+            this(productId, addressId, newAddress, voucherCode, offerId, coinsToRedeem, commandKey, null);
         }
     }
 

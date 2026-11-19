@@ -2,6 +2,7 @@ package com.oldbutgold.shop.modules.identity.application;
 
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.AddressEntity;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.AddressRepository;
+import com.oldbutgold.shop.modules.identity.infrastructure.persistence.EkycRepository;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.SellerVerificationRepository;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.UserEntity;
 import com.oldbutgold.shop.modules.identity.infrastructure.persistence.UserRepository;
@@ -19,23 +20,26 @@ public class DefaultIdentityCommerceFacade implements IdentityCommerceFacade {
     private final UserRepository userRepository;
     private final AddressRepository addressRepository;
     private final SellerVerificationRepository sellerVerificationRepository;
+    private final EkycRepository ekycRepository;
     private final Clock clock;
     private final AccountAccessService accountAccess;
 
     public DefaultIdentityCommerceFacade(UserRepository userRepository,
                                         AddressRepository addressRepository,
                                         SellerVerificationRepository sellerVerificationRepository,
-                                        Clock clock,AccountAccessService accountAccess) {
+                                        EkycRepository ekycRepository,
+                                        Clock clock, AccountAccessService accountAccess) {
         this.userRepository = userRepository;
         this.addressRepository = addressRepository;
         this.sellerVerificationRepository = sellerVerificationRepository;
+        this.ekycRepository = ekycRepository;
         this.clock = clock;
-        this.accountAccess=accountAccess;
+        this.accountAccess = accountAccess;
     }
 
     @Override
     public boolean isUserVerified(long userId) {
-        return sellerVerificationRepository.findFirstByUserIdAndStatus(userId, "VERIFIED").isPresent();
+        return ekycRepository.hasVerifiedProfile(userId);
     }
     @Override @Transactional(readOnly=true,noRollbackFor=RegistrationException.class)
     public void requirePurchaseAllowed(long buyerId,long sellerId,boolean requiresEkyc) {
@@ -137,5 +141,17 @@ public class DefaultIdentityCommerceFacade implements IdentityCommerceFacade {
                 e.isDefault(),
                 e.getCreatedAt()
         );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void requireQuickAuthResult(long buyerId, java.util.UUID quickAuthResultId) {
+        if (quickAuthResultId == null) {
+            throw new IllegalArgumentException("Thao tác này yêu cầu xác thực nhanh khuôn mặt.");
+        }
+        var valid = ekycRepository.findValidQuickAuthResult(buyerId);
+        if (valid.isEmpty() || !valid.get().resultId().equals(quickAuthResultId)) {
+            throw new IllegalStateException("Kết quả xác thực khuôn mặt không hợp lệ hoặc đã hết hạn. Vui lòng quét lại khuôn mặt.");
+        }
     }
 }

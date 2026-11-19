@@ -3,7 +3,7 @@ export interface ChatProduct { id: number; sellerId: number; title: string; pric
 export interface Conversation { id: number; buyerId: number; sellerId: number; productId: number; title: string; thumbnail: string | null; partnerName: string; role: 'BUYER' | 'SELLER'; lastActivity: string; preview: string; unread: number; blocked: boolean }
 export interface ConversationPage { items: Conversation[]; page: number; size: number; total: number; unread: number }
 export interface ChatMedia { mime: string; bytes: number; duration: number | null; available: boolean }
-export interface ChatMessage { id: number; senderId: number; type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'OFFER' | 'SYSTEM'; content: string; createdAt: string; replyTo: number | null; offerId: number | null; media: ChatMedia | null }
+export interface ChatMessage { id: number; senderId: number; type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'OFFER' | 'SYSTEM'; content: string; createdAt: string; replyTo: number | null; offerId: number | null; media: ChatMedia | null; moderationStatus?: string; violationType?: string }
 export type OfferAction = 'ACCEPT' | 'REJECT' | 'COUNTER' | 'WITHDRAW';
 export interface ChatOffer { id: number; conversationId: number; proposerId: number; parentId: number | null; price: number; status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'COUNTERED' | 'WITHDRAWN' | 'EXPIRED'; createdAt: string; expiresAt: string | null; respondedAt: string | null; respondedBy: number | null; version: number; productVersion: number; orderId: number | null; buyerFee: number; sellerFee: number; allowedActions: OfferAction[]; canCheckout: boolean }
 export interface ChatQuota { images: number; videos: number; bytes: number; maxImages: number; maxVideos: number; maxBytes: number; date: string }

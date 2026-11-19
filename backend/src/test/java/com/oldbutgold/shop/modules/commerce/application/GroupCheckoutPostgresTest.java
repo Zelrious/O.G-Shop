@@ -387,6 +387,7 @@ class GroupCheckoutPostgresTest {
                 """, UUID.randomUUID(), buyerId, policyId, adminId, "CMD_COIN_SEED_" + UUID.randomUUID());
 
         groupCheckoutService.setConfiguredMaxRedemptionPercentage("50");
+        groupCheckoutService.setCapPoApproved(true);
         groupCheckoutService.setConfiguredCanonicalPolicyCode("REWARD_CHECKOUT_STANDARD");
 
         try {
@@ -435,6 +436,7 @@ class GroupCheckoutPostgresTest {
             assertThat(currentBalance).isEqualTo(100000L); // Untouched at T1!
         } finally {
             groupCheckoutService.setConfiguredMaxRedemptionPercentage(null);
+            groupCheckoutService.setCapPoApproved(false);
             groupCheckoutService.setConfiguredCanonicalPolicyCode(null);
         }
     }

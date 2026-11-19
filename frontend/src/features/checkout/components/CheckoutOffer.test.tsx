@@ -14,7 +14,7 @@ it('previews the accepted offer price and forwards its source to checkout', asyn
   expect(await screen.findByText(/Giá đã thương lượng cho 1 món/)).toBeInTheDocument();
   expect(checkoutApi.getCheckoutPreview).toHaveBeenCalledWith(10, undefined, 9);
   fireEvent.click(screen.getByRole('button', { name: /Xác nhận Mua ngay/i }));
-  await waitFor(() => expect(checkoutApi.buyNow).toHaveBeenCalledWith({ productId: 10, offerId: 9, addressId: 1, newAddress: undefined, voucherCode: undefined }));
+  await waitFor(() => expect(checkoutApi.buyNow).toHaveBeenCalledWith({ productId: 10, offerId: 9, addressId: 1, newAddress: undefined, voucherCode: undefined, commandKey: expect.any(String), quickAuthResultId: undefined }));
 });
 it('explains a stale offer without replacing it with a sold-product error', async () => {
   vi.mocked(checkoutApi.getCheckoutPreview).mockRejectedValue(Object.assign(new Error('Tin đã thay đổi. Cần thương lượng lại.'), { status: 409, code: 'OFFER_LISTING_CHANGED' }));
@@ -47,7 +47,7 @@ it('allows buyer to choose between listed price and eligible accepted offer when
   fireEvent.click(offerRadio);
   expect(checkoutApi.getCheckoutPreview).toHaveBeenCalledWith(10, undefined, 9);
 
-  // Buy now submits with offerId
+  // Buy now submits with offerId and stable commandKey
   fireEvent.click(screen.getByRole('button', { name: /Xác nhận Mua ngay/i }));
-  await waitFor(() => expect(checkoutApi.buyNow).toHaveBeenCalledWith({ productId: 10, offerId: 9, addressId: 1, newAddress: undefined, voucherCode: undefined }));
+  await waitFor(() => expect(checkoutApi.buyNow).toHaveBeenCalledWith({ productId: 10, offerId: 9, addressId: 1, newAddress: undefined, voucherCode: undefined, commandKey: expect.any(String), quickAuthResultId: undefined }));
 });

@@ -88,6 +88,7 @@ Ví tiền thật, partial refund và đối soát production.
 ## Completed tasks
 
 - [x] Tạo package boundary và tài liệu module.
+- [x] **Tích hợp PR #17 Dual-Track Settlement & Vá Deadlock IPN Nhóm (TASK-0119)**: Đồng bộ chuỗi Flyway `V49`–`V55` cho `payment_ipn_raw_receipts`, `settlement_operations` và `reward_ledger`; sửa thứ tự khóa trong `GroupPaymentService.processGroupPaymentIpn` (`CheckoutGroup -> PaymentAttempt -> rawReceipt/og70_write_view`) để ngăn deadlock đồng thời.
 
 ## Remaining tasks
 

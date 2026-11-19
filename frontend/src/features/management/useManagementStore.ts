@@ -36,6 +36,7 @@ export function useManagementStore() {
     approveKyc: managementStore.approveKyc.bind(managementStore),
     rejectKyc: managementStore.rejectKyc.bind(managementStore),
     resolveComplaint: managementStore.resolveComplaint.bind(managementStore),
+    submitComplaint: managementStore.submitComplaint.bind(managementStore),
     escalateComplaintToAdmin: managementStore.escalateComplaintToAdmin.bind(managementStore),
     grantVoucher: managementStore.grantVoucher.bind(managementStore),
     revokeVoucher: managementStore.revokeVoucher.bind(managementStore),

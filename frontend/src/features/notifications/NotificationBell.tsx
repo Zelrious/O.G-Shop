@@ -8,7 +8,7 @@ import { notificationApi, notificationTarget, type NotificationItem, type Notifi
 import './notifications.css';
 
 export function NotificationBell() {
-  const { user } = useAuth();
+  const { user, reloadCurrentUser } = useAuth();
   const chat = useContext(ChatContext);
   const navigate = useNavigate();
   const userId = user?.userId;
@@ -33,9 +33,11 @@ export function NotificationBell() {
       catch (reason) { if (!ignore) setError(reason instanceof Error ? reason.message : 'Chưa tải được thông báo.'); }
       finally { fetching = false; if (!ignore) setLoading(false); }
     };
-    void load(); const timer = window.setInterval(() => void load(), 15000);
-    window.addEventListener('og-notifications-read', load); document.addEventListener('visibilitychange', load);
-    return () => { ignore = true; window.clearInterval(timer); window.removeEventListener('og-notifications-read', load); document.removeEventListener('visibilitychange', load); };
+    void load(); const timer = window.setInterval(() => void load(), 3000);
+    window.addEventListener('og-notifications-read', load);
+    window.addEventListener('og-chat-updated', load);
+    document.addEventListener('visibilitychange', load);
+    return () => { ignore = true; window.clearInterval(timer); window.removeEventListener('og-notifications-read', load); window.removeEventListener('og-chat-updated', load); document.removeEventListener('visibilitychange', load); };
   }, [userId, revision]);
   if (!user) return null;
   const destination = user.roles.includes('KTV') ? '/ktv/notifications' : user.roles.includes('ADMIN') ? '/admin/notifications' : '/notifications';
@@ -68,6 +70,9 @@ export function NotificationBell() {
     }
   };
   const open = async (item: NotificationItem, close: () => void) => {
+    if (item.type === 'EKYC_APPROVED') {
+      void reloadCurrentUser();
+    }
     const target = notificationTarget(item, user.roles), owner = user.userId;
     if (reading.current.has(item.id)) return;
     reading.current.add(item.id);

@@ -591,7 +591,8 @@ class ReturnCaseServicePostgresTest {
                 "CMD_DEC_" + UUID.randomUUID()
         ));
 
-        // KTV decides: REJECT_RETURN
+        // KTV claims case & decides: REJECT_RETURN
+        returnCaseService.assignCaseToKtv(ktvId, createdCase.caseId());
         ReturnCaseDtos.KtvRound1DecisionRequest ktvReq = new ReturnCaseDtos.KtvRound1DecisionRequest(
                 CaseDecisionEntity.OUTCOME_REJECT_RETURN,
                 "KTV xác minh sản phẩm người mua đã bóc seal kích hoạt sử dụng, bác yêu cầu đổi ý",
@@ -673,7 +674,8 @@ class ReturnCaseServicePostgresTest {
         );
         ReturnCaseDtos.ReturnCaseDetailResponse createdCase = returnCaseService.createReturnRequest(buyerId, fixture.orderId(), createReq);
 
-        // KTV proactively decides APPROVE_RETURN while case is OPEN
+        // KTV claims case, then proactively decides APPROVE_RETURN while case is OPEN
+        returnCaseService.assignCaseToKtv(ktvId, createdCase.caseId());
         returnCaseService.ktvDecideRound1(ktvId, createdCase.caseId(), new ReturnCaseDtos.KtvRound1DecisionRequest(
                 CaseDecisionEntity.OUTCOME_APPROVE_RETURN,
                 "KTV duyệt nhanh do có ảnh đối chiếu rõ ràng",
@@ -954,6 +956,7 @@ class ReturnCaseServicePostgresTest {
                     "CMD_CREATE_" + UUID.randomUUID()
             );
             ReturnCaseDtos.ReturnCaseDetailResponse createdCase = returnCaseService.createReturnRequest(buyerId, fixture.orderId(), createReq);
+            returnCaseService.assignCaseToKtv(ktvId, createdCase.caseId());
             return createdCase.caseId();
         });
 
@@ -1061,6 +1064,7 @@ class ReturnCaseServicePostgresTest {
                     "CMD_CREATE_" + UUID.randomUUID()
             );
             ReturnCaseDtos.ReturnCaseDetailResponse createdCase = returnCaseService.createReturnRequest(buyerId, fixture.orderId(), createReq);
+            returnCaseService.assignCaseToKtv(ktvId, createdCase.caseId());
             return createdCase.caseId();
         });
 
@@ -1172,6 +1176,7 @@ class ReturnCaseServicePostgresTest {
                     "CMD_CREATE_" + UUID.randomUUID()
             );
             ReturnCaseDtos.ReturnCaseDetailResponse createdCase = returnCaseService.createReturnRequest(buyerId, fixture.orderId(), createReq);
+            returnCaseService.assignCaseToKtv(ktvId, createdCase.caseId());
             return createdCase.caseId();
         });
 
@@ -1785,7 +1790,7 @@ class ReturnCaseServicePostgresTest {
 
         // 1. Verify CaseDecision on real PostgreSQL
         List<Map<String, Object>> decisions = jdbcTemplate.queryForList("""
-                SELECT decision_id, round_id, reviewed_by, actor_type, outcome, is_final, goods_refund_amount, reason, command_key
+                SELECT decision_id, round_id, reviewed_by, actor_type, outcome, is_final, goods_refund_amount, reason, command_key, decided_at
                 FROM og_compat.case_decisions
                 WHERE round_id = ?
                 """, prf.round2Id());
@@ -2684,6 +2689,7 @@ class ReturnCaseServicePostgresTest {
         txTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         PostReturnFixture prf = createPostReturnFixture(txTemplate);
+        txTemplate.executeWithoutResult(status -> returnCaseService.assignCaseToKtv(ktvId, prf.caseId()));
 
         String cmdKey = "CMD_PG_KTV_FULL_" + UUID.randomUUID();
         ReturnCaseDtos.KtvRound2DecisionRequest req = new ReturnCaseDtos.KtvRound2DecisionRequest(
@@ -2701,7 +2707,7 @@ class ReturnCaseServicePostgresTest {
 
         // 1. Verify CaseDecision on real PostgreSQL
         List<Map<String, Object>> decisions = jdbcTemplate.queryForList("""
-                SELECT decision_id, round_id, reviewed_by, actor_type, outcome, is_final, goods_refund_amount, reason, command_key
+                SELECT decision_id, round_id, reviewed_by, actor_type, outcome, is_final, goods_refund_amount, reason, command_key, decided_at
                 FROM og_compat.case_decisions
                 WHERE round_id = ?
                 """, prf.round2Id());
@@ -2767,7 +2773,8 @@ class ReturnCaseServicePostgresTest {
         );
         txTemplate.execute(status -> returnCaseService.submitDamageExemptionRequest(prf.sellerId(), prf.caseId(), dmgReq));
 
-        // Step 2: KTV decides EXEMPT_GOODS_REFUND
+        // Step 2: KTV claims & decides EXEMPT_GOODS_REFUND
+        txTemplate.executeWithoutResult(status -> returnCaseService.assignCaseToKtv(ktvId, prf.caseId()));
         String cmdKey = "CMD_PG_KTV_EXEMPT_" + UUID.randomUUID();
         ReturnCaseDtos.KtvRound2DecisionRequest req = new ReturnCaseDtos.KtvRound2DecisionRequest(
                 CaseDecisionEntity.OUTCOME_EXEMPT_GOODS_REFUND,
@@ -2784,7 +2791,7 @@ class ReturnCaseServicePostgresTest {
 
         // 1. Verify CaseDecision on real PostgreSQL
         List<Map<String, Object>> decisions = jdbcTemplate.queryForList("""
-                SELECT decision_id, round_id, reviewed_by, actor_type, outcome, is_final, goods_refund_amount, reason, command_key
+                SELECT decision_id, round_id, reviewed_by, actor_type, outcome, is_final, goods_refund_amount, reason, command_key, decided_at
                 FROM og_compat.case_decisions
                 WHERE round_id = ?
                 """, prf.round2Id());
@@ -2839,6 +2846,7 @@ class ReturnCaseServicePostgresTest {
         txTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         PostReturnFixture prf = createPostReturnFixture(txTemplate);
+        txTemplate.executeWithoutResult(status -> returnCaseService.assignCaseToKtv(ktvId, prf.caseId()));
 
         // KTV attempts EXEMPT_GOODS_REFUND without any damage request submitted
         String cmdKey = "CMD_PG_KTV_EXEMPT_NO_DMG_" + UUID.randomUUID();
@@ -2874,6 +2882,7 @@ class ReturnCaseServicePostgresTest {
         txTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         PostReturnFixture prf = createPostReturnFixture(txTemplate);
+        txTemplate.executeWithoutResult(status -> returnCaseService.assignCaseToKtv(ktvId, prf.caseId()));
 
         String cmdKey = "CMD_PG_KTV_ROLLBACK_" + UUID.randomUUID();
         ReturnCaseDtos.KtvRound2DecisionRequest req = new ReturnCaseDtos.KtvRound2DecisionRequest(
@@ -2915,6 +2924,7 @@ class ReturnCaseServicePostgresTest {
         txTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         PostReturnFixture prf = createPostReturnFixture(txTemplate);
+        txTemplate.executeWithoutResult(status -> returnCaseService.assignCaseToKtv(ktvId, prf.caseId()));
 
         String cmdKey = "CMD_PG_KTV_REPLAY_" + UUID.randomUUID();
         ReturnCaseDtos.KtvRound2DecisionRequest req = new ReturnCaseDtos.KtvRound2DecisionRequest(
@@ -2956,8 +2966,6 @@ class ReturnCaseServicePostgresTest {
         txTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         Long ktv1 = ktvId; // has role KTV
-        Long ktv2 = createTestUser("ktv2");
-        grantRole(ktv2, "KTV");
 
         int totalIterations = 10;
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(2);
@@ -2965,6 +2973,7 @@ class ReturnCaseServicePostgresTest {
         try {
             for (int i = 0; i < totalIterations; i++) {
                 PostReturnFixture prf = createPostReturnFixture(txTemplate);
+                txTemplate.executeWithoutResult(status -> returnCaseService.assignCaseToKtv(ktv1, prf.caseId()));
 
                 java.util.concurrent.CyclicBarrier barrier = new java.util.concurrent.CyclicBarrier(2);
                 java.util.concurrent.atomic.AtomicInteger winnerCount = new java.util.concurrent.atomic.AtomicInteger(0);
@@ -2996,7 +3005,7 @@ class ReturnCaseServicePostgresTest {
                 java.util.concurrent.Future<?> f2 = executor.submit(() -> {
                     try {
                         barrier.await(); // Synchronize departure so both threads execute at the exact same instant
-                        txTemplate.execute(status -> returnCaseService.ktvDecideRound2(ktv2, prf.caseId(),
+                        txTemplate.execute(status -> returnCaseService.ktvDecideRound2(ktv1, prf.caseId(),
                                 new ReturnCaseDtos.KtvRound2DecisionRequest(
                                         CaseDecisionEntity.OUTCOME_FULL_GOODS_REFUND,
                                         "KTV2 hoàn tiền toàn bộ cho người mua",
@@ -3048,6 +3057,7 @@ class ReturnCaseServicePostgresTest {
         txTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         PostReturnFixture prf = createPostReturnFixture(txTemplate);
+        txTemplate.executeWithoutResult(status -> returnCaseService.assignCaseToKtv(ktvId, prf.caseId()));
         String cmdKey = "CMD_PG_KTV_UPD_" + UUID.randomUUID();
         String originalReason = "Lý do phán quyết gốc của KTV";
         ReturnCaseDtos.KtvRound2DecisionRequest req = new ReturnCaseDtos.KtvRound2DecisionRequest(
@@ -3096,6 +3106,7 @@ class ReturnCaseServicePostgresTest {
         txTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         PostReturnFixture prf = createPostReturnFixture(txTemplate);
+        txTemplate.executeWithoutResult(status -> returnCaseService.assignCaseToKtv(ktvId, prf.caseId()));
         String cmdKey = "CMD_PG_KTV_DEL_" + UUID.randomUUID();
         String originalReason = "Lý do phán quyết gốc không được phép xóa";
         ReturnCaseDtos.KtvRound2DecisionRequest req = new ReturnCaseDtos.KtvRound2DecisionRequest(
@@ -3801,6 +3812,7 @@ class ReturnCaseServicePostgresTest {
         grantRole(adminId, "ADMIN");
         Long ktvId = createTestUser("ktv");
         grantRole(ktvId, "KTV");
+        txTemplate.executeWithoutResult(status -> returnCaseService.assignCaseToKtv(ktvId, prf.caseId()));
         CyclicBarrier barrier = new CyclicBarrier(2);
         ExecutorService executor = Executors.newFixedThreadPool(2);
 
@@ -3959,6 +3971,7 @@ class ReturnCaseServicePostgresTest {
         grantRole(adminId, "ADMIN");
         Long ktvId = createTestUser("ktv");
         grantRole(ktvId, "KTV");
+        txTemplate.executeWithoutResult(status -> returnCaseService.assignCaseToKtv(ktvId, prf.caseId()));
 
         // 1. Insert ESCALATED event
         txTemplate.executeWithoutResult(status -> {
@@ -4073,6 +4086,7 @@ class ReturnCaseServicePostgresTest {
         grantRole(adminId, "ADMIN");
         Long ktvId = createTestUser("ktv");
         grantRole(ktvId, "KTV");
+        txTemplate.executeWithoutResult(status -> returnCaseService.assignCaseToKtv(ktvId, prf.caseId()));
 
         // 1. KTV escalation commits first
         txTemplate.executeWithoutResult(status -> {
@@ -4119,6 +4133,7 @@ class ReturnCaseServicePostgresTest {
         grantRole(adminId, "ADMIN");
         Long ktvId = createTestUser("ktv");
         grantRole(ktvId, "KTV");
+        txTemplate.executeWithoutResult(status -> returnCaseService.assignCaseToKtv(ktvId, prf.caseId()));
 
         // 1. SYSTEM escalation commits first
         txTemplate.executeWithoutResult(status -> {

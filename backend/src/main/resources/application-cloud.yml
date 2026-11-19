@@ -1,0 +1,26 @@
+spring:
+  config:
+    activate:
+      on-profile: cloud
+  datasource:
+    url: ${CLOUD_DB_URL:${DB_URL}}
+    username: ${CLOUD_DB_USERNAME:${DB_USERNAME}}
+    password: ${CLOUD_DB_PASSWORD:${DB_PASSWORD}}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+  flyway:
+    enabled: true
+    default-schema: public
+
+app:
+  vnpay:
+    tmn-code: ${VNPAY_TMN_CODE:OHS7QVO0}
+    hash-secret: ${VNPAY_HASH_SECRET:local-test-only-hmac-key-please-do-not-use-live}
+  ghn:
+    api-token: ${GHN_API_TOKEN:test-token-dummy}
+    shop-id: ${GHN_SHOP_ID:229762}
+

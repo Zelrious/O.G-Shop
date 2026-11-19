@@ -4,12 +4,18 @@ import com.oldbutgold.shop.modules.trustsafety.application.CaseEvidenceRequestSe
 import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseDtos;
 import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseService;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Locale;
 
 @RestController
 @RequestMapping("/api/v1/trustsafety/returns")
@@ -17,11 +23,25 @@ public class ReturnCaseController {
 
     private final ReturnCaseService returnCaseService;
     private final CaseEvidenceRequestService caseEvidenceRequestService;
+    private final String environment;
+    private final boolean simulationEnabled;
 
     public ReturnCaseController(ReturnCaseService returnCaseService,
                                 CaseEvidenceRequestService caseEvidenceRequestService) {
+        this(returnCaseService, caseEvidenceRequestService, "PROD", false);
+    }
+
+    @Autowired
+    public ReturnCaseController(ReturnCaseService returnCaseService,
+                                CaseEvidenceRequestService caseEvidenceRequestService,
+                                @Value("${app.environment:PROD}") String environment,
+                                @Value("${app.ghn.simulation-enabled:false}") boolean simulationEnabled) {
         this.returnCaseService = returnCaseService;
         this.caseEvidenceRequestService = caseEvidenceRequestService;
+        this.environment = (environment != null && !environment.isBlank())
+                ? environment.trim().toUpperCase(Locale.ROOT)
+                : "PROD";
+        this.simulationEnabled = simulationEnabled;
     }
 
     private static long extractUserId(Jwt jwt) {
@@ -224,15 +244,19 @@ public class ReturnCaseController {
     // ==================== SYSTEM/CARRIER ENDPOINTS ====================
 
     /**
-     * Carrier xác nhận giao hàng trả thành công (UC33)
+     * Carrier xác nhận giao hàng trả thành công (UC33 — simulation-only DEV endpoint, ADMIN role)
      * POST /api/v1/trustsafety/returns/{caseId}/delivery/carrier
      */
     @PostMapping("/{caseId}/delivery/carrier")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ReturnCaseDtos.ReturnCaseDetailResponse> confirmReturnDeliveryByCarrier(
             @PathVariable Long caseId,
             @RequestParam Long shipmentId,
             @RequestParam java.time.Instant deliveredAt
     ) {
+        if ("PROD".equals(this.environment) || !this.simulationEnabled) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "FORBIDDEN_SIMULATION_IN_PRODUCTION");
+        }
         ReturnCaseDtos.ReturnCaseDetailResponse response = returnCaseService.confirmReturnDeliveryByCarrier(caseId, shipmentId, deliveredAt);
         return ResponseEntity.ok(response);
     }

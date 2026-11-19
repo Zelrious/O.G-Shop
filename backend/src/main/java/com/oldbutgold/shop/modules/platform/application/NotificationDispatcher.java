@@ -10,7 +10,7 @@ public class NotificationDispatcher {
     private final NotificationService service;
     private static final org.slf4j.Logger LOG=org.slf4j.LoggerFactory.getLogger(NotificationDispatcher.class);
     public NotificationDispatcher(NotificationService service) { this.service=service; }
-    @Scheduled(fixedDelayString="${app.notifications.dispatch-delay-ms:5000}")
+    @Scheduled(fixedDelayString="${app.notifications.dispatch-delay-ms:1000}")
     public void dispatch() {
         try { service.dispatchBatch(); }
         catch(RuntimeException e) { LOG.warn("In-app notification delivery deferred ({})",e.getClass().getSimpleName()); }

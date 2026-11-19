@@ -18,6 +18,8 @@ public interface IdentityCommerceFacade {
 
     AddressDto createAddress(long userId, CreateAddressRequest request);
 
+    void requireQuickAuthResult(long buyerId, java.util.UUID quickAuthResultId);
+
     record UserSummary(long userId, String fullName, String email, String phoneNumber) {}
 
     record AddressDto(

@@ -496,10 +496,17 @@ class CheckoutIdempotencyPostgresTest {
         assertThat(preBalanceAccount).isEqualTo(50000L);
         assertThat(preBalanceLedger).isEqualTo(50000L);
 
+        jdbcTemplate.queryForObject(
+                "SELECT public.og_provision_canonical_reward_policy(?)",
+                Long.class,
+                adminId
+        );
+
         String cmdKey = "CMD-ATOMIC-" + UUID.randomUUID();
         long coinsToRedeem = 5000L;
         System.setProperty("app.reward.canonical-policy-code", "REWARD_CHECKOUT_STANDARD");
         checkoutService.setMaxRedemptionPercentage("50");
+        checkoutService.setCapPoApproved(true);
         CheckoutDtos.BuyNowRequest request = new CheckoutDtos.BuyNowRequest(productId, addressId, null, null, null, coinsToRedeem, cmdKey);
 
         try {
@@ -617,6 +624,7 @@ class CheckoutIdempotencyPostgresTest {
         } finally {
             System.clearProperty("app.reward.canonical-policy-code");
             checkoutService.setMaxRedemptionPercentage(null);
+            checkoutService.setCapPoApproved(false);
         }
     }
 }

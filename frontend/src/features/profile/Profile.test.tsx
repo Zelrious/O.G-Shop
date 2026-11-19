@@ -6,14 +6,19 @@ import { SellerBankTab } from './components/SellerBankTab';
 import { UserProfile } from './types';
 import { profileApi } from './profileApi';
 import { MemoryRouter } from 'react-router-dom';
+import { quickAuthApi } from '../verification';
 
 const mockReloadCurrentUser = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('../auth', () => ({
-  useAuth: () => ({
-    reloadCurrentUser: mockReloadCurrentUser,
-  }),
-}));
+vi.mock('../auth', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    useAuth: () => ({
+      reloadCurrentUser: mockReloadCurrentUser,
+    }),
+  };
+});
 
 const mockProfile: UserProfile = {
   id: 1,
@@ -159,5 +164,59 @@ describe('Profile Feature Components', () => {
     expect(screen.getByText('******4321')).toBeInTheDocument();
     expect(screen.getByText('NGUYEN VAN A')).toBeInTheDocument();
     expect(screen.getByText('Tài khoản Người mua')).toBeInTheDocument();
+  });
+
+  it('SellerBankTab requests OTP when changing bank for non-verified user', async () => {
+    const onUpdate = vi.fn();
+    vi.spyOn(profileApi, 'requestBankChangeOtp').mockResolvedValue({
+      challengeId: 'test-challenge-uuid',
+      maskedEmail: 'bu***@example.com',
+      expiresAt: '2026-10-25T14:00:00Z',
+      resendAt: '2026-10-25T13:30:00Z',
+    });
+
+    render(
+      <MemoryRouter>
+        <SellerBankTab profile={mockProfile} onProfileUpdated={onUpdate} />
+      </MemoryRouter>
+    );
+
+    const changeBtn = screen.getByRole('button', { name: /Thay đổi tài khoản ngân hàng/i });
+    fireEvent.click(changeBtn);
+
+    expect(profileApi.requestBankChangeOtp).toHaveBeenCalled();
+    expect(await screen.findByText(/Xác thực thay đổi tài khoản/i)).toBeInTheDocument();
+    expect(screen.getByText(/bu\*\*\*@example.com/)).toBeInTheDocument();
+  });
+
+  it('SellerBankTab opens QuickFaceAuthModal when changing bank for verified seller', async () => {
+    const onUpdate = vi.fn();
+    vi.spyOn(quickAuthApi, 'init').mockResolvedValue({
+      alreadyVerified: false,
+      sessionId: 'test-session-uuid',
+      resultId: undefined,
+      expiresAt: '2026-10-25T14:00:00Z',
+      message: 'Vui lòng quét khuôn mặt.',
+    });
+
+    const verifiedProfile = {
+      ...mockProfile,
+      roles: ['BUYER', 'SELLER'],
+      verifiedSeller: true,
+    };
+
+    render(
+      <MemoryRouter>
+        <SellerBankTab profile={verifiedProfile} onProfileUpdated={onUpdate} />
+      </MemoryRouter>
+    );
+
+    const changeBtn = screen.getByRole('button', { name: /Thay đổi tài khoản ngân hàng/i });
+    fireEvent.click(changeBtn);
+
+    const faceOption = await screen.findByText(/Quét khuôn mặt Quick Face Auth/i);
+    fireEvent.click(faceOption);
+
+    expect(await screen.findByText(/Xác thực nhanh khuôn mặt/i)).toBeInTheDocument();
   });
 });

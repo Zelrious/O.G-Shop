@@ -91,6 +91,148 @@ public class ChatRepository {
           AND NOT public.og_has_role(u.user_id,'KTV') AND NOT public.og_has_role(u.user_id,'ADMIN')
           AND (u.full_name ILIKE '%'||?||'%' OR u.user_id::text=?) ORDER BY u.user_id DESC LIMIT 20
         """,seller,query,query);}
+    public void logModeration(long conversationId, long senderId, String originalContent, String maskedContent, String violationType, String triggeredRule) {
+        jdbc.update("""
+            INSERT INTO public.chat_moderation_logs(conversation_id, sender_id, original_content, masked_content, violation_type, triggered_rule)
+            VALUES(?, ?, ?, ?, ?, ?)
+            """, conversationId, senderId, originalContent, maskedContent, violationType, triggeredRule);
+    }
+    public void incrementViolationScore(long senderId) {
+        jdbc.update("UPDATE public.users SET chat_violation_score = chat_violation_score + 1 WHERE user_id = ?", senderId);
+    }
+    public Instant getChatRestrictedUntil(long userId) {
+        var list = jdbc.query("SELECT chat_restricted_until FROM public.users WHERE user_id = ?",
+            (r, n) -> instant(r, "chat_restricted_until"), userId);
+        return list.isEmpty() ? null : list.get(0);
+    }
+    public int getViolationScore(long userId) {
+        try {
+            Integer score = jdbc.queryForObject("SELECT chat_violation_score FROM public.users WHERE user_id = ?", Integer.class, userId);
+            return score != null ? score : 0;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+    public void setChatRestrictedUntil(long userId, Instant until) {
+        jdbc.update("UPDATE public.users SET chat_restricted_until = ? WHERE user_id = ?",
+            until == null ? null : Timestamp.from(until), userId);
+    }
+    public long createModerationReport(long conversationId, long offenderId, Long reporterId,
+                                       String violationType, String severityLevel, String status,
+                                       String flaggedContent, String contextSnippet) {
+        return createModerationReport(conversationId, offenderId, reporterId, null, violationType, severityLevel, status, flaggedContent, contextSnippet);
+    }
+
+    public long createModerationReport(long conversationId, long offenderId, Long reporterId, Long flaggedMessageId,
+                                       String violationType, String severityLevel, String status,
+                                       String flaggedContent, String contextSnippet) {
+        ensureReportsTableExists();
+        return jdbc.queryForObject("""
+            INSERT INTO public.chat_moderation_reports(conversation_id, offender_id, reporter_id, flagged_message_id,
+                                                       violation_type, severity_level, status,
+                                                       flagged_content, context_snippet)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING report_id
+            """, Long.class, conversationId, offenderId, reporterId, flaggedMessageId, violationType, severityLevel, status, flaggedContent, contextSnippet);
+    }
+    public String getRecentContextJson(long conversationId) {
+        return getRecentContextJson(conversationId, null, null);
+    }
+
+    public String getRecentContextJson(long conversationId, Long currentSenderId, String currentRawText) {
+        // Query recent moderation logs to resolve unmasked original content for KTV
+        Map<String, String> unmaskMap = new HashMap<>();
+        try {
+            var logRows = jdbc.query(
+                "SELECT original_content, masked_content FROM public.chat_moderation_logs WHERE conversation_id = ? ORDER BY log_id DESC LIMIT 20",
+                (rs, i) -> Map.entry(rs.getString("masked_content"), rs.getString("original_content")),
+                conversationId
+            );
+            for (var entry : logRows) {
+                if (entry.getKey() != null && entry.getValue() != null) {
+                    unmaskMap.putIfAbsent(entry.getKey(), entry.getValue());
+                }
+            }
+        } catch (Exception ignored) {
+            // Log table might be empty
+        }
+
+        var msgs = messages(conversationId, null, 10);
+        var chronologicalMsgs = new ArrayList<>(msgs);
+        Collections.reverse(chronologicalMsgs);
+
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (var m : chronologicalMsgs) {
+            String content = m.content();
+            boolean isMasked = false;
+
+            if (m.metadata() != null && m.metadata().containsKey("rawContent")) {
+                content = Objects.toString(m.metadata().get("rawContent"), content);
+                isMasked = true;
+            } else if (unmaskMap.containsKey(content)) {
+                content = unmaskMap.get(content);
+                isMasked = true;
+            } else if (content.contains("***") || content.contains("[SĐT") || content.contains("[Liên kết")) {
+                isMasked = true;
+                if (!unmaskMap.isEmpty()) {
+                    content = unmaskMap.values().iterator().next();
+                }
+            }
+
+            Map<String, Object> item = new HashMap<>();
+            item.put("messageId", m.id());
+            item.put("senderId", m.sender());
+            item.put("type", m.type());
+            item.put("content", content);
+            item.put("isMaskedForUsers", isMasked);
+            item.put("createdAt", m.created().toString());
+            items.add(item);
+        }
+
+        // If current message was passed (e.g., blocked CRITICAL message) and not in items, append it
+        if (currentRawText != null && currentSenderId != null) {
+            boolean alreadyPresent = items.stream().anyMatch(it -> currentRawText.equals(it.get("content")));
+            if (!alreadyPresent) {
+                Map<String, Object> currentItem = new HashMap<>();
+                currentItem.put("messageId", -1L);
+                currentItem.put("senderId", currentSenderId);
+                currentItem.put("type", "TEXT");
+                currentItem.put("content", currentRawText);
+                currentItem.put("isMaskedForUsers", true);
+                currentItem.put("createdAt", Instant.now().toString());
+                items.add(currentItem);
+            }
+        }
+
+        return encode(items);
+    }
+    private void ensureReportsTableExists() {
+        try {
+            jdbc.execute("""
+                CREATE TABLE IF NOT EXISTS public.chat_moderation_reports (
+                  report_id BIGSERIAL PRIMARY KEY,
+                  conversation_id BIGINT NOT NULL,
+                  offender_id BIGINT NOT NULL,
+                  reporter_id BIGINT NULL,
+                  flagged_message_id BIGINT NULL,
+                  violation_type VARCHAR(64) NOT NULL,
+                  severity_level VARCHAR(32) NOT NULL DEFAULT 'MEDIUM',
+                  status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+                  flagged_content TEXT NOT NULL,
+                  context_snippet TEXT NOT NULL,
+                  decision_action VARCHAR(64) NULL,
+                  reputation_penalty INT NOT NULL DEFAULT 0,
+                  decision_note TEXT NULL,
+                  resolved_by BIGINT NULL,
+                  resolved_at TIMESTAMP WITH TIME ZONE NULL,
+                  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """);
+        } catch (Exception ignored) {}
+        try {
+            jdbc.execute("ALTER TABLE public.chat_moderation_reports ADD COLUMN IF NOT EXISTS flagged_message_id BIGINT NULL");
+        } catch (Exception ignored) {}
+    }
     public Map<String,Object> decode(String value){try{return value==null?Map.of():json.readValue(value,new TypeReference<>(){});}catch(Exception e){throw new IllegalStateException("Cannot decode chat metadata",e);}}
     public String encode(Object value){try{return json.writeValueAsString(value);}catch(Exception e){throw new IllegalStateException("Cannot encode chat metadata",e);}}
     private Instant instant(ResultSet r,String column)throws SQLException{var t=r.getTimestamp(column);return t==null?null:t.toInstant();}

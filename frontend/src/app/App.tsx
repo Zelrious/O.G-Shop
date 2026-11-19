@@ -36,6 +36,7 @@ import {
   BuyerOrderDetailPage,
   SellerOrdersPage,
   SellerOrderDetailPage,
+  SellerEkycPage,
   ModerationPage,
   KtvEscrowPage,
   KtvUsersPage,
@@ -43,6 +44,7 @@ import {
   KtvKycPage,
   KtvComplaintsPage,
   KtvVouchersPage,
+  KtvChatModerationPage,
   AdminDashboardPage,
   AdminKtvAccountsPage,
   AdminEmergencyAlertsPage,
@@ -53,6 +55,7 @@ import {
   AdminFulfillmentIncidentsPage,
 } from '../pages';
 import { SellerDashboardPage } from '../pages/seller/SellerDashboardPage';
+import { SellerSettingsPage } from '../pages/seller/SellerSettingsPage';
 import './styles.css';
 import './ui-theme.css';
 import { ChatProvider } from '../features/chat-offer/ChatProvider';
@@ -157,6 +160,14 @@ export function App() {
                     }
                   />
                   <Route
+                    path="/ekyc/verification"
+                    element={
+                      <ProtectedRoute>
+                        <SellerVerificationPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/seller-verification"
                     element={
                       <ProtectedRoute>
@@ -180,6 +191,7 @@ export function App() {
                 >
                   <Route path="/seller" element={<SellerDashboardPage />} />
                   <Route path="/seller/dashboard" element={<SellerDashboardPage />} />
+                  <Route path="/seller/settings" element={<SellerSettingsPage />} />
                   <Route path="/seller/products" element={<SellerListingsPage />} />
                   <Route path="/seller/listings" element={<SellerListingsPage />} />
                   <Route path="/seller/listings/:productId/review" element={<SellerListingReviewPage />} />
@@ -190,6 +202,8 @@ export function App() {
                   <Route path="/seller/orders" element={<SellerOrdersPage />} />
                   <Route path="/seller/blocked" element={<BlockedBuyersPage />} />
                   <Route path="/seller/orders/:orderId" element={<SellerOrderDetailPage />} />
+                  <Route path="/seller/verification" element={<SellerEkycPage />} />
+                  <Route path="/seller/ekyc" element={<SellerEkycPage />} />
                 </Route>
 
                 {/* 4. KTV (Kiểm Tra Viên) Console Layout Shell */}
@@ -210,6 +224,7 @@ export function App() {
                   <Route path="/ktv/kyc" element={<KtvKycPage />} />
                   <Route path="/ktv/complaints" element={<KtvComplaintsPage />} />
                   <Route path="/ktv/vouchers" element={<KtvVouchersPage />} />
+                  <Route path="/ktv/chat-moderation" element={<KtvChatModerationPage />} />
                 </Route>
 
                 {/* 5. Admin (Quản Trị Viên) Console Layout Shell */}

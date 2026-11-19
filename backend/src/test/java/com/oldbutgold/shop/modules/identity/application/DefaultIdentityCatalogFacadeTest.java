@@ -12,7 +12,8 @@ class DefaultIdentityCatalogFacadeTest {
     @ParameterizedTest @ValueSource(strings = {"ADMIN", "KTV", "BUYER", "SELLER"})
     void checksCurrentDatabaseRoleAndActiveStatus(String name) {
         var users = mock(UserRepository.class);
-        var facade = new DefaultIdentityCatalogFacade(users, mock(SellerVerificationRepository.class),mock(AccountAccessService.class));
+        var ekycRepository = mock(EkycRepository.class);
+        var facade = new DefaultIdentityCatalogFacade(users, ekycRepository, mock(AccountAccessService.class));
         var user = mock(UserEntity.class); var role = mock(RoleEntity.class);
         when(role.getRoleName()).thenReturn(name); when(user.getRoles()).thenReturn(Set.of(role));
         when(users.findById(7L)).thenReturn(Optional.of(user)); when(user.getStatus()).thenReturn("ACTIVE");
@@ -20,5 +21,24 @@ class DefaultIdentityCatalogFacadeTest {
         when(user.getStatus()).thenReturn("LOCKED");
         assertThat(facade.isModeratorActive(7)).isFalse();
         assertThat(facade.isModeratorActive(999)).isFalse();
+    }
+
+    @ParameterizedTest @ValueSource(booleans = {true, false})
+    void getSellerSummaryTrustLabelDependsOnCanonicalEkyc(boolean hasVerifiedEkyc) {
+        var users = mock(UserRepository.class);
+        var ekycRepository = mock(EkycRepository.class);
+        var facade = new DefaultIdentityCatalogFacade(users, ekycRepository, mock(AccountAccessService.class));
+
+        var user = mock(UserEntity.class);
+        when(users.findById(7L)).thenReturn(Optional.of(user));
+        when(user.getFullName()).thenReturn("Shop Test");
+        when(ekycRepository.hasVerifiedProfile(7L)).thenReturn(hasVerifiedEkyc);
+
+        var summary = facade.getSellerSummary(7L);
+
+        assertThat(summary).isPresent();
+        assertThat(summary.get().trustLabel()).isEqualTo(
+            hasVerifiedEkyc ? "Đã xác minh eKYC" : "Người bán"
+        );
     }
 }

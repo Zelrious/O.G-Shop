@@ -239,6 +239,7 @@ public class CheckoutService {
                 eligibleOfferId,
                 eligibleOfferPrice,
                 voucherRejectionReason,
+                product.requiresBuyerEkyc(),
                 buyerCoinBalance,
                 maxRedeemableCoins,
                 BigDecimal.ZERO
@@ -319,6 +320,11 @@ public class CheckoutService {
         // DP-19: Guard eKYC requirement
         if (product.requiresBuyerEkyc() && !identityCommerceFacade.isUserVerified(buyerId)) {
             throw new IllegalStateException("Sản phẩm này yêu cầu Người mua phải hoàn tất xác thực eKYC CCCD để đặt mua.");
+        }
+
+        // UC08: Đơn hàng yêu cầu eKYC phải kèm kết quả xác thực nhanh còn hiệu lực
+        if (product.requiresBuyerEkyc()) {
+            identityCommerceFacade.requireQuickAuthResult(buyerId, request.quickAuthResultId());
         }
 
         // 2. Resolve Shipping Address

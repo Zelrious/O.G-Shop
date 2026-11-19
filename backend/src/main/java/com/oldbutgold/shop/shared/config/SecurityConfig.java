@@ -51,7 +51,7 @@ public class SecurityConfig {
                 .addFilterAfter(new com.oldbutgold.shop.modules.identity.infrastructure.security.AccountAccessFilter(accountAccess,json),
                     org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/health/**", "/error").permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/register/verify",
@@ -76,19 +76,28 @@ public class SecurityConfig {
                                 "/api/v1/payments/vnpay-ipn",
                                 "/api/v1/shipping/master-data/**").permitAll()
                         .requestMatchers("/api/v1/admin/payments/**").hasAnyRole("ADMIN", "KTV")
+                        .requestMatchers("/api/v1/admin/dashboard/**").hasAnyRole("ADMIN", "KTV")
                         .requestMatchers("/api/v1/admin/cases/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/admin/fulfillment/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/admin/vouchers/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/ktv/disputes/**").hasAnyRole("KTV", "ADMIN")
+                        .requestMatchers("/api/v1/ktv/users/**").hasRole("KTV")
+                        .requestMatchers("/api/v1/ktv/ekyc/**").hasRole("KTV")
+                        .requestMatchers("/api/v1/ktv/chat-moderation/**").hasRole("KTV")
                         .requestMatchers("/api/v1/ktv/**").hasRole("KTV")
                         .requestMatchers("/api/v1/commerce/vouchers/**").hasAnyRole("BUYER","SELLER")
                         .requestMatchers("/api/v1/account/**").hasAnyRole("BUYER","SELLER")
                         .requestMatchers("/api/v1/chat/**").hasAnyRole("BUYER","SELLER")
                         .requestMatchers(
                                 "/api/v1/auth/me",
+                                "/api/v1/profile",
                                 "/api/v1/profile/**",
+                                "/api/v1/ekyc",
                                 "/api/v1/ekyc/**",
+                                "/api/v1/seller-verification",
                                 "/api/v1/seller-verification/**",
-                                "/api/v1/seller/products/**",
+                                "/api/v1/seller",
+                                "/api/v1/seller/**",
                                 "/api/v1/moderation/**",
                                 "/api/v1/notifications/**",
                                 "/api/v1/commerce/**",
@@ -144,9 +153,18 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource(AuthProperties properties) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(properties.frontendOrigin()));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID"));
+        List<String> origins = new java.util.ArrayList<>();
+        if (properties.frontendOrigin() != null && !properties.frontendOrigin().isBlank()) {
+            origins.add(properties.frontendOrigin());
+        }
+        for (String origin : List.of("http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173", "http://127.0.0.1:5174")) {
+            if (!origins.contains(origin)) {
+                origins.add(origin);
+            }
+        }
+        configuration.setAllowedOrigins(origins);
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID", "Accept"));
         configuration.setExposedHeaders(List.of("Retry-After"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);

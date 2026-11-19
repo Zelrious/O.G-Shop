@@ -13,6 +13,9 @@ public interface PaymentAttemptRepository extends JpaRepository<PaymentAttemptEn
 
     Optional<PaymentAttemptEntity> findByTxnRef(String txnRef);
 
+    @Query("SELECT pi.groupId FROM PaymentAttemptEntity a JOIN PaymentIntentEntity pi ON pi.intentId = a.intentId WHERE a.txnRef = :txnRef")
+    Optional<java.util.UUID> findGroupIdByTxnRef(@Param("txnRef") String txnRef);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM PaymentAttemptEntity a WHERE a.txnRef = :txnRef")
     Optional<PaymentAttemptEntity> findByTxnRefForUpdate(@Param("txnRef") String txnRef);

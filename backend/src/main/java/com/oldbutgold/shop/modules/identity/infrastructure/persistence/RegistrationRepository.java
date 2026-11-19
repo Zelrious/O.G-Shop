@@ -44,6 +44,16 @@ public class RegistrationRepository {
                 "SELECT EXISTS(SELECT 1 FROM public.users WHERE record_type='users' AND email=?)", Boolean.class, email));
     }
 
+    public boolean phoneExists(String phone) {
+        if (phone == null || phone.isBlank()) return false;
+        String p = phone.trim();
+        String local = p.startsWith("+84") ? "0" + p.substring(3) : p;
+        String intl = p.startsWith("0") ? "+84" + p.substring(1) : p;
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM public.users WHERE record_type='users' AND (phone_number = ? OR phone_number = ?))",
+                Boolean.class, local, intl));
+    }
+
     public Optional<String> emailFor(UUID id) {
         return jdbc.query(SELECT + " AND challenge_id=?", mapper, id).stream().findFirst().map(Challenge::email);
     }

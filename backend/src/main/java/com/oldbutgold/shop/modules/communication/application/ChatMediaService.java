@@ -72,6 +72,12 @@ public class ChatMediaService {
         });
         Asset asset=asset(Objects.requireNonNull(data));return new MediaFile(storage.read(asset),asset.mime());
     }
+    public MediaFile readForModeration(long message){
+        StoredMessage data=repository.message(message).orElseThrow(()->problem(404,"CHAT_MEDIA_NOT_FOUND","Không tìm thấy tệp trong hệ thống."));
+        if(!Set.of("IMAGE","VIDEO").contains(data.type()))throw problem(400,"CHAT_MEDIA_INVALID_TYPE","Tin nhắn không chứa hình ảnh hoặc video.");
+        Asset asset=asset(data);
+        return new MediaFile(storage.read(asset),asset.mime());
+    }
     public boolean retained(StoredMessage message){var c=repository.thread(message.conversation()).orElseThrow();return commerce.retainMedia(c.buyer(),c.seller(),c.product())||evidence.retainsMessage(message.id());}
     public List<Long> cleanupCandidates(long after){return repository.cleanupCandidates(after);}
     public void cleanup(long id){
