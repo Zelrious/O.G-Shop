@@ -71,7 +71,10 @@ const matchesSearch = (item: UnifiedDisputeItem, q: string) => {
 export const KtvDisputesPage: React.FC = () => {
   const { disputes: mockDisputes, resolveDispute: mockResolveDispute } = useManagementStore();
   const mockDisputesRef = useRef(mockDisputes);
-  mockDisputesRef.current = mockDisputes;
+
+  useEffect(() => {
+    mockDisputesRef.current = mockDisputes;
+  }, [mockDisputes]);
 
   const [disputes, setDisputes] = useState<UnifiedDisputeItem[]>([]);
   const [allDisputesPool, setAllDisputesPool] = useState<UnifiedDisputeItem[]>([]);
@@ -312,7 +315,9 @@ export const KtvDisputesPage: React.FC = () => {
             ? (selectedDispute as UnifiedDisputeItem).id
             : String(selectedDispute.disputeId);
         mockResolveDispute(mockId, mockVerdict, verdictNotes.trim());
-      } catch {}
+      } catch {
+        // Ignore if dispute exists only in backend DB and not in local mock store
+      }
 
       setSuccessMessage(
         `Đã ghi nhận phán quyết (${verdictAction}) cho vụ việc đơn ${selectedDispute.orderCode} thành công.`

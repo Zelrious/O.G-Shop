@@ -105,33 +105,33 @@ export const AdminDashboardPage: React.FC = () => {
   const leastSearchedItems = stats.leastSearchedItems;
   const categoryReturns = stats.categoryReturns;
 
-  const handleExportRevenue = async () => {
-    exportRevenueDataCsv();
+  /** Triggers client-side fallback CSV first, then attempts authenticated backend export when available. */
+  const runCsvExport = async (
+    localFallback: () => void,
+    remoteDownload: () => Promise<void>
+  ) => {
+    localFallback();
     try {
-      await adminDashboardApi.downloadRevenueCsv();
-    } catch {}
+      await remoteDownload();
+    } catch {
+      // Client-side CSV export has already run; ignore backend failure in offline/test environments
+    }
   };
 
-  const handleExportUsers = async () => {
-    exportUserDataCsv();
-    try {
-      await adminDashboardApi.downloadUserGrowthCsv();
-    } catch {}
-  };
+  const handleExportRevenue = () =>
+    runCsvExport(exportRevenueDataCsv, () => adminDashboardApi.downloadRevenueCsv());
 
-  const handleExportTopSearch = async () => {
-    exportTopSearchCsv();
-    try {
-      await adminDashboardApi.downloadSearchTrendsCsv();
-    } catch {}
-  };
+  const handleExportUsers = () =>
+    runCsvExport(exportUserDataCsv, () => adminDashboardApi.downloadUserGrowthCsv());
 
-  const handleExportReturnComplaint = async () => {
-    exportReturnComplaintCsv();
-    try {
-      const selectedList = selectedCategories.size > 0 ? Array.from(selectedCategories) : undefined;
-      await adminDashboardApi.downloadCategoryReturnsCsv(selectedList);
-    } catch {}
+  const handleExportTopSearch = () =>
+    runCsvExport(exportTopSearchCsv, () => adminDashboardApi.downloadSearchTrendsCsv());
+
+  const handleExportReturnComplaint = () => {
+    const selectedList = selectedCategories.size > 0 ? Array.from(selectedCategories) : undefined;
+    return runCsvExport(exportReturnComplaintCsv, () =>
+      adminDashboardApi.downloadCategoryReturnsCsv(selectedList)
+    );
   };
 
   const isAllCategoriesSelected =
