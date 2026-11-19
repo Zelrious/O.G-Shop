@@ -6,8 +6,11 @@ import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.GhnWeb
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.GhnWebhookEventRepository;
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.ShipmentEntity;
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.ShipmentRepository;
+import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -34,6 +37,26 @@ public class GhnWebhookProcessor {
     private final TransactionTemplate transactionTemplate;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final ObjectProvider<ReturnCaseService> returnCaseServiceProvider;
+
+    @Autowired
+    public GhnWebhookProcessor(
+            GhnWebhookEventRepository eventRepository,
+            ShipmentRepository shipmentRepository,
+            FulfillmentStateService stateService,
+            TransactionTemplate transactionTemplate,
+            ObjectMapper objectMapper,
+            Clock clock,
+            ObjectProvider<ReturnCaseService> returnCaseServiceProvider
+    ) {
+        this.eventRepository = eventRepository;
+        this.shipmentRepository = shipmentRepository;
+        this.stateService = stateService;
+        this.transactionTemplate = transactionTemplate;
+        this.objectMapper = objectMapper;
+        this.clock = clock;
+        this.returnCaseServiceProvider = returnCaseServiceProvider;
+    }
 
     public GhnWebhookProcessor(
             GhnWebhookEventRepository eventRepository,
@@ -43,12 +66,7 @@ public class GhnWebhookProcessor {
             ObjectMapper objectMapper,
             Clock clock
     ) {
-        this.eventRepository = eventRepository;
-        this.shipmentRepository = shipmentRepository;
-        this.stateService = stateService;
-        this.transactionTemplate = transactionTemplate;
-        this.objectMapper = objectMapper;
-        this.clock = clock;
+        this(eventRepository, shipmentRepository, stateService, transactionTemplate, objectMapper, clock, null);
     }
 
     /**
@@ -200,6 +218,11 @@ public class GhnWebhookProcessor {
         Instant eventTime = payload.parseTime();
         String trackingNumber = shipment.getTrackingNumber();
 
+        if (ShipmentEntity.LEG_RETURN.equalsIgnoreCase(shipment.getLeg())) {
+            applyReturnStateTransition(shipment, payload, rawStatus, eventTime, now);
+            return;
+        }
+
         switch (rawStatus) {
             case "ready_to_pick", "picking", "money_collect_picking" -> {
                 // Đơn tạo xong hoặc tài xế đang đến lấy: Order vẫn SELLER_CONFIRMED, Shipment giữ PENDING
@@ -261,6 +284,64 @@ public class GhnWebhookProcessor {
             default -> {
                 log.warn("Nhận trạng thái GHN chưa biết: '{}' cho trackingNumber={}. Giữ nguyên trạng thái nghiệp vụ.",
                         payload.status(), trackingNumber);
+                shipment.setRawGhnStatus(payload.status());
+                shipmentRepository.save(shipment);
+            }
+        }
+    }
+
+    private void applyReturnStateTransition(
+            ShipmentEntity shipment,
+            WebhookPayloadDto payload,
+            String rawStatus,
+            Instant eventTime,
+            Instant now
+    ) {
+        Instant effectiveTime = eventTime != null ? eventTime : now;
+        switch (rawStatus) {
+            case "ready_to_pick", "picking", "money_collect_picking" -> {
+                shipment.setRawGhnStatus(rawStatus);
+                shipmentRepository.save(shipment);
+            }
+            case "picked" -> {
+                shipment.markPickedUp(effectiveTime, rawStatus, now);
+                shipmentRepository.save(shipment);
+            }
+            case "storing", "sorting", "transporting", "delivering", "money_collect_delivering" -> {
+                shipment.markInTransit(effectiveTime, rawStatus, now);
+                shipmentRepository.save(shipment);
+            }
+            case "delivery_fail" -> {
+                if (shipment.getFirstFailureAt() == null) {
+                    shipment.setFirstFailureAt(effectiveTime);
+                }
+                shipment.setRawGhnStatus(rawStatus);
+                shipmentRepository.save(shipment);
+            }
+            case "delivered" -> {
+                if (shipment.getReturnCaseId() == null) {
+                    log.error("Vận đơn trả hàng shipmentId={} không có returnCaseId. Fail-closed giao dịch webhook GHN.", shipment.getId());
+                    throw new IllegalStateException("Vận đơn trả hàng shipmentId=" + shipment.getId() + " thiếu returnCaseId");
+                }
+                ReturnCaseService returnCaseService = returnCaseServiceProvider != null
+                        ? returnCaseServiceProvider.getIfAvailable()
+                        : null;
+                if (returnCaseService == null) {
+                    log.error("ReturnCaseService không khả dụng để xử lý giao hàng trả cho shipmentId={}, returnCaseId={}. Fail-closed giao dịch.",
+                            shipment.getId(), shipment.getReturnCaseId());
+                    throw new IllegalStateException("ReturnCaseService không khả dụng để xác nhận trả hàng");
+                }
+                returnCaseService.confirmReturnDeliveryByCarrier(
+                        shipment.getReturnCaseId(),
+                        shipment.getId(),
+                        effectiveTime
+                );
+            }
+            case "cancel" -> {
+                shipment.markFailed(rawStatus, now);
+                shipmentRepository.save(shipment);
+            }
+            default -> {
                 shipment.setRawGhnStatus(payload.status());
                 shipmentRepository.save(shipment);
             }

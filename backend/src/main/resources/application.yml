@@ -19,7 +19,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:55432/og_shop}
     username: ${DB_USERNAME:og_shop}
-    password: ${DB_PASSWORD:root}
+    password: ${DB_PASSWORD:}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -36,6 +36,10 @@ spring:
 
 app:
   environment: ${APP_ENVIRONMENT:PROD}
+  reward:
+    canonical-policy-code: ${REWARD_CANONICAL_POLICY_CODE:}
+    # max-redemption-percentage: intentionally absent — requires explicit PO approval and DevOps configuration via REWARD_MAX_REDEMPTION_PERCENTAGE (DEC-10.7A)
+    max-redemption-percentage: ${REWARD_MAX_REDEMPTION_PERCENTAGE:}
   google:
     client-id: ${GOOGLE_CLIENT_ID:}
   registration:
@@ -85,6 +89,19 @@ app:
       cron: ${GHN_RECONCILIATION_CRON:0 */30 * * * *}
       batch-size: ${GHN_RECONCILIATION_BATCH_SIZE:50}
     simulation-enabled: ${GHN_SIMULATION_ENABLED:false}
+  scheduling:
+    return-reconciliation:
+      enabled: ${RETURN_RECONCILIATION_ENABLED:false}
+      fixed-delay-ms: ${RETURN_RECONCILIATION_DELAY:60000}
+      initial-delay-ms: ${RETURN_RECONCILIATION_INITIAL_DELAY:60000}
+    ktv-sla-escalation:
+      enabled: ${KTV_SLA_ESCALATION_ENABLED:false}
+      fixed-delay-ms: ${KTV_SLA_ESCALATION_DELAY:60000}
+      initial-delay-ms: ${KTV_SLA_ESCALATION_INITIAL_DELAY:60000}
+    overdue-delivery-disbursement:
+      enabled: ${OVERDUE_DELIVERY_DISBURSEMENT_ENABLED:false}
+      fixed-delay-ms: ${OVERDUE_DELIVERY_DISBURSEMENT_DELAY:60000}
+      initial-delay-ms: ${OVERDUE_DELIVERY_DISBURSEMENT_INITIAL_DELAY:60000}
 server:
   port: ${BACKEND_PORT:8080}
   error:
@@ -102,3 +119,14 @@ management:
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState, rewardPolicy
+          status:
+            order: DOWN, OUT_OF_SERVICE, NOT_READY, UP, UNKNOWN
+            http-mapping:
+              NOT_READY: 503

@@ -10,6 +10,7 @@ import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.GhnWeb
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.GhnWebhookEventRepository;
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.ShipmentEntity;
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.persistence.ShipmentRepository;
+import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import java.time.ZoneOffset;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -55,6 +57,9 @@ class GhnWebhookTest {
 
     @MockitoBean
     private FulfillmentStateService stateService;
+
+    @MockitoBean
+    private ReturnCaseService returnCaseService;
 
     private static final String TEST_SECRET = "test-webhook-secret-key-12345";
     private static final Instant NOW = Instant.parse("2026-10-18T10:00:00Z");
@@ -572,6 +577,62 @@ class GhnWebhookTest {
         assertThat(updated.getStatus()).isEqualTo(GhnWebhookEventEntity.STATUS_PROCESSED);
         // Xác minh chỉ gọi applyCarrierDelivered đúng 1 lần duy nhất
         verify(stateService, times(1)).applyCarrierDelivered(eq("GHN-RACE-WORKER"), any(), eq("delivered"));
+
+        shipmentRepository.delete(shipment);
+    }
+
+    @Test
+    @DisplayName("Task 3.1: Return shipment delivered triggers ReturnCaseService and does NOT call Outbound applyCarrierDelivered")
+    void testReturnShipmentDelivered_triggersReturnCaseService() throws Exception {
+        ShipmentEntity shipment = ShipmentEntity.createReturnShipment(
+                950L, 550L, "CARRIER", "GHN", "GHN-RETURN-001", NOW
+        );
+        shipment = shipmentRepository.save(shipment);
+
+        WebhookPayloadDto payload = createValidPayload("GHN-RETURN-001", "delivered", "2026-10-18T10:00:00Z");
+        GhnWebhookEventEntity entity = new GhnWebhookEventEntity(
+                "GHN-RETURN-001", "OG-DEV-950-RET", "switch_status", NOW,
+                "GHN-RETURN-001:switch_status:2026-10-18T10:00:00Z",
+                objectMapper.valueToTree(payload).toString(), NOW
+        );
+        eventRepository.save(entity);
+
+        webhookProcessor.processEvent(entity.getId());
+
+        verify(returnCaseService, times(1)).confirmReturnDeliveryByCarrier(eq(550L), eq(shipment.getId()), any());
+        verify(stateService, never()).applyCarrierDelivered(any(), any(), any());
+
+        shipmentRepository.delete(shipment);
+    }
+
+    @Test
+    @DisplayName("Task 3.1: Return shipment delivered fail-closed throws IllegalStateException if returnCaseId is missing")
+    void testReturnShipmentDelivered_missingReturnCaseId_failsClosed() throws Exception {
+        ShipmentEntity shipment = ShipmentEntity.createReturnShipment(
+                951L, null, "CARRIER", "GHN", "GHN-RETURN-NOCASE", NOW
+        );
+        shipment = shipmentRepository.save(shipment);
+
+        WebhookPayloadDto payload = createValidPayload("GHN-RETURN-NOCASE", "delivered", "2026-10-18T10:00:00Z");
+        GhnWebhookEventEntity entity = new GhnWebhookEventEntity(
+                "GHN-RETURN-NOCASE", "OG-DEV-951-RET", "switch_status", NOW,
+                "GHN-RETURN-NOCASE:switch_status:2026-10-18T10:00:00Z",
+                objectMapper.valueToTree(payload).toString(), NOW
+        );
+        eventRepository.save(entity);
+
+        webhookProcessor.processEvent(entity.getId());
+
+        GhnWebhookEventEntity reloadedEvent = eventRepository.findById(entity.getId()).orElseThrow();
+        assertThat(reloadedEvent.getStatus()).isNotEqualTo(GhnWebhookEventEntity.STATUS_PROCESSED);
+        assertThat(reloadedEvent.getLastError()).contains("thiếu returnCaseId");
+
+        verify(returnCaseService, never()).confirmReturnDeliveryByCarrier(any(), any(), any());
+        verify(stateService, never()).applyCarrierDelivered(any(), any(), any());
+
+        // Ensure shipment is NOT marked DELIVERED!
+        ShipmentEntity reloaded = shipmentRepository.findById(shipment.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isNotEqualTo(ShipmentEntity.STATUS_DELIVERED);
 
         shipmentRepository.delete(shipment);
     }

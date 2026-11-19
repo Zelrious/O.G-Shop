@@ -27,13 +27,61 @@ public class ShipmentEntity {
     public static final String STATUS_RETURNED = "RETURNED";
     public static final String STATUS_FAILED = "FAILED";
 
+    public static final String LEG_OUTBOUND = "OUTBOUND";
+    public static final String LEG_RETURN = "RETURN";
+    public static final String LEG_RECALL = "RECALL";
+
+    public static final String DELIVERY_METHOD_CARRIER = "CARRIER";
+    public static final String DELIVERY_METHOD_SELF_PICKUP = "SELF_PICKUP";
+    public static final String DELIVERY_METHOD_SELF_DELIVERY = "SELF_DELIVERY";
+
+    public static final String FEE_PAYER_BUYER = "BUYER";
+    public static final String FEE_PAYER_SELLER = "SELLER";
+    public static final String FEE_PAYER_PLATFORM = "PLATFORM";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "shipment_id")
     private Long id;
 
-    @Column(name = "order_id", nullable = false, unique = true)
+    @Column(name = "order_id", nullable = false)
     private Long orderId;
+
+    @Column(name = "leg", nullable = false, length = 15)
+    private String leg = LEG_OUTBOUND;
+
+    @Column(name = "workflow_model", nullable = false, length = 20)
+    private String workflowModel = "LEGACY_V14";
+
+    @Column(name = "return_case_id")
+    private Long returnCaseId;
+
+    @Column(name = "delivery_method", length = 20)
+    private String deliveryMethod;
+
+    @Column(name = "fee_snapshot", precision = 19, scale = 2)
+    private BigDecimal feeSnapshot;
+
+    @Column(name = "fee_payer", length = 10)
+    private String feePayer;
+
+    @Column(name = "initiated_at", nullable = false)
+    private Instant initiatedAt = Instant.now();
+
+    @Column(name = "pickup_expected_at")
+    private Instant pickupExpectedAt;
+
+    @Column(name = "pickup_deadline")
+    private Instant pickupDeadline;
+
+    @Column(name = "first_failure_at")
+    private Instant firstFailureAt;
+
+    @Column(name = "delivery_retry_due_at")
+    private Instant deliveryRetryDueAt;
+
+    @Column(name = "valid_delivery_at")
+    private Instant validDeliveryAt;
 
     @Column(name = "carrier", length = 100)
     private String carrier = "GHN";
@@ -116,10 +164,73 @@ public class ShipmentEntity {
         if (this.status == null || this.status.isBlank()) {
             this.status = STATUS_PENDING;
         }
+        if (this.leg == null || this.leg.isBlank()) {
+            this.leg = LEG_OUTBOUND;
+        }
+        if (this.workflowModel == null || this.workflowModel.isBlank()) {
+            this.workflowModel = "LEGACY_V14";
+        }
+        if (this.initiatedAt == null) {
+            this.initiatedAt = this.createdAt;
+        }
         if (this.updatedAt == null) {
             this.updatedAt = this.createdAt;
         }
     }
+
+    public static ShipmentEntity createReturnShipment(Long orderId, Long returnCaseId, String deliveryMethod, String carrier, String trackingNumber, Instant now) {
+        ShipmentEntity shipment = new ShipmentEntity();
+        shipment.orderId = orderId;
+        shipment.returnCaseId = returnCaseId;
+        shipment.leg = LEG_RETURN;
+        shipment.workflowModel = "UC83";
+        shipment.deliveryMethod = deliveryMethod != null ? deliveryMethod : DELIVERY_METHOD_CARRIER;
+        shipment.carrier = carrier != null && !carrier.isBlank() ? carrier : (DELIVERY_METHOD_CARRIER.equalsIgnoreCase(deliveryMethod) ? "GHN" : deliveryMethod);
+        shipment.trackingNumber = trackingNumber;
+        shipment.feeSnapshot = BigDecimal.ZERO;
+        shipment.feePayer = FEE_PAYER_BUYER;
+        shipment.status = STATUS_PENDING;
+        shipment.initiatedAt = now != null ? now : Instant.now();
+        shipment.createdAt = shipment.initiatedAt;
+        shipment.updatedAt = shipment.initiatedAt;
+        return shipment;
+    }
+
+    public String getLeg() { return leg; }
+    public void setLeg(String leg) { this.leg = leg; }
+
+    public String getWorkflowModel() { return workflowModel; }
+    public void setWorkflowModel(String workflowModel) { this.workflowModel = workflowModel; }
+
+    public Long getReturnCaseId() { return returnCaseId; }
+    public void setReturnCaseId(Long returnCaseId) { this.returnCaseId = returnCaseId; }
+
+    public String getDeliveryMethod() { return deliveryMethod; }
+    public void setDeliveryMethod(String deliveryMethod) { this.deliveryMethod = deliveryMethod; }
+
+    public BigDecimal getFeeSnapshot() { return feeSnapshot; }
+    public void setFeeSnapshot(BigDecimal feeSnapshot) { this.feeSnapshot = feeSnapshot; }
+
+    public String getFeePayer() { return feePayer; }
+    public void setFeePayer(String feePayer) { this.feePayer = feePayer; }
+
+    public Instant getInitiatedAt() { return initiatedAt; }
+    public void setInitiatedAt(Instant initiatedAt) { this.initiatedAt = initiatedAt; }
+
+    public Instant getPickupExpectedAt() { return pickupExpectedAt; }
+    public void setPickupExpectedAt(Instant pickupExpectedAt) { this.pickupExpectedAt = pickupExpectedAt; }
+
+    public Instant getPickupDeadline() { return pickupDeadline; }
+    public void setPickupDeadline(Instant pickupDeadline) { this.pickupDeadline = pickupDeadline; }
+
+    public Instant getFirstFailureAt() { return firstFailureAt; }
+    public void setFirstFailureAt(Instant firstFailureAt) { this.firstFailureAt = firstFailureAt; }
+
+    public Instant getDeliveryRetryDueAt() { return deliveryRetryDueAt; }
+    public void setDeliveryRetryDueAt(Instant deliveryRetryDueAt) { this.deliveryRetryDueAt = deliveryRetryDueAt; }
+
+    public Instant getValidDeliveryAt() { return validDeliveryAt; }
+    public void setValidDeliveryAt(Instant validDeliveryAt) { this.validDeliveryAt = validDeliveryAt; }
 
     @PreUpdate
     protected void onUpdate() {
@@ -133,6 +244,7 @@ public class ShipmentEntity {
     }
 
     public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
     public Long getOrderId() { return orderId; }
     public String getCarrier() { return carrier; }
     public String getTrackingNumber() { return trackingNumber; }

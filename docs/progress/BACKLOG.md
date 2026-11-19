@@ -1,5 +1,16 @@
 # Project Backlog
 
+## TASK-0119 — Tích Hợp PR #17 (UC83 Return Cases, Group Checkout/Settlement) & Vá Bảo mật/Deadlock (Đợt 1) / COMPLETED
+
+- [x] Giải quyết toàn bộ 6 xung đột Git khi merge `origin/feature/return-case-entities` vào `origin/main` (Dual-Track `LEGACY_V14` + `UC83`).
+- [x] Hòa hợp chuỗi Flyway `V41`–`V56` (đánh số lại `V37`–`V51` -> `V41`–`V55`, sửa `V48`/`V55` và bug match `V49` trên `og70_dispatch()`, thêm `V56` + sửa `OrderReviewService` cho `CREDIT_REVIEW` UC61).
+- [x] Vá `GroupCheckoutService` (`quickAuthResultId`, kiểm tra eKYC `IdentityCommerceFacade`) + `GroupCheckoutServiceEkycTest`.
+- [x] Vá 2 lỗ hổng bảo mật (`ReturnCaseController.confirmReturnDeliveryByCarrier` + `SecurityConfig`) + `ReturnCaseCarrierSecurityTest`.
+- [x] Cập nhật tối thiểu Frontend Checkout (`commandKey` trong `CheckoutView.tsx`, `checkoutApi.ts`, `types.ts`, `CheckoutOffer.test.tsx`).
+- [x] Vá deadlock `GroupPaymentService.processGroupPaymentIpn`, sửa test `CheckoutIdempotencyPostgresTest.scenario7`, `ReturnCaseServicePostgresTest`, bật `OGSHOP_TEST_ENABLE_FLYWAY: "true"` ở `.github/workflows/backend-ci.yml`, thêm Hikari `maximum-pool-size: 4` cho test, và di chuyển tài liệu `tasks/` của PR #17 vào `docs/`.
+- [x] Chốt **Phương án A** (`PO-CHOICE-3` chặn 409 khi còn hạn 48h, `D-08` auto-cancel sau hạn) và cập nhật `CaseEvidenceRequestPostgresTest` (13/13), `CaseEvidenceRequestConcurrencyPostgresTest` (5/5), `ReturnCaseServiceTest` (143/143) -> CI PostgreSQL 17 `1,473 tests: 0 Failures, 0 Errors`.
+- [ ] Đợt 2 & 3 (kế hoạch tiếp theo): Kết nối Frontend UI đầy đủ cho `UC83` và đánh giá deprecation nhánh `LEGACY_V14`.
+
 ## TASK-0117 — Trung Tâm Phân Xử Tranh Chấp KTV, Cơ Chế Hoàn Tiền Escrow và Đánh Giá Đơn Hàng (UC61, UC62, UC63, UC71, UC74, UC75, UC83) / COMPLETE
 
 - [x] Backend `V40__dispute_arbitration_and_reviews.sql`: Tạo bảng `dispute_cases` và indexes.

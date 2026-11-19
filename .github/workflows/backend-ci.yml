@@ -50,4 +50,5 @@ jobs:
           OGSHOP_TEST_DB_USER: test_ci_user
           OGSHOP_TEST_DB_PASSWORD: test_ci_password
           OGSHOP_TEST_DB_ISOLATED: "true"
+          OGSHOP_TEST_ENABLE_FLYWAY: "true"
         run: ./mvnw --batch-mode --no-transfer-progress verify

@@ -66,6 +66,25 @@ public class OrderController {
         return ResponseEntity.ok(orderManagementService.completeBuyerOrder(buyerId, orderId));
     }
 
+    @PostMapping("/orders/{orderId}/confirm-received")
+    public ResponseEntity<OrderManagementDtos.OrderActionResponse> confirmReceived(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long orderId
+    ) {
+        long buyerId = extractUserId(jwt);
+        return ResponseEntity.ok(orderManagementService.confirmReceived(buyerId, orderId));
+    }
+
+    @PostMapping("/orders/{orderId}/early-complete")
+    public ResponseEntity<OrderManagementDtos.OrderActionResponse> earlyComplete(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long orderId,
+            @RequestBody(required = false) OrderManagementDtos.EarlyCompleteRequest request
+    ) {
+        long buyerId = extractUserId(jwt);
+        return ResponseEntity.ok(orderManagementService.earlyCompleteOrder(buyerId, orderId, request));
+    }
+
     // --- Seller Endpoints ---
 
     @GetMapping("/seller/orders")

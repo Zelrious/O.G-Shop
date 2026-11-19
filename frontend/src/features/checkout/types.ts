@@ -59,6 +59,9 @@ export interface CheckoutPreview {
   eligibleOfferPrice?: number | null;
   voucherRejectionReason?: string | null;
   requiresBuyerEkyc?: boolean;
+  buyerCoinBalance?: number;
+  maxRedeemableCoins?: number;
+  coinDiscount?: number;
 }
 
 export interface BuyNowInput {
@@ -67,6 +70,8 @@ export interface BuyNowInput {
   addressId?: number;
   newAddress?: CreateAddressInput;
   voucherCode?: string;
+  coinsToRedeem?: number;
+  commandKey?: string;
   quickAuthResultId?: string;
 }
 

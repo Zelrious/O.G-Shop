@@ -101,6 +101,24 @@ public class ProductEntity {
     @Column(name = "quantity_total", nullable = false)
     private int quantityTotal = 1;
 
+    @Column(name = "quantity_held", nullable = false)
+    private int quantityHeld = 0;
+
+    @Column(name = "quantity_sold", nullable = false)
+    private int quantitySold = 0;
+
+    @Column(name = "quantity_unavailable", nullable = false)
+    private int quantityUnavailable = 0;
+
+    @Column(name = "quantity_available", insertable = false, updatable = false)
+    private Integer quantityAvailable;
+
+    @Column(name = "workflow_model")
+    private String workflowModel = "LEGACY_V14";
+
+    @Column(name = "return_allowed")
+    private Boolean returnAllowed = true;
+
     @Column(name = "current_revision_id")
     private Long currentRevisionId;
 
@@ -358,4 +376,20 @@ public class ProductEntity {
     public Instant getUpdatedAt() { return updatedAt; }
     public boolean isRequiresBuyerEkyc() { return requiresBuyerEkyc; }
     public Instant getDeletedAt() { return deletedAt; }
+    public Long getPublicRevisionId() { return publicRevisionId; }
+    public void setPublicRevisionId(Long publicRevisionId) { this.publicRevisionId = publicRevisionId; }
+    public String getWorkflowModel() { return workflowModel; }
+    public void setWorkflowModel(String workflowModel) { this.workflowModel = workflowModel; }
+    public Boolean getReturnAllowed() { return returnAllowed; }
+    public void setReturnAllowed(Boolean returnAllowed) { this.returnAllowed = returnAllowed; }
+    public int getQuantityHeld() { return quantityHeld; }
+    public void setQuantityHeld(int quantityHeld) { this.quantityHeld = quantityHeld; }
+    public int getQuantitySold() { return quantitySold; }
+    public void setQuantitySold(int quantitySold) { this.quantitySold = quantitySold; }
+    public int getQuantityUnavailable() { return quantityUnavailable; }
+    public void setQuantityUnavailable(int quantityUnavailable) { this.quantityUnavailable = quantityUnavailable; }
+    public Integer getQuantityAvailable() {
+        if (quantityAvailable != null) return quantityAvailable;
+        return quantityTotal - quantityHeld - quantitySold - quantityUnavailable;
+    }
 }

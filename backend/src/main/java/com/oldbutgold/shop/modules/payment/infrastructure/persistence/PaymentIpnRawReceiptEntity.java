@@ -12,6 +12,7 @@ public class PaymentIpnRawReceiptEntity {
     public static final String VERIFICATION_SIGNATURE_INVALID = "SIGNATURE_INVALID";
     public static final String VERIFICATION_SIGNATURE_VALID_UNLINKED = "SIGNATURE_VALID_UNLINKED";
     public static final String VERIFICATION_LINKED = "LINKED";
+    public static final String VERIFICATION_VERIFIED = "VERIFIED";
 
     public static final String PROCESSING_RECEIVED = "RECEIVED";
     public static final String PROCESSING_PROCESSED = "PROCESSED";
@@ -169,6 +170,10 @@ public class PaymentIpnRawReceiptEntity {
 
     public String getVerificationStatus() {
         return verificationStatus;
+    }
+
+    public void setVerificationStatus(String verificationStatus) {
+        this.verificationStatus = verificationStatus;
     }
 
     public String getProcessingStatus() {

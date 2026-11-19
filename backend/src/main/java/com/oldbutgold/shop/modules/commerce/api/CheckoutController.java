@@ -2,6 +2,8 @@ package com.oldbutgold.shop.modules.commerce.api;
 
 import com.oldbutgold.shop.modules.commerce.application.CheckoutDtos;
 import com.oldbutgold.shop.modules.commerce.application.CheckoutService;
+import com.oldbutgold.shop.modules.commerce.application.GroupCheckoutDtos;
+import com.oldbutgold.shop.modules.commerce.application.GroupCheckoutService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,9 +16,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/commerce")
 public class CheckoutController {
     private final CheckoutService checkoutService;
+    private final GroupCheckoutService groupCheckoutService;
 
-    public CheckoutController(CheckoutService checkoutService) {
+    public CheckoutController(CheckoutService checkoutService, GroupCheckoutService groupCheckoutService) {
         this.checkoutService = checkoutService;
+        this.groupCheckoutService = groupCheckoutService;
     }
 
     @GetMapping("/checkout/preview")
@@ -37,8 +41,20 @@ public class CheckoutController {
             @Valid @RequestBody CheckoutDtos.BuyNowRequest request
     ) {
         long buyerId = extractUserId(jwt);
-        CheckoutDtos.OrderCreatedResponse response = checkoutService.buyNow(buyerId, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        CheckoutDtos.BuyNowExecutionResult result = checkoutService.executeBuyNow(buyerId, request);
+        HttpStatus status = result.replayed() ? HttpStatus.OK : HttpStatus.CREATED;
+        return ResponseEntity.status(status).body(result.response());
+    }
+
+    @PostMapping("/checkout/groups")
+    public ResponseEntity<GroupCheckoutDtos.GroupCheckoutResponse> checkoutGroup(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody GroupCheckoutDtos.GroupCheckoutRequest request
+    ) {
+        long buyerId = extractUserId(jwt);
+        GroupCheckoutDtos.GroupCheckoutExecutionResult result = groupCheckoutService.executeCheckout(buyerId, request);
+        HttpStatus status = result.isIdempotentReplay() ? HttpStatus.OK : HttpStatus.CREATED;
+        return ResponseEntity.status(status).body(result.response());
     }
 
     @GetMapping("/orders/{orderId}")

@@ -147,6 +147,7 @@ Sở hữu hoặc sửa trực tiếp trạng thái nghiệp vụ của module k
 
 - [x] Tạo package boundary và tài liệu module.
 - [x] V3 tạo durable `outbox_events` cho Redis/WebSocket/notification worker sau này.
+- [x] **Hợp nhất Flyway `V41`–`V56`, Dual-Write Validator & Backend CI (TASK-0119)**: Đánh số lại PR #17 `V37`–`V51` -> `V41`–`V55` nối tiếp `V37`–`V40` của `main`; hòa hợp `V48` + `V55` (`public.reward_ledger`, kiểm invariant `og70_write_view`); vá bug match xuyên nhánh của `V49` trên PostgreSQL 17; bổ sung `V56` (`CREDIT_REVIEW`); cấu hình test Hikari pool size = 4, bật `OGSHOP_TEST_ENABLE_FLYWAY: "true"` trong `backend-ci.yml`; di chuyển kế hoạch/todo UC83 từ `tasks/` sang `docs/`.
 
 ## Remaining tasks
 

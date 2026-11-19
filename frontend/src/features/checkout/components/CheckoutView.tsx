@@ -1,6 +1,6 @@
 import { Icon } from '../../../shared/components/Icon/Icon';
 import { benefit } from '../../vouchers/voucherApi';
-import React, { useState, useEffect, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { checkoutApi, CheckoutApiError } from '../checkoutApi';
 import { CheckoutPreview, CreateAddressInput, OrderCreated } from '../types';
@@ -8,6 +8,14 @@ import { profileApi, GhnProvince, GhnDistrict, GhnWard } from '../../profile';
 import { AuthContext } from '../../auth/context';
 import { QuickFaceAuthModal } from '../../verification/components/QuickFaceAuthModal';
 import '../checkout.css';
+
+function buildBuyNowCommandKey(productId: number): string {
+  const randomPart =
+    typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `BUY-NOW-${productId}-${randomPart}`;
+}
 
 interface CheckoutViewProps {
   productId: number;
@@ -67,6 +75,9 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
 
   // Payment Method State
   const [paymentMethod, setPaymentMethod] = useState<'BANK_TRANSFER_MOCK' | 'COD_MOCK' | 'E_WALLET_MOCK'>('BANK_TRANSFER_MOCK');
+
+  // Idempotency commandKey kept stable for identical checkout payloads on retry
+  const commandAttemptRef = useRef<{ signature: string; commandKey: string } | null>(null);
 
   // Order Success State
   const [createdOrder, setCreatedOrder] = useState<OrderCreated | null>(null);
@@ -278,12 +289,30 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({ productId, offerId, 
       setErrorMsg(null);
 
       const finalOfferId = pricingMode === 'OFFER' ? (offerId ?? activeOfferId ?? preview?.eligibleOfferId ?? undefined) : undefined;
+      const targetAddressId = !isAddingNewAddress ? selectedAddressId! : undefined;
+      const targetNewAddress = isAddingNewAddress ? newAddress : undefined;
+      const targetVoucherCode = appliedVoucherCode || undefined;
+      const payloadSignature = JSON.stringify({
+        productId,
+        offerId: finalOfferId ?? null,
+        addressId: targetAddressId ?? null,
+        newAddress: targetNewAddress ?? null,
+        voucherCode: targetVoucherCode ?? null,
+      });
+      if (!commandAttemptRef.current || commandAttemptRef.current.signature !== payloadSignature) {
+        commandAttemptRef.current = {
+          signature: payloadSignature,
+          commandKey: buildBuyNowCommandKey(productId),
+        };
+      }
+
       const order = await checkoutApi.buyNow({
         productId,
         offerId: finalOfferId,
-        addressId: !isAddingNewAddress ? selectedAddressId! : undefined,
-        newAddress: isAddingNewAddress ? newAddress : undefined,
-        voucherCode: appliedVoucherCode || undefined,
+        addressId: targetAddressId,
+        newAddress: targetNewAddress,
+        voucherCode: targetVoucherCode,
+        commandKey: commandAttemptRef.current.commandKey,
         quickAuthResultId: overrideQuickAuthResultId || highValueQuickAuthResultId || undefined,
       });
 

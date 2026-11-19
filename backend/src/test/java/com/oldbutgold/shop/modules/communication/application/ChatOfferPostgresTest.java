@@ -38,7 +38,7 @@ class ChatOfferPostgresTest {
         String url=System.getenv("OGSHOP_CHAT_TEST_DB_URL");
         if(!url.matches("jdbc:postgresql://127\\.0\\.0\\.1:[0-9]+/ogshop_chat_test"))throw new IllegalStateException("Dedicated chat test DB required");
         p.add("spring.datasource.url",()->url);p.add("spring.datasource.username",()->System.getenv("OGSHOP_TEST_DB_USER"));p.add("spring.datasource.password",()->System.getenv("OGSHOP_TEST_DB_PASSWORD"));
-        p.add("spring.datasource.hikari.connection-init-sql",()->"SET search_path TO og_compat,public");p.add("spring.flyway.enabled",()->true);p.add("spring.jpa.hibernate.ddl-auto",()->"validate");
+        p.add("spring.datasource.hikari.connection-init-sql",()->"SET search_path TO og_compat,public");p.add("spring.flyway.enabled",com.oldbutgold.shop.shared.PostgresTestSafetyGuard::isFlywayOptInEnabled);p.add("spring.jpa.hibernate.ddl-auto",()->"validate");
         p.add("app.chat.upload-dir",()->"target/chat-test-private");p.add("app.cloudinary.url",()->"");p.add("app.cloudinary.cloud-name",()->"");
     }
     @Autowired ChatService chat;@Autowired OfferService offers;@Autowired ChatMediaService media;@Autowired CheckoutService checkout;

@@ -15,6 +15,7 @@ public final class PostgresTestSafetyGuard {
 
     public static final String ENV_TEST_DB_URL = "OGSHOP_TEST_DB_URL";
     public static final String ENV_TEST_DB_ISOLATED = "OGSHOP_TEST_DB_ISOLATED";
+    public static final String ENV_TEST_ENABLE_FLYWAY = "OGSHOP_TEST_ENABLE_FLYWAY";
     public static final String ENV_MODERATION_TEST_DB_URL = "OGSHOP_MODERATION_TEST_DB_URL";
     public static final String ENV_CATEGORY_TEST_DB_URL = "OGSHOP_CATEGORY_TEST_DB_URL";
     public static final String ENV_UPGRADE_TEST_DB_URL = "OGSHOP_UPGRADE_TEST_DB_URL";
@@ -65,6 +66,36 @@ public final class PostgresTestSafetyGuard {
                 System.getenv(ENV_TEST_DB_URL),
                 System.getenv(ENV_TEST_DB_ISOLATED)
         );
+    }
+
+    /**
+     * Determines whether Flyway migrations are allowed to run during test execution.
+     * <p>
+     * Hardening invariant: Flyway is DISABLED by default in test execution to prevent
+     * accidental, automatic DDL migrations against the test database.
+     * It requires explicit opt-in via {@code OGSHOP_TEST_ENABLE_FLYWAY=true}.
+     *
+     * @param envLookup function to look up environment variable by name
+     * @return {@code true} ONLY if {@code OGSHOP_TEST_ENABLE_FLYWAY} is explicitly "true" (case-insensitive);
+     *         {@code false} otherwise.
+     */
+    public static boolean isFlywayOptInEnabled(java.util.function.Function<String, String> envLookup) {
+        if (envLookup == null) {
+            return false;
+        }
+        String val = envLookup.apply(ENV_TEST_ENABLE_FLYWAY);
+        return "true".equalsIgnoreCase(val != null ? val.trim() : null);
+    }
+
+    /**
+     * Determines whether Flyway migrations are allowed to run during test execution
+     * using the system environment.
+     *
+     * @return {@code true} ONLY if {@code OGSHOP_TEST_ENABLE_FLYWAY=true} in system environment;
+     *         {@code false} otherwise.
+     */
+    public static boolean isFlywayOptInEnabled() {
+        return isFlywayOptInEnabled(System::getenv);
     }
 
     /**

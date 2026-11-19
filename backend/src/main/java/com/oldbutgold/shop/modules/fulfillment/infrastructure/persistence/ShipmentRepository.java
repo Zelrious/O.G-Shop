@@ -17,17 +17,31 @@ import java.util.Optional;
 
 @Repository
 public interface ShipmentRepository extends JpaRepository<ShipmentEntity, Long> {
-    Optional<ShipmentEntity> findByOrderId(Long orderId);
+    @Query("SELECT s FROM ShipmentEntity s WHERE s.orderId = :orderId AND (s.leg = 'OUTBOUND' OR s.leg IS NULL)")
+    Optional<ShipmentEntity> findByOrderId(@Param("orderId") Long orderId);
+
+    @Query("SELECT CASE WHEN COUNT(s) > 0 THEN TRUE ELSE FALSE END FROM ShipmentEntity s WHERE s.orderId = :orderId AND (s.leg = 'OUTBOUND' OR s.leg IS NULL)")
+    boolean existsByOrderId(@Param("orderId") Long orderId);
+
     Optional<ShipmentEntity> findByTrackingNumber(String trackingNumber);
     Optional<ShipmentEntity> findByClientOrderCode(String clientOrderCode);
-    boolean existsByOrderId(Long orderId);
 
     @Query("SELECT s.orderId FROM ShipmentEntity s WHERE s.trackingNumber = :trackingNumber")
     Optional<Long> findOrderIdByTrackingNumber(@Param("trackingNumber") String trackingNumber);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT s FROM ShipmentEntity s WHERE s.orderId = :orderId")
+    @Query("SELECT s FROM ShipmentEntity s WHERE s.orderId = :orderId AND (s.leg = 'OUTBOUND' OR s.leg IS NULL)")
     Optional<ShipmentEntity> findByOrderIdForUpdate(@Param("orderId") Long orderId);
+
+    @Query("SELECT s FROM ShipmentEntity s WHERE s.orderId = :orderId AND s.leg = :leg")
+    Optional<ShipmentEntity> findByOrderIdAndLeg(@Param("orderId") Long orderId, @Param("leg") String leg);
+
+    @Query("SELECT s FROM ShipmentEntity s WHERE s.returnCaseId = :caseId AND s.leg = 'RETURN'")
+    Optional<ShipmentEntity> findByReturnCaseId(@Param("caseId") Long caseId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM ShipmentEntity s WHERE s.returnCaseId = :caseId AND s.leg = 'RETURN'")
+    Optional<ShipmentEntity> findByReturnCaseIdForUpdate(@Param("caseId") Long caseId);
 
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)

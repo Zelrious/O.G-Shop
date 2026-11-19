@@ -199,4 +199,30 @@ class PostgresTestSafetyGuardTest {
         String resolved = PostgresTestSafetyGuard.resolveAndAssertSafe(validEnv::get, "true", envVarName);
         assertThat(resolved).isEqualTo(validUrl);
     }
+
+    @Test
+    @DisplayName("12. Flyway opt-in: Mặc định disabled khi không có biến môi trường hoặc giá trị không phải 'true'")
+    void testFlywayOptInDefaultDisabled() {
+        // null lookup
+        assertThat(PostgresTestSafetyGuard.isFlywayOptInEnabled(null)).isFalse();
+
+        // missing / null
+        java.util.Map<String, String> emptyEnv = java.util.Map.of();
+        assertThat(PostgresTestSafetyGuard.isFlywayOptInEnabled(emptyEnv::get)).isFalse();
+
+        // non-true values
+        for (String invalid : new String[]{"", "   ", "false", "FALSE", "0", "no", "yes", "enabled", "1"}) {
+            java.util.Map<String, String> env = java.util.Map.of(PostgresTestSafetyGuard.ENV_TEST_ENABLE_FLYWAY, invalid);
+            assertThat(PostgresTestSafetyGuard.isFlywayOptInEnabled(env::get))
+                    .as("Value '%s' must not enable Flyway", invalid)
+                    .isFalse();
+        }
+
+        // explicit opt-in
+        java.util.Map<String, String> optInEnv = java.util.Map.of(PostgresTestSafetyGuard.ENV_TEST_ENABLE_FLYWAY, "true");
+        assertThat(PostgresTestSafetyGuard.isFlywayOptInEnabled(optInEnv::get)).isTrue();
+
+        java.util.Map<String, String> optInCapsEnv = java.util.Map.of(PostgresTestSafetyGuard.ENV_TEST_ENABLE_FLYWAY, "TRUE");
+        assertThat(PostgresTestSafetyGuard.isFlywayOptInEnabled(optInCapsEnv::get)).isTrue();
+    }
 }

@@ -24,11 +24,17 @@ public class PaymentReconciliationCaseEntity {
     @Column(name = "case_id")
     private Long id;
 
-    @Column(name = "order_id", nullable = false)
+    @Column(name = "order_id")
     private Long orderId;
 
-    @Column(name = "payment_id", nullable = false)
+    @Column(name = "payment_id")
     private Long paymentId;
+
+    @Column(name = "intent_id")
+    private java.util.UUID intentId;
+
+    @Column(name = "assigned_user_id")
+    private Long assignedUserId;
 
     @Column(name = "attempt_id")
     private Long attemptId;
@@ -91,6 +97,27 @@ public class PaymentReconciliationCaseEntity {
         return entity;
     }
 
+    public static PaymentReconciliationCaseEntity fromIntentIpnEvent(java.util.UUID intentId,
+                                                                     Long attemptId,
+                                                                     String caseType,
+                                                                     Long eventId,
+                                                                     String vnpTransactionNo,
+                                                                     String dedupKey,
+                                                                     Instant createdAt) {
+        PaymentReconciliationCaseEntity entity = new PaymentReconciliationCaseEntity();
+        entity.intentId = intentId;
+        entity.attemptId = attemptId;
+        entity.caseType = caseType;
+        entity.sourceType = SOURCE_IPN_EVENT;
+        entity.eventId = eventId;
+        entity.reviewAuditId = null;
+        entity.vnpTransactionNo = vnpTransactionNo;
+        entity.dedupKey = dedupKey;
+        entity.status = STATUS_OPEN;
+        entity.createdAt = createdAt;
+        return entity;
+    }
+
     public static PaymentReconciliationCaseEntity fromReviewDecision(Long orderId,
                                                                      Long paymentId,
                                                                      Long attemptId,
@@ -122,6 +149,22 @@ public class PaymentReconciliationCaseEntity {
 
     public Long getId() {
         return id;
+    }
+
+    public java.util.UUID getIntentId() {
+        return intentId;
+    }
+
+    public void setIntentId(java.util.UUID intentId) {
+        this.intentId = intentId;
+    }
+
+    public Long getAssignedUserId() {
+        return assignedUserId;
+    }
+
+    public void setAssignedUserId(Long assignedUserId) {
+        this.assignedUserId = assignedUserId;
     }
 
     public Long getOrderId() {
@@ -170,6 +213,10 @@ public class PaymentReconciliationCaseEntity {
 
     public String getResolutionNote() {
         return resolutionNote;
+    }
+
+    public void setResolutionNote(String resolutionNote) {
+        this.resolutionNote = resolutionNote;
     }
 
     public Instant getCreatedAt() {
