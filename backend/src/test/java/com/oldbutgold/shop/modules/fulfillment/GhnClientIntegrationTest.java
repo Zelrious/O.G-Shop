@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 @ActiveProfiles("test")
 @SpringBootTest
 @Tag("integration")
-@EnabledIf("hasGhnCredentials")
+@EnabledIf("isLiveIntegrationEnabled")
 class GhnClientIntegrationTest {
 
     static {
@@ -62,9 +62,25 @@ class GhnClientIntegrationTest {
         }
     }
 
+    static boolean isLiveIntegrationEnabled() {
+        return isProfileOptInEnabled() && hasGhnCredentials();
+    }
+
+    static boolean isProfileOptInEnabled() {
+        return "true".equalsIgnoreCase(System.getProperty("ghn.live.integration.enabled"));
+    }
+
     static boolean hasGhnCredentials() {
-        return (System.getProperty("GHN_API_TOKEN") != null && !System.getProperty("GHN_API_TOKEN").isBlank())
-                || (System.getenv("GHN_API_TOKEN") != null && !System.getenv("GHN_API_TOKEN").isBlank());
+        return hasConfigValue("GHN_API_TOKEN") && hasConfigValue("GHN_SHOP_ID");
+    }
+
+    private static boolean hasConfigValue(String key) {
+        String prop = System.getProperty(key);
+        if (prop != null && !prop.isBlank()) {
+            return true;
+        }
+        String env = System.getenv(key);
+        return env != null && !env.isBlank();
     }
 
     @Autowired

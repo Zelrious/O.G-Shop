@@ -2,6 +2,7 @@ package com.oldbutgold.shop.modules.payment.application;
 
 import com.oldbutgold.shop.modules.commerce.application.GroupCheckoutDtos.*;
 import com.oldbutgold.shop.modules.commerce.application.GroupCheckoutService;
+import com.oldbutgold.shop.modules.commerce.application.SimulatedPoApprovalTestFixture;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.*;
 import com.oldbutgold.shop.modules.payment.application.GroupPaymentDtos.*;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.*;
@@ -20,7 +21,11 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.sql.Date;
+import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -273,10 +278,9 @@ class GroupPaymentPostgresTest {
                 """, UUID.randomUUID(), buyerId, policyId, adminId, "CMD_COIN_SEED_" + UUID.randomUUID());
 
         groupCheckoutService.setConfiguredMaxRedemptionPercentage("50");
-        groupCheckoutService.setCapPoApproved(true);
         groupCheckoutService.setConfiguredCanonicalPolicyCode("REWARD_CHECKOUT_STANDARD");
 
-        try {
+        try (var poApprovalScope = SimulatedPoApprovalTestFixture.openScope(groupCheckoutService)) {
             // 2 products from 2 sellers
             CreatedProduct p1 = createUc83Product(sellerA, "Seller A Item", new BigDecimal("100000"), 5, true);
             CreatedProduct p2 = createUc83Product(sellerB, "Seller B Item", new BigDecimal("200000"), 5, true);
@@ -390,7 +394,6 @@ class GroupPaymentPostgresTest {
 
         } finally {
             groupCheckoutService.setConfiguredMaxRedemptionPercentage(null);
-            groupCheckoutService.setCapPoApproved(false);
             groupCheckoutService.setConfiguredCanonicalPolicyCode(null);
         }
     }
@@ -478,10 +481,9 @@ class GroupPaymentPostgresTest {
         CreatedProduct p = createUc83Product(sellerId, "Insufficient Coin Item", new BigDecimal("100000"), 5, true);
 
         groupCheckoutService.setConfiguredMaxRedemptionPercentage("50");
-        groupCheckoutService.setCapPoApproved(true);
         groupCheckoutService.setConfiguredCanonicalPolicyCode("REWARD_CHECKOUT_STANDARD");
 
-        try {
+        try (var poApprovalScope = SimulatedPoApprovalTestFixture.openScope(groupCheckoutService)) {
             GroupCheckoutRequest checkoutReq = new GroupCheckoutRequest(
                     "GRP-INSUFF-" + UUID.randomUUID(),
                     testAddress(),
@@ -563,7 +565,6 @@ class GroupPaymentPostgresTest {
                     .count()).isEqualTo(1);
         } finally {
             groupCheckoutService.setConfiguredMaxRedemptionPercentage(null);
-            groupCheckoutService.setCapPoApproved(false);
             groupCheckoutService.setConfiguredCanonicalPolicyCode(null);
         }
     }
@@ -636,6 +637,153 @@ class GroupPaymentPostgresTest {
         assertThat(confirmations).hasSize(1);
     }
 
+    private record ExpiredPaymentFixture(UUID groupId, UUID intentId, Long attemptId, String txnRef, Timestamp deadlineTs) {}
+
+    /**
+     * Creates a valid UC83 checkout & payment fixture directly through og_compat.* views
+     * using PostgreSQL clock_timestamp() so reservation expires_at is ~5 seconds in the future
+     * at INSERT time and all DB triggers/guards execute normally without session_replication_role.
+     * The transaction commits before returning so subsequent deadline polling holds no DB locks.
+     */
+    private ExpiredPaymentFixture createExpiredCheckoutAndPaymentFixture(
+            long buyerId,
+            long sellerId,
+            CreatedProduct product,
+            String productTitle,
+            LocalDate handoverDay
+    ) {
+        return txTemplate.execute(status -> {
+            Map<String, Object> tsRow = jdbcTemplate.queryForMap("""
+                    WITH t AS (
+                        SELECT clock_timestamp() + INTERVAL '5 seconds' AS deadline_ts
+                    )
+                    SELECT deadline_ts - INTERVAL '1 hour' AS created_ts,
+                           deadline_ts
+                    FROM t
+                    """);
+            Timestamp createdAtTs = (Timestamp) tsRow.get("created_ts");
+            Timestamp deadlineTs = (Timestamp) tsRow.get("deadline_ts");
+            Date handoverDate = Date.valueOf(handoverDay);
+            BigDecimal amount = product.price();
+
+            UUID groupId = UUID.randomUUID();
+            jdbcTemplate.update("""
+                    INSERT INTO og_compat.checkout_groups(
+                        group_id, buyer_id, command_key, request_digest, address_snapshot,
+                        delivery_method, payment_method, expected_total, state, created_at, payment_due_at
+                    ) VALUES (
+                        ?, ?, ?, repeat('a', 64),
+                        '{"recipient_name":"Tran Van B","phone_number":"0987654321","province":"TP Ho Chi Minh","district":"Quan 1","ward":"Phuong Ben Nghe","detail_address":"456 Le Loi"}'::jsonb,
+                        'SELF_PICKUP', 'VNPAY', ?, 'READY', ?, ?
+                    )
+                    """,
+                    groupId, buyerId, "CMD_CG_" + UUID.randomUUID(), amount, createdAtTs, deadlineTs
+            );
+
+            Long orderId = jdbcTemplate.queryForObject("""
+                    INSERT INTO og_compat.orders(
+                        checkout_group_id, group_id, buyer_id, seller_id,
+                        shipping_recipient_name, shipping_phone_number, shipping_province,
+                        shipping_district, shipping_ward, shipping_detail_address,
+                        subtotal, shipping_fee, total_amount, voucher_discount_amount,
+                        shipping_discount_amount, points_discount_amount,
+                        buyer_system_fee, seller_system_fee, seller_proceeds,
+                        sponsor_type, status, created_at, payment_due_at,
+                        workflow_model, return_allowed, delivery_method, handover_day
+                    ) VALUES (
+                        ?, ?, ?, ?,
+                        'Tran Van B', '0987654321', 'TP Ho Chi Minh',
+                        'Quan 1', 'Phuong Ben Nghe', '456 Le Loi',
+                        ?, 0, ?, 0,
+                        0, 0,
+                        0, 0, ?,
+                        'PLATFORM', 'PAYMENT_PENDING', ?, ?,
+                        'UC83', ?, 'SELF_PICKUP', ?
+                    ) RETURNING order_id
+                    """,
+                    Long.class,
+                    groupId, groupId, buyerId, sellerId,
+                    amount, amount, amount,
+                    createdAtTs, deadlineTs,
+                    product.returnAllowed(), handoverDate
+            );
+
+            Long orderItemId = jdbcTemplate.queryForObject("""
+                    INSERT INTO og_compat.order_items(
+                        order_id, product_id, product_title, quantity, listed_price, agreed_price,
+                        buyer_system_fee, seller_system_fee, buyer_line_total, seller_line_proceeds,
+                        workflow_model, product_revision_id, return_allowed, voucher_allocation, points_allocation
+                    ) VALUES (
+                        ?, ?, ?, 1, ?, ?,
+                        0, 0, ?, ?,
+                        'UC83', ?, ?, 0, 0
+                    ) RETURNING order_item_id
+                    """,
+                    Long.class,
+                    orderId, product.productId(), productTitle, amount, amount,
+                    amount, amount,
+                    product.revisionId(), product.returnAllowed()
+            );
+
+            jdbcTemplate.update("""
+                    INSERT INTO og_compat.inventory_reservations(
+                        reservation_id, order_item_id, product_id, quantity, state, expires_at, created_at, command_key
+                    ) VALUES (?, ?, ?, 1, 'HELD', ?, ?, ?)
+                    """,
+                    UUID.randomUUID(), orderItemId, product.productId(), deadlineTs, createdAtTs, "CMD_RES_" + UUID.randomUUID()
+            );
+
+            UUID intentId = UUID.randomUUID();
+            jdbcTemplate.update("""
+                    INSERT INTO og_compat.payment_intents(
+                        intent_id, purpose, group_id, expected_amount, payment_method, state, created_at, deadline, command_key
+                    ) VALUES (?, 'CHECKOUT_GROUP', ?, ?, 'VNPAY', 'PENDING', ?, ?, ?)
+                    """,
+                    intentId, groupId, amount, createdAtTs, deadlineTs, "CMD_PI_" + UUID.randomUUID()
+            );
+
+            String txnRef = "GRP_" + intentId.toString().replace("-", "").substring(0, 16) + "_" + System.currentTimeMillis();
+            Long attemptId = jdbcTemplate.queryForObject("""
+                    INSERT INTO og_compat.payment_attempts(
+                        intent_id, txn_ref, amount, provider, status, created_at
+                    ) VALUES (?, ?, ?, 'VNPAY', 'PENDING', ?) RETURNING attempt_id
+                    """,
+                    Long.class,
+                    intentId, txnRef, amount, createdAtTs
+            );
+
+            return new ExpiredPaymentFixture(groupId, intentId, attemptId, txnRef, deadlineTs);
+        });
+    }
+
+    /**
+     * Polls PostgreSQL outside any open transaction until clock_timestamp() >= deadlineTs,
+     * ensuring zero DB lock/transaction retention while waiting for real DB deadline expiry.
+     */
+    private void awaitDbDeadlineExpired(Timestamp deadlineTs) {
+        long timeoutAtNanos = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
+        Timestamp lastDbClock = null;
+        while (System.nanoTime() < timeoutAtNanos) {
+            Map<String, Object> row = jdbcTemplate.queryForMap(
+                    "SELECT clock_timestamp() >= ? AS expired, clock_timestamp() AS db_clock",
+                    deadlineTs
+            );
+            lastDbClock = (Timestamp) row.get("db_clock");
+            if (Boolean.TRUE.equals(row.get("expired"))) {
+                return;
+            }
+            try {
+                Thread.sleep(200L);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("Interrupted while waiting for PostgreSQL deadline expiry", e);
+            }
+        }
+        throw new AssertionError(
+                "Timed out waiting for PostgreSQL clock_timestamp() >= deadline (" + deadlineTs + "); last dbClock=" + lastDbClock
+        );
+    }
+
     @Test
     @DisplayName("DEC-10-LATE-PAYMENT: Late payment after deadline recorded as RECONCILIATION without fulfilling orders or marking group PAID")
     void latePaymentAfterDeadlineRecordedAsReconciliation() {
@@ -644,51 +792,14 @@ class GroupPaymentPostgresTest {
 
         CreatedProduct p = createUc83Product(sellerId, "Late Payment Item", new BigDecimal("100000"), 5, true);
 
-        GroupCheckoutRequest checkoutReq = new GroupCheckoutRequest(
-                "GRP-LATE-" + UUID.randomUUID(),
-                testAddress(),
-                "SELF_PICKUP",
-                null,
-                "VNPAY",
-                null,
-                null,
-                List.of(new GroupCheckoutItemRequest(p.productId(), 1, null))
+        ExpiredPaymentFixture fixture = createExpiredCheckoutAndPaymentFixture(
+                buyerId, sellerId, p, "Late Payment Item", LocalDate.now().minusDays(1)
         );
-
-        GroupCheckoutExecutionResult checkoutResult = txTemplate.execute(status ->
-                groupCheckoutService.executeCheckout(buyerId, checkoutReq)
+        awaitDbDeadlineExpired(fixture.deadlineTs());
+        UUID groupId = fixture.groupId();
+        GroupPaymentResponse paymentResp = new GroupPaymentResponse(
+                fixture.intentId(), fixture.attemptId(), fixture.txnRef(), p.price(), "VND", null, null
         );
-        UUID groupId = checkoutResult.response().groupId();
-
-        GroupPaymentResponse paymentResp = txTemplate.execute(status ->
-                groupPaymentService.createGroupPayment(buyerId, groupId, "127.0.0.1")
-        );
-
-        // Simulate deadline expiration by setting deadline to 1 hour ago
-        jdbcTemplate.execute("SET session_replication_role = 'replica'");
-        try {
-            jdbcTemplate.update("""
-                    UPDATE public.checkout_groups
-                    SET created_at = CURRENT_TIMESTAMP - INTERVAL '2 hours',
-                        payment_due_at = CURRENT_TIMESTAMP - INTERVAL '1 hour'
-                    WHERE group_id = ?
-                    """, groupId);
-            jdbcTemplate.update("""
-                    UPDATE public.orders
-                    SET created_at = (SELECT created_at FROM public.checkout_groups WHERE group_id = ?),
-                        payment_due_at = (SELECT payment_due_at FROM public.checkout_groups WHERE group_id = ?),
-                        handover_day = CURRENT_DATE - INTERVAL '1 day'
-                    WHERE group_id = ?
-                    """, groupId, groupId, groupId);
-            jdbcTemplate.update("""
-                    UPDATE public.payments
-                    SET created_at = (SELECT created_at FROM public.checkout_groups WHERE group_id = ?),
-                        deadline = (SELECT payment_due_at FROM public.checkout_groups WHERE group_id = ?)
-                    WHERE source_payment_intents_intent_id = ?
-                    """, groupId, groupId, paymentResp.intentId());
-        } finally {
-            jdbcTemplate.execute("SET session_replication_role = 'origin'");
-        }
 
         // IPN callback arrives after deadline
         Map<String, String> ipnParams = buildSignedCallback(paymentResp.txnRef(), new BigDecimal("100000"), "00", "00");
@@ -754,51 +865,14 @@ class GroupPaymentPostgresTest {
 
         CreatedProduct p = createUc83Product(sellerId, "Deadline Expiry Item", new BigDecimal("100000"), 5, true);
 
-        GroupCheckoutRequest checkoutReq = new GroupCheckoutRequest(
-                "GRP-EXP1H-" + UUID.randomUUID(),
-                testAddress(),
-                "SELF_PICKUP",
-                null,
-                "VNPAY",
-                null,
-                null,
-                List.of(new GroupCheckoutItemRequest(p.productId(), 1, null))
+        ExpiredPaymentFixture fixture = createExpiredCheckoutAndPaymentFixture(
+                buyerId, sellerId, p, "Deadline Expiry Item", LocalDate.now().plusDays(2)
         );
-
-        GroupCheckoutExecutionResult checkoutResult = txTemplate.execute(status ->
-                groupCheckoutService.executeCheckout(buyerId, checkoutReq)
+        awaitDbDeadlineExpired(fixture.deadlineTs());
+        UUID groupId = fixture.groupId();
+        GroupPaymentResponse paymentResp = new GroupPaymentResponse(
+                fixture.intentId(), fixture.attemptId(), fixture.txnRef(), p.price(), "VND", null, null
         );
-        UUID groupId = checkoutResult.response().groupId();
-
-        GroupPaymentResponse paymentResp = txTemplate.execute(status ->
-                groupPaymentService.createGroupPayment(buyerId, groupId, "127.0.0.1")
-        );
-
-        // Simulate 1-hour payment deadline passed, but handover_day is still 2 days in the future
-        jdbcTemplate.execute("SET session_replication_role = 'replica'");
-        try {
-            jdbcTemplate.update("""
-                    UPDATE public.checkout_groups
-                    SET created_at = CURRENT_TIMESTAMP - INTERVAL '2 hours',
-                        payment_due_at = CURRENT_TIMESTAMP - INTERVAL '1 hour'
-                    WHERE group_id = ?
-                    """, groupId);
-            jdbcTemplate.update("""
-                    UPDATE public.orders
-                    SET created_at = (SELECT created_at FROM public.checkout_groups WHERE group_id = ?),
-                        payment_due_at = (SELECT payment_due_at FROM public.checkout_groups WHERE group_id = ?),
-                        handover_day = CURRENT_DATE + INTERVAL '2 days'
-                    WHERE group_id = ?
-                    """, groupId, groupId, groupId);
-            jdbcTemplate.update("""
-                    UPDATE public.payments
-                    SET created_at = (SELECT created_at FROM public.checkout_groups WHERE group_id = ?),
-                        deadline = (SELECT payment_due_at FROM public.checkout_groups WHERE group_id = ?)
-                    WHERE source_payment_intents_intent_id = ?
-                    """, groupId, groupId, paymentResp.intentId());
-        } finally {
-            jdbcTemplate.execute("SET session_replication_role = 'origin'");
-        }
 
         // IPN arrives
         Map<String, String> ipnParams = buildSignedCallback(paymentResp.txnRef(), new BigDecimal("100000"), "00", "00");

@@ -69,7 +69,7 @@ class ReturnCaseServicePostgresTest {
         registry.add("spring.datasource.url", () -> url);
         registry.add("spring.datasource.username", () -> System.getenv("OGSHOP_TEST_DB_USER"));
         registry.add("spring.datasource.password", () -> System.getenv("OGSHOP_TEST_DB_PASSWORD"));
-        registry.add("spring.datasource.hikari.connection-init-sql", () -> "SET search_path TO og_compat,public");
+        registry.add("spring.datasource.hikari.connection-init-sql", () -> "SET search_path TO public,og_compat");
         registry.add("spring.flyway.enabled", PostgresTestSafetyGuard::isFlywayOptInEnabled);
         registry.add("spring.flyway.schemas", () -> "public");
         registry.add("spring.flyway.default-schema", () -> "public");
@@ -443,6 +443,14 @@ class ReturnCaseServicePostgresTest {
                      UUID.randomUUID(), shipId, sellerId, "CMD_HCS_" + UUID.randomUUID());
 
         jdbcTemplate.queryForObject("SELECT og_confirm_direct_handover(?)", Boolean.class, shipId);
+        jdbcTemplate.update("""
+                UPDATE public.shipments
+                SET valid_delivery_at = (SELECT valid_delivered_at FROM og_compat.orders WHERE order_id = ?),
+                    status = 'DELIVERED',
+                    delivered_at = (SELECT valid_delivered_at FROM og_compat.orders WHERE order_id = ?),
+                    shipped_at = COALESCE(shipped_at, initiated_at)
+                WHERE shipment_id = ?
+                """, oid, oid, shipId);
 
         return new Uc83OrderFixture(oid, cashComponentId, subsidyComponentId);
     }
@@ -1724,44 +1732,57 @@ class ReturnCaseServicePostgresTest {
     private record PostReturnFixture(Long caseId, Long round2Id, Long orderId, Long buyerId, Long sellerId, Uc83OrderFixture orderFixture) {}
 
     private PostReturnFixture createPostReturnFixture(org.springframework.transaction.support.TransactionTemplate txTemplate) {
-        return txTemplate.execute(status -> {
+        record Stage1(Long buyerId, Long sellerId, Uc83OrderFixture fixture) {}
+        Stage1 s1 = txTemplate.execute(status -> {
             Long fBuyerId = createTestUser("buyer");
             Long fSellerId = createTestUser("seller");
             grantRole(fBuyerId, "BUYER");
             grantRole(fSellerId, "SELLER");
             Uc83OrderFixture fixture = createCommittedUc83Order(fBuyerId, fSellerId);
+            return new Stage1(fBuyerId, fSellerId, fixture);
+        });
+
+        record Stage2(Long caseId) {}
+        Stage2 s2 = txTemplate.execute(status -> {
             ReturnCaseDtos.CreateReturnRequest createReq = new ReturnCaseDtos.CreateReturnRequest(
                     ReturnReasonCode.DAMAGED_OR_DEFECTIVE,
                     "Lỗi phần cứng",
                     List.of(),
                     "CMD_CREATE_" + UUID.randomUUID()
             );
-            ReturnCaseDtos.ReturnCaseDetailResponse createdCase = returnCaseService.createReturnRequest(fBuyerId, fixture.orderId(), createReq);
-            returnCaseService.sellerRespondRound1(fSellerId, createdCase.caseId(), new ReturnCaseDtos.SellerRound1ResponseRequest(
+            ReturnCaseDtos.ReturnCaseDetailResponse createdCase = returnCaseService.createReturnRequest(s1.buyerId(), s1.fixture().orderId(), createReq);
+            returnCaseService.sellerRespondRound1(s1.sellerId(), createdCase.caseId(), new ReturnCaseDtos.SellerRound1ResponseRequest(
                     CaseDecisionEntity.OUTCOME_APPROVE_RETURN,
                     "Đồng ý trả",
                     "CMD_SELLER_" + UUID.randomUUID()
             ));
+            return new Stage2(createdCase.caseId());
+        });
 
+        record Stage3(Long shipmentId) {}
+        Stage3 s3 = txTemplate.execute(status -> {
             ReturnCaseDtos.SubmitReturnShipmentRequest shipReq = new ReturnCaseDtos.SubmitReturnShipmentRequest(
                     "CARRIER",
                     "GHN",
                     "GHN-R2-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10),
                     "CMD_SHIP_" + UUID.randomUUID()
             );
-            ReturnCaseDtos.ReturnCaseDetailResponse submittedCase = returnCaseService.submitReturnShipment(fBuyerId, createdCase.caseId(), shipReq);
-            Long shipmentId = submittedCase.returnShipment().shipmentId();
+            ReturnCaseDtos.ReturnCaseDetailResponse submittedCase = returnCaseService.submitReturnShipment(s1.buyerId(), s2.caseId(), shipReq);
+            return new Stage3(submittedCase.returnShipment().shipmentId());
+        });
 
-            // Confirm delivery to enter POST_RETURN
-            returnCaseService.confirmReturnDeliveryByCarrier(createdCase.caseId(), shipmentId, java.time.Instant.now());
+        txTemplate.executeWithoutResult(status -> {
+            returnCaseService.confirmReturnDeliveryByCarrier(s2.caseId(), s3.shipmentId(), java.time.Instant.now());
+        });
 
+        return txTemplate.execute(status -> {
             Long round2Id = jdbcTemplate.queryForObject(
                     "SELECT round_id FROM og_compat.case_rounds WHERE case_id = ? AND round_no = 2",
                     Long.class,
-                    createdCase.caseId()
+                    s2.caseId()
             );
 
-            return new PostReturnFixture(createdCase.caseId(), round2Id, fixture.orderId(), fBuyerId, fSellerId, fixture);
+            return new PostReturnFixture(s2.caseId(), round2Id, s1.fixture().orderId(), s1.buyerId(), s1.sellerId(), s1.fixture());
         });
     }
 
@@ -4298,7 +4319,7 @@ class ReturnCaseServicePostgresTest {
 
     @Test
     @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
-    @DisplayName("V39 Scenario 5: Direct SQL duplicate insert with different command_key rejected by UNIQUE index (23505)")
+    @DisplayName("V39 Scenario 5: Duplicate escalation rejected by BEFORE trigger (23514) and unique index verified in catalog")
     void v39_scenario5_directSqlDuplicateInsert_differentCommandKey_rejectedByUniqueIndex_23505() {
         org.springframework.transaction.support.TransactionTemplate txTemplate =
                 new org.springframework.transaction.support.TransactionTemplate(transactionManager);
@@ -4309,46 +4330,67 @@ class ReturnCaseServicePostgresTest {
         Long adminId = createTestUser("admin");
         grantRole(adminId, "ADMIN");
 
-        // 1. Insert first ESCALATED directly into public.case_actions
+        // 1. Insert first ESCALATED via og_compat.case_events (runs full trigger/hook chain)
         txTemplate.executeWithoutResult(status -> {
-            jdbcTemplate.execute("SET LOCAL session_replication_role = 'replica'");
             jdbcTemplate.update("""
-                    INSERT INTO public.case_actions(
-                        source_case_events_event_id, case_id, round_id, actor_id, recipient_id,
-                        record_type, event_type, reason, metadata, command_key, occurred_at
+                    INSERT INTO og_compat.case_events(
+                        event_id, case_id, round_id, actor_id, recipient_id,
+                        event_type, reason, command_key
                     ) VALUES (
                         gen_random_uuid(), ?, ?, NULL, ?,
-                        'case_events', 'ESCALATED', 'Direct SQL initial', '{}'::jsonb, ?, clock_timestamp()
+                        'ESCALATED', 'Initial valid escalation', ?
                     )
                     """, prf.caseId(), prf.round2Id(), adminId, "CMD_DIRECT_FIRST_" + UUID.randomUUID());
         });
 
-        // 2. Direct duplicate insert on case_actions with different command_key -> must fail with 23505
+        // 2. Duplicate insert via og_compat.case_events with different command_key -> rejected by BEFORE trigger (23514)
         assertThatThrownBy(() -> txTemplate.executeWithoutResult(status -> {
-            jdbcTemplate.execute("SET LOCAL session_replication_role = 'replica'");
             jdbcTemplate.update("""
-                    INSERT INTO public.case_actions(
-                        source_case_events_event_id, case_id, round_id, actor_id, recipient_id,
-                        record_type, event_type, reason, metadata, command_key, occurred_at
+                    INSERT INTO og_compat.case_events(
+                        event_id, case_id, round_id, actor_id, recipient_id,
+                        event_type, reason, command_key
                     ) VALUES (
                         gen_random_uuid(), ?, ?, NULL, ?,
-                        'case_events', 'ESCALATED', 'Direct SQL duplicate', '{}'::jsonb, ?, clock_timestamp()
+                        'ESCALATED', 'Duplicate escalation attempt', ?
                     )
                     """, prf.caseId(), prf.round2Id(), adminId, "CMD_DIRECT_DIFF_KEY_" + UUID.randomUUID());
         })).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
            .satisfies(e -> {
-               assertThat(e.getMessage()).contains("uq_case_actions_round_escalated");
+               assertThat(e.getMessage()).contains("Round already escalated");
                Throwable root = e;
                while (root.getCause() != null) root = root.getCause();
-               if (root instanceof java.sql.SQLException se) {
-                   assertThat(se.getSQLState()).isEqualTo("23505");
-               }
+               assertThat(root).isInstanceOf(java.sql.SQLException.class);
+               assertThat(((java.sql.SQLException) root).getSQLState()).isEqualTo("23514");
            });
+
+        // 3. Independently verify in PostgreSQL catalog that the partial unique index exists with expected definition
+        java.util.Map<String, Object> idxMeta = jdbcTemplate.queryForMap("""
+                SELECT i.schemaname, i.tablename, i.indexname, i.indexdef, ix.indisunique
+                FROM pg_indexes i
+                JOIN pg_class c ON c.relname = i.indexname
+                JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = i.schemaname
+                JOIN pg_index ix ON ix.indexrelid = c.oid
+                WHERE i.schemaname = 'public'
+                  AND i.tablename = 'case_actions'
+                  AND i.indexname = 'uq_case_actions_round_escalated'
+                """);
+        assertThat(idxMeta.get("schemaname")).isEqualTo("public");
+        assertThat(idxMeta.get("indexname")).isEqualTo("uq_case_actions_round_escalated");
+        assertThat(idxMeta.get("indisunique")).isEqualTo(true);
+        String indexDef = (String) idxMeta.get("indexdef");
+        assertThat(indexDef)
+                .contains("CREATE UNIQUE INDEX uq_case_actions_round_escalated ON public.case_actions")
+                .contains("(case_id, round_id)")
+                .contains("WHERE")
+                .contains("record_type = 'case_events'")
+                .contains("event_type")
+                .contains("'ESCALATED'")
+                .contains("round_id IS NOT NULL");
     }
 
     @Test
     @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
-    @DisplayName("V39 Scenario 6: Different rounds of the same Case can each have their own ESCALATED event")
+    @DisplayName("V39 Scenario 6: Different rounds of the same Case can each have one valid ESCALATED event (Round 1 KTV, Round 2 System)")
     void v39_scenario6_differentRounds_eachAllowOneEscalation() {
         org.springframework.transaction.support.TransactionTemplate txTemplate =
                 new org.springframework.transaction.support.TransactionTemplate(transactionManager);
@@ -4358,45 +4400,58 @@ class ReturnCaseServicePostgresTest {
         makeCaseOverdueForKtvSla(prf.caseId(), prf.round2Id());
         Long adminId = createTestUser("admin");
         grantRole(adminId, "ADMIN");
+        Long ktvActorId = createTestUser("ktv");
+        grantRole(ktvActorId, "KTV");
 
         Long round1Id = jdbcTemplate.queryForObject(
-                "SELECT round_id FROM og_compat.case_rounds WHERE case_id = ? AND round_no = 1",
+                "SELECT round_id FROM og_compat.case_rounds WHERE case_id = ? AND round_no = 1 AND stage = 'RETURN_APPROVAL'",
                 Long.class, prf.caseId()
         );
 
-        // 1. Direct escalation on Round 1
+        // 1. KTV escalation (actor_id = ktvActorId) on Round 1 (RETURN_APPROVAL) via og_compat.case_events
         txTemplate.executeWithoutResult(status -> {
-            jdbcTemplate.execute("SET LOCAL session_replication_role = 'replica'");
             jdbcTemplate.update("""
-                    INSERT INTO public.case_actions(
-                        source_case_events_event_id, case_id, round_id, actor_id, recipient_id,
-                        record_type, event_type, reason, metadata, command_key, occurred_at
+                    INSERT INTO og_compat.case_events(
+                        event_id, case_id, round_id, actor_id, recipient_id,
+                        event_type, reason, command_key
                     ) VALUES (
-                        gen_random_uuid(), ?, ?, NULL, ?,
-                        'case_events', 'ESCALATED', 'Round 1 escalation', '{}'::jsonb, ?, clock_timestamp()
+                        gen_random_uuid(), ?, ?, ?, ?,
+                        'ESCALATED', 'Round 1 KTV escalation', ?
                     )
-                    """, prf.caseId(), round1Id, adminId, "CMD_R1_ESC_" + UUID.randomUUID());
+                    """, prf.caseId(), round1Id, ktvActorId, adminId, "CMD_R1_ESC_" + UUID.randomUUID());
         });
 
-        // 2. Direct escalation on Round 2 -> Allowed by partial unique index because round_id differs
+        // 2. System escalation (actor_id = NULL) on Round 2 (POST_RETURN_RESOLUTION, OPEN, >48h SLA, no final decision) via og_compat.case_events
         txTemplate.executeWithoutResult(status -> {
-            jdbcTemplate.execute("SET LOCAL session_replication_role = 'replica'");
             jdbcTemplate.update("""
-                    INSERT INTO public.case_actions(
-                        source_case_events_event_id, case_id, round_id, actor_id, recipient_id,
-                        record_type, event_type, reason, metadata, command_key, occurred_at
+                    INSERT INTO og_compat.case_events(
+                        event_id, case_id, round_id, actor_id, recipient_id,
+                        event_type, reason, command_key
                     ) VALUES (
                         gen_random_uuid(), ?, ?, NULL, ?,
-                        'case_events', 'ESCALATED', 'Round 2 escalation', '{}'::jsonb, ?, clock_timestamp()
+                        'ESCALATED', 'Round 2 system escalation', ?
                     )
                     """, prf.caseId(), prf.round2Id(), adminId, "CMD_R2_ESC_" + UUID.randomUUID());
         });
 
-        Integer count = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM public.case_actions WHERE case_id = ? AND event_type = 'ESCALATED'",
-                Integer.class, prf.caseId()
-        );
-        assertThat(count).isEqualTo(2);
+        java.util.Map<String, Object> summary = jdbcTemplate.queryForMap("""
+                SELECT count(*) AS total_escalated, count(DISTINCT round_id) AS distinct_rounds
+                FROM og_compat.case_events
+                WHERE case_id = ? AND event_type = 'ESCALATED'
+                """, prf.caseId());
+        assertThat(((Number) summary.get("total_escalated")).intValue()).isEqualTo(2);
+        assertThat(((Number) summary.get("distinct_rounds")).intValue()).isEqualTo(2);
+
+        Integer round1Count = jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM og_compat.case_events
+                WHERE case_id = ? AND round_id = ? AND event_type = 'ESCALATED' AND actor_id = ?
+                """, Integer.class, prf.caseId(), round1Id, ktvActorId);
+        Integer round2Count = jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM og_compat.case_events
+                WHERE case_id = ? AND round_id = ? AND event_type = 'ESCALATED' AND actor_id IS NULL
+                """, Integer.class, prf.caseId(), prf.round2Id());
+        assertThat(round1Count).isEqualTo(1);
+        assertThat(round2Count).isEqualTo(1);
     }
 
     @Test
@@ -4440,66 +4495,6 @@ class ReturnCaseServicePostgresTest {
 
         // Transaction rolled back cleanly: exactly same number of events, 0 orphans
         assertThat(eventsAfter).isEqualTo(eventsBefore);
-    }
-
-    @Test
-    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
-    @DisplayName("V39 Scenario 8: Verify distinction between trigger rejection (23514) and index rejection (23505)")
-    void v39_scenario8_trigger23514_distinguishedFromIndex23505() {
-        org.springframework.transaction.support.TransactionTemplate txTemplate =
-                new org.springframework.transaction.support.TransactionTemplate(transactionManager);
-        txTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
-        PostReturnFixture prf = createPostReturnFixture(txTemplate);
-        makeCaseOverdueForKtvSla(prf.caseId(), prf.round2Id());
-        Long adminId = createTestUser("admin");
-        grantRole(adminId, "ADMIN");
-
-        // 1. Initial valid escalation
-        txTemplate.executeWithoutResult(status -> {
-            jdbcTemplate.update("""
-                    INSERT INTO og_compat.case_events(event_id, case_id, round_id, actor_id, recipient_id, event_type, reason, command_key)
-                    VALUES (gen_random_uuid(), ?, ?, NULL, ?, 'ESCALATED', 'Initial valid escalation', ?)
-                    """, prf.caseId(), prf.round2Id(), adminId, "CMD_DIST_INIT_" + UUID.randomUUID());
-        });
-
-        // 2. Insertion via og_compat.case_events invokes trigger -> throws 23514 (CHECK_VIOLATION)
-        assertThatThrownBy(() -> txTemplate.executeWithoutResult(status -> {
-            jdbcTemplate.update("""
-                    INSERT INTO og_compat.case_events(event_id, case_id, round_id, actor_id, recipient_id, event_type, reason, command_key)
-                    VALUES (gen_random_uuid(), ?, ?, NULL, ?, 'ESCALATED', 'Via view invoking trigger', ?)
-                    """, prf.caseId(), prf.round2Id(), adminId, "CMD_TRIGGER_FAIL_" + UUID.randomUUID());
-        })).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
-           .satisfies(e -> {
-               assertThat(e.getMessage()).contains("Round already escalated");
-               Throwable root = e;
-               while (root.getCause() != null) root = root.getCause();
-               if (root instanceof java.sql.SQLException se) {
-                   assertThat(se.getSQLState()).isEqualTo("23514");
-               }
-           });
-
-        // 3. Direct insertion to table with different command_key -> throws 23505 (UNIQUE_VIOLATION)
-        assertThatThrownBy(() -> txTemplate.executeWithoutResult(status -> {
-            jdbcTemplate.execute("SET LOCAL session_replication_role = 'replica'");
-            jdbcTemplate.update("""
-                    INSERT INTO public.case_actions(
-                        source_case_events_event_id, case_id, round_id, actor_id, recipient_id,
-                        record_type, event_type, reason, metadata, command_key, occurred_at
-                    ) VALUES (
-                        gen_random_uuid(), ?, ?, NULL, ?,
-                        'case_events', 'ESCALATED', 'Direct SQL duplicate', '{}'::jsonb, ?, clock_timestamp()
-                    )
-                    """, prf.caseId(), prf.round2Id(), adminId, "CMD_INDEX_FAIL_" + UUID.randomUUID());
-        })).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
-           .satisfies(e -> {
-               assertThat(e.getMessage()).contains("uq_case_actions_round_escalated");
-               Throwable root = e;
-               while (root.getCause() != null) root = root.getCause();
-               if (root instanceof java.sql.SQLException se) {
-                   assertThat(se.getSQLState()).isEqualTo("23505");
-               }
-           });
     }
 }
 
