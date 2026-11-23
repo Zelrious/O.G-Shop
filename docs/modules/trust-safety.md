@@ -1,5 +1,12 @@
 # Trust & Safety Module
 
+## Vá bảo mật KTV, ranh giới Controller & LocalEvidenceStorageVerifier — TASK-0120 / 2026-11-23
+
+- `ReturnCaseController`: khóa `@PreAuthorize("hasRole('KTV')")` cho 3 endpoint `/ktv/request-evidence`, `/ktv/decide-round1`, `/ktv/decide-round2`.
+- `ReturnCaseService`: bổ sung kiểm tra `isKtv(ktvId)` tường minh trong `ktvDecideRound1` và cung cấp các phương thức facade cho `ReturnCaseCommerceController` và `KtvCaseController` (loại bỏ truy cập repository trực tiếp khỏi Controller).
+- `LocalEvidenceStorageVerifier`: triển khai `EvidenceStorageVerifier` đọc file thực tế, chặn path traversal/symlink escape và tính SHA-256 thực (bật qua `app.trustsafety.evidence-strict-verify=true`).
+- Kiểm chứng: `ReturnCaseCarrierSecurityTest`, `KtvCaseControllerTest`, `ReturnCaseServiceTest` (144/144), `LocalEvidenceStorageVerifierTest` (3/3) PASS.
+
 ## Dispute arbitration, refund, and review center — TASK-0117 / 2026-11-17
 
 - Hoàn thiện luồng phân xử tranh chấp KTV (`/api/v1/ktv/disputes/**`), khiếu nại Người mua (`/api/v1/commerce/orders/{orderId}/dispute`), giải trình Người bán (`/api/v1/commerce/orders/{orderId}/dispute/seller-response`), và đánh giá đơn hàng (`/api/v1/commerce/orders/{orderId}/review`).

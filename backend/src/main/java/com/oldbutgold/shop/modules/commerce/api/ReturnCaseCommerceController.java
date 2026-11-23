@@ -1,11 +1,7 @@
 package com.oldbutgold.shop.modules.commerce.api;
 
-import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderEntity;
-import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderRepository;
 import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseDtos;
 import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseService;
-import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseEntity;
-import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseRepository;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -18,24 +14,18 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.NoSuchElementException;
-
+/**
+ * Order-scoped REST endpoints for UC83 return cases.
+ * Delegates strictly to {@link ReturnCaseService} without accessing repositories directly.
+ */
 @RestController
 @RequestMapping("/api/v1/commerce/orders/{orderId}")
 public class ReturnCaseCommerceController {
 
     private final ReturnCaseService returnCaseService;
-    private final OrderRepository orderRepository;
-    private final CaseRepository caseRepository;
 
-    public ReturnCaseCommerceController(
-            ReturnCaseService returnCaseService,
-            OrderRepository orderRepository,
-            CaseRepository caseRepository
-    ) {
+    public ReturnCaseCommerceController(ReturnCaseService returnCaseService) {
         this.returnCaseService = returnCaseService;
-        this.orderRepository = orderRepository;
-        this.caseRepository = caseRepository;
     }
 
     private static long extractUserId(Jwt jwt) {
@@ -49,16 +39,6 @@ public class ReturnCaseCommerceController {
         }
     }
 
-    private OrderEntity findOrderOrThrow(Long orderId) {
-        return orderRepository.findById(orderId)
-                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
-    }
-
-    private CaseEntity findActiveCaseOrThrow(Long orderId) {
-        return caseRepository.findActiveCaseByOrderId(orderId)
-                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy hồ sơ khiếu nại đang hoạt động cho đơn hàng #" + orderId));
-    }
-
     /**
      * 1. Tạo yêu cầu trả hàng / khiếu nại (Buyer)
      * POST /api/v1/commerce/orders/{orderId}/return-request
@@ -70,11 +50,8 @@ public class ReturnCaseCommerceController {
             @Valid @RequestBody ReturnCaseDtos.CreateReturnRequest request
     ) {
         long buyerId = extractUserId(jwt);
-        OrderEntity order = findOrderOrThrow(orderId);
-        if (buyerId != order.getBuyerId()) {
-            throw new AccessDeniedException("Chỉ người mua của đơn hàng mới có quyền yêu cầu trả hàng");
-        }
-        ReturnCaseDtos.ReturnCaseDetailResponse response = returnCaseService.createReturnRequest(buyerId, orderId, request);
+        ReturnCaseDtos.ReturnCaseDetailResponse response =
+                returnCaseService.createReturnRequestForOrder(buyerId, orderId, request);
         return ResponseEntity.ok(response);
     }
 
@@ -88,12 +65,8 @@ public class ReturnCaseCommerceController {
             @PathVariable Long orderId
     ) {
         long actorId = extractUserId(jwt);
-        OrderEntity order = findOrderOrThrow(orderId);
-        if (actorId != order.getBuyerId() && actorId != order.getSellerId()) {
-            throw new AccessDeniedException("Người dùng không thuộc đơn hàng này");
-        }
-        CaseEntity activeCase = findActiveCaseOrThrow(orderId);
-        ReturnCaseDtos.ReturnCaseDetailResponse response = returnCaseService.getReturnCaseById(actorId, activeCase.getId());
+        ReturnCaseDtos.ReturnCaseDetailResponse response =
+                returnCaseService.getActiveReturnCaseForOrder(actorId, orderId);
         return ResponseEntity.ok(response);
     }
 
@@ -108,12 +81,8 @@ public class ReturnCaseCommerceController {
             @RequestBody(required = false) ReturnCaseDtos.WithdrawReturnRequest request
     ) {
         long buyerId = extractUserId(jwt);
-        OrderEntity order = findOrderOrThrow(orderId);
-        if (buyerId != order.getBuyerId()) {
-            throw new AccessDeniedException("Chỉ người mua của đơn hàng mới có quyền rút yêu cầu trả hàng");
-        }
-        CaseEntity activeCase = findActiveCaseOrThrow(orderId);
-        ReturnCaseDtos.ReturnCaseDetailResponse response = returnCaseService.withdrawReturnRequest(buyerId, activeCase.getId(), request);
+        ReturnCaseDtos.ReturnCaseDetailResponse response =
+                returnCaseService.withdrawReturnRequestForOrder(buyerId, orderId, request);
         return ResponseEntity.ok(response);
     }
 
@@ -128,12 +97,8 @@ public class ReturnCaseCommerceController {
             @Valid @RequestBody ReturnCaseDtos.SellerRound1ResponseRequest request
     ) {
         long sellerId = extractUserId(jwt);
-        OrderEntity order = findOrderOrThrow(orderId);
-        if (sellerId != order.getSellerId()) {
-            throw new AccessDeniedException("Chỉ người bán của đơn hàng mới có quyền phản hồi");
-        }
-        CaseEntity activeCase = findActiveCaseOrThrow(orderId);
-        ReturnCaseDtos.ReturnCaseDetailResponse response = returnCaseService.sellerRespondRound1(sellerId, activeCase.getId(), request);
+        ReturnCaseDtos.ReturnCaseDetailResponse response =
+                returnCaseService.sellerRespondRound1ForOrder(sellerId, orderId, request);
         return ResponseEntity.ok(response);
     }
 
@@ -148,12 +113,8 @@ public class ReturnCaseCommerceController {
             @Valid @RequestBody ReturnCaseDtos.ConfirmReturnDeliveryRequest request
     ) {
         long actorId = extractUserId(jwt);
-        OrderEntity order = findOrderOrThrow(orderId);
-        if (actorId != order.getBuyerId() && actorId != order.getSellerId()) {
-            throw new AccessDeniedException("Người dùng không thuộc đơn hàng này");
-        }
-        CaseEntity activeCase = findActiveCaseOrThrow(orderId);
-        ReturnCaseDtos.ReturnCaseDetailResponse response = returnCaseService.confirmReturnDeliveryDirect(actorId, activeCase.getId(), request);
+        ReturnCaseDtos.ReturnCaseDetailResponse response =
+                returnCaseService.confirmReturnDeliveryDirectForOrder(actorId, orderId, request);
         return ResponseEntity.ok(response);
     }
 
@@ -168,12 +129,8 @@ public class ReturnCaseCommerceController {
             @Valid @RequestBody ReturnCaseDtos.SellerAgreeRefundRequest request
     ) {
         long sellerId = extractUserId(jwt);
-        OrderEntity order = findOrderOrThrow(orderId);
-        if (sellerId != order.getSellerId()) {
-            throw new AccessDeniedException("Chỉ người bán của đơn hàng mới có quyền đồng ý hoàn tiền");
-        }
-        CaseEntity activeCase = findActiveCaseOrThrow(orderId);
-        ReturnCaseDtos.ReturnCaseDetailResponse response = returnCaseService.sellerAgreeRefundRound2(sellerId, activeCase.getId(), request);
+        ReturnCaseDtos.ReturnCaseDetailResponse response =
+                returnCaseService.sellerAgreeRefundRound2ForOrder(sellerId, orderId, request);
         return ResponseEntity.ok(response);
     }
 
@@ -188,13 +145,8 @@ public class ReturnCaseCommerceController {
             @Valid @RequestBody ReturnCaseDtos.SellerDamageExemptionRequest request
     ) {
         long sellerId = extractUserId(jwt);
-        OrderEntity order = findOrderOrThrow(orderId);
-        if (sellerId != order.getSellerId()) {
-            throw new AccessDeniedException("Chỉ người bán của đơn hàng mới có quyền gửi yêu cầu bồi thường thiệt hại");
-        }
-        CaseEntity activeCase = findActiveCaseOrThrow(orderId);
-        ReturnCaseDtos.ReturnCaseDetailResponse response = returnCaseService.submitDamageExemptionRequest(sellerId, activeCase.getId(), request);
+        ReturnCaseDtos.ReturnCaseDetailResponse response =
+                returnCaseService.submitDamageExemptionRequestForOrder(sellerId, orderId, request);
         return ResponseEntity.ok(response);
     }
 }
-

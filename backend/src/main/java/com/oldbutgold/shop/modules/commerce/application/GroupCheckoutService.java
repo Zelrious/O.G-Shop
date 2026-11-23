@@ -6,8 +6,10 @@ import com.oldbutgold.shop.modules.catalog.infrastructure.persistence.ProductEnt
 import com.oldbutgold.shop.modules.catalog.infrastructure.persistence.ProductRepository;
 import com.oldbutgold.shop.modules.catalog.infrastructure.persistence.ProductRevisionEntity;
 import com.oldbutgold.shop.modules.catalog.infrastructure.persistence.ProductRevisionRepository;
+import com.oldbutgold.shop.modules.commerce.api.VoucherDtos;
 import com.oldbutgold.shop.modules.commerce.application.GroupCheckoutDtos.*;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.*;
+import com.oldbutgold.shop.modules.communication.application.NegotiatedCheckoutFacade;
 import com.oldbutgold.shop.modules.identity.application.IdentityCommerceFacade;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.RewardPolicyEntity;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.RewardPolicyRepository;
@@ -51,6 +53,8 @@ public class GroupCheckoutService {
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final IdentityCommerceFacade identityCommerceFacade;
+    private final VoucherService voucherService;
+    private final NegotiatedCheckoutFacade negotiatedCheckoutFacade;
 
     @Value("${app.reward.canonical-policy-code:}")
     private String configuredCanonicalPolicyCode;
@@ -75,7 +79,23 @@ public class GroupCheckoutService {
                                 ObjectMapper objectMapper) {
         this(productRepository, productRevisionRepository, checkoutGroupRepository,
                 orderRepository, orderItemRepository, inventoryReservationRepository,
-                rewardPolicyRepository, jdbcTemplate, clock, objectMapper, null);
+                rewardPolicyRepository, jdbcTemplate, clock, objectMapper, null, null, null);
+    }
+
+    public GroupCheckoutService(ProductRepository productRepository,
+                                ProductRevisionRepository productRevisionRepository,
+                                CheckoutGroupRepository checkoutGroupRepository,
+                                OrderRepository orderRepository,
+                                OrderItemRepository orderItemRepository,
+                                InventoryReservationRepository inventoryReservationRepository,
+                                RewardPolicyRepository rewardPolicyRepository,
+                                JdbcTemplate jdbcTemplate,
+                                Clock clock,
+                                ObjectMapper objectMapper,
+                                IdentityCommerceFacade identityCommerceFacade) {
+        this(productRepository, productRevisionRepository, checkoutGroupRepository,
+                orderRepository, orderItemRepository, inventoryReservationRepository,
+                rewardPolicyRepository, jdbcTemplate, clock, objectMapper, identityCommerceFacade, null, null);
     }
 
     @Autowired
@@ -89,7 +109,9 @@ public class GroupCheckoutService {
                                 @Autowired(required = false) JdbcTemplate jdbcTemplate,
                                 Clock clock,
                                 ObjectMapper objectMapper,
-                                @Autowired(required = false) IdentityCommerceFacade identityCommerceFacade) {
+                                @Autowired(required = false) IdentityCommerceFacade identityCommerceFacade,
+                                @Autowired(required = false) VoucherService voucherService,
+                                @Autowired(required = false) NegotiatedCheckoutFacade negotiatedCheckoutFacade) {
         this.productRepository = productRepository;
         this.productRevisionRepository = productRevisionRepository;
         this.checkoutGroupRepository = checkoutGroupRepository;
@@ -101,6 +123,8 @@ public class GroupCheckoutService {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.identityCommerceFacade = identityCommerceFacade;
+        this.voucherService = voucherService;
+        this.negotiatedCheckoutFacade = negotiatedCheckoutFacade;
     }
 
     public GroupCheckoutResponse checkout(long buyerId, GroupCheckoutRequest request) {
@@ -161,6 +185,7 @@ public class GroupCheckoutService {
                 ProductRevisionEntity revision,
                 GroupCheckoutItemRequest itemRequest,
                 BigDecimal agreedPrice,
+                String priceSource,
                 BigDecimal lineSubtotal
         ) {}
 
@@ -180,6 +205,9 @@ public class GroupCheckoutService {
             }
             if (identityCommerceFacade != null) {
                 identityCommerceFacade.requirePurchaseAllowed(buyerId, product.getSellerId(), product.isRequiresBuyerEkyc());
+            }
+            if (negotiatedCheckoutFacade != null) {
+                negotiatedCheckoutFacade.requireNotBlocked(buyerId, product.getSellerId());
             }
             if (product.isRequiresBuyerEkyc()) {
                 anyRequiresBuyerEkyc = true;
@@ -204,11 +232,19 @@ public class GroupCheckoutService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sản phẩm " + product.getTitle() + " không hỗ trợ phương thức nhận hàng " + deliveryMethod);
             }
 
+            // UC24 Alt 1a: Negotiated offer price support via NegotiatedCheckoutFacade
             BigDecimal agreedPrice = revision.getListedUnitPrice();
+            String priceSource = "LIST_PRICE";
+            if (itemReq.acceptedOfferId() != null && negotiatedCheckoutFacade != null) {
+                var agreement = negotiatedCheckoutFacade.bind(buyerId, product.getId(), itemReq.acceptedOfferId(), requestDigest);
+                agreedPrice = agreement.price();
+                priceSource = "NEGOTIATED_OFFER";
+            }
+
             BigDecimal lineSubtotal = agreedPrice.multiply(BigDecimal.valueOf(itemReq.quantity()));
             groupSubtotal = groupSubtotal.add(lineSubtotal);
 
-            validatedItems.add(new ValidatedItem(product, revision, itemReq, agreedPrice, lineSubtotal));
+            validatedItems.add(new ValidatedItem(product, revision, itemReq, agreedPrice, priceSource, lineSubtotal));
         }
 
         // UC24 / UC08: Fail-closed Buyer eKYC + Quick Face Auth guard for high-value items
@@ -222,16 +258,85 @@ public class GroupCheckoutService {
             identityCommerceFacade.requireQuickAuthResult(buyerId, request.quickAuthResultId());
         }
 
-        // 3. Voucher calculation
-        BigDecimal groupVoucherDiscount = BigDecimal.ZERO;
-        // In this phase, if voucherCode provided, check if repository exists or default to 0
-        // (Voucher logic can be applied if voucherCode is passed and found)
+        // 3. Partition items by (sellerId, returnAllowed) and compute Shipping Fees first (needed for shipping vouchers)
+        record PartitionKey(Long sellerId, boolean returnAllowed) {}
+        Map<PartitionKey, List<ValidatedItem>> partitions = new LinkedHashMap<>();
+        for (ValidatedItem item : validatedItems) {
+            PartitionKey key = new PartitionKey(item.product().getSellerId(), item.revision().isReturnAllowed());
+            partitions.computeIfAbsent(key, k -> new ArrayList<>()).add(item);
+        }
 
-        // 4. Coin redemption calculation (DEC-10.7A fail-closed)
+        List<PartitionKey> partitionKeys = new ArrayList<>(partitions.keySet());
+        Map<PartitionKey, BigDecimal> orderSubtotals = new LinkedHashMap<>();
+        for (PartitionKey key : partitionKeys) {
+            BigDecimal subtotal = partitions.get(key).stream()
+                    .map(ValidatedItem::lineSubtotal)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            orderSubtotals.put(key, subtotal);
+        }
+
+        // DEC-08 Option A Shipping Calculation
+        Map<PartitionKey, BigDecimal> partitionShippingFees = new LinkedHashMap<>();
+        if ("CARRIER".equals(deliveryMethod)) {
+            Map<Long, List<PartitionKey>> sellerPartitions = new LinkedHashMap<>();
+            for (PartitionKey key : partitionKeys) {
+                sellerPartitions.computeIfAbsent(key.sellerId(), k -> new ArrayList<>()).add(key);
+            }
+            for (Map.Entry<Long, List<PartitionKey>> entry : sellerPartitions.entrySet()) {
+                List<PartitionKey> keysForSeller = entry.getValue();
+                PartitionKey primaryKey = keysForSeller.stream()
+                        .filter(PartitionKey::returnAllowed)
+                        .findFirst()
+                        .orElse(keysForSeller.get(0));
+                for (PartitionKey key : keysForSeller) {
+                    if (key.equals(primaryKey)) {
+                        partitionShippingFees.put(key, STANDARD_SHIPPING_FEE);
+                    } else {
+                        partitionShippingFees.put(key, BigDecimal.ZERO);
+                    }
+                }
+            }
+        } else {
+            for (PartitionKey key : partitionKeys) {
+                partitionShippingFees.put(key, BigDecimal.ZERO);
+            }
+        }
+        BigDecimal groupShippingFee = partitionShippingFees.values().stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // 4. Voucher calculation (BR-UC24-03: apply Voucher BEFORE Coins; supports goods & shipping vouchers)
+        BigDecimal groupVoucherDiscount = BigDecimal.ZERO;
+        BigDecimal groupShippingDiscount = BigDecimal.ZERO;
+        VoucherDtos.Grant ownedVoucherGrant = null;
+        if (request.voucherCode() != null && !request.voucherCode().isBlank() && voucherService != null) {
+            ValidatedItem primaryItem = validatedItems.getFirst();
+            voucherService.lockCheckout(buyerId, primaryItem.product().getSellerId());
+            ownedVoucherGrant = voucherService.resolve(
+                    buyerId,
+                    request.voucherCode().trim(),
+                    primaryItem.product().getId(),
+                    groupSubtotal,
+                    true
+            );
+            VoucherDtos.Campaign campaign = ownedVoucherGrant.campaign();
+            if ("SHIPPING_DISCOUNT".equalsIgnoreCase(campaign.voucherType())) {
+                groupShippingDiscount = calculateVoucherDiscount(campaign, groupShippingFee);
+            } else {
+                groupVoucherDiscount = calculateVoucherDiscount(campaign, groupSubtotal);
+            }
+        }
+
+        // 5. Coin redemption calculation (DEC-10.7A fail-closed; Voucher-first priority; auto-clamp excess coins so user never loses coins)
         Long coinsRequested = request.coinsRequested();
         BigDecimal groupPointsDiscount = BigDecimal.ZERO;
+        BigDecimal groupPointsGoodsDiscount = BigDecimal.ZERO;
+        BigDecimal groupPointsShippingDiscount = BigDecimal.ZERO;
         Long coinsToRedeem = 0L;
         Long rewardPolicyId = null;
+
+        BigDecimal remainingGoodsAfterVoucher = groupSubtotal.subtract(groupVoucherDiscount).max(BigDecimal.ZERO);
+        BigDecimal remainingShippingAfterVoucher = groupShippingFee.subtract(groupShippingDiscount).max(BigDecimal.ZERO);
+        BigDecimal maxPayableAfterVoucher = remainingGoodsAfterVoucher.add(remainingShippingAfterVoucher);
 
         if (coinsRequested != null && coinsRequested > 0) {
             BigDecimal capPct = resolveMaxRedemptionPercentage(); // Fail closed if unconfigured
@@ -263,38 +368,29 @@ public class GroupCheckoutService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số dư xu không đủ để thực hiện thanh toán.");
             }
 
-            BigDecimal maxGoodsRedemption = groupSubtotal.subtract(groupVoucherDiscount).max(BigDecimal.ZERO);
-            long maxRedeemableCoins = maxGoodsRedemption
+            long maxRedeemableCoins = maxPayableAfterVoucher
                     .multiply(capPct)
                     .divide(new BigDecimal("100"), 0, RoundingMode.FLOOR)
+                    .divide(pointValue, 0, RoundingMode.FLOOR)
                     .longValue();
 
-            if (coinsRequested > maxRedeemableCoins) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số xu sử dụng (" + coinsRequested + ") vượt quá giá trị thanh toán cho hàng hóa (" + maxRedeemableCoins + " xu).");
+            // Auto-adjust (clamp) coins when Voucher reduced remaining payable, so buyer never wastes or loses coins
+            coinsToRedeem = Math.min(coinsRequested, Math.max(0L, maxRedeemableCoins));
+            if (coinsToRedeem < coinsRequested) {
+                log.info("Auto-adjusted coinsRequested from {} to {} after voucher priority (maxPayableAfterVoucher={}, capPct={}%)",
+                        coinsRequested, coinsToRedeem, maxPayableAfterVoucher, capPct);
             }
-
-            coinsToRedeem = coinsRequested;
-            groupPointsDiscount = BigDecimal.valueOf(coinsToRedeem).multiply(pointValue);
-        }
-
-        // 5. Partition items by (sellerId, returnAllowed)
-        record PartitionKey(Long sellerId, boolean returnAllowed) {}
-        Map<PartitionKey, List<ValidatedItem>> partitions = new LinkedHashMap<>();
-        for (ValidatedItem item : validatedItems) {
-            PartitionKey key = new PartitionKey(item.product().getSellerId(), item.revision().isReturnAllowed());
-            partitions.computeIfAbsent(key, k -> new ArrayList<>()).add(item);
+            if (coinsToRedeem == 0L) {
+                rewardPolicyId = null;
+            } else {
+                groupPointsDiscount = BigDecimal.valueOf(coinsToRedeem).multiply(pointValue);
+                // Priority: offset remaining goods first, then remaining shipping fee
+                groupPointsGoodsDiscount = groupPointsDiscount.min(remainingGoodsAfterVoucher);
+                groupPointsShippingDiscount = groupPointsDiscount.subtract(groupPointsGoodsDiscount).min(remainingShippingAfterVoucher);
+            }
         }
 
         // 6. Largest Remainder Method across Orders
-        List<PartitionKey> partitionKeys = new ArrayList<>(partitions.keySet());
-        Map<PartitionKey, BigDecimal> orderSubtotals = new LinkedHashMap<>();
-        for (PartitionKey key : partitionKeys) {
-            BigDecimal subtotal = partitions.get(key).stream()
-                    .map(ValidatedItem::lineSubtotal)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            orderSubtotals.put(key, subtotal);
-        }
-
         Map<PartitionKey, BigDecimal> orderVoucherDiscounts = allocateLargestRemainder(
                 groupVoucherDiscount,
                 partitionKeys,
@@ -302,57 +398,42 @@ public class GroupCheckoutService {
                 orderSubtotals
         );
 
+        Map<PartitionKey, BigDecimal> orderShippingDiscounts = allocateLargestRemainder(
+                groupShippingDiscount,
+                partitionKeys,
+                partitionShippingFees,
+                partitionShippingFees
+        );
+
         Map<PartitionKey, BigDecimal> orderGoodsAfterVoucher = new LinkedHashMap<>();
+        Map<PartitionKey, BigDecimal> orderShippingAfterVoucher = new LinkedHashMap<>();
         for (PartitionKey key : partitionKeys) {
             orderGoodsAfterVoucher.put(key, orderSubtotals.get(key).subtract(orderVoucherDiscounts.get(key)));
+            orderShippingAfterVoucher.put(key, partitionShippingFees.get(key).subtract(orderShippingDiscounts.get(key)));
         }
 
         Map<PartitionKey, BigDecimal> orderPointsDiscounts = allocateLargestRemainder(
-                groupPointsDiscount,
+                groupPointsGoodsDiscount,
                 partitionKeys,
                 orderGoodsAfterVoucher,
                 orderGoodsAfterVoucher
         );
 
+        Map<PartitionKey, BigDecimal> orderPointsShippingDiscounts = allocateLargestRemainder(
+                groupPointsShippingDiscount,
+                partitionKeys,
+                orderShippingAfterVoucher,
+                orderShippingAfterVoucher
+        );
+
         // 7. Save CheckoutGroupEntity
         UUID groupId = UUID.randomUUID();
         String addressJson = buildAddressSnapshotJson(request.shippingAddress());
-
-        // DEC-08 Option A Shipping Calculation:
-        // Group partitions by sellerId. Each seller is charged at most one STANDARD_SHIPPING_FEE (if deliveryMethod == "CARRIER").
-        // For each seller, the Primary Seller Order (returnAllowed = true) bears the full shipping fee.
-        // Other partitions of that seller (returnAllowed = false) get shipping fee = 0.
-        // If a seller has no returnable partitions, the remaining partition bears the shipping fee.
-        // For non-CARRIER methods (SELF_PICKUP, SELF_DELIVERY), shipping fee is 0.
-        Map<PartitionKey, BigDecimal> partitionShippingFees = new LinkedHashMap<>();
-        if ("CARRIER".equals(deliveryMethod)) {
-            Map<Long, List<PartitionKey>> sellerPartitions = new LinkedHashMap<>();
-            for (PartitionKey key : partitionKeys) {
-                sellerPartitions.computeIfAbsent(key.sellerId(), k -> new ArrayList<>()).add(key);
-            }
-            for (Map.Entry<Long, List<PartitionKey>> entry : sellerPartitions.entrySet()) {
-                List<PartitionKey> keysForSeller = entry.getValue();
-                PartitionKey primaryKey = keysForSeller.stream()
-                        .filter(PartitionKey::returnAllowed)
-                        .findFirst()
-                        .orElse(keysForSeller.get(0));
-                for (PartitionKey key : keysForSeller) {
-                    if (key.equals(primaryKey)) {
-                        partitionShippingFees.put(key, STANDARD_SHIPPING_FEE);
-                    } else {
-                        partitionShippingFees.put(key, BigDecimal.ZERO);
-                    }
-                }
-            }
-        } else {
-            for (PartitionKey key : partitionKeys) {
-                partitionShippingFees.put(key, BigDecimal.ZERO);
-            }
-        }
-
-        BigDecimal groupShippingFee = partitionShippingFees.values().stream()
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal expectedTotal = groupSubtotal.add(groupShippingFee).subtract(groupVoucherDiscount).subtract(groupPointsDiscount);
+        BigDecimal expectedTotal = groupSubtotal
+                .add(groupShippingFee)
+                .subtract(groupVoucherDiscount)
+                .subtract(groupShippingDiscount)
+                .subtract(groupPointsDiscount);
 
         CheckoutGroupEntity group = new CheckoutGroupEntity(
                 groupId,
@@ -375,6 +456,7 @@ public class GroupCheckoutService {
         List<OrderEntity> savedOrders = new ArrayList<>();
         List<OrderItemEntity> savedItems = new ArrayList<>();
         List<InventoryReservationEntity> savedReservations = new ArrayList<>();
+        Map<Long, List<OrderItemEntity>> itemsByOrderId = new LinkedHashMap<>();
 
         LocalDate handoverDay = LocalDate.now().plusDays(2);
 
@@ -385,9 +467,15 @@ public class GroupCheckoutService {
             BigDecimal orderSubtotal = orderSubtotals.get(key);
             BigDecimal orderVoucher = orderVoucherDiscounts.get(key);
             BigDecimal orderPoints = orderPointsDiscounts.get(key);
+            BigDecimal orderPointsShipping = orderPointsShippingDiscounts.get(key);
             BigDecimal orderShippingFee = partitionShippingFees.get(key);
-            BigDecimal orderShippingDiscount = BigDecimal.ZERO;
-            BigDecimal orderTotal = orderSubtotal.add(orderShippingFee).subtract(orderVoucher).subtract(orderPoints).subtract(orderShippingDiscount);
+            BigDecimal orderShippingDiscount = orderShippingDiscounts.get(key);
+            BigDecimal orderTotal = orderSubtotal
+                    .add(orderShippingFee)
+                    .subtract(orderVoucher)
+                    .subtract(orderPoints)
+                    .subtract(orderShippingDiscount)
+                    .subtract(orderPointsShipping);
 
             OrderEntity order = new OrderEntity(
                     groupId, // checkoutGroupId
@@ -421,11 +509,13 @@ public class GroupCheckoutService {
                     deliveryMethod,
                     handoverDay
             );
+            order.setPointsShippingDiscountAmount(orderPointsShipping);
             order.setCarrierSnapshot(carrier);
             order.setPaymentDueAt(paymentDueAt);
             order.setCreatedAt(now);
             order = orderRepository.saveAndFlush(order);
             savedOrders.add(order);
+            List<OrderItemEntity> orderSavedItems = new ArrayList<>();
 
             // Item-level Largest Remainder allocation
             List<Integer> itemIndices = new ArrayList<>();
@@ -474,7 +564,7 @@ public class GroupCheckoutService {
                         sellerLineProceeds,
                         null, // feePolicyId = null
                         vi.itemRequest().acceptedOfferId(),
-                        "LIST_PRICE",
+                        vi.priceSource(),
                         vAlloc,
                         pAlloc,
                         "UC83",
@@ -483,6 +573,11 @@ public class GroupCheckoutService {
                 );
                 orderItem = orderItemRepository.saveAndFlush(orderItem);
                 savedItems.add(orderItem);
+                orderSavedItems.add(orderItem);
+
+                if (vi.itemRequest().acceptedOfferId() != null && negotiatedCheckoutFacade != null) {
+                    negotiatedCheckoutFacade.linkOrder(buyerId, vi.itemRequest().acceptedOfferId(), order.getId());
+                }
 
                 // Create Inventory Reservation
                 InventoryReservationEntity reservation = new InventoryReservationEntity(
@@ -498,13 +593,225 @@ public class GroupCheckoutService {
                 reservation = inventoryReservationRepository.saveAndFlush(reservation);
                 savedReservations.add(reservation);
             }
+            itemsByOrderId.put(order.getId(), orderSavedItems);
         }
 
-        // DEC-10.4: T1 READY only pins rewardPolicyId and snapshots points discounts.
+        // 8b. Persist Voucher Redemption & Discount Allocations (conserving V53 og_validate_discount_totals)
+        BigDecimal totalVoucherAndShippingDiscount = groupVoucherDiscount.add(groupShippingDiscount);
+        if (ownedVoucherGrant != null && voucherService != null && !savedOrders.isEmpty()) {
+            voucherService.bindOrder(savedOrders.getFirst().getId(), ownedVoucherGrant);
+            if (jdbcTemplate != null && totalVoucherAndShippingDiscount.compareTo(BigDecimal.ZERO) > 0) {
+                UUID redemptionId = UUID.randomUUID();
+                jdbcTemplate.update("""
+                        INSERT INTO og_compat.checkout_redemptions(
+                            redemption_id, group_id, voucher_id, discount_amount, redeemed_at, command_key
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        redemptionId,
+                        groupId,
+                        ownedVoucherGrant.campaign().id(),
+                        totalVoucherAndShippingDiscount,
+                        java.sql.Timestamp.from(now),
+                        "VOUCHER_REDEEM:" + groupId
+                );
+
+                for (OrderEntity order : savedOrders) {
+                    List<OrderItemEntity> orderItems = itemsByOrderId.getOrDefault(order.getId(), List.of());
+                    for (OrderItemEntity item : orderItems) {
+                        if (item.getVoucherAllocation() != null && item.getVoucherAllocation().compareTo(BigDecimal.ZERO) > 0) {
+                            jdbcTemplate.update("""
+                                    INSERT INTO og_compat.discount_allocations(
+                                        allocation_id, order_item_id, redemption_id, component, amount
+                                    ) VALUES (?, ?, ?, 'GOODS', ?)
+                                    """,
+                                    UUID.randomUUID(),
+                                    item.getId(),
+                                    redemptionId,
+                                    item.getVoucherAllocation()
+                            );
+                        }
+                    }
+                    if (order.getShippingDiscountAmount() != null
+                            && order.getShippingDiscountAmount().compareTo(BigDecimal.ZERO) > 0
+                            && !orderItems.isEmpty()) {
+                        jdbcTemplate.update("""
+                                INSERT INTO og_compat.discount_allocations(
+                                    allocation_id, order_item_id, redemption_id, component, amount
+                                ) VALUES (?, ?, ?, 'SHIPPING', ?)
+                                """,
+                                UUID.randomUUID(),
+                                orderItems.getFirst().getId(),
+                                redemptionId,
+                                order.getShippingDiscountAmount()
+                        );
+                    }
+                }
+            }
+        }
+
+        // 9. UC24 Alt 7a / UC25 Alt 2a / BR-UC25-06: Zero-VND fast-path (no cash gateway / VNPay transaction)
+        if (expectedTotal.compareTo(BigDecimal.ZERO) == 0) {
+            finalizeZeroAmountGroup(
+                    group,
+                    savedOrders,
+                    itemsByOrderId,
+                    savedReservations,
+                    groupPointsDiscount,
+                    coinsToRedeem,
+                    rewardPolicyId,
+                    now
+            );
+        }
+
+        // DEC-10.4: For expectedTotal > 0, T1 READY only pins rewardPolicyId and snapshots points discounts.
         // MUST NOT create DEBIT_CHECKOUT or discount_allocations in T1.
         // Ledger debit and allocations occur strictly in T2 upon payment confirmation.
 
         return new GroupCheckoutExecutionResult(buildResponse(group), false);
+    }
+
+    private void finalizeZeroAmountGroup(
+            CheckoutGroupEntity group,
+            List<OrderEntity> savedOrders,
+            Map<Long, List<OrderItemEntity>> itemsByOrderId,
+            List<InventoryReservationEntity> savedReservations,
+            BigDecimal groupPointsDiscount,
+            Long coinsToRedeem,
+            Long rewardPolicyId,
+            Instant now
+    ) {
+        UUID groupId = group.getGroupId();
+        java.sql.Timestamp nowTs = java.sql.Timestamp.from(now);
+        java.sql.Timestamp sellerAcceptDueTs = java.sql.Timestamp.from(now.plus(2, ChronoUnit.DAYS));
+
+        if (jdbcTemplate != null) {
+            // 0. Insert canonical 0-VND confirmation proof (required by og_validate_order_workflow_proof)
+            UUID zeroConfirmationId = UUID.randomUUID();
+            jdbcTemplate.update("""
+                    INSERT INTO og_compat.zero_checkout_confirmations(
+                        confirmation_id, group_id, buyer_id, confirmed_at, command_key
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    zeroConfirmationId,
+                    groupId,
+                    group.getBuyerId(),
+                    nowTs,
+                    "ZERO_CONFIRM:" + groupId
+            );
+
+            // 1. Insert canonical platform subsidy fund components for 0-VND orders
+            // (GOODS_CASH / SHIPPING_CASH require allocation_id IS NOT NULL and are omitted when no cash payment occurs)
+            for (OrderEntity order : savedOrders) {
+                BigDecimal goodsSubsidy = order.getVoucherDiscountAmount().add(order.getPointsDiscountAmount());
+                BigDecimal shipSubsidy = order.getShippingDiscountAmount().add(order.getPointsShippingDiscountAmount());
+
+                jdbcTemplate.update("""
+                        INSERT INTO og_compat.order_fund_components(
+                            component_id, order_id, allocation_id, late_confirmation_id, component_type,
+                            confirmed_amount, funding_reference, confirmed_at
+                        ) VALUES (?, ?, NULL, NULL, 'PLATFORM_GOODS_SUBSIDY', ?, 'PLATFORM_PROMOTION', ?)
+                        """, UUID.randomUUID(), order.getId(), goodsSubsidy, nowTs);
+
+                if (shipSubsidy.compareTo(BigDecimal.ZERO) > 0) {
+                    jdbcTemplate.update("""
+                            INSERT INTO og_compat.order_fund_components(
+                                component_id, order_id, allocation_id, late_confirmation_id, component_type,
+                                confirmed_amount, funding_reference, confirmed_at
+                            ) VALUES (?, ?, NULL, NULL, 'PLATFORM_SHIPPING_SUBSIDY', ?, 'PLATFORM_SHIPPING', ?)
+                            """, UUID.randomUUID(), order.getId(), shipSubsidy, nowTs);
+                }
+            }
+
+            // 2. Debit coins & record discount_allocations (GOODS + SHIPPING) for 0-VND checkout
+            if (groupPointsDiscount.compareTo(BigDecimal.ZERO) > 0 && rewardPolicyId != null && coinsToRedeem != null && coinsToRedeem > 0) {
+                UUID rewardEntryId = UUID.randomUUID();
+                jdbcTemplate.update("""
+                        INSERT INTO og_compat.reward_ledger(
+                            entry_id, user_id, policy_id, entry_type, points_delta, group_id, actor_id, reason, command_key, created_at
+                        ) VALUES (?, ?, ?, 'DEBIT_CHECKOUT', ?, ?, NULL, ?, ?, ?)
+                        """,
+                        rewardEntryId,
+                        group.getBuyerId(),
+                        rewardPolicyId,
+                        -coinsToRedeem,
+                        groupId,
+                        "Khấu trừ xu đặt hàng 0 đồng nhóm " + groupId,
+                        "REWARD_DEBIT:" + groupId,
+                        nowTs
+                );
+
+                for (OrderEntity order : savedOrders) {
+                    List<OrderItemEntity> orderItems = itemsByOrderId.getOrDefault(order.getId(), List.of());
+                    for (OrderItemEntity item : orderItems) {
+                        if (item.getPointsAllocation() != null && item.getPointsAllocation().compareTo(BigDecimal.ZERO) > 0) {
+                            jdbcTemplate.update("""
+                                    INSERT INTO og_compat.discount_allocations(
+                                        allocation_id, order_item_id, reward_entry_id, component, amount
+                                    ) VALUES (?, ?, ?, 'GOODS', ?)
+                                    """,
+                                    UUID.randomUUID(),
+                                    item.getId(),
+                                    rewardEntryId,
+                                    item.getPointsAllocation()
+                            );
+                        }
+                    }
+                    if (order.getPointsShippingDiscountAmount().compareTo(BigDecimal.ZERO) > 0 && !orderItems.isEmpty()) {
+                        jdbcTemplate.update("""
+                                INSERT INTO og_compat.discount_allocations(
+                                    allocation_id, order_item_id, reward_entry_id, component, amount
+                                ) VALUES (?, ?, ?, 'SHIPPING', ?)
+                                """,
+                                UUID.randomUUID(),
+                                orderItems.getFirst().getId(),
+                                rewardEntryId,
+                                order.getPointsShippingDiscountAmount()
+                        );
+                    }
+                }
+            }
+
+            // 3. Transition orders to PAID_HELD using exact confirmed_at from zero_checkout_confirmations
+            for (OrderEntity order : savedOrders) {
+                jdbcTemplate.update("""
+                        UPDATE og_compat.orders
+                        SET status = 'PAID_HELD',
+                            paid_confirmed_at = (SELECT confirmed_at FROM og_compat.zero_checkout_confirmations WHERE confirmation_id = ?),
+                            seller_accept_due_at = (SELECT confirmed_at + INTERVAL '2 days' FROM og_compat.zero_checkout_confirmations WHERE confirmation_id = ?)
+                        WHERE order_id = ?
+                        """, zeroConfirmationId, zeroConfirmationId, order.getId());
+            }
+        }
+
+        // 4. Transition reservations to FUNDED
+        for (InventoryReservationEntity res : savedReservations) {
+            res.setState("FUNDED");
+            res.setChangedAt(now);
+            inventoryReservationRepository.saveAndFlush(res);
+        }
+
+        // 5. Transition CheckoutGroup to PAID
+        group.setState(CheckoutGroupEntity.STATE_PAID);
+        checkoutGroupRepository.saveAndFlush(group);
+        log.info("Zero-VND group checkout {} finalized immediately to PAID without VNPay transaction.", groupId);
+    }
+
+    private BigDecimal calculateVoucherDiscount(VoucherDtos.Campaign voucher, BigDecimal baseAmount) {
+        if (voucher == null || baseAmount == null || baseAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal discount;
+        if ("PERCENTAGE".equalsIgnoreCase(voucher.discountType())) {
+            discount = baseAmount.multiply(voucher.discountValue())
+                    .divide(new BigDecimal("100"), 0, RoundingMode.HALF_UP);
+            if (voucher.maxDiscountAmount() != null && discount.compareTo(voucher.maxDiscountAmount()) > 0) {
+                discount = voucher.maxDiscountAmount();
+            }
+        } else {
+            discount = voucher.discountValue();
+        }
+        BigDecimal capped = voucher.maxDiscountAmount() == null ? baseAmount : baseAmount.min(voucher.maxDiscountAmount());
+        return discount.min(capped).max(BigDecimal.ZERO);
     }
 
     private <K> Map<K, BigDecimal> allocateLargestRemainder(
@@ -584,8 +891,8 @@ public class GroupCheckoutService {
         for (OrderEntity order : orders) {
             groupSubtotal = groupSubtotal.add(order.getSubtotal());
             groupShippingFee = groupShippingFee.add(order.getShippingFee());
-            groupVoucherDiscount = groupVoucherDiscount.add(order.getVoucherDiscountAmount());
-            groupPointsDiscount = groupPointsDiscount.add(order.getPointsDiscountAmount());
+            groupVoucherDiscount = groupVoucherDiscount.add(order.getVoucherDiscountAmount()).add(order.getShippingDiscountAmount());
+            groupPointsDiscount = groupPointsDiscount.add(order.getTotalPointsDiscountAmount());
 
             List<OrderItemEntity> items = orderItemRepository.findByOrderId(order.getId());
             List<OrderItemResponse> itemResponses = items.stream().map(i -> new OrderItemResponse(

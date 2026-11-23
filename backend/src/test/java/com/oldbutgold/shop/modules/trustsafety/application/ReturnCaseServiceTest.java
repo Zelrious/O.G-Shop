@@ -648,6 +648,7 @@ class ReturnCaseServiceTest {
         CaseRoundEntity round = new CaseRoundEntity(caseId, 1, CaseRoundEntity.STAGE_RETURN_APPROVAL);
         round.setId(601L);
 
+        when(jdbcTemplate.queryForObject(eq("SELECT og_has_role(?, 'KTV')"), eq(Boolean.class), eq(ktvId))).thenReturn(true);
         when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
         when(caseRoundRepository.findByCaseIdAndRoundNo(caseId, 1)).thenReturn(Optional.of(round));
@@ -686,6 +687,7 @@ class ReturnCaseServiceTest {
         CaseRoundEntity round = new CaseRoundEntity(caseId, 1, CaseRoundEntity.STAGE_RETURN_APPROVAL);
         round.setId(601L);
 
+        when(jdbcTemplate.queryForObject(eq("SELECT og_has_role(?, 'KTV')"), eq(Boolean.class), eq(ktvId))).thenReturn(true);
         when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
         when(caseRoundRepository.findByCaseIdAndRoundNo(caseId, 1)).thenReturn(Optional.of(round));
@@ -724,6 +726,7 @@ class ReturnCaseServiceTest {
         CaseRoundEntity round = new CaseRoundEntity(caseId, 1, CaseRoundEntity.STAGE_RETURN_APPROVAL);
         round.setId(601L);
 
+        when(jdbcTemplate.queryForObject(eq("SELECT og_has_role(?, 'KTV')"), eq(Boolean.class), eq(ktvId))).thenReturn(true);
         when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
         when(caseRoundRepository.findByCaseIdAndRoundNo(caseId, 1)).thenReturn(Optional.of(round));
@@ -737,6 +740,37 @@ class ReturnCaseServiceTest {
         assertThatThrownBy(() -> service.ktvDecideRound1(ktvId, caseId, request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("KTV bắt buộc phải nhập lý do phán quyết chi tiết");
+    }
+
+    @Test
+    @DisplayName("ktvDecideRound1: Non-KTV user is rejected with 403 ACCESS_DENIED even if assigned")
+    void ktvDecideRound1_nonKtvUser_throwsForbidden() {
+        Long caseId = 501L;
+        Long nonKtvId = 999L;
+        CaseEntity returnCase = new CaseEntity(CaseEntity.TYPE_RETURN, orderId, buyerId, "[CHANGE_MIND] Detail", "CMD_1");
+        returnCase.setId(caseId);
+        returnCase.setState(CaseEntity.STATE_REVIEWING);
+        returnCase.setAssignedTo(nonKtvId);
+
+        OrderEntity order = createValidDeliveredOrder();
+
+        when(jdbcTemplate.queryForObject(eq("SELECT og_has_role(?, 'KTV')"), eq(Boolean.class), eq(nonKtvId))).thenReturn(false);
+        when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        ReturnCaseDtos.KtvRound1DecisionRequest request = new ReturnCaseDtos.KtvRound1DecisionRequest(
+                CaseDecisionEntity.OUTCOME_APPROVE_RETURN,
+                "Lý do hợp lệ tối thiểu 5 ký tự",
+                "CMD_NON_KTV"
+        );
+
+        assertThatThrownBy(() -> service.ktvDecideRound1(nonKtvId, caseId, request))
+                .isInstanceOf(TrustSafetyBusinessException.class)
+                .satisfies(ex -> {
+                    TrustSafetyBusinessException tsEx = (TrustSafetyBusinessException) ex;
+                    assertThat(tsEx.getStatus()).isEqualTo(org.springframework.http.HttpStatus.FORBIDDEN);
+                    assertThat(tsEx.getCode()).isEqualTo("ACCESS_DENIED");
+                });
     }
 
     // ==================== TASK 2.4: Buyer Withdraw Return Request Tests ====================
@@ -4786,6 +4820,7 @@ class ReturnCaseServiceTest {
         returnCase.setAssignedTo(null);
 
         OrderEntity order = createValidDeliveredOrder();
+        when(jdbcTemplate.queryForObject(eq("SELECT og_has_role(?, 'KTV')"), eq(Boolean.class), eq(testKtvId))).thenReturn(true);
         when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
@@ -4816,6 +4851,7 @@ class ReturnCaseServiceTest {
         returnCase.setAssignedTo(otherKtvId);
 
         OrderEntity order = createValidDeliveredOrder();
+        when(jdbcTemplate.queryForObject(eq("SELECT og_has_role(?, 'KTV')"), eq(Boolean.class), eq(testKtvId))).thenReturn(true);
         when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
@@ -4848,6 +4884,7 @@ class ReturnCaseServiceTest {
         CaseRoundEntity round = new CaseRoundEntity(caseId, 1, CaseRoundEntity.STAGE_RETURN_APPROVAL);
         round.setId(601L);
 
+        when(jdbcTemplate.queryForObject(eq("SELECT og_has_role(?, 'KTV')"), eq(Boolean.class), eq(testKtvId))).thenReturn(true);
         when(caseRepository.findById(caseId)).thenReturn(Optional.of(returnCase));
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
         when(caseRoundRepository.findByCaseIdAndRoundNo(caseId, 1)).thenReturn(Optional.of(round));

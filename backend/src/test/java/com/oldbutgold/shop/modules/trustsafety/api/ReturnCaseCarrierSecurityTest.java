@@ -154,4 +154,44 @@ class ReturnCaseCarrierSecurityTest {
                                 .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
                 .andExpect(status().isForbidden());
     }
+
+    @Test
+    @DisplayName("ReturnCaseController KTV endpoints reject non-KTV roles (BUYER, SELLER, ADMIN) with 403")
+    void trustsafetyKtvEndpoints_nonKtvRoles_return403() throws Exception {
+        String r1Payload = """
+                {"outcome":"APPROVE_RETURN","reason":"Valid reason text","commandKey":"CMD_1"}
+                """;
+        String r2Payload = """
+                {"outcome":"FULL_GOODS_REFUND","reason":"Valid reason text","commandKey":"CMD_2"}
+                """;
+        String reqEvPayload = """
+                {"reason":"Need clearer unboxing photo evidence","requestedItems":["Ảnh hộp"],"commandKey":"CMD_3"}
+                """;
+
+        for (String role : List.of("ROLE_BUYER", "ROLE_SELLER", "ROLE_ADMIN")) {
+            mockMvc.perform(post("/api/v1/trustsafety/returns/100/ktv/decide-round1")
+                            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                            .content(r1Payload)
+                            .with(jwt().jwt(j -> j.subject("101"))
+                                    .authorities(new SimpleGrantedAuthority(role))))
+                    .andExpect(status().isForbidden());
+
+            mockMvc.perform(post("/api/v1/trustsafety/returns/100/ktv/decide-round2")
+                            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                            .content(r2Payload)
+                            .with(jwt().jwt(j -> j.subject("101"))
+                                    .authorities(new SimpleGrantedAuthority(role))))
+                    .andExpect(status().isForbidden());
+
+            mockMvc.perform(post("/api/v1/trustsafety/returns/100/ktv/request-evidence")
+                            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                            .content(reqEvPayload)
+                            .with(jwt().jwt(j -> j.subject("101"))
+                                    .authorities(new SimpleGrantedAuthority(role))))
+                    .andExpect(status().isForbidden());
+        }
+
+        verify(returnCaseService, never()).ktvDecideRound1(any(), any(), any());
+        verify(returnCaseService, never()).ktvDecideRound2(any(), any(), any());
+    }
 }

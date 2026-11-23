@@ -4,12 +4,6 @@ import com.oldbutgold.shop.modules.trustsafety.application.CaseEvidenceRequestSe
 import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseDtos;
 import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseService;
 import com.oldbutgold.shop.modules.trustsafety.application.TrustSafetyBusinessException;
-import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseEntity;
-import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseEventEntity;
-import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseEventRepository;
-import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseRepository;
-import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseRoundEntity;
-import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseRoundRepository;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +21,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * KTV console endpoints for UC83 return cases.
+ * Delegates strictly to application services without accessing repositories directly.
+ */
 @RestController
 @RequestMapping("/api/v1/ktv")
 @Validated
@@ -34,22 +32,13 @@ public class KtvCaseController {
 
     private final ReturnCaseService returnCaseService;
     private final CaseEvidenceRequestService caseEvidenceRequestService;
-    private final CaseRepository caseRepository;
-    private final CaseRoundRepository caseRoundRepository;
-    private final CaseEventRepository caseEventRepository;
 
     public KtvCaseController(
             ReturnCaseService returnCaseService,
-            CaseEvidenceRequestService caseEvidenceRequestService,
-            CaseRepository caseRepository,
-            CaseRoundRepository caseRoundRepository,
-            CaseEventRepository caseEventRepository
+            CaseEvidenceRequestService caseEvidenceRequestService
     ) {
         this.returnCaseService = returnCaseService;
         this.caseEvidenceRequestService = caseEvidenceRequestService;
-        this.caseRepository = caseRepository;
-        this.caseRoundRepository = caseRoundRepository;
-        this.caseEventRepository = caseEventRepository;
     }
 
     private static long extractUserId(Jwt jwt) {
@@ -61,15 +50,6 @@ public class KtvCaseController {
         } catch (NumberFormatException e) {
             throw new AccessDeniedException("Phiên đăng nhập không hợp lệ.");
         }
-    }
-
-    private CaseEntity findCaseOrThrow(Long caseId) {
-        if (caseId == null) {
-            throw new TrustSafetyBusinessException(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "caseId không hợp lệ");
-        }
-        return caseRepository.findById(caseId)
-                .orElseThrow(() -> new TrustSafetyBusinessException(HttpStatus.NOT_FOUND, "NOT_FOUND",
-                        "Không tìm thấy hồ sơ khiếu nại #" + caseId));
     }
 
     /**
@@ -106,7 +86,7 @@ public class KtvCaseController {
             @PathVariable Long caseId
     ) {
         long ktvId = extractUserId(jwt);
-        findCaseOrThrow(caseId);
+        returnCaseService.verifyCaseExistsForKtv(caseId);
         ReturnCaseDtos.ReturnCaseDetailResponse response = returnCaseService.assignCaseToKtv(ktvId, caseId);
         return ResponseEntity.ok(response);
     }
@@ -122,15 +102,7 @@ public class KtvCaseController {
             @Valid @RequestBody ReturnCaseDtos.KtvRound1DecisionRequest request
     ) {
         long ktvId = extractUserId(jwt);
-        CaseEntity c = findCaseOrThrow(caseId);
-
-        // Bắt buộc claim trước khi quyết định
-        if (c.getAssignedTo() == null || !c.getAssignedTo().equals(ktvId)) {
-            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "NOT_ASSIGNED_KTV",
-                    "KTV không được phân công phụ trách Case này (Case #" + caseId + " chưa được claim hoặc thuộc về KTV #" + c.getAssignedTo() + ")");
-        }
-
-        ReturnCaseDtos.ReturnCaseDetailResponse response = returnCaseService.ktvDecideRound1(ktvId, caseId, request);
+        ReturnCaseDtos.ReturnCaseDetailResponse response = returnCaseService.ktvConsoleDecideRound1(ktvId, caseId, request);
         return ResponseEntity.ok(response);
     }
 
@@ -145,22 +117,7 @@ public class KtvCaseController {
             @Valid @RequestBody ReturnCaseDtos.KtvRound2DecisionRequest request
     ) {
         long ktvId = extractUserId(jwt);
-        CaseEntity c = findCaseOrThrow(caseId);
-
-        // Kiểm tra xem Round 2 có bị leo thang (ESCALATED) lên Admin hay không
-        CaseRoundEntity round2 = caseRoundRepository.findByCaseIdAndRoundNo(caseId, 2).orElse(null);
-        if (round2 != null && caseEventRepository.existsByCaseIdAndRoundIdAndEventType(caseId, round2.getId(), CaseEventEntity.TYPE_ESCALATED)) {
-            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "CASE_ESCALATED",
-                    "Hồ sơ đã được chuyển lên Quản trị viên (Admin) do quá hạn SLA. KTV không còn quyền đưa ra quyết định.");
-        }
-
-        // Bắt buộc claim trước khi quyết định
-        if (c.getAssignedTo() == null || !c.getAssignedTo().equals(ktvId)) {
-            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "NOT_ASSIGNED_KTV",
-                    "KTV không được phân công phụ trách Case này (Case #" + caseId + " chưa được claim hoặc thuộc về KTV #" + c.getAssignedTo() + ")");
-        }
-
-        ReturnCaseDtos.ReturnCaseDetailResponse response = returnCaseService.ktvDecideRound2(ktvId, caseId, request);
+        ReturnCaseDtos.ReturnCaseDetailResponse response = returnCaseService.ktvConsoleDecideRound2(ktvId, caseId, request);
         return ResponseEntity.ok(response);
     }
 
@@ -175,14 +132,6 @@ public class KtvCaseController {
             @Valid @RequestBody ReturnCaseDtos.KtvRequestEvidenceRequest request
     ) {
         long ktvId = extractUserId(jwt);
-        CaseEntity c = findCaseOrThrow(caseId);
-
-        // Bắt buộc claim trước khi yêu cầu bằng chứng
-        if (c.getAssignedTo() == null || !c.getAssignedTo().equals(ktvId)) {
-            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "NOT_ASSIGNED_KTV",
-                    "KTV không được phân công phụ trách Case này (Case #" + caseId + " chưa được claim hoặc thuộc về KTV #" + c.getAssignedTo() + ")");
-        }
-
         CaseEvidenceRequestService.KtvRequestEvidenceResult result =
                 caseEvidenceRequestService.requestEvidence(ktvId, caseId, request);
 

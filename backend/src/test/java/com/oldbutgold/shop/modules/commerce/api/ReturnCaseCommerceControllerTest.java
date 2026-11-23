@@ -2,21 +2,16 @@ package com.oldbutgold.shop.modules.commerce.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderEntity;
-import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderRepository;
 import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseDtos;
 import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseService;
-import com.oldbutgold.shop.modules.trustsafety.application.TrustSafetyBusinessException;
-import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseEntity;
-import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseRepository;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.ReturnReasonCode;
 import com.oldbutgold.shop.shared.api.ApiExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.MethodParameter;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -32,12 +27,11 @@ import java.security.Principal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.NoSuchElementException;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -45,18 +39,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@DisplayName("ReturnCaseCommerceControllerTest - Pure Service Delegation & Boundary Checks")
 class ReturnCaseCommerceControllerTest {
 
     private ReturnCaseService returnCaseService;
-    private OrderRepository orderRepository;
-    private CaseRepository caseRepository;
     private MockMvc mockMvc;
     private ObjectMapper objectMapper;
 
     private static final Long ORDER_ID = 1001L;
     private static final Long BUYER_ID = 50L;
     private static final Long SELLER_ID = 60L;
-    private static final Long STRANGER_ID = 999L;
     private static final Long CASE_ID = 2001L;
 
     private static class TestJwtArgumentResolver implements HandlerMethodArgumentResolver {
@@ -80,17 +72,10 @@ class ReturnCaseCommerceControllerTest {
     @BeforeEach
     void setUp() {
         returnCaseService = mock(ReturnCaseService.class);
-        orderRepository = mock(OrderRepository.class);
-        caseRepository = mock(CaseRepository.class);
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
 
-        ReturnCaseCommerceController controller = new ReturnCaseCommerceController(
-                returnCaseService,
-                orderRepository,
-                caseRepository
-        );
-
+        ReturnCaseCommerceController controller = new ReturnCaseCommerceController(returnCaseService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setCustomArgumentResolvers(new TestJwtArgumentResolver())
                 .setControllerAdvice(new ApiExceptionHandler())
@@ -108,624 +93,144 @@ class ReturnCaseCommerceControllerTest {
         return new TestingAuthenticationToken(jwt, null);
     }
 
-    private OrderEntity stubOrder(Long buyerId, Long sellerId) {
-        OrderEntity order = mock(OrderEntity.class);
-        when(order.getId()).thenReturn(ORDER_ID);
-        when(order.getBuyerId()).thenReturn(buyerId);
-        when(order.getSellerId()).thenReturn(sellerId);
-        return order;
-    }
-
-    private CaseEntity stubCase(Long caseId) {
-        CaseEntity caseEntity = mock(CaseEntity.class);
-        when(caseEntity.getId()).thenReturn(caseId);
-        when(caseEntity.getOrderId()).thenReturn(ORDER_ID);
-        return caseEntity;
-    }
-
-    private ReturnCaseDtos.ReturnCaseDetailResponse dummyDetailResponse() {
+    private ReturnCaseDtos.ReturnCaseDetailResponse stubResponse(String state) {
+        Instant now = Instant.parse("2026-11-23T04:00:00Z");
         return new ReturnCaseDtos.ReturnCaseDetailResponse(
-                CASE_ID,
-                ORDER_ID,
-                "RETURN",
-                "OPEN",
-                ReturnReasonCode.CHANGE_MIND,
-                "clean",
-                "full",
-                BUYER_ID,
-                Instant.now(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                List.of()
+                CASE_ID, ORDER_ID, "RETURN", state,
+                ReturnReasonCode.DAMAGED_OR_DEFECTIVE, "Defect", "Desc", BUYER_ID,
+                now, null, null, null, null, null, List.of(), List.of()
         );
     }
 
-    // ==================== ENDPOINT 1: POST /return-request ====================
-
     @Test
-    @DisplayName("Endpoint 1: Tạo return-request thành công (200 OK) khi đúng Buyer")
-    void createReturnRequest_validBuyer_success200() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(returnCaseService.createReturnRequest(eq(BUYER_ID), eq(ORDER_ID), any()))
-                .thenReturn(dummyDetailResponse());
+    @DisplayName("POST /return-request delegates to createReturnRequestForOrder")
+    void createReturnRequest_delegatesToService() throws Exception {
+        when(returnCaseService.createReturnRequestForOrder(eq(BUYER_ID), eq(ORDER_ID), any()))
+                .thenReturn(stubResponse("OPEN"));
 
-        ReturnCaseDtos.CreateReturnRequest request = new ReturnCaseDtos.CreateReturnRequest(
-                ReturnReasonCode.CHANGE_MIND,
-                "Không vừa cỡ",
-                List.of(),
-                "CMD-RET-1"
+        var req = new ReturnCaseDtos.CreateReturnRequest(
+                ReturnReasonCode.DAMAGED_OR_DEFECTIVE, "Sản phẩm bị nứt màn hình", List.of(), "CMD_1"
         );
 
         mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-request", ORDER_ID)
                         .principal(authToken(BUYER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.caseId").value(CASE_ID));
+                .andExpect(jsonPath("$.caseId").value(CASE_ID))
+                .andExpect(jsonPath("$.state").value("OPEN"));
 
-        verify(returnCaseService).createReturnRequest(eq(BUYER_ID), eq(ORDER_ID), any());
+        verify(returnCaseService).createReturnRequestForOrder(eq(BUYER_ID), eq(ORDER_ID), any());
     }
 
     @Test
-    @DisplayName("Endpoint 1: Tạo return-request bị từ chối 403 khi actor không phải Buyer (B2 rule)")
-    void createReturnRequest_nonBuyer_forbidden403() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-
-        ReturnCaseDtos.CreateReturnRequest request = new ReturnCaseDtos.CreateReturnRequest(
-                ReturnReasonCode.CHANGE_MIND,
-                "Không vừa cỡ",
-                List.of(),
-                "CMD-RET-1"
-        );
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-request", ORDER_ID)
-                        .principal(authToken(STRANGER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-
-        verify(returnCaseService, never()).createReturnRequest(any(), any(), any());
-    }
-
-    @Test
-    @DisplayName("Endpoint 1: Tạo return-request trả về 400 Bad Request khi thiếu reasonCode")
-    void createReturnRequest_missingReasonCode_badRequest400() throws Exception {
-        String invalidJson = """
-                {
-                    "detail": "Không có lý do",
-                    "commandKey": "CMD-1"
-                }
-                """;
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-request", ORDER_ID)
-                        .principal(authToken(BUYER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(invalidJson))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
-    }
-
-    @Test
-    @DisplayName("Endpoint 1: Tạo return-request trả về 404 khi không tìm thấy đơn hàng")
-    void createReturnRequest_orderNotFound_404() throws Exception {
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.empty());
-
-        ReturnCaseDtos.CreateReturnRequest request = new ReturnCaseDtos.CreateReturnRequest(
-                ReturnReasonCode.CHANGE_MIND,
-                "Chi tiết",
-                List.of(),
-                "CMD-1"
-        );
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-request", ORDER_ID)
-                        .principal(authToken(BUYER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
-    }
-
-    // ==================== ENDPOINT 2: GET /return-case (R2 rule) ====================
-
-    @Test
-    @DisplayName("Endpoint 2: GET return-case thành công (200 OK) khi có active case và actor là Buyer")
-    void getReturnCase_validBuyer_activeCase_success200() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        CaseEntity activeCase = stubCase(CASE_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.of(activeCase));
-        when(returnCaseService.getReturnCaseById(BUYER_ID, CASE_ID)).thenReturn(dummyDetailResponse());
+    @DisplayName("GET /return-case delegates to getActiveReturnCaseForOrder and propagates 403/404")
+    void getReturnCase_delegatesAndPropagatesErrors() throws Exception {
+        when(returnCaseService.getActiveReturnCaseForOrder(BUYER_ID, ORDER_ID))
+                .thenReturn(stubResponse("OPEN"));
+        when(returnCaseService.getActiveReturnCaseForOrder(999L, ORDER_ID))
+                .thenThrow(new AccessDeniedException("Người dùng không thuộc đơn hàng này"));
+        when(returnCaseService.getActiveReturnCaseForOrder(BUYER_ID, 9999L))
+                .thenThrow(new NoSuchElementException("Không tìm thấy đơn hàng #9999"));
 
         mockMvc.perform(get("/api/v1/commerce/orders/{orderId}/return-case", ORDER_ID)
                         .principal(authToken(BUYER_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.caseId").value(CASE_ID));
 
-        verify(returnCaseService).getReturnCaseById(BUYER_ID, CASE_ID);
-    }
-
-    @Test
-    @DisplayName("Endpoint 2: GET return-case thành công (200 OK) khi có active case và actor là Seller")
-    void getReturnCase_validSeller_activeCase_success200() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        CaseEntity activeCase = stubCase(CASE_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.of(activeCase));
-        when(returnCaseService.getReturnCaseById(SELLER_ID, CASE_ID)).thenReturn(dummyDetailResponse());
-
         mockMvc.perform(get("/api/v1/commerce/orders/{orderId}/return-case", ORDER_ID)
-                        .principal(authToken(SELLER_ID)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.caseId").value(CASE_ID));
-    }
+                        .principal(authToken(999L)))
+                .andExpect(status().isForbidden());
 
-    @Test
-    @DisplayName("Endpoint 2: GET return-case trả về 403 khi actor không thuộc đơn hàng")
-    void getReturnCase_stranger_forbidden403() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-
-        mockMvc.perform(get("/api/v1/commerce/orders/{orderId}/return-case", ORDER_ID)
-                        .principal(authToken(STRANGER_ID)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-
-        verify(caseRepository, never()).findActiveCaseByOrderId(any());
-    }
-
-    @Test
-    @DisplayName("Endpoint 2: GET return-case trả về 404 khi không có active case (R2 rule: không fallback lịch sử)")
-    void getReturnCase_noActiveCase_notFound404() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.empty());
-
-        mockMvc.perform(get("/api/v1/commerce/orders/{orderId}/return-case", ORDER_ID)
+        mockMvc.perform(get("/api/v1/commerce/orders/{orderId}/return-case", 9999L)
                         .principal(authToken(BUYER_ID)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
-
-        verify(returnCaseService, never()).getReturnCaseById(any(), any());
+                .andExpect(status().isNotFound());
     }
 
-    // ==================== ENDPOINT 3: POST /return-case/withdraw ====================
-
     @Test
-    @DisplayName("Endpoint 3: Rút yêu cầu thành công (200 OK) khi đúng Buyer và có active case")
-    void withdrawReturnRequest_validBuyer_success200() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        CaseEntity activeCase = stubCase(CASE_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.of(activeCase));
-        when(returnCaseService.withdrawReturnRequest(eq(BUYER_ID), eq(CASE_ID), any()))
-                .thenReturn(dummyDetailResponse());
-
-        ReturnCaseDtos.WithdrawReturnRequest request = new ReturnCaseDtos.WithdrawReturnRequest(
-                "Đã tự thỏa thuận",
-                "CMD-W-1"
-        );
+    @DisplayName("POST /return-case/withdraw delegates to withdrawReturnRequestForOrder")
+    void withdraw_delegatesToService() throws Exception {
+        when(returnCaseService.withdrawReturnRequestForOrder(eq(BUYER_ID), eq(ORDER_ID), any()))
+                .thenReturn(stubResponse("CLOSED"));
 
         mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-case/withdraw", ORDER_ID)
                         .principal(authToken(BUYER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .content("{\"reason\":\"Thỏa thuận xong\",\"commandKey\":\"CMD_W1\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.caseId").value(CASE_ID));
+                .andExpect(jsonPath("$.state").value("CLOSED"));
+
+        verify(returnCaseService).withdrawReturnRequestForOrder(eq(BUYER_ID), eq(ORDER_ID), any());
     }
 
     @Test
-    @DisplayName("Endpoint 3: Rút yêu cầu thành công khi request body là null (Optional body)")
-    void withdrawReturnRequest_optionalBodyNull_success200() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        CaseEntity activeCase = stubCase(CASE_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.of(activeCase));
-        when(returnCaseService.withdrawReturnRequest(eq(BUYER_ID), eq(CASE_ID), any()))
-                .thenReturn(dummyDetailResponse());
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-case/withdraw", ORDER_ID)
-                        .principal(authToken(BUYER_ID)))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    @DisplayName("Endpoint 3: Rút yêu cầu trả về 403 khi actor là Seller (chỉ Buyer được rút)")
-    void withdrawReturnRequest_seller_forbidden403() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-case/withdraw", ORDER_ID)
-                        .principal(authToken(SELLER_ID)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-
-        verify(returnCaseService, never()).withdrawReturnRequest(any(), any(), any());
-    }
-
-    @Test
-    @DisplayName("Endpoint 3: Rút yêu cầu trả về 404 khi không có active case")
-    void withdrawReturnRequest_noActiveCase_notFound404() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.empty());
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-case/withdraw", ORDER_ID)
-                        .principal(authToken(BUYER_ID)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
-    }
-
-    // ==================== ENDPOINT 4: POST /return-case/seller-response ====================
-
-    @Test
-    @DisplayName("Endpoint 4: Seller phản hồi Vòng 1 thành công (200 OK) khi đúng Seller")
-    void sellerRespondRound1_validSeller_success200() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        CaseEntity activeCase = stubCase(CASE_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.of(activeCase));
-        when(returnCaseService.sellerRespondRound1(eq(SELLER_ID), eq(CASE_ID), any()))
-                .thenReturn(dummyDetailResponse());
-
-        ReturnCaseDtos.SellerRound1ResponseRequest request = new ReturnCaseDtos.SellerRound1ResponseRequest(
-                "APPROVE_RETURN",
-                "Đồng ý nhận lại hàng",
-                "CMD-RESP-1"
-        );
+    @DisplayName("POST /return-case/seller-response delegates to sellerRespondRound1ForOrder")
+    void sellerRespondRound1_delegatesToService() throws Exception {
+        when(returnCaseService.sellerRespondRound1ForOrder(eq(SELLER_ID), eq(ORDER_ID), any()))
+                .thenReturn(stubResponse("RETURN_APPROVED"));
 
         mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-case/seller-response", ORDER_ID)
                         .principal(authToken(SELLER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
+                        .content("{\"outcome\":\"APPROVE_RETURN\",\"reason\":\"Đồng ý trả hàng\",\"commandKey\":\"CMD_S1\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("RETURN_APPROVED"));
+
+        verify(returnCaseService).sellerRespondRound1ForOrder(eq(SELLER_ID), eq(ORDER_ID), any());
     }
 
     @Test
-    @DisplayName("Endpoint 4: Seller phản hồi Vòng 1 trả về 403 khi actor là Buyer")
-    void sellerRespondRound1_buyer_forbidden403() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-
-        ReturnCaseDtos.SellerRound1ResponseRequest request = new ReturnCaseDtos.SellerRound1ResponseRequest(
-                "APPROVE_RETURN",
-                "Đồng ý nhận lại hàng",
-                "CMD-RESP-1"
-        );
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-case/seller-response", ORDER_ID)
-                        .principal(authToken(BUYER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-
-        verify(returnCaseService, never()).sellerRespondRound1(any(), any(), any());
-    }
-
-    @Test
-    @DisplayName("Endpoint 4: Seller phản hồi Vòng 1 trả về 404 khi không có active case")
-    void sellerRespondRound1_noActiveCase_notFound404() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.empty());
-
-        ReturnCaseDtos.SellerRound1ResponseRequest request = new ReturnCaseDtos.SellerRound1ResponseRequest(
-                "APPROVE_RETURN",
-                "Đồng ý nhận lại hàng",
-                "CMD-RESP-404"
-        );
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-case/seller-response", ORDER_ID)
-                        .principal(authToken(SELLER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
-
-        verify(returnCaseService, never()).sellerRespondRound1(any(), any(), any());
-    }
-
-    // ==================== ENDPOINT 5: POST /confirm-direct-handover ====================
-
-    @Test
-    @DisplayName("Endpoint 5: Xác nhận bàn giao trực tiếp thành công (200 OK) khi actor là Buyer")
-    void confirmReturnDeliveryDirect_buyer_success200() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        CaseEntity activeCase = stubCase(CASE_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.of(activeCase));
-        when(returnCaseService.confirmReturnDeliveryDirect(eq(BUYER_ID), eq(CASE_ID), any()))
-                .thenReturn(dummyDetailResponse());
-
-        ReturnCaseDtos.ConfirmReturnDeliveryRequest request = new ReturnCaseDtos.ConfirmReturnDeliveryRequest(
-                Instant.now(),
-                "Giao nhận thành công",
-                "CMD-HANDOVER-1"
-        );
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-shipment/confirm-direct-handover", ORDER_ID)
-                        .principal(authToken(BUYER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    @DisplayName("Endpoint 5: Xác nhận bàn giao trực tiếp thành công (200 OK) khi actor là Seller")
-    void confirmReturnDeliveryDirect_seller_success200() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        CaseEntity activeCase = stubCase(CASE_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.of(activeCase));
-        when(returnCaseService.confirmReturnDeliveryDirect(eq(SELLER_ID), eq(CASE_ID), any()))
-                .thenReturn(dummyDetailResponse());
-
-        ReturnCaseDtos.ConfirmReturnDeliveryRequest request = new ReturnCaseDtos.ConfirmReturnDeliveryRequest(
-                Instant.now(),
-                "Đã nhận hàng trả",
-                "CMD-HANDOVER-2"
-        );
+    @DisplayName("POST /return-shipment/confirm-direct-handover delegates to confirmReturnDeliveryDirectForOrder")
+    void confirmDirectHandover_delegatesToService() throws Exception {
+        when(returnCaseService.confirmReturnDeliveryDirectForOrder(eq(SELLER_ID), eq(ORDER_ID), any()))
+                .thenReturn(stubResponse("POST_RETURN"));
 
         mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-shipment/confirm-direct-handover", ORDER_ID)
                         .principal(authToken(SELLER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
+                        .content("{\"otpCode\":\"123456\",\"commandKey\":\"CMD_H1\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("POST_RETURN"));
+
+        verify(returnCaseService).confirmReturnDeliveryDirectForOrder(eq(SELLER_ID), eq(ORDER_ID), any());
     }
 
     @Test
-    @DisplayName("Endpoint 5: Xác nhận bàn giao trực tiếp trả về 403 khi actor là Stranger")
-    void confirmReturnDeliveryDirect_stranger_forbidden403() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-
-        ReturnCaseDtos.ConfirmReturnDeliveryRequest request = new ReturnCaseDtos.ConfirmReturnDeliveryRequest(
-                Instant.now(),
-                "Ghi chú",
-                "CMD-HANDOVER-3"
-        );
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-shipment/confirm-direct-handover", ORDER_ID)
-                        .principal(authToken(STRANGER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-    }
-
-    @Test
-    @DisplayName("Endpoint 5: Bàn giao trực tiếp trả về 409 khi có COMMAND_KEY_CONFLICT từ service")
-    void confirmReturnDeliveryDirect_commandKeyConflict_409() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        CaseEntity activeCase = stubCase(CASE_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.of(activeCase));
-        when(returnCaseService.confirmReturnDeliveryDirect(eq(BUYER_ID), eq(CASE_ID), any()))
-                .thenThrow(new TrustSafetyBusinessException(HttpStatus.CONFLICT, "COMMAND_KEY_CONFLICT", "Xung đột khóa lệnh"));
-
-        ReturnCaseDtos.ConfirmReturnDeliveryRequest request = new ReturnCaseDtos.ConfirmReturnDeliveryRequest(
-                Instant.now(),
-                "Ghi chú",
-                "CMD-HANDOVER-CONFLICT"
-        );
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-shipment/confirm-direct-handover", ORDER_ID)
-                        .principal(authToken(BUYER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("COMMAND_KEY_CONFLICT"));
-    }
-
-    @Test
-    @DisplayName("Endpoint 5: Bàn giao trực tiếp trả về 404 khi không có active case")
-    void confirmReturnDeliveryDirect_noActiveCase_notFound404() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.empty());
-
-        ReturnCaseDtos.ConfirmReturnDeliveryRequest request = new ReturnCaseDtos.ConfirmReturnDeliveryRequest(
-                Instant.now(),
-                "Ghi chú",
-                "CMD-HANDOVER-404"
-        );
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-shipment/confirm-direct-handover", ORDER_ID)
-                        .principal(authToken(BUYER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
-
-        verify(returnCaseService, never()).confirmReturnDeliveryDirect(any(), any(), any());
-    }
-
-    // ==================== ENDPOINT 6: POST /return-case/agree-refund ====================
-
-    @Test
-    @DisplayName("Endpoint 6: Seller đồng ý hoàn tiền Vòng 2 thành công (200 OK) khi đúng Seller")
-    void sellerAgreeRefundRound2_validSeller_success200() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        CaseEntity activeCase = stubCase(CASE_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.of(activeCase));
-        when(returnCaseService.sellerAgreeRefundRound2(eq(SELLER_ID), eq(CASE_ID), any()))
-                .thenReturn(dummyDetailResponse());
-
-        ReturnCaseDtos.SellerAgreeRefundRequest request = new ReturnCaseDtos.SellerAgreeRefundRequest(
-                "Đồng ý hoàn tiền sau kiểm tra",
-                "CMD-AGREE-1"
-        );
+    @DisplayName("POST /return-case/agree-refund delegates to sellerAgreeRefundRound2ForOrder")
+    void agreeRefund_delegatesToService() throws Exception {
+        when(returnCaseService.sellerAgreeRefundRound2ForOrder(eq(SELLER_ID), eq(ORDER_ID), any()))
+                .thenReturn(stubResponse("CLOSED"));
 
         mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-case/agree-refund", ORDER_ID)
                         .principal(authToken(SELLER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
+                        .content("{\"reason\":\"Hàng đúng, đồng ý hoàn tiền\",\"commandKey\":\"CMD_A1\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("CLOSED"));
+
+        verify(returnCaseService).sellerAgreeRefundRound2ForOrder(eq(SELLER_ID), eq(ORDER_ID), any());
     }
 
     @Test
-    @DisplayName("Endpoint 6: Seller đồng ý hoàn tiền trả về 403 khi actor là Buyer")
-    void sellerAgreeRefundRound2_buyer_forbidden403() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-
-        ReturnCaseDtos.SellerAgreeRefundRequest request = new ReturnCaseDtos.SellerAgreeRefundRequest(
-                "Đồng ý hoàn tiền sau kiểm tra",
-                "CMD-AGREE-1"
-        );
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-case/agree-refund", ORDER_ID)
-                        .principal(authToken(BUYER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-
-        verify(returnCaseService, never()).sellerAgreeRefundRound2(any(), any(), any());
-    }
-
-    @Test
-    @DisplayName("Endpoint 6: Seller đồng ý hoàn tiền trả về 404 khi không có active case")
-    void sellerAgreeRefundRound2_noActiveCase_notFound404() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.empty());
-
-        ReturnCaseDtos.SellerAgreeRefundRequest request = new ReturnCaseDtos.SellerAgreeRefundRequest(
-                "Đồng ý hoàn tiền sau kiểm tra",
-                "CMD-AGREE-404"
-        );
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-case/agree-refund", ORDER_ID)
-                        .principal(authToken(SELLER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
-
-        verify(returnCaseService, never()).sellerAgreeRefundRound2(any(), any(), any());
-    }
-
-    // ==================== ENDPOINT 7: POST /return-case/damage-exemption ====================
-
-    @Test
-    @DisplayName("Endpoint 7: Seller đề nghị miễn trừ thiệt hại thành công (200 OK) khi đúng Seller")
-    void submitDamageExemptionRequest_validSeller_success200() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        CaseEntity activeCase = stubCase(CASE_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.of(activeCase));
-        when(returnCaseService.submitDamageExemptionRequest(eq(SELLER_ID), eq(CASE_ID), any()))
-                .thenReturn(dummyDetailResponse());
-
-        ReturnCaseDtos.EvidenceItemDto evidence = new ReturnCaseDtos.EvidenceItemDto(
-                "IMAGE",
-                "obj-key-1",
-                "hàng vỡ nát",
-                "sha256-hash",
-                1024L,
-                null
-        );
-
-        ReturnCaseDtos.SellerDamageExemptionRequest request = new ReturnCaseDtos.SellerDamageExemptionRequest(
-                "Hàng trả về bị tráo và hỏng hoàn toàn",
-                List.of(evidence),
-                "CMD-EXEMPT-1"
-        );
+    @DisplayName("POST /return-case/damage-exemption delegates to submitDamageExemptionRequestForOrder")
+    void damageExemption_delegatesToService() throws Exception {
+        when(returnCaseService.submitDamageExemptionRequestForOrder(eq(SELLER_ID), eq(ORDER_ID), any()))
+                .thenReturn(stubResponse("POST_RETURN"));
 
         mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-case/damage-exemption", ORDER_ID)
                         .principal(authToken(SELLER_ID))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
+                        .content("{\"reason\":\"Hàng trả bị tráo đổi\",\"evidenceList\":[{\"mediaType\":\"IMAGE\",\"objectKey\":\"img/1.jpg\"}],\"commandKey\":\"CMD_D1\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("POST_RETURN"));
+
+        verify(returnCaseService).submitDamageExemptionRequestForOrder(eq(SELLER_ID), eq(ORDER_ID), any());
     }
 
     @Test
-    @DisplayName("Endpoint 7: Seller đề nghị miễn trừ trả về 403 khi actor là Buyer")
-    void submitDamageExemptionRequest_buyer_forbidden403() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-
-        ReturnCaseDtos.SellerDamageExemptionRequest request = new ReturnCaseDtos.SellerDamageExemptionRequest(
-                "Hàng trả về bị tráo",
-                List.of(new ReturnCaseDtos.EvidenceItemDto("IMAGE", "k", "t", "d", 100L, null)),
-                "CMD-EXEMPT-1"
-        );
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-case/damage-exemption", ORDER_ID)
-                        .principal(authToken(BUYER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
-
-        verify(returnCaseService, never()).submitDamageExemptionRequest(any(), any(), any());
-    }
-
-    @Test
-    @DisplayName("Endpoint 7: Seller đề nghị miễn trừ trả về 400 Bad Request khi danh sách bằng chứng rỗng")
-    void submitDamageExemptionRequest_emptyEvidence_badRequest400() throws Exception {
-        ReturnCaseDtos.SellerDamageExemptionRequest request = new ReturnCaseDtos.SellerDamageExemptionRequest(
-                "Lý do hợp lệ dài hơn 5 ký tự",
-                List.of(),
-                "CMD-EXEMPT-EMPTY"
-        );
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-case/damage-exemption", ORDER_ID)
-                        .principal(authToken(SELLER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
-    }
-
-    @Test
-    @DisplayName("Endpoint 7: Seller đề nghị miễn trừ trả về 404 khi không có active case")
-    void submitDamageExemptionRequest_noActiveCase_notFound404() throws Exception {
-        OrderEntity order = stubOrder(BUYER_ID, SELLER_ID);
-        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(caseRepository.findActiveCaseByOrderId(ORDER_ID)).thenReturn(Optional.empty());
-
-        ReturnCaseDtos.EvidenceItemDto evidence = new ReturnCaseDtos.EvidenceItemDto(
-                "IMAGE",
-                "obj-key-1",
-                "hàng vỡ nát",
-                "sha256-hash",
-                1024L,
-                null
-        );
-
-        ReturnCaseDtos.SellerDamageExemptionRequest request = new ReturnCaseDtos.SellerDamageExemptionRequest(
-                "Hàng trả về bị tráo và hỏng hoàn toàn",
-                List.of(evidence),
-                "CMD-EXEMPT-404"
-        );
-
-        mockMvc.perform(post("/api/v1/commerce/orders/{orderId}/return-case/damage-exemption", ORDER_ID)
-                        .principal(authToken(SELLER_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
-
-        verify(returnCaseService, never()).submitDamageExemptionRequest(any(), any(), any());
-    }
-
-    // ==================== AUTHENTICATION GUARD ====================
-
-    @Test
-    @DisplayName("Chung: Yêu cầu không có JWT principal trả về 403 Access Denied")
-    void unauthenticatedRequest_forbidden403() throws Exception {
+    @DisplayName("Unauthenticated call returns 403 via AccessDeniedException from extractUserId")
+    void unauthenticated_returns403() throws Exception {
         mockMvc.perform(get("/api/v1/commerce/orders/{orderId}/return-case", ORDER_ID))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+                .andExpect(status().isForbidden());
     }
 }

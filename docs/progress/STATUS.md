@@ -1,5 +1,39 @@
 # Project Status
 
+## Triển Khai V58: Xu Trừ Trực Tiếp Phí Vận Chuyển, Ưu Tiên Voucher + Tự Động Điều Chỉnh Xu & Hoàn Đúng Xu Thực Chi — TASK-0122 / 2026-11-23
+
+- **Mục tiêu**:
+  - Flyway `V58__allow_points_on_shipping_and_voucher_priority.sql`: thêm cột `points_shipping_discount_amount` trên `orders` / `og_compat.orders`, patch `og70_write_view()`, `og70_dispatch()`, `og70_validate_graph(boolean)` (`uq_discount_points_item` theo `(reward_entry_id, order_item_id, component)`), `og70_validate_row()`, `og_guard_fund_component()`, và `og58_validate_discount_totals_for_group()`.
+  - `GroupCheckoutService` + `GroupPaymentService`: ưu tiên áp dụng Voucher trước, tự động điều chỉnh (auto-clamp) số xu thực dùng khi voucher làm giảm tổng phải trả để không làm mất xu người dùng, phân bổ xu vào tiền hàng trước rồi phần dư trừ trực tiếp phí vận chuyển `CARRIER`, hạch toán chính xác `SHIPPING_CASH`, `PLATFORM_SHIPPING_SUBSIDY` và `discount_allocations` (`GOODS` + `SHIPPING`).
+  - `RefundSettlementService`: hoàn đúng 100% tổng xu thực chi (`points_discount_amount + points_shipping_discount_amount`) khi hoàn trả/hủy đơn hợp lệ.
+- **Kiểm thử**:
+  - Flyway `V58` migrate sạch trên `og_shop_test` (`127.0.0.1:55433`, PostgreSQL 17).
+  - `GroupCheckoutPostgresTest` (**8/8 PASS**), `GroupCheckoutPackage2UnitTest` (**5/5 PASS**), hồi quy `GroupPaymentPostgresTest` (7/7), `GroupPaymentConcurrencyPostgresTest` (4/4), `CheckoutIdempotencyPostgresTest` (7/7), `V51ValidatorChainPostgresTest` (14/14).
+  - Full Backend `mvnw verify` offline: **`Tests run: 1499, Failures: 0, Errors: 0, Skipped: 387`**, `jar` + `spring-boot:repackage` -> **BUILD SUCCESS**.
+
+## Triển Khai Gói 2 UC83: Fast-Path Đơn 0đ, Tích Hợp Voucher & Giá Thương Lượng Offer trong GroupCheckout — TASK-0121 / 2026-11-23
+
+- **Mục tiêu**:
+  - Triển khai fast-path đơn 0 đồng (`UC24 Alt 7a`, `UC25 Alt 2a`, `BR-UC25-06`) trong `GroupCheckoutService.finalizeZeroAmountGroup`: ghi chứng cứ `og_compat.zero_checkout_confirmations`, ghi `order_fund_components` trợ giá nền tảng (`PLATFORM_GOODS_SUBSIDY` / `PLATFORM_SHIPPING_SUBSIDY`), trừ xu ngay (`reward_ledger` `DEBIT_CHECKOUT` + `discount_allocations`), chuyển `orders -> PAID_HELD`, `inventory_reservations -> FUNDED`, `checkout_groups -> PAID` không mở VNPay.
+  - Bổ sung fail-closed guard `400 ZERO_AMOUNT_NO_PAYMENT_REQUIRED` trong `GroupPaymentService.createGroupPayment` khi `expectedTotal <= 0`.
+  - Tích hợp `VoucherService` (cả voucher tiền hàng và `SHIPPING_DISCOUNT` + `checkout_redemptions` / `discount_allocations`) và `NegotiatedCheckoutFacade` (`requireNotBlocked`, `bind`, `linkOrder` cho `acceptedOfferId`) vào `GroupCheckoutService`.
+  - Lưu ý phạm vi DB `V1–V57`: đơn `SELF_PICKUP`/`SELF_DELIVERY` + 100% xu hoặc `CARRIER` + voucher ship + 100% xu đạt 0đ trọn vẹn; dùng xu trừ trực tiếp phí vận chuyển `CARRIER` không qua voucher cần migration `V58` tách riêng (chờ phê duyệt nếu triển khai).
+- **Kiểm thử**:
+  - `GroupCheckoutPackage2UnitTest` + `GroupCheckoutServiceEkycTest`: **5/5 PASS**.
+  - PostgreSQL 17 thật (`og_shop_test` @ `127.0.0.1:55433`): `GroupCheckoutPostgresTest` (**7/7 PASS**, bao gồm `zeroAmountSelfDeliveryCheckout_finalizesImmediatelyToPaidWithoutVnPay` qua toàn bộ deferred triggers lúc COMMIT), `GroupPaymentPostgresTest` (7/7), `GroupPaymentConcurrencyPostgresTest` (4/4), `CheckoutIdempotencyPostgresTest` (7/7), `V51ValidatorChainPostgresTest` (14/14).
+  - Full Backend `mvnw verify` offline: **`Tests run: 1496, Failures: 0, Errors: 0, Skipped: 386`**, `jar` + `spring-boot:repackage` -> **BUILD SUCCESS** (44.5s).
+
+## Triển Khai Gói 1 UC83: Khép Kín Hoàn Tiền Runtime, Vá Bảo Mật KTV, Ranh Giới Controller & EvidenceStorageVerifier — TASK-0120 / 2026-11-23
+
+- **Mục tiêu**:
+  - Khép kín luồng xác nhận hoàn tiền `UC83` (`REQUESTED -> CONFIRMED -> CREDIT_REFUND -> REFUNDED/COMPLETED`) ở runtime qua `AdminPaymentController` (`GET /api/v1/admin/payments/orders/{orderId}/settlements`, `POST /api/v1/admin/payments/settlements/{operationId}/confirm`) và scheduler tùy chọn `SettlementReconciliationScheduler` (mặc định tắt `app.scheduling.settlement-auto-confirm.enabled: false`).
+  - Vá bảo mật & ranh giới kiến trúc: thêm `@PreAuthorize("hasRole('KTV')")` cho 3 endpoint KTV trên `ReturnCaseController`, bổ sung kiểm tra `isKtv(ktvId)` tường minh trong `ReturnCaseService.ktvDecideRound1`, tách hoàn toàn repository khỏi `ReturnCaseCommerceController` và `KtvCaseController`.
+  - Triển khai `LocalEvidenceStorageVerifier` (tính SHA-256 thực + chống path traversal fail-closed, bật qua `app.trustsafety.evidence-strict-verify=true`).
+- **Kiểm thử**:
+  - Đã rebase sạch lên `14cece9` (PR #21, `V57`).
+  - Bộ test trọng tâm Gói 1 (8 test classes): **226/226 PASS (0 Failures, 0 Errors)**.
+  - Full Backend `mvnw verify` offline: **`Tests run: 1492, Failures: 0, Errors: 0, Skipped: 385`**, `jar` + `spring-boot:repackage` → **BUILD SUCCESS** (54.1s).
+
 ## Tích Hợp PR #17 Hệ Sinh Thái UC83 Return Cases, Group Checkout/Settlement & Vá Bảo Mật/Deadlock (Đợt 1) — TASK-0119 / 2026-11-19
 
 - **Mục tiêu**:

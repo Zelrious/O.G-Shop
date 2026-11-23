@@ -98,6 +98,9 @@ public class GroupPaymentService {
         if (!CheckoutGroupEntity.STATE_READY.equals(group.getState())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Nhóm thanh toán không ở trạng thái chờ thanh toán: " + group.getState());
         }
+        if (group.getExpectedTotal() == null || group.getExpectedTotal().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ZERO_AMOUNT_NO_PAYMENT_REQUIRED: Đơn hàng 0 đồng không cần mở cổng thanh toán.");
+        }
         if (group.getPaymentDueAt() != null && !group.getPaymentDueAt().isAfter(now)) {
             throw new ResponseStatusException(HttpStatus.GONE, "Nhóm thanh toán đã hết hạn.");
         }
@@ -375,9 +378,9 @@ public class GroupPaymentService {
 
         List<OrderEntity> orders = orderRepository.findByCheckoutGroupId(group.getGroupId());
 
-        // Check buyer Coin balance at T2 BEFORE saving confirmation as ALLOCATABLE
+        // Check buyer Coin balance at T2 BEFORE saving confirmation as ALLOCATABLE (includes both goods & shipping coins)
         BigDecimal totalPointsDiscount = orders.stream()
-                .map(OrderEntity::getPointsDiscountAmount)
+                .map(OrderEntity::getTotalPointsDiscountAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         boolean insufficientCoins = false;
@@ -554,8 +557,10 @@ public class GroupPaymentService {
             );
             orderFundComponentRepository.saveAndFlush(cGoods);
 
-            // SHIPPING_CASH = o.shipping_fee - shipping_discount
-            BigDecimal shippingCash = order.getShippingFee().subtract(order.getShippingDiscountAmount());
+            // SHIPPING_CASH = o.shipping_fee - shipping_discount - points_shipping_discount
+            BigDecimal shippingCash = order.getShippingFee()
+                    .subtract(order.getShippingDiscountAmount())
+                    .subtract(order.getPointsShippingDiscountAmount());
             OrderFundComponentEntity cShipping = new OrderFundComponentEntity(
                     UUID.randomUUID(),
                     order.getId(),
@@ -568,7 +573,7 @@ public class GroupPaymentService {
             );
             orderFundComponentRepository.saveAndFlush(cShipping);
 
-            // PLATFORM_GOODS_SUBSIDY = voucher + coins
+            // PLATFORM_GOODS_SUBSIDY = voucher + goods coins
             BigDecimal goodsSubsidy = order.getVoucherDiscountAmount().add(order.getPointsDiscountAmount());
             OrderFundComponentEntity cGoodsSub = new OrderFundComponentEntity(
                     UUID.randomUUID(),
@@ -582,8 +587,8 @@ public class GroupPaymentService {
             );
             orderFundComponentRepository.saveAndFlush(cGoodsSub);
 
-            // PLATFORM_SHIPPING_SUBSIDY = shipping_discount
-            BigDecimal shipSubsidy = order.getShippingDiscountAmount();
+            // PLATFORM_SHIPPING_SUBSIDY = shipping_discount + shipping coins
+            BigDecimal shipSubsidy = order.getShippingDiscountAmount().add(order.getPointsShippingDiscountAmount());
             OrderFundComponentEntity cShipSub = new OrderFundComponentEntity(
                     UUID.randomUUID(),
                     order.getId(),
@@ -597,7 +602,7 @@ public class GroupPaymentService {
             orderFundComponentRepository.saveAndFlush(cShipSub);
         }
 
-        // 4. Coin T2 Debit & Discount Allocations
+        // 4. Coin T2 Debit & Discount Allocations (GOODS + SHIPPING)
         if (totalPointsDiscount.compareTo(BigDecimal.ZERO) > 0 && group.getRewardPolicyId() != null) {
             boolean alreadyDebited = rewardLedgerRepository.findByGroupIdAndEntryType(group.getGroupId(), RewardLedgerEntity.ENTRY_DEBIT_CHECKOUT).isPresent();
             if (!alreadyDebited) {
@@ -617,7 +622,7 @@ public class GroupPaymentService {
                         java.sql.Timestamp.from(now)
                 );
 
-                // Insert discount_allocations matching order item points allocations
+                // Insert discount_allocations matching order item GOODS & order SHIPPING coin allocations
                 for (OrderEntity order : orders) {
                     List<OrderItemEntity> items = orderItemRepository.findByOrderId(order.getId());
                     for (OrderItemEntity item : items) {
@@ -633,6 +638,18 @@ public class GroupPaymentService {
                                     item.getPointsAllocation()
                             );
                         }
+                    }
+                    if (order.getPointsShippingDiscountAmount().compareTo(BigDecimal.ZERO) > 0 && !items.isEmpty()) {
+                        jdbcTemplate.update("""
+                                INSERT INTO og_compat.discount_allocations(
+                                    allocation_id, order_item_id, reward_entry_id, component, amount
+                                ) VALUES (?, ?, ?, 'SHIPPING', ?)
+                                """,
+                                UUID.randomUUID(),
+                                items.getFirst().getId(),
+                                rewardEntryId,
+                                order.getPointsShippingDiscountAmount()
+                        );
                     }
                 }
             }

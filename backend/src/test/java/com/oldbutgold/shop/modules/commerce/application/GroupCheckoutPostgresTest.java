@@ -2,6 +2,7 @@ package com.oldbutgold.shop.modules.commerce.application;
 
 import com.oldbutgold.shop.modules.commerce.application.GroupCheckoutDtos.*;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.*;
+import com.oldbutgold.shop.modules.payment.application.RefundSettlementService;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.RewardPolicyEntity;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.RewardPolicyRepository;
 import com.oldbutgold.shop.shared.PostgresTestSafetyGuard;
@@ -60,6 +61,9 @@ class GroupCheckoutPostgresTest {
 
     @Autowired
     private RewardPolicyRepository rewardPolicyRepository;
+
+    @Autowired
+    private RefundSettlementService refundSettlementService;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -503,5 +507,202 @@ class GroupCheckoutPostgresTest {
 
         List<OrderEntity> orders = orderRepository.findByCheckoutGroupId(response.groupId());
         assertThat(orders.get(0).getShippingFee()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("Package 2A: Zero-VND checkout (SELF_DELIVERY + 100% coins) finalizes immediately to PAID on real PostgreSQL COMMIT")
+    void zeroAmountSelfDeliveryCheckout_finalizesImmediatelyToPaidWithoutVnPay() {
+        long buyerId = createUser("BUYER");
+        long sellerId = createUser("SELLER");
+        CreatedProduct p = createUc83Product(sellerId, "Zero VND Fast-Path Item", new BigDecimal("150000"), 5, true);
+
+        Long policyId;
+        List<Long> pList = jdbcTemplate.queryForList("SELECT policy_id FROM og_compat.reward_policies WHERE policy_code = 'REWARD_CHECKOUT_STANDARD'", Long.class);
+        if (pList.isEmpty()) {
+            policyId = jdbcTemplate.queryForObject("""
+                    INSERT INTO og_compat.reward_policies(policy_code, point_value, policy_snapshot, created_by, created_at)
+                    VALUES ('REWARD_CHECKOUT_STANDARD', 1.00, '{"max_redemption_percentage": 100}', ?, NOW())
+                    RETURNING policy_id
+                    """, Long.class, adminId);
+        } else {
+            policyId = pList.get(0);
+        }
+
+        Integer accCount = jdbcTemplate.queryForObject("SELECT count(*) FROM og_compat.reward_accounts WHERE user_id = ?", Integer.class, buyerId);
+        if (accCount == null || accCount == 0) {
+            jdbcTemplate.update("INSERT INTO og_compat.reward_accounts(user_id) VALUES (?)", buyerId);
+        }
+        jdbcTemplate.update("""
+                INSERT INTO og_compat.reward_ledger(entry_id, user_id, policy_id, entry_type, points_delta, actor_id, reason, command_key)
+                VALUES (?, ?, ?, 'CORRECTION', 150000, ?, 'Zero VND coin seed', ?)
+                """, UUID.randomUUID(), buyerId, policyId, adminId, "CMD_ZERO_SEED_" + UUID.randomUUID());
+
+        groupCheckoutService.setConfiguredMaxRedemptionPercentage("100");
+        groupCheckoutService.setConfiguredCanonicalPolicyCode("REWARD_CHECKOUT_STANDARD");
+
+        try (var poApprovalScope = SimulatedPoApprovalTestFixture.openScope(groupCheckoutService)) {
+            GroupCheckoutRequest request = new GroupCheckoutRequest(
+                    "ZERO-VND-" + UUID.randomUUID(),
+                    testAddress(),
+                    "SELF_DELIVERY",
+                    null,
+                    "VNPAY",
+                    null,
+                    150000L,
+                    List.of(new GroupCheckoutItemRequest(p.productId(), 1, null))
+            );
+
+            GroupCheckoutExecutionResult result = txTemplate.execute(status ->
+                    groupCheckoutService.executeCheckout(buyerId, request)
+            );
+
+            assertThat(result).isNotNull();
+            GroupCheckoutResponse response = result.response();
+            assertThat(response.expectedTotal()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(response.state()).isEqualTo(CheckoutGroupEntity.STATE_PAID);
+
+            List<OrderEntity> orders = orderRepository.findByCheckoutGroupId(response.groupId());
+            assertThat(orders).hasSize(1);
+            OrderEntity order = orders.get(0);
+            assertThat(order.getStatus()).isEqualTo(OrderEntity.STATUS_PAID_HELD);
+            assertThat(order.getPaidConfirmedAt()).isNotNull();
+            assertThat(order.getSellerAcceptDueAt()).isNotNull();
+
+            List<OrderItemEntity> items = orderItemRepository.findByOrderId(order.getId());
+            assertThat(items).hasSize(1);
+            List<InventoryReservationEntity> reservations = inventoryReservationRepository.findByOrderItemId(items.get(0).getId());
+            assertThat(reservations).hasSize(1);
+            assertThat(reservations.get(0).getState()).isEqualTo("FUNDED");
+
+            // Verify DEBIT_CHECKOUT written and buyer balance deducted to 0
+            Integer debitCount = jdbcTemplate.queryForObject(
+                    "SELECT count(*) FROM og_compat.reward_ledger WHERE group_id = ? AND entry_type = 'DEBIT_CHECKOUT' AND points_delta = -150000",
+                    Integer.class, response.groupId()
+            );
+            assertThat(debitCount).isEqualTo(1);
+            Long remainingBalance = jdbcTemplate.queryForObject(
+                    "SELECT balance FROM og_compat.reward_accounts WHERE user_id = ?",
+                    Long.class, buyerId
+            );
+            assertThat(remainingBalance).isEqualTo(0L);
+
+            // Verify zero_checkout_confirmations proof row exists
+            Integer zeroProofCount = jdbcTemplate.queryForObject(
+                    "SELECT count(*) FROM og_compat.zero_checkout_confirmations WHERE group_id = ? AND buyer_id = ?",
+                    Integer.class, response.groupId(), buyerId
+            );
+            assertThat(zeroProofCount).isEqualTo(1);
+
+            // Verify order_fund_components (PLATFORM_GOODS_SUBSIDY = 150000, allocation_id IS NULL)
+            BigDecimal goodsSubsidy = jdbcTemplate.queryForObject(
+                    "SELECT confirmed_amount FROM og_compat.order_fund_components WHERE order_id = ? AND component_type = 'PLATFORM_GOODS_SUBSIDY' AND allocation_id IS NULL",
+                    BigDecimal.class, order.getId()
+            );
+            assertThat(goodsSubsidy).isEqualByComparingTo(new BigDecimal("150000"));
+
+            // Verify discount_allocations linked to reward_entry_id (passes V53 trigger)
+            BigDecimal allocatedCoins = jdbcTemplate.queryForObject(
+                    "SELECT COALESCE(SUM(amount), 0) FROM og_compat.discount_allocations WHERE order_item_id = ? AND reward_entry_id IS NOT NULL",
+                    BigDecimal.class, items.get(0).getId()
+            );
+            assertThat(allocatedCoins).isEqualByComparingTo(new BigDecimal("150000"));
+        } finally {
+            groupCheckoutService.setConfiguredMaxRedemptionPercentage(null);
+            groupCheckoutService.setConfiguredCanonicalPolicyCode(null);
+        }
+    }
+
+    @Test
+    @DisplayName("V58: CARRIER coins offset goods + shipping directly, auto-clamps excess coins, and RefundSettlementService resolves exact total coins spent")
+    void carrierCheckout_coinsOffsetGoodsAndShippingAndAutoClamp_commitsV58AndResolvesExactRefundCoins() {
+        long buyerId = createUser("BUYER");
+        long sellerId = createUser("SELLER");
+        CreatedProduct p = createUc83Product(sellerId, "Carrier Coin Shipping Item", new BigDecimal("100000"), 5, true);
+
+        Long policyId;
+        List<Long> pList = jdbcTemplate.queryForList("SELECT policy_id FROM og_compat.reward_policies WHERE policy_code = 'REWARD_CHECKOUT_STANDARD'", Long.class);
+        if (pList.isEmpty()) {
+            policyId = jdbcTemplate.queryForObject("""
+                    INSERT INTO og_compat.reward_policies(policy_code, point_value, policy_snapshot, created_by, created_at)
+                    VALUES ('REWARD_CHECKOUT_STANDARD', 1.00, '{"max_redemption_percentage": 100}', ?, NOW())
+                    RETURNING policy_id
+                    """, Long.class, adminId);
+        } else {
+            policyId = pList.get(0);
+        }
+
+        Integer accCount = jdbcTemplate.queryForObject("SELECT count(*) FROM og_compat.reward_accounts WHERE user_id = ?", Integer.class, buyerId);
+        if (accCount == null || accCount == 0) {
+            jdbcTemplate.update("INSERT INTO og_compat.reward_accounts(user_id) VALUES (?)", buyerId);
+        }
+        jdbcTemplate.update("""
+                INSERT INTO og_compat.reward_ledger(entry_id, user_id, policy_id, entry_type, points_delta, actor_id, reason, command_key)
+                VALUES (?, ?, ?, 'CORRECTION', 200000, ?, 'V58 coin seed', ?)
+                """, UUID.randomUUID(), buyerId, policyId, adminId, "CMD_V58_SEED_" + UUID.randomUUID());
+
+        groupCheckoutService.setConfiguredMaxRedemptionPercentage("100");
+        groupCheckoutService.setConfiguredCanonicalPolicyCode("REWARD_CHECKOUT_STANDARD");
+
+        try (var poApprovalScope = SimulatedPoApprovalTestFixture.openScope(groupCheckoutService)) {
+            // Buyer requests 150,000 coins on 100,000 goods + 30,000 CARRIER shipping -> must auto-clamp to 130,000 (100k goods + 30k ship)
+            GroupCheckoutRequest request = new GroupCheckoutRequest(
+                    "V58-CARRIER-COIN-" + UUID.randomUUID(),
+                    testAddress(),
+                    "CARRIER",
+                    "GHN",
+                    "VNPAY",
+                    null,
+                    150000L,
+                    List.of(new GroupCheckoutItemRequest(p.productId(), 1, null))
+            );
+
+            GroupCheckoutExecutionResult result = txTemplate.execute(status ->
+                    groupCheckoutService.executeCheckout(buyerId, request)
+            );
+
+            assertThat(result).isNotNull();
+            GroupCheckoutResponse response = result.response();
+            assertThat(response.expectedTotal()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(response.state()).isEqualTo(CheckoutGroupEntity.STATE_PAID);
+            assertThat(response.groupPointsDiscount()).isEqualByComparingTo(new BigDecimal("130000"));
+            assertThat(response.coinsUsed()).isEqualTo(130000L);
+
+            List<OrderEntity> orders = orderRepository.findByCheckoutGroupId(response.groupId());
+            assertThat(orders).hasSize(1);
+            OrderEntity order = orders.get(0);
+            assertThat(order.getStatus()).isEqualTo(OrderEntity.STATUS_PAID_HELD);
+            assertThat(order.getPointsDiscountAmount()).isEqualByComparingTo(new BigDecimal("100000"));
+            assertThat(order.getPointsShippingDiscountAmount()).isEqualByComparingTo(new BigDecimal("30000"));
+            assertThat(order.getTotalPointsDiscountAmount()).isEqualByComparingTo(new BigDecimal("130000"));
+
+            // Buyer started with 200,000 coins; exact 130,000 debited -> 70,000 untouched (20,000 excess never lost!)
+            Long remainingBalance = jdbcTemplate.queryForObject(
+                    "SELECT balance FROM og_compat.reward_accounts WHERE user_id = ?",
+                    Long.class, buyerId
+            );
+            assertThat(remainingBalance).isEqualTo(70000L);
+
+            // Verify both GOODS and SHIPPING fund components and discount_allocations
+            BigDecimal shipSubsidy = jdbcTemplate.queryForObject(
+                    "SELECT confirmed_amount FROM og_compat.order_fund_components WHERE order_id = ? AND component_type = 'PLATFORM_SHIPPING_SUBSIDY'",
+                    BigDecimal.class, order.getId()
+            );
+            assertThat(shipSubsidy).isEqualByComparingTo(new BigDecimal("30000"));
+
+            BigDecimal shippingCoinAlloc = jdbcTemplate.queryForObject(
+                    "SELECT COALESCE(SUM(d.amount), 0) FROM og_compat.discount_allocations d JOIN og_compat.order_items i USING(order_item_id) WHERE i.order_id = ? AND d.reward_entry_id IS NOT NULL AND d.component = 'SHIPPING'",
+                    BigDecimal.class, order.getId()
+            );
+            assertThat(shippingCoinAlloc).isEqualByComparingTo(new BigDecimal("30000"));
+
+            // Verify RefundSettlementService resolves exact total coins spent (100k goods + 30k shipping = 130,000) for refund
+            long refundableCoins = refundSettlementService.getCanonicalDebitedCoinsOrFailClosed(
+                    order.getId(), order.getTotalPointsDiscountAmount()
+            );
+            assertThat(refundableCoins).isEqualTo(130000L);
+        } finally {
+            groupCheckoutService.setConfiguredMaxRedemptionPercentage(null);
+            groupCheckoutService.setConfiguredCanonicalPolicyCode(null);
+        }
     }
 }

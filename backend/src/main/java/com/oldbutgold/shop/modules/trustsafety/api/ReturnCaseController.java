@@ -195,6 +195,7 @@ public class ReturnCaseController {
      * POST /api/v1/trustsafety/returns/{caseId}/ktv/request-evidence
      */
     @PostMapping("/{caseId}/ktv/request-evidence")
+    @PreAuthorize("hasRole('KTV')")
     public ResponseEntity<ReturnCaseDtos.KtvRequestEvidenceResponse> requestEvidence(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long caseId,
@@ -216,6 +217,7 @@ public class ReturnCaseController {
      * POST /api/v1/trustsafety/returns/{caseId}/ktv/decide-round1
      */
     @PostMapping("/{caseId}/ktv/decide-round1")
+    @PreAuthorize("hasRole('KTV')")
     public ResponseEntity<ReturnCaseDtos.ReturnCaseDetailResponse> ktvDecideRound1(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long caseId,
@@ -231,6 +233,7 @@ public class ReturnCaseController {
      * POST /api/v1/trustsafety/returns/{caseId}/ktv/decide-round2
      */
     @PostMapping("/{caseId}/ktv/decide-round2")
+    @PreAuthorize("hasRole('KTV')")
     public ResponseEntity<ReturnCaseDtos.ReturnCaseDetailResponse> ktvDecideRound2(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long caseId,

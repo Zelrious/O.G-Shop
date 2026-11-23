@@ -1,5 +1,22 @@
 # Payment Module
 
+## V58: Hạch toán xu trừ phí vận chuyển & hoàn đủ tổng xu thực chi — TASK-0122 / 2026-11-23
+
+- `GroupPaymentService`: tính `SHIPPING_CASH = shipping_fee - shipping_discount_amount - points_shipping_discount_amount`, `PLATFORM_SHIPPING_SUBSIDY = shipping_discount_amount + points_shipping_discount_amount`, và ghi `discount_allocations` (`component = 'SHIPPING'`) cho xu tại T2 `DEBIT_CHECKOUT`.
+- `RefundSettlementService`: tính tổng xu thực chi của đơn gồm `points_discount_amount + points_shipping_discount_amount` để hoàn trả đủ 100% xu khách đã bỏ ra khi hoàn hàng/hủy đơn hợp lệ.
+- Kiểm chứng: `RefundSettlementServiceTest` + `GroupCheckoutPostgresTest` (8/8) + `GroupPaymentPostgresTest` (7/7) PASS.
+
+## Bảo vệ đơn 0 đồng trên GroupPaymentService — TASK-0121 / 2026-11-23
+
+- `GroupPaymentService.createGroupPayment`: bổ sung fail-closed guard từ chối `expectedTotal <= 0` với lỗi `400 BAD_REQUEST` (`ZERO_AMOUNT_NO_PAYMENT_REQUIRED`), ngăn tạo `PaymentIntent` hoặc URL VNPay cho nhóm đơn hàng 0 đồng.
+- Kiểm chứng: `GroupCheckoutPackage2UnitTest.createGroupPayment_whenZeroAmount_throwsBadRequestWithoutOpeningVnPay` PASS, `GroupPaymentPostgresTest` (7/7) & `GroupPaymentConcurrencyPostgresTest` (4/4) PASS trên PostgreSQL 17.
+
+## Khép kín xác nhận hoàn tiền UC83 — TASK-0120 / 2026-11-23
+
+- `AdminPaymentController`: bổ sung `GET /api/v1/admin/payments/orders/{orderId}/settlements` và `POST /api/v1/admin/payments/settlements/{operationId}/confirm` (`ADMIN`/`KTV`) gọi `RefundSettlementService` để khép kín vòng đời `REQUESTED -> CONFIRMED -> CREDIT_REFUND -> REFUNDED/COMPLETED`.
+- `SettlementReconciliationScheduler`: bổ sung worker mô phỏng xác nhận tự động (mặc định tắt qua `app.scheduling.settlement-auto-confirm.enabled: false`).
+- Kiểm chứng: `AdminPaymentControllerSecurityTest` (3/3), `SettlementReconciliationSchedulerTest` (2/2), `RefundSettlementServiceTest` PASS.
+
 ## Giao diện checkout — TASK-0091 / 2026-10-13
 
 Checkout dùng token sáng/tối và icon đơn sắc; logo vendor giữ màu nhận diện. Không đổi provider/callback/receipt/transaction. Hồi quy frontend accepted-offer checkout đạt; provider thật chưa được nghiệm thu lại trong task UI. [Bằng chứng](../../output/ui-0091/README.md).
