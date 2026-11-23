@@ -254,6 +254,24 @@ public class TextModerator {
         "(?:\\+?84|0)[35789]\\d{8}"
     );
 
+    // Pre-compiled patterns for Vietnamese word number conversion and sliding window masking (exact semantics preserved)
+    private static final Pattern SLIDING_WINDOW_MASK_TOKEN = Pattern.compile(
+        "(?i)(?<=^|[\\s\\p{Punct}])(?:không|khong|ko|zero|dzo|một|mot|mốt|nhất|hai|nhị|ba|tam|bốn|bon|tư|tu|tứ|năm|nam|lăm|lam|ngũ|sáu|sau|lục|bảy|bay|bẩy|thất|tám|bát|chín|chin|cửu|\\d+)(?=[\\s\\p{Punct}]|$)"
+    );
+    private static final Pattern VN_WORD_K_PREFIX = Pattern.compile(
+        "(?i)(?<=^|[\\s\\p{Punct}])k(?=[\\s\\p{Punct}]*(?:[035789]|ba|năm|nam|bảy|bay|tám|tam|chín|chin))"
+    );
+    private static final Pattern VN_WORD_0 = Pattern.compile("(?i)(?<=^|[\\s\\p{Punct}])(?:không|khong|ko|zero|dzo)(?=[\\s\\p{Punct}]|$)");
+    private static final Pattern VN_WORD_1 = Pattern.compile("(?i)(?<=^|[\\s\\p{Punct}])(?:một|mot|mốt|nhất)(?=[\\s\\p{Punct}]|$)");
+    private static final Pattern VN_WORD_2 = Pattern.compile("(?i)(?<=^|[\\s\\p{Punct}])(?:hai|nhị)(?=[\\s\\p{Punct}]|$)");
+    private static final Pattern VN_WORD_3 = Pattern.compile("(?i)(?<=^|[\\s\\p{Punct}])(?:ba|tam)(?=[\\s\\p{Punct}]|$)");
+    private static final Pattern VN_WORD_4 = Pattern.compile("(?i)(?<=^|[\\s\\p{Punct}])(?:bốn|bon|tư|tu|tứ)(?=[\\s\\p{Punct}]|$)");
+    private static final Pattern VN_WORD_5 = Pattern.compile("(?i)(?<=^|[\\s\\p{Punct}])(?:năm|nam|lăm|lam|ngũ)(?=[\\s\\p{Punct}]|$)");
+    private static final Pattern VN_WORD_6 = Pattern.compile("(?i)(?<=^|[\\s\\p{Punct}])(?:sáu|sau|lục)(?=[\\s\\p{Punct}]|$)");
+    private static final Pattern VN_WORD_7 = Pattern.compile("(?i)(?<=^|[\\s\\p{Punct}])(?:bảy|bay|bẩy|thất)(?=[\\s\\p{Punct}]|$)");
+    private static final Pattern VN_WORD_8 = Pattern.compile("(?i)(?<=^|[\\s\\p{Punct}])(?:tám|bát)(?=[\\s\\p{Punct}]|$)");
+    private static final Pattern VN_WORD_9 = Pattern.compile("(?i)(?<=^|[\\s\\p{Punct}])(?:chín|chin|cửu)(?=[\\s\\p{Punct}]|$)");
+
     private static int severityRank(String level) {
         if (level == null) return 0;
         return switch (level) {
@@ -411,14 +429,13 @@ public class TextModerator {
             }
         }
 
-        // 4. Compute anti-false text once for PII & Phone evaluation
-        String antiFalseText = stripAntiFalsePositive(currentText);
-
         // 4b. Standalone 12-digit CCCD
         String antiFalseForCccd = stripAntiFalsePositive(currentText);
+        boolean cccdChanged = false;
         Matcher cccdMatcher = CCCD_PATTERN.matcher(antiFalseForCccd);
         if (cccdMatcher.find()) {
             currentText = CCCD_PATTERN.matcher(currentText).replaceAll("***");
+            cccdChanged = true;
             isViolation = true;
             if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
                 primaryViolationType = "PII_LEAK";
@@ -428,11 +445,13 @@ public class TextModerator {
         }
 
         // 5. Check & mask Phone Numbers (Separators, Homoglyphs, Emojis, Zero-width)
-        // Recompute on currentText so already-masked CCCDs won't trigger phone regex
-        String antiFalseForPhone = stripAntiFalsePositive(currentText);
+        // Recompute only when currentText was modified by step 4b; otherwise reuse antiFalseForCccd
+        String antiFalseForPhone = cccdChanged ? stripAntiFalsePositive(currentText) : antiFalseForCccd;
+        boolean changedAfterPhoneStrip = false;
         Matcher phoneMatcher = VIETNAMESE_PHONE_WITH_HOMOGLYPHS.matcher(antiFalseForPhone);
         if (phoneMatcher.find()) {
             currentText = VIETNAMESE_PHONE_WITH_HOMOGLYPHS.matcher(currentText).replaceAll("***");
+            changedAfterPhoneStrip = true;
             isViolation = true;
             if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
                 primaryViolationType = "PHONE_LEAK";
@@ -445,6 +464,7 @@ public class TextModerator {
         Matcher sepMatcher = VIETNAMESE_PHONE_WITH_SEPARATORS.matcher(currentText);
         if (sepMatcher.find()) {
             currentText = sepMatcher.replaceAll("***");
+            changedAfterPhoneStrip = true;
             isViolation = true;
             if (severityLevel == null || isHigherSeverity("MEDIUM", severityLevel)) {
                 primaryViolationType = "PHONE_LEAK";
@@ -474,11 +494,13 @@ public class TextModerator {
                     }
                 }
                 currentText = maskWordNumberSequence(currentText);
+                changedAfterPhoneStrip = true;
             }
         }
 
         // 5c. Check & mask Padded digit sequences (e.g. 123450912345678999 "lấy 10 số ở giữa", 9990901234567888)
-        String antiFalseCluster = stripAntiFalsePositive(currentText);
+        // Recompute only when currentText was modified after antiFalseForPhone was computed
+        String antiFalseCluster = changedAfterPhoneStrip ? stripAntiFalsePositive(currentText) : antiFalseForPhone;
         Matcher paddedMatcher = PADDED_DIGITS_PATTERN.matcher(antiFalseCluster);
         while (paddedMatcher.find()) {
             String padded = paddedMatcher.group();
@@ -615,7 +637,7 @@ public class TextModerator {
                 if (rawText.length() <= 40 || containsWordNumberSequence(rawText)) {
                     masked = "***";
                 } else {
-                    masked = rawText.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:không|khong|ko|zero|dzo|một|mot|mốt|nhất|hai|nhị|ba|tam|bốn|bon|tư|tu|tứ|năm|nam|lăm|lam|ngũ|sáu|sau|lục|bảy|bay|bẩy|thất|tám|bát|chín|chin|cửu|\\d+)(?=[\\s\\p{Punct}]|$)", "***");
+                    masked = SLIDING_WINDOW_MASK_TOKEN.matcher(rawText).replaceAll("***");
                     if (masked.equals(rawText)) {
                         masked = "***";
                     }
@@ -728,18 +750,18 @@ public class TextModerator {
         String s = text.toLowerCase(Locale.ROOT);
 
         // Handle 'k' as 'không' when followed by phone prefixes
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])k(?=[\\s\\p{Punct}]*(?:[035789]|ba|năm|nam|bảy|bay|tám|tam|chín|chin))", "0 ");
+        s = VN_WORD_K_PREFIX.matcher(s).replaceAll("0 ");
 
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:không|khong|ko|zero|dzo)(?=[\\s\\p{Punct}]|$)", "0");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:một|mot|mốt|nhất)(?=[\\s\\p{Punct}]|$)", "1");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:hai|nhị)(?=[\\s\\p{Punct}]|$)", "2");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:ba|tam)(?=[\\s\\p{Punct}]|$)", "3");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:bốn|bon|tư|tu|tứ)(?=[\\s\\p{Punct}]|$)", "4");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:năm|nam|lăm|lam|ngũ)(?=[\\s\\p{Punct}]|$)", "5");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:sáu|sau|lục)(?=[\\s\\p{Punct}]|$)", "6");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:bảy|bay|bẩy|thất)(?=[\\s\\p{Punct}]|$)", "7");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:tám|bát)(?=[\\s\\p{Punct}]|$)", "8");
-        s = s.replaceAll("(?i)(?<=^|[\\s\\p{Punct}])(?:chín|chin|cửu)(?=[\\s\\p{Punct}]|$)", "9");
+        s = VN_WORD_0.matcher(s).replaceAll("0");
+        s = VN_WORD_1.matcher(s).replaceAll("1");
+        s = VN_WORD_2.matcher(s).replaceAll("2");
+        s = VN_WORD_3.matcher(s).replaceAll("3");
+        s = VN_WORD_4.matcher(s).replaceAll("4");
+        s = VN_WORD_5.matcher(s).replaceAll("5");
+        s = VN_WORD_6.matcher(s).replaceAll("6");
+        s = VN_WORD_7.matcher(s).replaceAll("7");
+        s = VN_WORD_8.matcher(s).replaceAll("8");
+        s = VN_WORD_9.matcher(s).replaceAll("9");
         return s;
     }
 
