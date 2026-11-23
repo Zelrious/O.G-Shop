@@ -2,6 +2,7 @@ package com.oldbutgold.shop.modules.payment.application;
 
 import com.oldbutgold.shop.modules.commerce.application.GroupCheckoutDtos.*;
 import com.oldbutgold.shop.modules.commerce.application.GroupCheckoutService;
+import com.oldbutgold.shop.modules.commerce.application.SimulatedPoApprovalTestFixture;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.*;
 import com.oldbutgold.shop.modules.payment.application.GroupPaymentDtos.*;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.*;
@@ -107,14 +108,12 @@ class GroupPaymentConcurrencyPostgresTest {
         adminId = createUser("ADMIN");
         ktvId = createUser("KTV");
         groupCheckoutService.setConfiguredMaxRedemptionPercentage("50");
-        groupCheckoutService.setCapPoApproved(true);
         groupCheckoutService.setConfiguredCanonicalPolicyCode("REWARD_CHECKOUT_STANDARD");
     }
 
     @AfterEach
     void tearDown() {
         groupCheckoutService.setConfiguredMaxRedemptionPercentage(null);
-        groupCheckoutService.setCapPoApproved(false);
         groupCheckoutService.setConfiguredCanonicalPolicyCode(null);
     }
 
@@ -287,277 +286,283 @@ class GroupPaymentConcurrencyPostgresTest {
     @Test
     @DisplayName("Case A — Duplicate IPN: Two concurrent IPNs for the same attempt result in exactly 1 confirmation & 1 debit")
     void caseA_concurrentDuplicateIpnDoesNotDoubleDebitOrConfirm() throws Exception {
-        long buyerId = createUser("BUYER");
-        long sellerId = createUser("SELLER");
+        try (var poApprovalScope = SimulatedPoApprovalTestFixture.openScope(groupCheckoutService)) {
+            long buyerId = createUser("BUYER");
+            long sellerId = createUser("SELLER");
 
-        // Give buyer 100,000 coins
-        TransactionTemplate tx = new TransactionTemplate(transactionManager);
-        tx.execute(status -> {
-            seedCoins(buyerId, 100000L);
-            return null;
-        });
+            // Give buyer 100,000 coins
+            TransactionTemplate tx = new TransactionTemplate(transactionManager);
+            tx.execute(status -> {
+                seedCoins(buyerId, 100000L);
+                return null;
+            });
 
-        CreatedProduct prod = createUc83Product(sellerId, "Concurrent Item A", new BigDecimal("200000"), 5, true);
+            CreatedProduct prod = createUc83Product(sellerId, "Concurrent Item A", new BigDecimal("200000"), 5, true);
 
-        // T1 Checkout with 50,000 coins redemption
-        GroupCheckoutRequest checkoutReq = new GroupCheckoutRequest(
-                "GRP-CONCUR-A-" + UUID.randomUUID(),
-                testAddress(),
-                "SELF_PICKUP",
-                null,
-                "VNPAY",
-                null,
-                50000L,
-                List.of(new GroupCheckoutItemRequest(prod.productId(), 1, null))
-        );
+            // T1 Checkout with 50,000 coins redemption
+            GroupCheckoutRequest checkoutReq = new GroupCheckoutRequest(
+                    "GRP-CONCUR-A-" + UUID.randomUUID(),
+                    testAddress(),
+                    "SELF_PICKUP",
+                    null,
+                    "VNPAY",
+                    null,
+                    50000L,
+                    List.of(new GroupCheckoutItemRequest(prod.productId(), 1, null))
+            );
 
-        GroupCheckoutExecutionResult checkoutResult = tx.execute(status ->
-                groupCheckoutService.executeCheckout(buyerId, checkoutReq)
-        );
-        UUID groupId = checkoutResult.response().groupId();
+            GroupCheckoutExecutionResult checkoutResult = tx.execute(status ->
+                    groupCheckoutService.executeCheckout(buyerId, checkoutReq)
+            );
+            UUID groupId = checkoutResult.response().groupId();
 
-        GroupPaymentResponse paymentResp = tx.execute(status ->
-                groupPaymentService.createGroupPayment(buyerId, groupId, "127.0.0.1")
-        );
+            GroupPaymentResponse paymentResp = tx.execute(status ->
+                    groupPaymentService.createGroupPayment(buyerId, groupId, "127.0.0.1")
+            );
 
-        Map<String, String> ipnParams = buildSignedCallback(paymentResp.txnRef(), new BigDecimal("150000"), "00", "00");
+            Map<String, String> ipnParams = buildSignedCallback(paymentResp.txnRef(), new BigDecimal("150000"), "00", "00");
 
-        // Setup real concurrency with 2 threads and CyclicBarrier
-        int threads = 2;
-        ExecutorService executor = Executors.newFixedThreadPool(threads);
-        CyclicBarrier barrier = new CyclicBarrier(threads);
-        List<Future<GroupPaymentIpnResult>> futures = new ArrayList<>();
+            // Setup real concurrency with 2 threads and CyclicBarrier
+            int threads = 2;
+            ExecutorService executor = Executors.newFixedThreadPool(threads);
+            CyclicBarrier barrier = new CyclicBarrier(threads);
+            List<Future<GroupPaymentIpnResult>> futures = new ArrayList<>();
 
-        for (int i = 0; i < threads; i++) {
-            futures.add(executor.submit(() -> {
-                barrier.await(5, TimeUnit.SECONDS);
-                TransactionTemplate threadTx = new TransactionTemplate(transactionManager);
-                return threadTx.execute(status ->
-                        groupPaymentService.processGroupPaymentIpn(ipnParams, "127.0.0.1")
-                );
-            }));
+            for (int i = 0; i < threads; i++) {
+                futures.add(executor.submit(() -> {
+                    barrier.await(5, TimeUnit.SECONDS);
+                    TransactionTemplate threadTx = new TransactionTemplate(transactionManager);
+                    return threadTx.execute(status ->
+                            groupPaymentService.processGroupPaymentIpn(ipnParams, "127.0.0.1")
+                    );
+                }));
+            }
+
+            List<GroupPaymentIpnResult> results = new ArrayList<>();
+            for (Future<GroupPaymentIpnResult> future : futures) {
+                results.add(future.get(15, TimeUnit.SECONDS));
+            }
+            executor.shutdown();
+
+            // One must succeed ("00"), other can be either "00" or already confirmed ("02")
+            assertThat(results).anyMatch(r -> "00".equals(r.rspCode()));
+
+            // Exactly 1 payment confirmation
+            List<PaymentConfirmationEntity> confirmations = paymentConfirmationRepository.findByIntentId(paymentResp.intentId());
+            assertThat(confirmations).hasSize(1);
+
+            // Exactly 1 DEBIT_CHECKOUT in reward_ledger
+            Optional<RewardLedgerEntity> debitOpt = rewardLedgerRepository.findByGroupIdAndEntryType(groupId, RewardLedgerEntity.ENTRY_DEBIT_CHECKOUT);
+            assertThat(debitOpt).isPresent();
+            assertThat(debitOpt.get().getPointsDelta()).isEqualTo(-50000L);
+
+            // Final buyer balance is exactly 50,000 (deducted exactly once, no double debit)
+            Long balance = jdbcTemplate.queryForObject("SELECT balance FROM og_compat.reward_accounts WHERE user_id = ?", Long.class, buyerId);
+            assertThat(balance).isEqualTo(50000L);
+
+            // Group is PAID
+            CheckoutGroupEntity group = checkoutGroupRepository.findById(groupId).orElseThrow();
+            assertThat(group.getState()).isEqualTo(CheckoutGroupEntity.STATE_PAID);
+
+            // Orders are PAID_HELD
+            List<OrderEntity> orders = orderRepository.findByCheckoutGroupId(groupId);
+            assertThat(orders.get(0).getStatus()).isEqualTo(OrderEntity.STATUS_PAID_HELD);
         }
-
-        List<GroupPaymentIpnResult> results = new ArrayList<>();
-        for (Future<GroupPaymentIpnResult> future : futures) {
-            results.add(future.get(15, TimeUnit.SECONDS));
-        }
-        executor.shutdown();
-
-        // One must succeed ("00"), other can be either "00" or already confirmed ("02")
-        assertThat(results).anyMatch(r -> "00".equals(r.rspCode()));
-
-        // Exactly 1 payment confirmation
-        List<PaymentConfirmationEntity> confirmations = paymentConfirmationRepository.findByIntentId(paymentResp.intentId());
-        assertThat(confirmations).hasSize(1);
-
-        // Exactly 1 DEBIT_CHECKOUT in reward_ledger
-        Optional<RewardLedgerEntity> debitOpt = rewardLedgerRepository.findByGroupIdAndEntryType(groupId, RewardLedgerEntity.ENTRY_DEBIT_CHECKOUT);
-        assertThat(debitOpt).isPresent();
-        assertThat(debitOpt.get().getPointsDelta()).isEqualTo(-50000L);
-
-        // Final buyer balance is exactly 50,000 (deducted exactly once, no double debit)
-        Long balance = jdbcTemplate.queryForObject("SELECT balance FROM og_compat.reward_accounts WHERE user_id = ?", Long.class, buyerId);
-        assertThat(balance).isEqualTo(50000L);
-
-        // Group is PAID
-        CheckoutGroupEntity group = checkoutGroupRepository.findById(groupId).orElseThrow();
-        assertThat(group.getState()).isEqualTo(CheckoutGroupEntity.STATE_PAID);
-
-        // Orders are PAID_HELD
-        List<OrderEntity> orders = orderRepository.findByCheckoutGroupId(groupId);
-        assertThat(orders.get(0).getStatus()).isEqualTo(OrderEntity.STATUS_PAID_HELD);
     }
 
     @Test
     @DisplayName("Case B — Two different txnRefs for same Group: Only 1 confirms, exactly 1 debit recorded")
     void caseB_twoDifferentTxnRefsSameGroupConcurrentOnlyOneWins() throws Exception {
-        long buyerId = createUser("BUYER");
-        long sellerId = createUser("SELLER");
+        try (var poApprovalScope = SimulatedPoApprovalTestFixture.openScope(groupCheckoutService)) {
+            long buyerId = createUser("BUYER");
+            long sellerId = createUser("SELLER");
 
-        TransactionTemplate tx = new TransactionTemplate(transactionManager);
-        tx.execute(status -> {
-            seedCoins(buyerId, 100000L);
-            return null;
-        });
+            TransactionTemplate tx = new TransactionTemplate(transactionManager);
+            tx.execute(status -> {
+                seedCoins(buyerId, 100000L);
+                return null;
+            });
 
-        CreatedProduct prod = createUc83Product(sellerId, "Concurrent Item B", new BigDecimal("100000"), 5, true);
+            CreatedProduct prod = createUc83Product(sellerId, "Concurrent Item B", new BigDecimal("100000"), 5, true);
 
-        GroupCheckoutRequest checkoutReq = new GroupCheckoutRequest(
-                "GRP-CONCUR-B-" + UUID.randomUUID(),
-                testAddress(),
-                "SELF_PICKUP",
-                null,
-                "VNPAY",
-                null,
-                20000L,
-                List.of(new GroupCheckoutItemRequest(prod.productId(), 1, null))
-        );
-
-        GroupCheckoutExecutionResult checkoutResult = tx.execute(status ->
-                groupCheckoutService.executeCheckout(buyerId, checkoutReq)
-        );
-        UUID groupId = checkoutResult.response().groupId();
-
-        // First attempt created
-        GroupPaymentResponse paymentResp1 = tx.execute(status ->
-                groupPaymentService.createGroupPayment(buyerId, groupId, "127.0.0.1")
-        );
-
-        // Mark attempt 1 as failed/cancelled to allow attempt 2 creation under uq_intent_pending_attempt
-        tx.execute(status -> {
-            PaymentAttemptEntity a1 = paymentAttemptRepository.findById(paymentResp1.attemptId()).orElseThrow();
-            a1.markFailed("Cancelled by user", Instant.now());
-            paymentAttemptRepository.saveAndFlush(a1);
-            return null;
-        });
-
-        // Second attempt created with different txnRef
-        GroupPaymentResponse paymentResp2 = tx.execute(status ->
-                groupPaymentService.createGroupPayment(buyerId, groupId, "127.0.0.1")
-        );
-        assertThat(paymentResp1.txnRef()).isNotEqualTo(paymentResp2.txnRef());
-
-        Map<String, String> ipnParams1 = buildSignedCallback(paymentResp1.txnRef(), new BigDecimal("80000"), "00", "00");
-        Map<String, String> ipnParams2 = buildSignedCallback(paymentResp2.txnRef(), new BigDecimal("80000"), "00", "00");
-
-        // Concurrent execution of both callbacks
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CyclicBarrier barrier = new CyclicBarrier(2);
-
-        Future<GroupPaymentIpnResult> future1 = executor.submit(() -> {
-            barrier.await(5, TimeUnit.SECONDS);
-            TransactionTemplate threadTx = new TransactionTemplate(transactionManager);
-            return threadTx.execute(status ->
-                    groupPaymentService.processGroupPaymentIpn(ipnParams1, "127.0.0.1")
+            GroupCheckoutRequest checkoutReq = new GroupCheckoutRequest(
+                    "GRP-CONCUR-B-" + UUID.randomUUID(),
+                    testAddress(),
+                    "SELF_PICKUP",
+                    null,
+                    "VNPAY",
+                    null,
+                    20000L,
+                    List.of(new GroupCheckoutItemRequest(prod.productId(), 1, null))
             );
-        });
 
-        Future<GroupPaymentIpnResult> future2 = executor.submit(() -> {
-            barrier.await(5, TimeUnit.SECONDS);
-            TransactionTemplate threadTx = new TransactionTemplate(transactionManager);
-            return threadTx.execute(status ->
-                    groupPaymentService.processGroupPaymentIpn(ipnParams2, "127.0.0.1")
+            GroupCheckoutExecutionResult checkoutResult = tx.execute(status ->
+                    groupCheckoutService.executeCheckout(buyerId, checkoutReq)
             );
-        });
+            UUID groupId = checkoutResult.response().groupId();
 
-        GroupPaymentIpnResult res1 = future1.get(15, TimeUnit.SECONDS);
-        GroupPaymentIpnResult res2 = future2.get(15, TimeUnit.SECONDS);
-        executor.shutdown();
+            // First attempt created
+            GroupPaymentResponse paymentResp1 = tx.execute(status ->
+                    groupPaymentService.createGroupPayment(buyerId, groupId, "127.0.0.1")
+            );
 
-        // Exactly one confirmed
-        List<PaymentConfirmationEntity> confirmations = paymentConfirmationRepository.findByIntentId(paymentResp1.intentId());
-        assertThat(confirmations).hasSize(1);
+            // Mark attempt 1 as failed/cancelled to allow attempt 2 creation under uq_intent_pending_attempt
+            tx.execute(status -> {
+                PaymentAttemptEntity a1 = paymentAttemptRepository.findById(paymentResp1.attemptId()).orElseThrow();
+                a1.markFailed("Cancelled by user", Instant.now());
+                paymentAttemptRepository.saveAndFlush(a1);
+                return null;
+            });
 
-        // Exactly one DEBIT_CHECKOUT in reward_ledger
-        Optional<RewardLedgerEntity> debitOpt = rewardLedgerRepository.findByGroupIdAndEntryType(groupId, RewardLedgerEntity.ENTRY_DEBIT_CHECKOUT);
-        assertThat(debitOpt).isPresent();
-        assertThat(debitOpt.get().getPointsDelta()).isEqualTo(-20000L);
+            // Second attempt created with different txnRef
+            GroupPaymentResponse paymentResp2 = tx.execute(status ->
+                    groupPaymentService.createGroupPayment(buyerId, groupId, "127.0.0.1")
+            );
+            assertThat(paymentResp1.txnRef()).isNotEqualTo(paymentResp2.txnRef());
 
-        // Buyer balance is exactly 80,000 (100k - 20k)
-        Long balance = jdbcTemplate.queryForObject("SELECT balance FROM og_compat.reward_accounts WHERE user_id = ?", Long.class, buyerId);
-        assertThat(balance).isEqualTo(80000L);
+            Map<String, String> ipnParams1 = buildSignedCallback(paymentResp1.txnRef(), new BigDecimal("80000"), "00", "00");
+            Map<String, String> ipnParams2 = buildSignedCallback(paymentResp2.txnRef(), new BigDecimal("80000"), "00", "00");
 
-        // Group is PAID
-        CheckoutGroupEntity group = checkoutGroupRepository.findById(groupId).orElseThrow();
-        assertThat(group.getState()).isEqualTo(CheckoutGroupEntity.STATE_PAID);
+            // Concurrent execution of both callbacks
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            CyclicBarrier barrier = new CyclicBarrier(2);
+
+            Future<GroupPaymentIpnResult> future1 = executor.submit(() -> {
+                barrier.await(5, TimeUnit.SECONDS);
+                TransactionTemplate threadTx = new TransactionTemplate(transactionManager);
+                return threadTx.execute(status ->
+                        groupPaymentService.processGroupPaymentIpn(ipnParams1, "127.0.0.1")
+                );
+            });
+
+            Future<GroupPaymentIpnResult> future2 = executor.submit(() -> {
+                barrier.await(5, TimeUnit.SECONDS);
+                TransactionTemplate threadTx = new TransactionTemplate(transactionManager);
+                return threadTx.execute(status ->
+                        groupPaymentService.processGroupPaymentIpn(ipnParams2, "127.0.0.1")
+                );
+            });
+
+            GroupPaymentIpnResult res1 = future1.get(15, TimeUnit.SECONDS);
+            GroupPaymentIpnResult res2 = future2.get(15, TimeUnit.SECONDS);
+            executor.shutdown();
+
+            // Exactly one confirmed
+            List<PaymentConfirmationEntity> confirmations = paymentConfirmationRepository.findByIntentId(paymentResp1.intentId());
+            assertThat(confirmations).hasSize(1);
+
+            // Exactly one DEBIT_CHECKOUT in reward_ledger
+            Optional<RewardLedgerEntity> debitOpt = rewardLedgerRepository.findByGroupIdAndEntryType(groupId, RewardLedgerEntity.ENTRY_DEBIT_CHECKOUT);
+            assertThat(debitOpt).isPresent();
+            assertThat(debitOpt.get().getPointsDelta()).isEqualTo(-20000L);
+
+            // Buyer balance is exactly 80,000 (100k - 20k)
+            Long balance = jdbcTemplate.queryForObject("SELECT balance FROM og_compat.reward_accounts WHERE user_id = ?", Long.class, buyerId);
+            assertThat(balance).isEqualTo(80000L);
+
+            // Group is PAID
+            CheckoutGroupEntity group = checkoutGroupRepository.findById(groupId).orElseThrow();
+            assertThat(group.getState()).isEqualTo(CheckoutGroupEntity.STATE_PAID);
+        }
     }
 
     @Test
     @DisplayName("Case C — Coin balance depleted before T2: Rejects payment, does not mark PAID, preserves balance")
     void caseC_insufficientCoinAtT2RejectsPaymentAndPreservesBalance() {
-        long buyerId = createUser("BUYER");
-        long sellerId = createUser("SELLER");
+        try (var poApprovalScope = SimulatedPoApprovalTestFixture.openScope(groupCheckoutService)) {
+            long buyerId = createUser("BUYER");
+            long sellerId = createUser("SELLER");
 
-        TransactionTemplate tx = new TransactionTemplate(transactionManager);
-        tx.execute(status -> {
-            seedCoins(buyerId, 100000L);
-            return null;
-        });
+            TransactionTemplate tx = new TransactionTemplate(transactionManager);
+            tx.execute(status -> {
+                seedCoins(buyerId, 100000L);
+                return null;
+            });
 
-        CreatedProduct prod = createUc83Product(sellerId, "Insufficient Coin Item", new BigDecimal("100000"), 5, true);
+            CreatedProduct prod = createUc83Product(sellerId, "Insufficient Coin Item", new BigDecimal("100000"), 5, true);
 
-        // T1 Checkout with 50,000 coins redemption (valid at T1)
-        GroupCheckoutRequest checkoutReq = new GroupCheckoutRequest(
-                "GRP-INSUF-" + UUID.randomUUID(),
-                testAddress(),
-                "SELF_PICKUP",
-                null,
-                "VNPAY",
-                null,
-                50000L,
-                List.of(new GroupCheckoutItemRequest(prod.productId(), 1, null))
-        );
+            // T1 Checkout with 50,000 coins redemption (valid at T1)
+            GroupCheckoutRequest checkoutReq = new GroupCheckoutRequest(
+                    "GRP-INSUF-" + UUID.randomUUID(),
+                    testAddress(),
+                    "SELF_PICKUP",
+                    null,
+                    "VNPAY",
+                    null,
+                    50000L,
+                    List.of(new GroupCheckoutItemRequest(prod.productId(), 1, null))
+            );
 
-        GroupCheckoutExecutionResult checkoutResult = tx.execute(status ->
-                groupCheckoutService.executeCheckout(buyerId, checkoutReq)
-        );
-        UUID groupId = checkoutResult.response().groupId();
+            GroupCheckoutExecutionResult checkoutResult = tx.execute(status ->
+                    groupCheckoutService.executeCheckout(buyerId, checkoutReq)
+            );
+            UUID groupId = checkoutResult.response().groupId();
 
-        GroupPaymentResponse paymentResp = tx.execute(status ->
-                groupPaymentService.createGroupPayment(buyerId, groupId, "127.0.0.1")
-        );
+            GroupPaymentResponse paymentResp = tx.execute(status ->
+                    groupPaymentService.createGroupPayment(buyerId, groupId, "127.0.0.1")
+            );
 
-        // Before T2 IPN arrives: simulate buyer spent coins elsewhere, depleting balance to 10,000 (< 50,000)
-        tx.execute(status -> {
-            adjustCoins(buyerId, -90000L);
-            return null;
-        });
+            // Before T2 IPN arrives: simulate buyer spent coins elsewhere, depleting balance to 10,000 (< 50,000)
+            tx.execute(status -> {
+                adjustCoins(buyerId, -90000L);
+                return null;
+            });
 
-        Long currentBalance = jdbcTemplate.queryForObject("SELECT balance FROM og_compat.reward_accounts WHERE user_id = ?", Long.class, buyerId);
-        assertThat(currentBalance).isEqualTo(10000L);
+            Long currentBalance = jdbcTemplate.queryForObject("SELECT balance FROM og_compat.reward_accounts WHERE user_id = ?", Long.class, buyerId);
+            assertThat(currentBalance).isEqualTo(10000L);
 
-        // IPN arrives at T2
-        Map<String, String> ipnParams = buildSignedCallback(paymentResp.txnRef(), new BigDecimal("50000"), "00", "00");
-        GroupPaymentIpnResult ipnResult = tx.execute(status ->
-                groupPaymentService.processGroupPaymentIpn(ipnParams, "127.0.0.1")
-        );
+            // IPN arrives at T2
+            Map<String, String> ipnParams = buildSignedCallback(paymentResp.txnRef(), new BigDecimal("50000"), "00", "00");
+            GroupPaymentIpnResult ipnResult = tx.execute(status ->
+                    groupPaymentService.processGroupPaymentIpn(ipnParams, "127.0.0.1")
+            );
 
-        // T2 rejects payment due to insufficient coin balance
-        assertThat(ipnResult.rspCode()).isEqualTo("04");
+            // T2 rejects payment due to insufficient coin balance
+            assertThat(ipnResult.rspCode()).isEqualTo("04");
 
-        // Attempt is marked FAILED
-        PaymentAttemptEntity attempt = paymentAttemptRepository.findById(paymentResp.attemptId()).orElseThrow();
-        assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptEntity.STATUS_FAILED);
+            // Attempt is marked FAILED
+            PaymentAttemptEntity attempt = paymentAttemptRepository.findById(paymentResp.attemptId()).orElseThrow();
+            assertThat(attempt.getStatus()).isEqualTo(PaymentAttemptEntity.STATUS_FAILED);
 
-        // Group is NOT PAID, remains READY
-        CheckoutGroupEntity group = checkoutGroupRepository.findById(groupId).orElseThrow();
-        assertThat(group.getState()).isEqualTo(CheckoutGroupEntity.STATE_READY);
+            // Group is NOT PAID, remains READY
+            CheckoutGroupEntity group = checkoutGroupRepository.findById(groupId).orElseThrow();
+            assertThat(group.getState()).isEqualTo(CheckoutGroupEntity.STATE_READY);
 
-        // Orders are NOT PAID_HELD, remain PAYMENT_PENDING
-        List<OrderEntity> orders = orderRepository.findByCheckoutGroupId(groupId);
-        assertThat(orders.get(0).getStatus()).isEqualTo(OrderEntity.STATUS_PAYMENT_PENDING);
+            // Orders are NOT PAID_HELD, remain PAYMENT_PENDING
+            List<OrderEntity> orders = orderRepository.findByCheckoutGroupId(groupId);
+            assertThat(orders.get(0).getStatus()).isEqualTo(OrderEntity.STATUS_PAYMENT_PENDING);
 
-        // No DEBIT_CHECKOUT was recorded for this group
-        Optional<RewardLedgerEntity> debitOpt = rewardLedgerRepository.findByGroupIdAndEntryType(groupId, RewardLedgerEntity.ENTRY_DEBIT_CHECKOUT);
-        assertThat(debitOpt).isEmpty();
+            // No DEBIT_CHECKOUT was recorded for this group
+            Optional<RewardLedgerEntity> debitOpt = rewardLedgerRepository.findByGroupIdAndEntryType(groupId, RewardLedgerEntity.ENTRY_DEBIT_CHECKOUT);
+            assertThat(debitOpt).isEmpty();
 
-        // Balance remains 10,000 (NOT negative)
-        Long postBalance = jdbcTemplate.queryForObject("SELECT balance FROM og_compat.reward_accounts WHERE user_id = ?", Long.class, buyerId);
-        assertThat(postBalance).isEqualTo(10000L);
+            // Balance remains 10,000 (NOT negative)
+            Long postBalance = jdbcTemplate.queryForObject("SELECT balance FROM og_compat.reward_accounts WHERE user_id = ?", Long.class, buyerId);
+            assertThat(postBalance).isEqualTo(10000L);
 
-        // Cash payment evidence is preserved in payment_confirmations with disposition RECONCILIATION
-        Optional<PaymentConfirmationEntity> confOpt = paymentConfirmationRepository.findByAttemptId(paymentResp.attemptId());
-        assertThat(confOpt).isPresent();
-        assertThat(confOpt.get().getAmount()).isEqualByComparingTo(new BigDecimal("50000"));
-        assertThat(confOpt.get().getDisposition()).isEqualTo(PaymentConfirmationEntity.DISPOSITION_RECONCILIATION);
+            // Cash payment evidence is preserved in payment_confirmations with disposition RECONCILIATION
+            Optional<PaymentConfirmationEntity> confOpt = paymentConfirmationRepository.findByAttemptId(paymentResp.attemptId());
+            assertThat(confOpt).isPresent();
+            assertThat(confOpt.get().getAmount()).isEqualByComparingTo(new BigDecimal("50000"));
+            assertThat(confOpt.get().getDisposition()).isEqualTo(PaymentConfirmationEntity.DISPOSITION_RECONCILIATION);
 
-        // Manual reconciliation case is created for Ops/Accounting
-        String dedupKey = "REC:INSUFFICIENT_COIN:" + paymentResp.intentId();
-        Optional<PaymentReconciliationCaseEntity> caseOpt = paymentReconciliationCaseRepository.findByDedupKey(dedupKey);
-        assertThat(caseOpt).isPresent();
-        assertThat(caseOpt.get().getStatus()).isEqualTo(PaymentReconciliationCaseEntity.STATUS_OPEN);
-        assertThat(caseOpt.get().getCaseType()).isEqualTo(PaymentReconciliationCaseEntity.CASE_LATE_SUCCESS_ON_FAILED);
+            // Manual reconciliation case is created for Ops/Accounting
+            String dedupKey = "REC:INSUFFICIENT_COIN:" + paymentResp.intentId();
+            Optional<PaymentReconciliationCaseEntity> caseOpt = paymentReconciliationCaseRepository.findByDedupKey(dedupKey);
+            assertThat(caseOpt).isPresent();
+            assertThat(caseOpt.get().getStatus()).isEqualTo(PaymentReconciliationCaseEntity.STATUS_OPEN);
+            assertThat(caseOpt.get().getCaseType()).isEqualTo(PaymentReconciliationCaseEntity.CASE_LATE_SUCCESS_ON_FAILED);
 
-        // Duplicate IPN callback returns "02" without duplicating confirmation or case
-        GroupPaymentIpnResult dupResult = tx.execute(status ->
-                groupPaymentService.processGroupPaymentIpn(ipnParams, "127.0.0.1")
-        );
-        assertThat(dupResult.rspCode()).isEqualTo("02");
-        assertThat(paymentConfirmationRepository.findByIntentId(paymentResp.intentId())).hasSize(1);
-        assertThat(paymentReconciliationCaseRepository.findAll().stream()
-                .filter(c -> dedupKey.equals(c.getDedupKey()))
-                .count()).isEqualTo(1);
+            // Duplicate IPN callback returns "02" without duplicating confirmation or case
+            GroupPaymentIpnResult dupResult = tx.execute(status ->
+                    groupPaymentService.processGroupPaymentIpn(ipnParams, "127.0.0.1")
+            );
+            assertThat(dupResult.rspCode()).isEqualTo("02");
+            assertThat(paymentConfirmationRepository.findByIntentId(paymentResp.intentId())).hasSize(1);
+            assertThat(paymentReconciliationCaseRepository.findAll().stream()
+                    .filter(c -> dedupKey.equals(c.getDedupKey()))
+                    .count()).isEqualTo(1);
+        }
     }
 
     @Test

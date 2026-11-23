@@ -82,4 +82,30 @@ class V55MigrationStaticTest {
         assertThat(v55Content).contains("shipping_ghn_province_id%shipping_ghn_district_id%shipping_ghn_ward_code%");
         assertThat(v55Content).contains("reward_policy_id%");
     }
+
+    @Test
+    @DisplayName("Safety guard rejects migration verification on shared database (port 54432)")
+    void testSafetyGuardRejectsSharedDbPort() {
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() ->
+                V55DualMigrationVerificationPostgresTest.assertSafeMigrationVerificationEnvironment(
+                        "localhost:54432",
+                        "jdbc:postgresql://localhost:54432/og_shop_v55_clean_verify_test",
+                        "jdbc:postgresql://localhost:54432/og_shop_v55_upgrade_verify_test"
+                )
+        )).isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("shared database");
+    }
+
+    @Test
+    @DisplayName("Safety guard rejects migration verification on dev database (port 5433)")
+    void testSafetyGuardRejectsDevDbPort() {
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() ->
+                V55DualMigrationVerificationPostgresTest.assertSafeMigrationVerificationEnvironment(
+                        "localhost:5433",
+                        "jdbc:postgresql://localhost:5433/og_shop_v55_clean_verify_test",
+                        "jdbc:postgresql://localhost:5433/og_shop_v55_upgrade_verify_test"
+                )
+        )).isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("development database");
+    }
 }

@@ -83,7 +83,7 @@ class CaseEvidenceRequestConcurrencyPostgresTest {
         registry.add("spring.datasource.url", () -> url);
         registry.add("spring.datasource.username", () -> System.getenv("OGSHOP_TEST_DB_USER"));
         registry.add("spring.datasource.password", () -> System.getenv("OGSHOP_TEST_DB_PASSWORD"));
-        registry.add("spring.datasource.hikari.connection-init-sql", () -> "SET search_path TO og_compat,public");
+        registry.add("spring.datasource.hikari.connection-init-sql", () -> "SET search_path TO public,og_compat");
         registry.add("spring.flyway.enabled", PostgresTestSafetyGuard::isFlywayOptInEnabled);
         registry.add("spring.flyway.schemas", () -> "public");
         registry.add("spring.flyway.default-schema", () -> "public");
@@ -349,6 +349,14 @@ class CaseEvidenceRequestConcurrencyPostgresTest {
                      UUID.randomUUID(), shipId, fSellerId, "CMD_HCS_" + UUID.randomUUID());
 
         jdbcTemplate.queryForObject("SELECT og_confirm_direct_handover(?)", Boolean.class, shipId);
+        jdbcTemplate.update("""
+                UPDATE public.shipments
+                SET valid_delivery_at = (SELECT valid_delivered_at FROM og_compat.orders WHERE order_id = ?),
+                    status = 'DELIVERED',
+                    delivered_at = (SELECT valid_delivered_at FROM og_compat.orders WHERE order_id = ?),
+                    shipped_at = COALESCE(shipped_at, initiated_at)
+                WHERE shipment_id = ?
+                """, oid, oid, shipId);
 
         return new Uc83OrderFixture(oid, cashComponentId, null);
     }
@@ -358,46 +366,59 @@ class CaseEvidenceRequestConcurrencyPostgresTest {
     private TestFixture createEligibleCaseFixture(boolean isExpired) {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        return tx.execute(status -> {
+
+        record Stage1(Long buyerId, Long sellerId, Uc83OrderFixture fixture) {}
+        Stage1 s1 = tx.execute(status -> {
             Long fBuyerId = createTestUser("buyer");
             Long fSellerId = createTestUser("seller");
             grantRole(fBuyerId, "BUYER");
             grantRole(fSellerId, "SELLER");
-
             Uc83OrderFixture fixture = createCommittedUc83Order(fBuyerId, fSellerId);
+            return new Stage1(fBuyerId, fSellerId, fixture);
+        });
+
+        record Stage2(Long caseId) {}
+        Stage2 s2 = tx.execute(status -> {
             ReturnCaseDtos.CreateReturnRequest createReq = new ReturnCaseDtos.CreateReturnRequest(
                     ReturnReasonCode.DAMAGED_OR_DEFECTIVE,
                     "Lỗi phần cứng",
                     List.of(),
                     "CMD_CREATE_" + UUID.randomUUID()
             );
-            ReturnCaseDtos.ReturnCaseDetailResponse createdCase = returnCaseService.createReturnRequest(fBuyerId, fixture.orderId(), createReq);
-            returnCaseService.sellerRespondRound1(fSellerId, createdCase.caseId(), new ReturnCaseDtos.SellerRound1ResponseRequest(
+            ReturnCaseDtos.ReturnCaseDetailResponse createdCase = returnCaseService.createReturnRequest(s1.buyerId(), s1.fixture().orderId(), createReq);
+            returnCaseService.sellerRespondRound1(s1.sellerId(), createdCase.caseId(), new ReturnCaseDtos.SellerRound1ResponseRequest(
                     CaseDecisionEntity.OUTCOME_APPROVE_RETURN,
                     "Đồng ý trả",
                     "CMD_SELLER_" + UUID.randomUUID()
             ));
+            return new Stage2(createdCase.caseId());
+        });
 
+        record Stage3(Long shipmentId) {}
+        Stage3 s3 = tx.execute(status -> {
             ReturnCaseDtos.SubmitReturnShipmentRequest shipReq = new ReturnCaseDtos.SubmitReturnShipmentRequest(
                     "CARRIER",
                     "GHN",
                     "GHN-R2-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10),
                     "CMD_SHIP_" + UUID.randomUUID()
             );
-            ReturnCaseDtos.ReturnCaseDetailResponse submittedCase = returnCaseService.submitReturnShipment(fBuyerId, createdCase.caseId(), shipReq);
-            Long shipmentId = submittedCase.returnShipment().shipmentId();
+            ReturnCaseDtos.ReturnCaseDetailResponse submittedCase = returnCaseService.submitReturnShipment(s1.buyerId(), s2.caseId(), shipReq);
+            return new Stage3(submittedCase.returnShipment().shipmentId());
+        });
 
-            // Confirm delivery to enter POST_RETURN
-            returnCaseService.confirmReturnDeliveryByCarrier(createdCase.caseId(), shipmentId, Instant.now());
+        tx.executeWithoutResult(status -> {
+            returnCaseService.confirmReturnDeliveryByCarrier(s2.caseId(), s3.shipmentId(), Instant.now());
+        });
 
+        return tx.execute(status -> {
             Long round2Id = jdbcTemplate.queryForObject(
                     "SELECT round_id FROM og_compat.case_rounds WHERE case_id = ? AND round_no = 2",
                     Long.class,
-                    createdCase.caseId()
+                    s2.caseId()
             );
 
             // Assign KTV to case
-            jdbcTemplate.update("UPDATE og_compat.cases SET assigned_to = ? WHERE case_id = ?", ktvId, createdCase.caseId());
+            jdbcTemplate.update("UPDATE og_compat.cases SET assigned_to = ? WHERE case_id = ?", ktvId, s2.caseId());
 
             // Set valid_damage_request_at for Round 2 (Batch 1 submitted)
             jdbcTemplate.update("UPDATE og_compat.case_rounds SET valid_damage_request_at = CURRENT_TIMESTAMP WHERE round_id = ?", round2Id);
@@ -406,17 +427,17 @@ class CaseEvidenceRequestConcurrencyPostgresTest {
             if (isExpired) {
                 Timestamp validReturned = Timestamp.from(Instant.now().minus(3, ChronoUnit.DAYS));
                 Timestamp approvedAt = Timestamp.from(Instant.now().minus(4, ChronoUnit.DAYS));
-                jdbcTemplate.update("UPDATE og_compat.shipments SET valid_delivery_at = ? WHERE shipment_id = ?", validReturned, shipmentId);
+                jdbcTemplate.update("UPDATE public.shipments SET valid_delivery_at = ? WHERE shipment_id = ?", validReturned, s3.shipmentId());
                 jdbcTemplate.update("""
                         UPDATE og_compat.cases
                         SET approved_at = ?,
                             valid_returned_at = ?,
                             seller_response_due_at = (?::timestamptz + INTERVAL '2 days')
                         WHERE case_id = ?
-                        """, approvedAt, validReturned, validReturned, createdCase.caseId());
+                        """, approvedAt, validReturned, validReturned, s2.caseId());
             }
 
-            return new TestFixture(fixture.orderId(), createdCase.caseId(), round2Id, fSellerId);
+            return new TestFixture(s1.fixture().orderId(), s2.caseId(), round2Id, s1.sellerId());
         });
     }
 

@@ -506,10 +506,9 @@ class CheckoutIdempotencyPostgresTest {
         long coinsToRedeem = 5000L;
         System.setProperty("app.reward.canonical-policy-code", "REWARD_CHECKOUT_STANDARD");
         checkoutService.setMaxRedemptionPercentage("50");
-        checkoutService.setCapPoApproved(true);
         CheckoutDtos.BuyNowRequest request = new CheckoutDtos.BuyNowRequest(productId, addressId, null, null, null, coinsToRedeem, cmdKey);
 
-        try {
+        try (var poApprovalScope = SimulatedPoApprovalTestFixture.openScope(checkoutService)) {
             // Spy: Throw mid-flight exception at reserveProduct (after idempotency entry, Order, OrderItem, and Coin Debit, before TX commit)
             doThrow(new RuntimeException("Simulated mid-flight crash before transaction commit"))
                     .when(catalogCommerceFacade).reserveProduct(anyLong(), anyLong(), any(), any());
@@ -624,7 +623,6 @@ class CheckoutIdempotencyPostgresTest {
         } finally {
             System.clearProperty("app.reward.canonical-policy-code");
             checkoutService.setMaxRedemptionPercentage(null);
-            checkoutService.setCapPoApproved(false);
         }
     }
 }

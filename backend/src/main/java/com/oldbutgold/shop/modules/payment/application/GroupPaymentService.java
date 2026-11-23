@@ -256,8 +256,11 @@ public class GroupPaymentService {
                 return new GroupPaymentIpnResult("02", "Order already confirmed or expired", attempt.getIntentId(), "RECONCILIATION");
             }
 
-            // Check if there is an active PENDING or SUCCESS attempt for this intent (e.g. concurrent attempt in case B)
-            Optional<PaymentAttemptEntity> pendingAttemptOpt = paymentAttemptRepository.findByIntentIdAndStatusForUpdate(attempt.getIntentId(), PaymentAttemptEntity.STATUS_PENDING);
+            // Check if there is an active PENDING or SUCCESS attempt for this intent (e.g. concurrent attempt in case B).
+            // Read without FOR UPDATE here: this branch already holds pg_advisory_xact_lock(700048) (via rawReceipt insert)
+            // and the parent CheckoutGroup lock, whereas an active PENDING transaction holds RowLock(Attempt) before acquiring
+            // 700048 — locking Attempt here would invert lock order and cause 40P01 deadlock.
+            Optional<PaymentAttemptEntity> pendingAttemptOpt = paymentAttemptRepository.findByIntentIdAndStatus(attempt.getIntentId(), PaymentAttemptEntity.STATUS_PENDING);
             if (pendingAttemptOpt.isPresent() && !pendingAttemptOpt.get().getId().equals(attempt.getId())) {
                 return new GroupPaymentIpnResult("02", "Another active attempt is pending for this order", attempt.getIntentId(), "RECONCILIATION");
             }

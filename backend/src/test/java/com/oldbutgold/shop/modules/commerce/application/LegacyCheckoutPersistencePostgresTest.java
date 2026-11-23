@@ -188,15 +188,13 @@ class LegacyCheckoutPersistencePostgresTest {
         System.setProperty("app.reward.canonical-policy-code", "REWARD_CHECKOUT_STANDARD");
         // DEC-10.7A: cap must be configured; using 50% for this test scenario
         checkoutService.setMaxRedemptionPercentage("50");
-        checkoutService.setCapPoApproved(true);
         CheckoutDtos.OrderCreatedResponse response;
-        try {
+        try (var poApprovalScope = SimulatedPoApprovalTestFixture.openScope(checkoutService)) {
             var request = new BuyNowRequest(productId, buyerAddressId, null, null, null, coinsToRedeem, "LEGACY-COIN-" + UUID.randomUUID());
             response = checkoutService.buyNow(buyerId, request);
         } finally {
             System.clearProperty("app.reward.canonical-policy-code");
             checkoutService.setMaxRedemptionPercentage(null);
-            checkoutService.setCapPoApproved(false);
         }
 
         assertThat(response).isNotNull();
@@ -250,8 +248,7 @@ class LegacyCheckoutPersistencePostgresTest {
 
         System.setProperty("app.reward.canonical-policy-code", "NON_EXISTENT_POLICY_CODE");
         checkoutService.setMaxRedemptionPercentage("50");
-        checkoutService.setCapPoApproved(true);
-        try {
+        try (var poApprovalScope = SimulatedPoApprovalTestFixture.openScope(checkoutService)) {
             var request = new BuyNowRequest(productId, buyerAddressId, null, null, null, 5000L, "FAIL-COIN-" + UUID.randomUUID());
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> checkoutService.buyNow(buyerId, request))
                     .isInstanceOf(IllegalStateException.class)
@@ -259,7 +256,6 @@ class LegacyCheckoutPersistencePostgresTest {
         } finally {
             System.clearProperty("app.reward.canonical-policy-code");
             checkoutService.setMaxRedemptionPercentage(null);
-            checkoutService.setCapPoApproved(false);
         }
     }
 
@@ -286,17 +282,15 @@ class LegacyCheckoutPersistencePostgresTest {
         );
 
         checkoutService.setMaxRedemptionPercentage("50");
-        checkoutService.setCapPoApproved(true);
         System.clearProperty("app.reward.canonical-policy-code");
         checkoutService.setCanonicalRewardPolicyCode(null);
-        try {
+        try (var poApprovalScope = SimulatedPoApprovalTestFixture.openScope(checkoutService)) {
             var request = new BuyNowRequest(productId, buyerAddressId, null, null, null, 5000L, "FAIL-NO-CONFIG-" + UUID.randomUUID());
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> checkoutService.buyNow(buyerId, request))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("Missing explicit configuration for canonical reward policy code");
         } finally {
             checkoutService.setMaxRedemptionPercentage(null);
-            checkoutService.setCapPoApproved(false);
         }
     }
 

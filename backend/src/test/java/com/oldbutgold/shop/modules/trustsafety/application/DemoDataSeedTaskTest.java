@@ -4,12 +4,15 @@ import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseDe
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseEntity;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseRoundEntity;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.ReturnReasonCode;
-import org.junit.jupiter.api.Disabled;
+import com.oldbutgold.shop.shared.PostgresTestSafetyGuard;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -20,12 +23,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@Disabled("Manual developer seed script targeting local og_shop on port 55432; enable manually only when seeding demo data")
 @SpringBootTest
+@EnabledIfEnvironmentVariable(named = "ENABLE_DEMO_SEED", matches = "true")
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:postgresql://localhost:55432/og_shop",
-        "spring.datasource.username=og_shop",
-        "spring.datasource.password=root",
         "spring.jpa.hibernate.ddl-auto=none",
         "app.scheduling.return-reconciliation.enabled=false",
         "app.ghn.shop-id=229762",
@@ -35,6 +35,16 @@ import static org.assertj.core.api.Assertions.assertThat;
         "app.vnpay.hash-secret=DUMMY"
 })
 class DemoDataSeedTaskTest {
+
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        String url = PostgresTestSafetyGuard.resolveAndAssertSafeDemoSeedFromEnv();
+        var credentials = PostgresTestSafetyGuard.resolveAndAssertSafeDemoSeedCredentialsFromEnv();
+        registry.add("spring.datasource.url", () -> url);
+        registry.add("spring.datasource.username", credentials::username);
+        registry.add("spring.datasource.password", credentials::password);
+        registry.add("spring.datasource.hikari.connection-init-sql", () -> "SET search_path TO og_compat,public");
+    }
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -46,7 +56,7 @@ class DemoDataSeedTaskTest {
     private ReturnCaseService returnCaseService;
 
     @Test
-    @DisplayName("Seed Demo Case in POST_RETURN state on og_shop (port 55432)")
+    @DisplayName("Seed Demo Case in POST_RETURN state on verified isolated test database")
     void seedDemoData() {
         Long buyerId = 1L;
         Long sellerId = 2L;
