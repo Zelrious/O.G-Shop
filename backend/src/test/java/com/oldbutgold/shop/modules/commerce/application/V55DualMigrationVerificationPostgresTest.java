@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -14,33 +15,50 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import javax.sql.DataSource;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verification of V55 Dual-Path Migrations (renumbered from V51) and og70_write_view() convergence.
+ * Verification of V55–V57 Dual-Path Migrations and og70_write_view() / og70_dispatch() convergence.
  *
- * <p>Enforces strict execution against an isolated PostgreSQL test database (resolves host/port/credentials
- * dynamically from OGSHOP_TEST_DB_URL / OGSHOP_TEST_DB_USER / OGSHOP_TEST_DB_PASSWORD, with safe defaults).
- * Verifies:
- * 1. Clean Path A: V1 -> V56 on fresh database (og_shop_v55_clean_test).
- * 2. Upgrade Path B: V1 -> V40 (main baseline), then V41..V56 on (og_shop_v55_upgrade_test).
- * 3. Flyway checksum preservation for V48 and flyway validate success on both paths.
- * 4. 100% convergence (0 diff, matching SHA-256) of og70_write_view() between Path A and Path B.
+ * <p>OPT-IN EXECUTION ONLY:
+ * This verification drops and recreates dedicated migration test databases.
+ * It is strictly isolated from the default backend regression test suite via:
+ * 1. Maven profile 'migration-verification' (excluded from default surefire).
+ * 2. JUnit tag 'migration-verification'.
+ * 3. Environment gate OGSHOP_MIGRATION_VERIFY_ENABLED=true.
+ * 4. Dedicated instance configuration via OGSHOP_MIGRATION_VERIFY_HOST_PORT.
+ * 5. Strict safety guard preventing execution against shared DB (54432), dev DB (5433),
+ *    protected DBs, or the active backend integration-test DB (OGSHOP_TEST_DB_URL).
+ *
+ * <p>Verifies:
+ * 1. Clean Path A: V1 -> V57 on fresh database (og_shop_v55_clean_verify_test).
+ * 2. Upgrade Path B: V1 -> V40 (main baseline), then V41..V57 on (og_shop_v55_upgrade_verify_test).
+ * 3. Flyway checksum preservation for V48, V49, V57 and flyway validate success on both paths.
+ * 4. 100% convergence (0 diff, matching SHA-256) of og70_write_view() AND og70_dispatch() between Path A and Path B.
  * 5. Functional compatibility writes on all 4 repaired branches plus reward_ledger (CREDIT_REFUND & V56 CREDIT_REVIEW).
  */
+@Tag("migration-verification")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-@EnabledIfEnvironmentVariable(named = "OGSHOP_TEST_DB_ISOLATED", matches = "true")
+@EnabledIfEnvironmentVariable(named = "OGSHOP_MIGRATION_VERIFY_ENABLED", matches = "true")
 class V55DualMigrationVerificationPostgresTest {
 
-    private static final String CLEAN_DB_NAME = "og_shop_v55_clean_test";
-    private static final String UPGRADE_DB_NAME = "og_shop_v55_upgrade_test";
+    public static final String ENV_MIGRATION_VERIFY_ENABLED = "OGSHOP_MIGRATION_VERIFY_ENABLED";
+    public static final String ENV_MIGRATION_VERIFY_HOST_PORT = "OGSHOP_MIGRATION_VERIFY_HOST_PORT";
+    public static final String ENV_MIGRATION_VERIFY_USER = "OGSHOP_MIGRATION_VERIFY_USER";
+    public static final String ENV_MIGRATION_VERIFY_PASSWORD = "OGSHOP_MIGRATION_VERIFY_PASSWORD";
+
+    private static final String CLEAN_DB_NAME = "og_shop_v55_clean_verify_test";
+    private static final String UPGRADE_DB_NAME = "og_shop_v55_upgrade_verify_test";
 
     private static DataSource cleanDataSource;
     private static DataSource upgradeDataSource;
@@ -48,39 +66,39 @@ class V55DualMigrationVerificationPostgresTest {
     private static JdbcTemplate cleanJdbc;
     private static JdbcTemplate upgradeJdbc;
 
-    private static String resolveJdbcUrlForDb(String targetDb) {
-        String envUrl = System.getenv(PostgresTestSafetyGuard.ENV_TEST_DB_URL);
-        String baseUrl = (envUrl != null && !envUrl.isBlank())
-                ? envUrl.trim()
-                : "jdbc:postgresql://localhost:55432/postgres";
-        int schemeIdx = baseUrl.indexOf("://");
-        int pathStart = baseUrl.indexOf('/', schemeIdx + 3);
-        int queryStart = baseUrl.indexOf('?', pathStart);
-        String prefix = baseUrl.substring(0, pathStart + 1);
-        String suffix = queryStart >= 0 ? baseUrl.substring(queryStart) : "";
-        return prefix + targetDb + suffix;
-    }
-
-    private static String resolveDbUser() {
-        String user = System.getenv("OGSHOP_TEST_DB_USER");
-        return (user != null && !user.isBlank()) ? user.trim() : "og_shop";
-    }
-
-    private static String resolveDbPassword() {
-        String pass = System.getenv("OGSHOP_TEST_DB_PASSWORD");
-        return pass != null ? pass : "root";
-    }
-
     @BeforeAll
     static void setUp() {
-        String cleanJdbcUrl = PostgresTestSafetyGuard.assertSafeTestDatabase(resolveJdbcUrlForDb(CLEAN_DB_NAME), "true");
-        String upgradeJdbcUrl = PostgresTestSafetyGuard.assertSafeTestDatabase(resolveJdbcUrlForDb(UPGRADE_DB_NAME), "true");
-        String rootJdbcUrl = resolveJdbcUrlForDb("postgres");
-        String dbUser = resolveDbUser();
-        String dbPass = resolveDbPassword();
+        String hostPort = System.getenv(ENV_MIGRATION_VERIFY_HOST_PORT);
+        if (hostPort == null || hostPort.isBlank()) {
+            throw new IllegalStateException(
+                    "Migration verification aborted: Dedicated PostgreSQL host:port must be configured via environment variable "
+                    + ENV_MIGRATION_VERIFY_HOST_PORT + " (e.g. localhost:55332). "
+                    + "Automatic fallback to default ports is strictly prohibited."
+            );
+        }
+        hostPort = hostPort.trim();
 
-        DataSource rootDs = new DriverManagerDataSource(rootJdbcUrl, dbUser, dbPass);
+        String dbUser = System.getenv(ENV_MIGRATION_VERIFY_USER);
+        if (dbUser == null || dbUser.isBlank()) {
+            dbUser = "og_shop";
+        }
+        String dbPass = System.getenv(ENV_MIGRATION_VERIFY_PASSWORD);
+        if (dbPass == null || dbPass.isBlank()) {
+            dbPass = "postgres";
+        }
+
+        String cleanJdbcUrl = "jdbc:postgresql://" + hostPort + "/" + CLEAN_DB_NAME;
+        String upgradeJdbcUrl = "jdbc:postgresql://" + hostPort + "/" + UPGRADE_DB_NAME;
+
+        assertSafeMigrationVerificationEnvironment(hostPort, cleanJdbcUrl, upgradeJdbcUrl);
+
+        DataSource rootDs = new DriverManagerDataSource("jdbc:postgresql://" + hostPort + "/postgres", dbUser, dbPass);
         JdbcTemplate rootJdbc = new JdbcTemplate(rootDs);
+
+        String systemIdentifier = rootJdbc.queryForObject("SELECT system_identifier FROM pg_control_system()", String.class);
+        if (!"7709359968475385894".equals(systemIdentifier)) {
+            throw new IllegalStateException("PostgreSQL system_identifier mismatch! Expected 7709359968475385894, found: " + systemIdentifier);
+        }
 
         rootJdbc.execute("DROP DATABASE IF EXISTS " + CLEAN_DB_NAME + " WITH (FORCE)");
         rootJdbc.execute("CREATE DATABASE " + CLEAN_DB_NAME + " OWNER " + dbUser);
@@ -98,9 +116,66 @@ class V55DualMigrationVerificationPostgresTest {
         upgradeJdbc.execute("CREATE EXTENSION IF NOT EXISTS vector");
     }
 
+    /**
+     * Safety guard ensuring migration verification never executes against:
+     * 1. Development database (port 5433).
+     * 2. Shared test database (port 54432, og_shop_bd5_test).
+     * 3. Protected databases or the active backend integration-test database.
+     */
+    static void assertSafeMigrationVerificationEnvironment(String targetHostPort, String cleanUrl, String upgradeUrl) {
+        if (!CLEAN_DB_NAME.equals("og_shop_v55_clean_verify_test") || !UPGRADE_DB_NAME.equals("og_shop_v55_upgrade_verify_test")) {
+            throw new IllegalStateException("Migration verification aborted: Unauthorized verification database names!");
+        }
+
+        Set<String> protectedDbs = Set.of(
+                "og_shop_v51_clean_test",
+                "og_shop_v51_upgrade_test",
+                "og_shop_v51_clean_verify_test",
+                "og_shop_v51_upgrade_verify_test",
+                "og_shop_demo_isolated_test",
+                "og_shop_isolated_test",
+                "og_shop_backend_regression_clean_test",
+                "og_shop_bd5_test",
+                "og_shop",
+                "postgres"
+        );
+        if (protectedDbs.contains(CLEAN_DB_NAME.toLowerCase(Locale.ROOT)) || protectedDbs.contains(UPGRADE_DB_NAME.toLowerCase(Locale.ROOT))) {
+            throw new IllegalStateException("Migration verification aborted: Attempting to target protected database!");
+        }
+
+        if (targetHostPort.contains(":54432") || cleanUrl.contains("54432") || cleanUrl.contains("og_shop_bd5_test")) {
+            throw new IllegalStateException("Migration verification aborted: Execution against shared database (port 54432) is strictly prohibited!");
+        }
+        if (targetHostPort.contains(":5433") || cleanUrl.contains("5433")) {
+            throw new IllegalStateException("Migration verification aborted: Execution against development database (port 5433) is strictly prohibited!");
+        }
+
+        PostgresTestSafetyGuard.assertSafeTestDatabase(cleanUrl, "true");
+        PostgresTestSafetyGuard.assertSafeTestDatabase(upgradeUrl, "true");
+
+        String backendTestUrl = System.getenv(PostgresTestSafetyGuard.ENV_TEST_DB_URL);
+        if (backendTestUrl != null && !backendTestUrl.isBlank()) {
+            try {
+                URI backendUri = URI.create(backendTestUrl.trim().substring("jdbc:".length()));
+                String backendPath = backendUri.getPath();
+                if (backendPath != null && backendPath.length() > 1) {
+                    String backendDb = backendPath.substring(1).toLowerCase(Locale.ROOT);
+                    if (CLEAN_DB_NAME.equalsIgnoreCase(backendDb) || UPGRADE_DB_NAME.equalsIgnoreCase(backendDb)) {
+                        throw new IllegalStateException(
+                                "Migration verification aborted: Target database collides with active backend test database '" + backendDb + "'!"
+                        );
+                    }
+                }
+            } catch (IllegalStateException e) {
+                throw e;
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
     @Test
     @Order(1)
-    @DisplayName("Path A: Clean migration from V1 to V56 succeeds and validates")
+    @DisplayName("Path A: Clean migration from V1 to V57 succeeds and validates")
     void testPathACleanMigration() {
         Flyway flyway = Flyway.configure()
                 .dataSource(cleanDataSource)
@@ -110,7 +185,7 @@ class V55DualMigrationVerificationPostgresTest {
                 .load();
 
         var result = flyway.migrate();
-        assertThat(result.migrationsExecuted).isGreaterThanOrEqualTo(56);
+        assertThat(result.migrationsExecuted).isGreaterThanOrEqualTo(57);
 
         // Flyway validate must pass cleanly
         flyway.validate();
@@ -118,10 +193,10 @@ class V55DualMigrationVerificationPostgresTest {
         // Check flyway_schema_history
         Integer totalMigrations = cleanJdbc.queryForObject(
                 "SELECT count(*) FROM public.flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(totalMigrations).isGreaterThanOrEqualTo(56);
+        assertThat(totalMigrations).isGreaterThanOrEqualTo(57);
 
-        // V48, V55, V56 must be recorded with success = true
-        for (String ver : new String[]{"48", "55", "56"}) {
+        // V48, V49, V55, V56, V57 must be recorded with success = true
+        for (String ver : new String[]{"48", "49", "55", "56", "57"}) {
             Boolean verSuccess = cleanJdbc.queryForObject(
                     "SELECT success FROM public.flyway_schema_history WHERE version = ?", Boolean.class, ver);
             assertThat(verSuccess).as("Version " + ver + " must succeed").isTrue();
@@ -130,7 +205,7 @@ class V55DualMigrationVerificationPostgresTest {
 
     @Test
     @Order(2)
-    @DisplayName("Path B: Upgrade migration from main (V1..V40) through V56 succeeds and validates")
+    @DisplayName("Path B: Upgrade migration from main (V1..V40) through V57 succeeds and validates")
     void testPathBUpgradeMigration() {
         // Step 1: Migrate up to V40 (main baseline)
         Flyway flywayV40 = Flyway.configure()
@@ -147,7 +222,7 @@ class V55DualMigrationVerificationPostgresTest {
                 "SELECT count(*) FROM public.flyway_schema_history WHERE success = true", Integer.class);
         assertThat(v40Count).isEqualTo(40);
 
-        // Step 2: Migrate to latest (V41..V56)
+        // Step 2: Migrate to latest (V41..V57)
         Flyway flywayLatest = Flyway.configure()
                 .dataSource(upgradeDataSource)
                 .schemas("public")
@@ -156,12 +231,12 @@ class V55DualMigrationVerificationPostgresTest {
                 .load();
 
         var upgradeResult = flywayLatest.migrate();
-        assertThat(upgradeResult.migrationsExecuted).isEqualTo(16);
+        assertThat(upgradeResult.migrationsExecuted).isEqualTo(17);
 
         // Flyway validate must pass cleanly on Path B
         flywayLatest.validate();
 
-        for (String ver : new String[]{"48", "55", "56"}) {
+        for (String ver : new String[]{"48", "49", "55", "56", "57"}) {
             Boolean verSuccess = upgradeJdbc.queryForObject(
                     "SELECT success FROM public.flyway_schema_history WHERE version = ?", Boolean.class, ver);
             assertThat(verSuccess).as("Upgrade version " + ver + " must succeed").isTrue();
@@ -170,21 +245,23 @@ class V55DualMigrationVerificationPostgresTest {
 
     @Test
     @Order(3)
-    @DisplayName("V48 Checksum is preserved and identical across Path A and Path B")
+    @DisplayName("V48, V49, and V57 Checksums are preserved and identical across Path A and Path B")
     void testV48ChecksumPreserved() {
-        Integer checksumA = cleanJdbc.queryForObject(
-                "SELECT checksum FROM public.flyway_schema_history WHERE version = '48'", Integer.class);
-        Integer checksumB = upgradeJdbc.queryForObject(
-                "SELECT checksum FROM public.flyway_schema_history WHERE version = '48'", Integer.class);
+        for (String ver : new String[]{"48", "49", "57"}) {
+            Integer checksumA = cleanJdbc.queryForObject(
+                    "SELECT checksum FROM public.flyway_schema_history WHERE version = ?", Integer.class, ver);
+            Integer checksumB = upgradeJdbc.queryForObject(
+                    "SELECT checksum FROM public.flyway_schema_history WHERE version = ?", Integer.class, ver);
 
-        assertThat(checksumA).isNotNull();
-        assertThat(checksumB).isNotNull();
-        assertThat(checksumA).isEqualTo(checksumB);
+            assertThat(checksumA).as("Path A checksum for V" + ver).isNotNull();
+            assertThat(checksumB).as("Path B checksum for V" + ver).isNotNull();
+            assertThat(checksumA).as("Checksum parity for V" + ver).isEqualTo(checksumB);
+        }
     }
 
     @Test
     @Order(4)
-    @DisplayName("og70_write_view() converges 100% between Clean Path A and Upgrade Path B (0 diff, SHA-256 match)")
+    @DisplayName("og70_write_view() and og70_dispatch() converge 100% between Clean Path A and Upgrade Path B (0 diff, SHA-256 match)")
     void testFunctionDefinitionConvergence() throws Exception {
         String defA = cleanJdbc.queryForObject(
                 "SELECT pg_get_functiondef('public.og70_write_view()'::regprocedure)", String.class);
@@ -203,6 +280,27 @@ class V55DualMigrationVerificationPostgresTest {
 
         assertThat(normA).isEqualTo(normB);
         assertThat(shaA).isEqualTo(shaB);
+
+        // Verify og70_dispatch() convergence and V57 expires_at forwarding invariants
+        String dispatchA = cleanJdbc.queryForObject(
+                "SELECT pg_get_functiondef('public.og70_dispatch()'::regprocedure)", String.class);
+        String dispatchB = upgradeJdbc.queryForObject(
+                "SELECT pg_get_functiondef('public.og70_dispatch()'::regprocedure)", String.class);
+
+        assertThat(dispatchA).isNotNull();
+        assertThat(dispatchB).isNotNull();
+
+        String normDispatchA = dispatchA.replace("\r\n", "\n").trim();
+        String normDispatchB = dispatchB.replace("\r\n", "\n").trim();
+
+        assertThat(normDispatchA).isEqualTo(normDispatchB);
+        assertThat(computeSha256(normDispatchA)).isEqualTo(computeSha256(normDispatchB));
+
+        // V57 invariant checks on og70_dispatch() reward_ledger branch
+        assertThat(normDispatchA).contains("'expires_at',n->'expires_at'");
+        assertThat(normDispatchA).contains("'expires_at',o->'expires_at'");
+        assertThat(normDispatchA).contains("IF TG_OP<>'DELETE' THEN n:=jsonb_set(n,ARRAY['expires_at'],coalesce(result->'expires_at','null'::jsonb),true); END IF;");
+        assertThat(normDispatchA).contains("IF TG_OP<>'DELETE' THEN PERFORM og70_validate_row('reward_ledger',result); END IF;");
 
         // Verify Invariants on converged function definition
         // 1. Defective branches have NO expires_at in INSERT column list

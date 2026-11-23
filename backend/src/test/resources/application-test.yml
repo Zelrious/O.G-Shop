@@ -4,7 +4,7 @@ spring:
     username: sa
     password:
     hikari:
-      maximum-pool-size: 4
+      maximum-pool-size: 8
       minimum-idle: 0
       idle-timeout: 10000
   jpa:
