@@ -1,5 +1,11 @@
 # Project Backlog
 
+## TASK-0125 — Nối Giao Diện Frontend Cho Hệ Sinh Thái UC83 / COMPLETED
+
+- [x] Tạo `frontend/src/features/disputes/returnCaseApi.ts` và mở rộng `ordersApi.ts` (`confirmReceived(videoOption)`, `earlyCompleteOrder`) + `checkoutApi.ts` (`groupCheckout`, `calculateAdjustedCoinsAfterVoucher` khớp `V58`).
+- [x] Tạo và gắn `Uc83BuyerOrderPanel` (`BuyerOrderDetailView.tsx`), `Uc83SellerReturnPanel` (`SellerOrderDetailView.tsx`), `Uc83SettlementConfirmPanel` (`KtvDisputesPage.tsx`).
+- [x] Bổ sung `Uc83FrontendIntegration.test.tsx` (4/4 PASS); toàn bộ Frontend đạt `eslint` 0 lỗi, `tsc -b` 0 lỗi, **57/57 test files — 298/298 tests PASS**, `vite build` PASS.
+
 ## TASK-0124 — Gói 4 UC83: Đồng Bộ Tài Liệu Đặc Tả & Quyết Định / COMPLETED
 
 - [x] Cập nhật `docs/requirements/use-cases-83/CHANGELOG_UC_ALIGNMENT.md` tổng hợp toàn bộ quyết định `D5`, `BD-1..6`, `D-03`, `D-07`, `D-08`, `D-10B`, `PO-DEC-01..06`, `OPEN-02A/B`, `DEC-08A`, `DEC-10.4/7A`, `V58` xu trừ phí ship & Gói 1–3.

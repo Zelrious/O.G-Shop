@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { PageHeader } from '../../shared/components';
 import { Select } from '../../shared/components/Select/Select';
 import { MediaLightboxModal } from '../../shared/components/MediaLightboxModal';
+import { Uc83SettlementConfirmPanel } from '../../features/disputes/Uc83SettlementConfirmPanel';
 import { ConsoleIcons } from '../../shared/layout/ConsoleIcons';
 import {
   TableActionDropdown,
@@ -1055,6 +1056,11 @@ export const KtvDisputesPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* UC83 Runtime Settlement Confirmation Panel */}
+            {selectedDispute.orderId && (
+              <Uc83SettlementConfirmPanel orderId={selectedDispute.orderId} />
+            )}
 
             {/* ARBITRATION VERDICT FORM */}
             <div style={{ borderTop: '1px solid var(--og-color-border)', paddingTop: '16px' }}>

@@ -1,5 +1,13 @@
 # Project Status
 
+## Nối Giao Diện Frontend Hệ Sinh Thái UC83 (Checkout Coins/0đ, UC27, UC62 7a/7c, Seller R1/R2 & KTV/Admin Xác Nhận Hoàn Tiền) — TASK-0125 / 2026-11-24
+
+- **Mục tiêu**:
+  - Bổ sung bộ API client TypeScript chuẩn hóa: `returnCaseApi.ts` (Buyer/Seller/KTV/Admin UC83), `ordersApi.confirmReceived(videoOption)` & `earlyCompleteOrder`, `checkoutApi.groupCheckout` & `calculateAdjustedCoinsAfterVoucher` (đồng bộ `V58` ưu tiên voucher + tự động điều chỉnh xu + đơn 0đ).
+  - Xây dựng và tích hợp 3 panel UI độc lập giữ nguyên 100% tương thích giao diện hiện hành: `Uc83BuyerOrderPanel` trong `BuyerOrderDetailView.tsx`, `Uc83SellerReturnPanel` trong `SellerOrderDetailView.tsx`, và `Uc83SettlementConfirmPanel` trong `KtvDisputesPage.tsx`.
+- **Kiểm thử**:
+  - Frontend `eslint --max-warnings=0` (0 lỗi/0 cảnh báo), `tsc -b` (0 lỗi), Vitest **57/57 files — 298/298 tests PASS** (gồm `Uc83FrontendIntegration.test.tsx` 4/4 PASS), `vite build` thành công (548ms).
+
 ## Triển Khai Gói 4 UC83: Đồng Bộ Tài Liệu Đặc Tả & Quyết Định — TASK-0124 / 2026-11-23
 
 - **Mục tiêu**:

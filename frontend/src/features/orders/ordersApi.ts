@@ -65,6 +65,28 @@ export const ordersApi = {
     return handleResponse<OrderActionResponse>(res);
   },
 
+  async confirmReceived(
+    orderId: number,
+    videoOption?: 'VIDEO_RECORDED' | 'SKIPPED_AFTER_WARNING',
+  ): Promise<OrderActionResponse> {
+    const res = await authApi.authorizedFetch(`/commerce/orders/${orderId}/confirm-received`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(videoOption ? { videoOption } : {}),
+    });
+    return handleResponse<OrderActionResponse>(res);
+  },
+
+  async earlyCompleteOrder(orderId: number, warningConsent: boolean, commandKey?: string): Promise<OrderActionResponse> {
+    const key = commandKey || `EARLY-COMPLETE:${orderId}:${Date.now()}`;
+    const res = await authApi.authorizedFetch(`/commerce/orders/${orderId}/early-complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ warningConsent, commandKey: key }),
+    });
+    return handleResponse<OrderActionResponse>(res);
+  },
+
   // Seller API
   async getSellerOrders(status?: string, page = 0, size = 10): Promise<PageResponse<OrderSummary>> {
     const params = new URLSearchParams({

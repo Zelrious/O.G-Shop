@@ -5,6 +5,7 @@ import { ordersApi } from '../ordersApi';
 import { OrderDetail } from '../types';
 import { TrackingResponse, formatGhnStatus } from '../../fulfillment/fulfillmentApi';
 import { SellerDisputeResponseModal } from '../../disputes/SellerDisputeResponseModal';
+import { Uc83SellerReturnPanel } from '../../disputes/Uc83SellerReturnPanel';
 import { OrderReviewModal } from '../../disputes/OrderReviewModal';
 import { reviewApi } from '../../disputes/reviewApi';
 import type { OrderReviewsResponse } from '../../disputes/types';
@@ -498,17 +499,24 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
               )}
 
               {order.status === 'DELIVERED' && (
-                <div style={{
-                  background: '#fef9c3',
-                  border: '1px solid #fde047',
-                  borderRadius: 8,
-                  padding: 12,
-                  fontSize: '0.85rem',
-                  color: '#854d0e',
-                  lineHeight: 1.5,
-                }}>
-                  <strong>Đã giao hàng thành công!</strong> Đang chờ người mua xác nhận hoặc hệ thống sẽ tự động hoàn tất sau thời gian đồng kiểm.
-                </div>
+                <>
+                  <div style={{
+                    background: '#fef9c3',
+                    border: '1px solid #fde047',
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: '0.85rem',
+                    color: '#854d0e',
+                    lineHeight: 1.5,
+                  }}>
+                    <strong>Đã giao hàng thành công!</strong> Đang chờ người mua xác nhận hoặc hệ thống sẽ tự động hoàn tất sau thời gian đồng kiểm.
+                  </div>
+                  <Uc83SellerReturnPanel
+                    orderId={order.orderId}
+                    orderStatus={order.status}
+                    onUpdated={loadOrder}
+                  />
+                </>
               )}
 
               {order.status === 'DISPUTED' && (
