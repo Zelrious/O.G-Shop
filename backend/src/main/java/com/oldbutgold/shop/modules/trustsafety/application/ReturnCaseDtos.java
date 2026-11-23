@@ -419,6 +419,29 @@ public final class ReturnCaseDtos {
             String escalationReason
     ) {}
 
+    public record BuyerSupplementEvidenceRequest(
+            @Size(max = 2000, message = "Ghi chú bổ sung tối đa 2000 ký tự")
+            String note,
+            List<EvidenceItemDto> evidenceList,
+            @NotNull(message = "commandKey không được để trống")
+            String commandKey
+    ) {}
+
+    public record OverduePickupBatchResult(
+            int totalScanned,
+            List<Long> closedBuyerFaultCaseIds,
+            List<Long> escalatedCarrierFaultCaseIds,
+            List<Long> skippedCaseIds,
+            List<Long> failedCaseIds
+    ) {
+        public OverduePickupBatchResult {
+            closedBuyerFaultCaseIds = closedBuyerFaultCaseIds != null ? List.copyOf(closedBuyerFaultCaseIds) : List.of();
+            escalatedCarrierFaultCaseIds = escalatedCarrierFaultCaseIds != null ? List.copyOf(escalatedCarrierFaultCaseIds) : List.of();
+            skippedCaseIds = skippedCaseIds != null ? List.copyOf(skippedCaseIds) : List.of();
+            failedCaseIds = failedCaseIds != null ? List.copyOf(failedCaseIds) : List.of();
+        }
+    }
+
     public record AdminEscalatedCasePageResponse(
             List<AdminEscalatedCaseSummaryResponse> content,
             int page,

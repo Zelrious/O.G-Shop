@@ -1,5 +1,11 @@
 # Trust & Safety Module
 
+## Gói 3 UC83: Quá hạn gửi hàng trả 3 ngày (UC33 3d–3e) & Bổ sung bằng chứng Vòng 1 (UC62 7a) — TASK-0123 / 2026-11-23
+
+- `ReturnCaseService.reconcileOverdueReturnPickups()` + `ReturnReconciliationScheduler`: đối soát hồ sơ trả hàng quá hạn 3 ngày (đóng `CLOSED` + `CLEANUP` nếu lỗi Người mua; giữ tiền + `ESCALATED` nếu lỗi ĐVVC / có phản đối), mặc định tắt qua `app.scheduling.overdue-return-pickup.enabled: false`.
+- `CaseEvidenceRequestService.requestRound1Evidence` (`POST /api/v1/trustsafety/returns/{caseId}/ktv/request-round1-evidence`, `hasRole('KTV')`) và `ReturnCaseService.supplementBuyerEvidenceRound1` (append-only, quota `1–5` ảnh / `<= 2` video `<= 60s`, hoàn tất `PENDING` request Vòng 1 sang `FULFILLED`, idempotent `commandKey`).
+- Kiểm chứng: `Package3Uc33Uc62Uc27UnitTest` (3/3 PASS) và full `mvnw verify` (1,502/1,502 PASS).
+
 ## Vá bảo mật KTV, ranh giới Controller & LocalEvidenceStorageVerifier — TASK-0120 / 2026-11-23
 
 - `ReturnCaseController`: khóa `@PreAuthorize("hasRole('KTV')")` cho 3 endpoint `/ktv/request-evidence`, `/ktv/decide-round1`, `/ktv/decide-round2`.

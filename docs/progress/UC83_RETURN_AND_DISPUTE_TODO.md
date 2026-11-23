@@ -1,7 +1,8 @@
 # Danh sách Công việc (Todo List): Luồng Trả hàng & Tranh chấp Nhiều Vòng
 
 > [!NOTE]
-> Tài liệu di chuyển từ nhánh PR #17 (`tasks/todo.md`) vào `docs/progress/` nhằm tránh xung đột với `tasks/todo.md` trên `main`. Các migration trong tài liệu gốc (`V37–V51`) tương ứng với **`V41–V55`** sau tích hợp Đợt 1 (`TASK-0119`). Xem thêm [UC83_RETURN_AND_DISPUTE_PLAN.md](../architecture/UC83_RETURN_AND_DISPUTE_PLAN.md).
+> Tài liệu di chuyển từ nhánh PR #17 (`tasks/todo.md`) vào `docs/progress/` nhằm tránh xung đột với `tasks/todo.md` trên `main`. Các migration trong tài liệu gốc (`V37–V51`) tương ứng với **`V41–V55`** sau tích hợp Đợt 1 (`TASK-0119`), và đã mở rộng đến **`V58`** (`TASK-0122`).
+> **Cập nhật tiến độ (`2026-11-23`)**: Toàn bộ hạng mục Backend cốt lõi gồm `Task 1.2b` (Group Checkout/Payment UC83, đơn 0đ, Voucher, Negotiated Offer, `V58` xu trừ phí vận chuyển & tự động điều chỉnh xu), xác nhận hoàn tiền runtime (`TASK-0120`), và nhánh biên `UC33 3d–3e` / `UC62 7a` / `UC27 Bước 3` (`TASK-0123`) đã **HOÀN TẤT & KIỂM CHỨNG** (`1,502/1,502` offline + PostgreSQL 17 real COMMIT). Hạng mục còn lại là Giai đoạn 6 (nối đầy đủ Frontend UI cho UC83). Xem thêm [UC83_RETURN_AND_DISPUTE_PLAN.md](../architecture/UC83_RETURN_AND_DISPUTE_PLAN.md) và [CHANGELOG_UC_ALIGNMENT.md](../requirements/use-cases-83/CHANGELOG_UC_ALIGNMENT.md).
 
 > Tài liệu theo dõi tiến độ chi tiết của [UC83_RETURN_AND_DISPUTE_PLAN.md](../architecture/UC83_RETURN_AND_DISPUTE_PLAN.md) dựa trên Báo cáo đồ án (`Báo_cáo_đồ_án.docx`: UC22, UC26, UC27, UC33, UC40, UC52, UC62, UC63, UC71, UC75, UC83).
 
@@ -55,7 +56,7 @@
     - `backend/src/main/java/com/oldbutgold/shop/modules/commerce/infrastructure/persistence/OrderEntity.java`
     - `backend/src/main/java/com/oldbutgold/shop/modules/trustsafety/infrastructure/persistence/CaseRepository.java`
 
-- [ ] **Task 1.2b: Nâng cấp luồng Checkout & Payment sang mô hình UC83 (Tiền đề BẮT BUỘC của Giai đoạn 6 UI và E2E)**
+- [x] **Task 1.2b: Nâng cấp luồng Checkout & Payment sang mô hình UC83 (Hoàn tất qua PR #17 + TASK-0121 + TASK-0122 `V58`)**
   - **Mô tả**: Tiền đề bắt buộc để Giai đoạn 6 (UI) và bước kiểm thử End-to-End (E2E) tạo được đơn hàng UC83 thật từ màn hình mua hàng. Cho tới khi hoàn thành, E2E chỉ chạy bằng dữ liệu fixture/script. (CHƯA LÀM LÚC NÀY).
   - **Checklist gỡ cờ read-only trên `OrderEntity` (Bắt buộc thực hiện ở Task 1.2b)**:
     - [ ] Gỡ `insertable=false` trên `OrderEntity` cho các cột: `workflow_model`, `group_id`, `delivery_method`, `handover_day`, `return_allowed`.

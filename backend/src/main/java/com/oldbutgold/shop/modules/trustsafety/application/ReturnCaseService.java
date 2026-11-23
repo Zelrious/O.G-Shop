@@ -573,6 +573,270 @@ public class ReturnCaseService {
         return submitDamageExemptionRequest(sellerId, activeCase.getId(), request);
     }
 
+    /**
+     * UC62 Alt 7a: Người mua bổ sung bằng chứng Vòng 1 theo orderId (Order-scoped facade).
+     */
+    @Transactional
+    public ReturnCaseDtos.ReturnCaseDetailResponse supplementBuyerEvidenceRound1ForOrder(
+            Long buyerId,
+            Long orderId,
+            ReturnCaseDtos.BuyerSupplementEvidenceRequest request
+    ) {
+        OrderEntity order = requireOrderOrThrow(orderId);
+        if (!buyerId.equals(order.getBuyerId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Chỉ người mua của đơn hàng mới có quyền bổ sung bằng chứng Vòng 1");
+        }
+        CaseEntity activeCase = requireActiveCaseOrThrow(orderId);
+        return supplementBuyerEvidenceRound1(buyerId, activeCase.getId(), request);
+    }
+
+    /**
+     * UC62 Alt 7a: Người mua bổ sung bằng chứng Vòng 1 (append-only, quota 1-5 ảnh / <= 2 video <= 60s, idempotent commandKey).
+     */
+    @Transactional
+    public ReturnCaseDtos.ReturnCaseDetailResponse supplementBuyerEvidenceRound1(
+            Long buyerId,
+            Long caseId,
+            ReturnCaseDtos.BuyerSupplementEvidenceRequest request
+    ) {
+        if (buyerId == null || caseId == null || request == null) {
+            throw new IllegalArgumentException("Thông tin bổ sung bằng chứng không hợp lệ");
+        }
+        String cmdKey = request.commandKey() != null ? request.commandKey().trim() : "";
+        if (cmdKey.isBlank()) {
+            throw new IllegalArgumentException("commandKey không được để trống");
+        }
+        if (request.evidenceList() == null || request.evidenceList().isEmpty()) {
+            throw new IllegalArgumentException("Bắt buộc phải cung cấp ít nhất 1 bằng chứng (ảnh hoặc video)");
+        }
+
+        // 1. Idempotency check before state mutation
+        Optional<CaseEventEntity> existingEvent = caseEventRepository.findByCommandKey(cmdKey);
+        if (existingEvent.isPresent()) {
+            if (!existingEvent.get().getCaseId().equals(caseId)) {
+                throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "COMMAND_KEY_CONFLICT",
+                        "Xung đột commandKey: khóa này đã được sử dụng cho hồ sơ khác");
+            }
+            CaseEntity existingCase = caseRepository.findById(caseId)
+                    .orElseThrow(() -> new NoSuchElementException("Không tìm thấy hồ sơ khiếu nại #" + caseId));
+            return mapToDetailResponse(existingCase);
+        }
+
+        // 2. Lock Order -> Case -> Round 1
+        CaseEntity c = caseRepository.findById(caseId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy hồ sơ khiếu nại #" + caseId));
+        OrderEntity order = orderRepository.findByIdForUpdate(c.getOrderId())
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + c.getOrderId()));
+        if (!buyerId.equals(order.getBuyerId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Chỉ người mua của đơn hàng mới có quyền bổ sung bằng chứng Vòng 1");
+        }
+        CaseEntity lockedCase = caseRepository.findByIdForUpdate(caseId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy hồ sơ khiếu nại #" + caseId));
+
+        if (!CaseEntity.STATE_OPEN.equals(lockedCase.getState()) && !CaseEntity.STATE_REVIEWING.equals(lockedCase.getState())) {
+            throw new IllegalStateException("Chỉ có thể bổ sung bằng chứng Vòng 1 khi hồ sơ ở trạng thái OPEN hoặc REVIEWING (hiện tại: " + lockedCase.getState() + ")");
+        }
+
+        CaseRoundEntity round1 = caseRoundRepository.findByCaseIdAndRoundNo(caseId, 1)
+                .orElseThrow(() -> new IllegalStateException("Không tìm thấy Vòng 1 của hồ sơ #" + caseId));
+        if (!CaseRoundEntity.STATE_OPEN.equals(round1.getState())
+                || !caseDecisionRepository.findByRoundIdOrderByDecidedAtAsc(round1.getId()).isEmpty()) {
+            throw new IllegalStateException("Vòng 1 đã đóng hoặc đã có phán quyết, không thể bổ sung bằng chứng");
+        }
+
+        // 3. Validate evidence quota & storage digest
+        validateEvidence(request.evidenceList());
+
+        List<CaseEvidenceEntity> existingEvidence = caseEvidenceRepository.findByRoundIdOrderBySubmittedAtAsc(round1.getId());
+        int maxSubmissionNo = existingEvidence.stream()
+                .mapToInt(e -> e.getSubmissionNo() != null ? e.getSubmissionNo() : 1)
+                .max()
+                .orElse(1);
+        if (maxSubmissionNo >= 4) {
+            throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "MAX_RESUBMISSION_REACHED",
+                    "Đã đạt số lần nộp bổ sung tối đa (4 đợt)");
+        }
+        int nextSubmissionNo = maxSubmissionNo + 1;
+        Instant now = clock.instant();
+
+        // Fulfill active Round 1 PENDING evidence request if any
+        UUID linkedRequestId = null;
+        if (caseEvidenceRequestRepository != null) {
+            Optional<CaseEvidenceRequestEntity> pendingReqOpt =
+                    caseEvidenceRequestRepository.findByCaseIdAndStatus(caseId, CaseEvidenceRequestEntity.STATUS_PENDING);
+            if (pendingReqOpt.isPresent() && round1.getId().equals(pendingReqOpt.get().getRoundId())) {
+                CaseEvidenceRequestEntity pendingReq = pendingReqOpt.get();
+                pendingReq.setStatus(CaseEvidenceRequestEntity.STATUS_FULFILLED);
+                pendingReq.setFulfilledAt(now);
+                pendingReq.setFulfillmentCommandKey(cmdKey);
+                caseEvidenceRequestRepository.save(pendingReq);
+                linkedRequestId = pendingReq.getId();
+            }
+        }
+
+        // 4. Append new CaseEvidenceEntity batch (append-only)
+        for (ReturnCaseDtos.EvidenceItemDto item : request.evidenceList()) {
+            String mediaType = item.mediaType() != null ? item.mediaType().trim().toUpperCase(Locale.ROOT) : CaseEvidenceEntity.MEDIA_IMAGE;
+            CaseEvidenceEntity ev = new CaseEvidenceEntity(
+                    UUID.randomUUID(),
+                    round1.getId(),
+                    buyerId,
+                    nextSubmissionNo,
+                    mediaType,
+                    item.objectKey(),
+                    item.textContent(),
+                    item.contentDigest(),
+                    item.fileSizeBytes(),
+                    item.durationSeconds()
+            );
+            ev.setSubmittedAt(now);
+            ev.setRequestId(linkedRequestId);
+            caseEvidenceRepository.save(ev);
+        }
+
+        Map<String, Object> meta = new java.util.LinkedHashMap<>();
+        meta.put("submission_no", nextSubmissionNo);
+        meta.put("evidence_count", request.evidenceList().size());
+        if (linkedRequestId != null) {
+            meta.put("request_id", linkedRequestId.toString());
+        }
+        String reasonText = (request.note() != null && !request.note().isBlank())
+                ? request.note().trim()
+                : "Người mua bổ sung bằng chứng Vòng 1 (đợt " + nextSubmissionNo + ")";
+        CaseEventEntity event = new CaseEventEntity(
+                UUID.randomUUID(),
+                caseId,
+                round1.getId(),
+                buyerId,
+                order.getSellerId(),
+                CaseEventEntity.TYPE_SUPPLEMENTED,
+                reasonText,
+                safeToJson(meta),
+                cmdKey
+        );
+        caseEventRepository.save(event);
+
+        log.info("UC62 Alt 7a: Buyer {} supplemented Round 1 evidence for case {} (submissionNo={}, count={})",
+                buyerId, caseId, nextSubmissionNo, request.evidenceList().size());
+        return mapToDetailResponse(lockedCase);
+    }
+
+    /**
+     * UC33 Exception 3d–3e: Đối soát các hồ sơ trả hàng quá hạn gửi hàng 3 ngày hoặc thất bại lấy hàng.
+     * - Lỗi Người mua (quá hạn 3 ngày không gửi hàng trả / không có lỗi ĐVVC): đóng case (CLOSED), ghi sự kiện CLEANUP.
+     * - Lỗi ĐVVC hoặc đang có phản đối (admin_review_required = true): giữ tiền & ghi sự kiện ESCALATED cho KTV xem xét.
+     */
+    @Transactional
+    public ReturnCaseDtos.OverduePickupBatchResult reconcileOverdueReturnPickups() {
+        if (jdbcTemplate == null) {
+            return new ReturnCaseDtos.OverduePickupBatchResult(0, List.of(), List.of(), List.of(), List.of());
+        }
+
+        Instant now = clock.instant();
+        java.sql.Timestamp nowTs = java.sql.Timestamp.from(now);
+        java.sql.Timestamp threeDaysAgoTs = java.sql.Timestamp.from(now.minus(RETURN_WINDOW_DURATION));
+
+        List<Map<String, Object>> candidates = jdbcTemplate.queryForList("""
+                SELECT c.case_id, c.order_id, c.state,
+                       s.shipment_id,
+                       COALESCE(s.admin_review_required, FALSE) AS carrier_fault_flagged,
+                       s.incident_notes
+                FROM og_compat.cases c
+                LEFT JOIN og_compat.shipments s ON s.return_case_id = c.case_id AND s.leg = 'RETURN'
+                WHERE c.case_type = 'RETURN'
+                  AND (
+                      (c.state = 'RETURN_APPROVED' AND c.approved_at IS NOT NULL AND c.approved_at < ? AND s.shipment_id IS NULL)
+                      OR
+                      (c.state = 'RETURNING' AND s.shipment_id IS NOT NULL AND s.valid_delivery_at IS NULL
+                       AND s.pickup_deadline IS NOT NULL AND s.pickup_deadline < ?)
+                  )
+                ORDER BY c.case_id ASC
+                LIMIT 100
+                """, threeDaysAgoTs, nowTs);
+
+        List<Long> closedBuyerFault = new ArrayList<>();
+        List<Long> escalatedCarrierFault = new ArrayList<>();
+        List<Long> skipped = new ArrayList<>();
+        List<Long> failed = new ArrayList<>();
+
+        for (Map<String, Object> row : candidates) {
+            Long caseId = ((Number) row.get("case_id")).longValue();
+            boolean carrierFault = Boolean.TRUE.equals(row.get("carrier_fault_flagged"));
+            String incidentNotes = row.get("incident_notes") != null ? row.get("incident_notes").toString() : "";
+            if (!carrierFault && incidentNotes.toUpperCase(Locale.ROOT).contains("CARRIER")) {
+                carrierFault = true;
+            }
+
+            try {
+                CaseEntity lockedCase = caseRepository.findByIdForUpdate(caseId).orElse(null);
+                if (lockedCase == null
+                        || (!CaseEntity.STATE_RETURN_APPROVED.equals(lockedCase.getState())
+                            && !CaseEntity.STATE_RETURNING.equals(lockedCase.getState()))) {
+                    skipped.add(caseId);
+                    continue;
+                }
+
+                Long roundId = caseRoundRepository.findLatestRoundByCaseId(caseId)
+                        .map(CaseRoundEntity::getId).orElse(null);
+
+                if (carrierFault) {
+                    String cmdKey = "OVERDUE_PICKUP_ESCALATE:" + caseId;
+                    if (caseEventRepository.findByCommandKey(cmdKey).isPresent()) {
+                        skipped.add(caseId);
+                        continue;
+                    }
+                    CaseEventEntity escEvent = new CaseEventEntity(
+                            UUID.randomUUID(),
+                            caseId,
+                            roundId,
+                            null,
+                            lockedCase.getAssignedTo(),
+                            CaseEventEntity.TYPE_ESCALATED,
+                            "Quá hạn lấy hàng trả do sự cố ĐVVC / cần KTV xem xét (UC33 3e). Giữ nguyên trạng thái tiền ký quỹ.",
+                            "{\"reason\":\"CARRIER_PICKUP_FAILURE\"}",
+                            cmdKey
+                    );
+                    caseEventRepository.save(escEvent);
+                    escalatedCarrierFault.add(caseId);
+                } else {
+                    String cmdKey = "OVERDUE_PICKUP_CLOSE:" + caseId;
+                    if (caseEventRepository.findByCommandKey(cmdKey).isPresent()) {
+                        skipped.add(caseId);
+                        continue;
+                    }
+                    lockedCase.setState(CaseEntity.STATE_CLOSED);
+                    lockedCase.setClosedAt(now);
+                    caseRepository.save(lockedCase);
+
+                    CaseEventEntity closeEvent = new CaseEventEntity(
+                            UUID.randomUUID(),
+                            caseId,
+                            roundId,
+                            null,
+                            lockedCase.getCreatedBy(),
+                            CaseEventEntity.TYPE_CLEANUP,
+                            "Đóng hồ sơ trả hàng do quá hạn gửi/lấy hàng trả 3 ngày từ phía Người mua (UC33 3d).",
+                            "{\"reason\":\"BUYER_OVERDUE_RETURN_PICKUP\"}",
+                            cmdKey
+                    );
+                    caseEventRepository.save(closeEvent);
+                    closedBuyerFault.add(caseId);
+                }
+            } catch (Exception ex) {
+                log.warn("reconcileOverdueReturnPickups failed for case {}: {}", caseId, ex.getMessage());
+                failed.add(caseId);
+            }
+        }
+
+        return new ReturnCaseDtos.OverduePickupBatchResult(
+                candidates.size(),
+                closedBuyerFault,
+                escalatedCarrierFault,
+                skipped,
+                failed
+        );
+    }
+
     @Transactional
     public ReturnCaseDtos.ReturnCaseDetailResponse ktvConsoleDecideRound2(
             Long ktvId,

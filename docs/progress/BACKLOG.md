@@ -1,5 +1,20 @@
 # Project Backlog
 
+## TASK-0124 — Gói 4 UC83: Đồng Bộ Tài Liệu Đặc Tả & Quyết Định / COMPLETED
+
+- [x] Cập nhật `docs/requirements/use-cases-83/CHANGELOG_UC_ALIGNMENT.md` tổng hợp toàn bộ quyết định `D5`, `BD-1..6`, `D-03`, `D-07`, `D-08`, `D-10B`, `PO-DEC-01..06`, `OPEN-02A/B`, `DEC-08A`, `DEC-10.4/7A`, `V58` xu trừ phí ship & Gói 1–3.
+- [x] Đồng bộ trạng thái hoàn tất Backend & `Task 1.2b` vào `docs/architecture/UC83_RETURN_AND_DISPUTE_PLAN.md` và `docs/progress/UC83_RETURN_AND_DISPUTE_TODO.md`.
+- [x] Xác nhận `scripts/quality/validate-docs.ps1` PASS.
+- [ ] Giai đoạn kế tiếp (Đợt 2): Nối đầy đủ giao diện Frontend UI cho hệ sinh thái UC83 (`GroupCheckout`, `ReturnCase` Vòng 1 & Vòng 2, `Admin` xác nhận hoàn tiền).
+
+## TASK-0123 — Gói 3 UC83: Nhánh Biên UC33 (3d–3e), UC62 (7a) & UC27 (Bước 3) / COMPLETED
+
+- [x] **3A (`UC33 3d–3e`)**: `ReturnCaseService.reconcileOverdueReturnPickups()` + `ReturnReconciliationScheduler` (`app.scheduling.overdue-return-pickup.enabled: false`).
+- [x] **3B (`UC62 7a`)**: `CaseEvidenceRequestService.requestRound1Evidence` + `POST /api/v1/trustsafety/returns/{caseId}/ktv/request-round1-evidence` + `POST /api/v1/commerce/orders/{orderId}/return-case/supplement-evidence`.
+- [x] **3C (`UC27 Bước 3`)**: `POST /api/v1/commerce/orders/{orderId}/confirm-received` hỗ trợ `ConfirmReceivedRequest(videoOption)` lưu `RECEIPT_CONFIRMED` vào `order_events`.
+- [x] Bổ sung `Package3Uc33Uc62Uc27UnitTest` (3/3 PASS); full offline `mvnw verify` (`1502/1502 PASS`, `BUILD SUCCESS`).
+- [ ] Tiếp nối: Gói 4 (đồng bộ tài liệu đặc tả & quyết định `CHANGELOG_UC_ALIGNMENT.md`, `UC83_RETURN_AND_DISPUTE_PLAN.md`, `UC83_RETURN_AND_DISPUTE_TODO.md`).
+
 ## TASK-0122 — V58: Xu Trừ Phí Vận Chuyển, Ưu Tiên Voucher + Tự Động Điều Chỉnh Xu & Hoàn Đúng Xu Thực Chi / COMPLETED
 
 - [x] Tạo Flyway migration `V58__allow_points_on_shipping_and_voucher_priority.sql` (`orders.points_shipping_discount_amount`, `og_compat.orders`, `og70_write_view`, `og70_dispatch`, `og70_validate_graph`, `og70_validate_row`, `og_guard_fund_component`, `og58_validate_discount_totals_for_group`).

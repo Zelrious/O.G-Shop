@@ -23,23 +23,34 @@ public class ReturnReconciliationScheduler {
     private final ReturnCaseService returnCaseService;
     private final OrderManagementService orderManagementService;
     private final boolean overdueDisbursementEnabled;
+    private final boolean overdueReturnPickupEnabled;
 
     @Autowired
     public ReturnReconciliationScheduler(
             ReturnCaseService returnCaseService,
             OrderManagementService orderManagementService,
-            @Value("${app.scheduling.overdue-delivery-disbursement.enabled:false}") boolean overdueDisbursementEnabled
+            @Value("${app.scheduling.overdue-delivery-disbursement.enabled:false}") boolean overdueDisbursementEnabled,
+            @Value("${app.scheduling.overdue-return-pickup.enabled:false}") boolean overdueReturnPickupEnabled
     ) {
         this.returnCaseService = returnCaseService;
         this.orderManagementService = orderManagementService;
         this.overdueDisbursementEnabled = overdueDisbursementEnabled;
+        this.overdueReturnPickupEnabled = overdueReturnPickupEnabled;
+    }
+
+    public ReturnReconciliationScheduler(
+            ReturnCaseService returnCaseService,
+            OrderManagementService orderManagementService,
+            boolean overdueDisbursementEnabled
+    ) {
+        this(returnCaseService, orderManagementService, overdueDisbursementEnabled, false);
     }
 
     public ReturnReconciliationScheduler(
             ReturnCaseService returnCaseService,
             OrderManagementService orderManagementService
     ) {
-        this(returnCaseService, orderManagementService, true);
+        this(returnCaseService, orderManagementService, true, false);
     }
 
     @Scheduled(
@@ -102,6 +113,30 @@ public class ReturnReconciliationScheduler {
             }
         } catch (Exception ex) {
             log.error("ReturnReconciliationScheduler encountered unhandled overdue delivery disbursement error: {}", ex.getMessage(), ex);
+        }
+    }
+
+    @Scheduled(
+            fixedDelayString = "${app.scheduling.overdue-return-pickup.fixed-delay-ms:60000}",
+            initialDelayString = "${app.scheduling.overdue-return-pickup.initial-delay-ms:60000}"
+    )
+    public void reconcileOverdueReturnPickups() {
+        if (!overdueReturnPickupEnabled) {
+            log.debug("Overdue return pickup reconciliation scheduler is disabled by feature toggle.");
+            return;
+        }
+        try {
+            ReturnCaseDtos.OverduePickupBatchResult result = returnCaseService.reconcileOverdueReturnPickups();
+            if (result != null && result.totalScanned() > 0) {
+                log.info("Overdue return pickup reconciliation executed: scanned={}, closedBuyerFault={}, escalatedCarrierFault={}, skipped={}, failed={}",
+                        result.totalScanned(),
+                        result.closedBuyerFaultCaseIds().size(),
+                        result.escalatedCarrierFaultCaseIds().size(),
+                        result.skippedCaseIds().size(),
+                        result.failedCaseIds().size());
+            }
+        } catch (Exception ex) {
+            log.error("ReturnReconciliationScheduler encountered unhandled overdue return pickup error: {}", ex.getMessage(), ex);
         }
     }
 }

@@ -1,5 +1,22 @@
 # Project Status
 
+## Triển Khai Gói 4 UC83: Đồng Bộ Tài Liệu Đặc Tả & Quyết Định — TASK-0124 / 2026-11-23
+
+- **Mục tiêu**:
+  - Cập nhật `docs/requirements/use-cases-83/CHANGELOG_UC_ALIGNMENT.md` tổng hợp toàn bộ quyết định và triển khai UC83 (`TASK-0119`..`TASK-0123`, Flyway `V41–V58`, đơn 0đ, xu trừ phí vận chuyển + tự động điều chỉnh xu, `UC33 3d–3e`, `UC62 7a`, `UC27` `videoOption`).
+  - Đồng bộ trạng thái hoàn tất Backend Gói 1–3 và `Task 1.2b` trong `docs/architecture/UC83_RETURN_AND_DISPUTE_PLAN.md` và `docs/progress/UC83_RETURN_AND_DISPUTE_TODO.md`.
+- **Kiểm thử**: `scripts/quality/validate-docs.ps1` PASS.
+
+## Triển Khai Gói 3 UC83: Nhánh Biên UC33 (3d–3e), UC62 (7a) & UC27 (Bước 3) — TASK-0123 / 2026-11-23
+
+- **Mục tiêu**:
+  - **3A (`UC33 3d–3e`)**: Bổ sung `ReturnCaseService.reconcileOverdueReturnPickups()` phân tách lỗi Người mua (đóng case `CLOSED` + `CLEANUP`) vs lỗi ĐVVC (`ESCALATED` giữ tiền chuyển KTV) và `ReturnReconciliationScheduler.reconcileOverdueReturnPickups()` (feature toggle mặc định `false`).
+  - **3B (`UC62 7a`)**: Bổ sung `CaseEvidenceRequestService.requestRound1Evidence` (`POST /api/v1/trustsafety/returns/{caseId}/ktv/request-round1-evidence`, `hasRole('KTV')`) và `ReturnCaseService.supplementBuyerEvidenceRound1` (`POST /api/v1/commerce/orders/{orderId}/return-case/supplement-evidence`, append-only, quota `1–5` ảnh / `<= 2` video `<= 60s`, idempotent `commandKey`).
+  - **3C (`UC27 Bước 3`)**: Mở rộng `POST /api/v1/commerce/orders/{orderId}/confirm-received` nhận `ConfirmReceivedRequest(videoOption)` (`VIDEO_RECORDED` / `SKIPPED_AFTER_WARNING`), lưu `RECEIPT_CONFIRMED` vào `og_compat.order_events`, tương thích ngược 100%.
+- **Kiểm thử**:
+  - `Package3Uc33Uc62Uc27UnitTest`: **3/3 PASS**.
+  - Full Backend `mvnw verify` offline: **`Tests run: 1502, Failures: 0, Errors: 0, Skipped: 387`**, `jar` + `spring-boot:repackage` -> **BUILD SUCCESS** (1m14s).
+
 ## Triển Khai V58: Xu Trừ Trực Tiếp Phí Vận Chuyển, Ưu Tiên Voucher + Tự Động Điều Chỉnh Xu & Hoàn Đúng Xu Thực Chi — TASK-0122 / 2026-11-23
 
 - **Mục tiêu**:

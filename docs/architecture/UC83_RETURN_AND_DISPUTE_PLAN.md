@@ -2,7 +2,8 @@
 
 > [!NOTE]
 > Tài liệu di chuyển từ nhánh PR #17 (`tasks/complaint_plan.md`) vào `docs/architecture/` theo `docs/PROJECT_STRUCTURE.md` (Đợt 1 — `TASK-0119`).
-> Khi tích hợp lên `main`, toàn bộ chuỗi Flyway của nhánh PR #17 đã được đánh số lại **V37–V51 -> V41–V55** để hòa hợp với **V37–V40** của `main` (`chat_moderation` & `dispute_arbitration_and_reviews`), đồng thời giữ vận hành song song **Dual-Track** (`LEGACY_V14` + `UC83`).
+> Khi tích hợp lên `main`, chuỗi Flyway đã hòa hợp đến **`V58`** (`V41–V55` từ PR #17, `V56` cho `CREDIT_REVIEW`, `V57` remediation `expires_at`, và `V58` cho `orders.points_shipping_discount_amount` — xu trừ phí vận chuyển + ưu tiên voucher + hoàn đủ tổng xu thực chi), đồng thời giữ vận hành song song **Dual-Track** (`LEGACY_V14` + `UC83`).
+> **Trạng thái Backend (`2026-11-23`)**: Đã hoàn tất và kiểm chứng toàn bộ Gói 1–4 (`TASK-0120`..`TASK-0124`) gồm: xác nhận hoàn tiền runtime (`AdminPaymentController` + `SettlementReconciliationScheduler`), đơn 0đ fast-path (`zero_checkout_confirmations`), Voucher & Negotiated Offer, `V58` xu trừ phí ship + tự động điều chỉnh xu, `UC33 3d–3e`, `UC62 7a`, và `UC27` `videoOption`. Xem chi tiết tại [CHANGELOG_UC_ALIGNMENT.md](../requirements/use-cases-83/CHANGELOG_UC_ALIGNMENT.md).
 
 > **Căn cứ tài liệu**: Báo cáo đồ án tốt nghiệp (`Báo_cáo_đồ_án.docx`: UC22, UC26, UC27, UC33, UC40, UC52, UC62, UC63, UC71, UC75, UC83).  
 > **Tệp trích xuất văn bản**: `tasks/bao_cao_extracted.txt` (9.426 dòng trích xuất nguyên văn từ `Báo_cáo_đồ_án.docx`).  

@@ -102,6 +102,10 @@ app:
       enabled: ${OVERDUE_DELIVERY_DISBURSEMENT_ENABLED:false}
       fixed-delay-ms: ${OVERDUE_DELIVERY_DISBURSEMENT_DELAY:60000}
       initial-delay-ms: ${OVERDUE_DELIVERY_DISBURSEMENT_INITIAL_DELAY:60000}
+    overdue-return-pickup:
+      enabled: ${OVERDUE_RETURN_PICKUP_ENABLED:false}
+      fixed-delay-ms: ${OVERDUE_RETURN_PICKUP_DELAY:60000}
+      initial-delay-ms: ${OVERDUE_RETURN_PICKUP_INITIAL_DELAY:60000}
     settlement-auto-confirm:
       enabled: ${SETTLEMENT_AUTO_CONFIRM_ENABLED:false}
       fixed-delay-ms: ${SETTLEMENT_AUTO_CONFIRM_DELAY:60000}

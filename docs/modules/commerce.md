@@ -1,5 +1,10 @@
 # Commerce Module
 
+## Gói 3 UC83: UC27 videoOption khi xác nhận nhận hàng & bổ sung bằng chứng Vòng 1 — TASK-0123 / 2026-11-23
+
+- `OrderController` / `OrderManagementService`: mở rộng `POST /api/v1/commerce/orders/{orderId}/confirm-received` nhận tùy chọn `ConfirmReceivedRequest(videoOption)` (`VIDEO_RECORDED` / `SKIPPED_AFTER_WARNING`), ghi `RECEIPT_CONFIRMED` vào `og_compat.order_events`, tương thích ngược 100%.
+- `ReturnCaseCommerceController`: bổ sung `POST /api/v1/commerce/orders/{orderId}/return-case/supplement-evidence` ủy quyền sang `ReturnCaseService.supplementBuyerEvidenceRound1ForOrder(...)`.
+
 ## V58: Xu trừ trực tiếp phí vận chuyển & tự động điều chỉnh xu ưu tiên voucher — TASK-0122 / 2026-11-23
 
 - `V58__allow_points_on_shipping_and_voucher_priority.sql` bổ sung `orders.points_shipping_discount_amount` (mặc định `0`), mở rộng `og_compat.orders`, `og70_write_view`, `og70_dispatch`, `og70_validate_graph` (`uq_discount_points_item` theo `(reward_entry_id, order_item_id, component)`), `og70_validate_row` và `og58_validate_discount_totals_for_group`.

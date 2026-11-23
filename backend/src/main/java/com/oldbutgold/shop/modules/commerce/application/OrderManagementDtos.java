@@ -87,6 +87,13 @@ public class OrderManagementDtos {
             String message
     ) {}
 
+    public record ConfirmReceivedRequest(
+            String videoOption
+    ) {
+        public static final String VIDEO_OPTION_RECORDED = "VIDEO_RECORDED";
+        public static final String VIDEO_OPTION_SKIPPED_AFTER_WARNING = "SKIPPED_AFTER_WARNING";
+    }
+
     public record EarlyCompleteRequest(
             Boolean warningConsent,
             String commandKey

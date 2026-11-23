@@ -251,6 +251,120 @@ public class CaseEvidenceRequestService {
     }
 
     /**
+     * UC62 Alt 7a: KTV phát hành yêu cầu Người mua bổ sung bằng chứng ở Vòng 1 (RETURN_APPROVAL).
+     * Cấp cho Người mua 48 giờ liên tục (deadline_at = issued_at + 48 hours).
+     */
+    @Transactional
+    public KtvRequestEvidenceResult requestRound1Evidence(
+            Long ktvId,
+            Long caseId,
+            ReturnCaseDtos.KtvRequestEvidenceRequest request
+    ) {
+        if (ktvId == null) {
+            throw new TrustSafetyBusinessException(HttpStatus.UNAUTHORIZED, "AUTHENTICATION_FAILED", "Yêu cầu đăng nhập.");
+        }
+        if (caseId == null || caseId < 1) {
+            throw new TrustSafetyBusinessException(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "caseId không hợp lệ");
+        }
+        if (request == null) {
+            throw new TrustSafetyBusinessException(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "Yêu cầu không được để trống");
+        }
+
+        String cmdKey = request.commandKey() != null ? request.commandKey().trim() : "";
+        if (cmdKey.isBlank() || cmdKey.length() > 150) {
+            throw new TrustSafetyBusinessException(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "commandKey phải từ 1 đến 150 ký tự");
+        }
+
+        String reason = request.reason() != null ? request.reason().trim() : "";
+        if (reason.length() < 10 || reason.length() > 2000) {
+            throw new TrustSafetyBusinessException(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "Lý do yêu cầu bổ sung phải từ 10 đến 2000 ký tự");
+        }
+
+        List<String> requestedItems = request.requestedItems();
+        if (requestedItems != null && requestedItems.size() > 10) {
+            throw new TrustSafetyBusinessException(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "Danh sách mục yêu cầu tối đa 10 mục");
+        }
+
+        String computedHash = computeCanonicalPayloadHash(caseId, reason, requestedItems);
+
+        // Lock Order -> Case -> Round(1)
+        ReturnWorkflowLockGateway.ReturnWorkflowLockedEntities locked = lockGateway.lockForRound(caseId, 1);
+        CaseEntity c = locked.returnCase();
+        CaseRoundEntity round1 = locked.activeRound();
+
+        Optional<CaseEvidenceRequestEntity> existingOpt = caseEvidenceRequestRepository.findByCommandKey(cmdKey);
+        if (existingOpt.isPresent()) {
+            CaseEvidenceRequestEntity existing = existingOpt.get();
+            if (!existing.getCaseId().equals(caseId)) {
+                throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "COMMAND_KEY_CONFLICT",
+                        "Xung đột commandKey: khóa này đã được sử dụng cho một hồ sơ khiếu nại khác");
+            }
+            if (existing.getPayloadHash().equalsIgnoreCase(computedHash)) {
+                return KtvRequestEvidenceResult.replayed(toResponse(existing));
+            }
+            throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "COMMAND_KEY_CONFLICT",
+                    "Trùng commandKey nhưng nội dung yêu cầu khác nhau");
+        }
+
+        if (!isKtv(ktvId)) {
+            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
+                    "Người dùng không có vai trò KTV để thực hiện yêu cầu này");
+        }
+        if (c.getAssignedTo() == null || !c.getAssignedTo().equals(ktvId)) {
+            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "NOT_ASSIGNED_KTV",
+                    "KTV không được phân công phụ trách Case này (Case #" + caseId + ")");
+        }
+
+        if (!CaseEntity.STATE_OPEN.equals(c.getState()) && !CaseEntity.STATE_REVIEWING.equals(c.getState())) {
+            throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "CASE_NOT_ELIGIBLE",
+                    "Hồ sơ không ở trạng thái Vòng 1 OPEN/REVIEWING (Trạng thái hiện tại: " + c.getState() + ")");
+        }
+        if (round1 == null || round1.getRoundNo() == null || round1.getRoundNo() != 1
+                || !CaseRoundEntity.STATE_OPEN.equals(round1.getState())) {
+            throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "CASE_NOT_ELIGIBLE",
+                    "Vòng 1 không ở trạng thái OPEN để yêu cầu bổ sung bằng chứng");
+        }
+        if (!caseDecisionRepository.findByRoundIdOrderByDecidedAtAsc(round1.getId()).isEmpty()) {
+            throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "CASE_NOT_ELIGIBLE",
+                    "Vòng 1 đã có phán quyết, không thể yêu cầu bổ sung bằng chứng");
+        }
+
+        List<CaseEvidenceEntity> existingEvidence = caseEvidenceRepository.findByRoundIdOrderBySubmittedAtAsc(round1.getId());
+        int maxSubmissionNo = existingEvidence.stream()
+                .mapToInt(e -> e.getSubmissionNo() != null ? e.getSubmissionNo() : 1)
+                .max()
+                .orElse(1);
+        if (maxSubmissionNo >= 4) {
+            throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "MAX_RESUBMISSION_REACHED",
+                    "Đã đạt số lần nộp bổ sung tối đa (tổng số 4 batches)");
+        }
+
+        if (caseEvidenceRequestRepository.findByCaseIdAndStatus(caseId, CaseEvidenceRequestEntity.STATUS_PENDING).isPresent()) {
+            throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "PENDING_REQUEST_EXISTS",
+                    "Đã tồn tại một yêu cầu bằng chứng ở trạng thái PENDING trên Case này");
+        }
+
+        Instant issuedAt = clock.instant();
+        Instant deadlineAt = issuedAt.plus(48, ChronoUnit.HOURS);
+        CaseEvidenceRequestEntity requestEntity = new CaseEvidenceRequestEntity(
+                UUID.randomUUID(),
+                caseId,
+                round1.getId(),
+                ktvId,
+                reason,
+                serializeRequestedItems(requestedItems),
+                issuedAt,
+                deadlineAt,
+                cmdKey,
+                computedHash
+        );
+        CaseEvidenceRequestEntity saved = caseEvidenceRequestRepository.save(requestEntity);
+        log.info("UC62 Alt 7a Round 1 Request Evidence issued: requestId={}, caseId={}, deadlineAt={}",
+                saved.getId(), caseId, deadlineAt);
+        return KtvRequestEvidenceResult.created(toResponse(saved));
+    }
+
+    /**
      * Chuẩn hóa canonical payload và tính mã băm SHA-256 theo quy chuẩn D-07 (Section 5).
      * Các trường tham gia: caseId, reason, requestedItems.
      * commandKey là khóa tra cứu, không băm vào payload.

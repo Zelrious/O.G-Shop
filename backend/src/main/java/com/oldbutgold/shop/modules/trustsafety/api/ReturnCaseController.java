@@ -213,6 +213,26 @@ public class ReturnCaseController {
     }
 
     /**
+     * KTV yêu cầu Người mua bổ sung bằng chứng ở Vòng 1 (UC62 Alt 7a)
+     * POST /api/v1/trustsafety/returns/{caseId}/ktv/request-round1-evidence
+     */
+    @PostMapping("/{caseId}/ktv/request-round1-evidence")
+    @PreAuthorize("hasRole('KTV')")
+    public ResponseEntity<ReturnCaseDtos.KtvRequestEvidenceResponse> ktvRequestRound1Evidence(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long caseId,
+            @Valid @RequestBody ReturnCaseDtos.KtvRequestEvidenceRequest request
+    ) {
+        long ktvId = extractUserId(jwt);
+        CaseEvidenceRequestService.KtvRequestEvidenceResult result =
+                caseEvidenceRequestService.requestRound1Evidence(ktvId, caseId, request);
+        if (result.isCreated()) {
+            return ResponseEntity.status(HttpStatus.CREATED).body(result.response());
+        }
+        return ResponseEntity.ok(result.response());
+    }
+
+    /**
      * KTV phân xử Vòng 1 (APPROVE_RETURN / REJECT_RETURN)
      * POST /api/v1/trustsafety/returns/{caseId}/ktv/decide-round1
      */

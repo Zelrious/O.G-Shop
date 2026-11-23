@@ -149,4 +149,20 @@ public class ReturnCaseCommerceController {
                 returnCaseService.submitDamageExemptionRequestForOrder(sellerId, orderId, request);
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * 8. Người mua bổ sung bằng chứng Vòng 1 (UC62 Alt 7a)
+     * POST /api/v1/commerce/orders/{orderId}/return-case/supplement-evidence
+     */
+    @PostMapping("/return-case/supplement-evidence")
+    public ResponseEntity<ReturnCaseDtos.ReturnCaseDetailResponse> supplementBuyerEvidenceRound1(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long orderId,
+            @Valid @RequestBody ReturnCaseDtos.BuyerSupplementEvidenceRequest request
+    ) {
+        long buyerId = extractUserId(jwt);
+        ReturnCaseDtos.ReturnCaseDetailResponse response =
+                returnCaseService.supplementBuyerEvidenceRound1ForOrder(buyerId, orderId, request);
+        return ResponseEntity.ok(response);
+    }
 }

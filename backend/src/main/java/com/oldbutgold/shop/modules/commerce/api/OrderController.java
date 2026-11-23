@@ -69,10 +69,11 @@ public class OrderController {
     @PostMapping("/orders/{orderId}/confirm-received")
     public ResponseEntity<OrderManagementDtos.OrderActionResponse> confirmReceived(
             @AuthenticationPrincipal Jwt jwt,
-            @PathVariable Long orderId
+            @PathVariable Long orderId,
+            @RequestBody(required = false) OrderManagementDtos.ConfirmReceivedRequest request
     ) {
         long buyerId = extractUserId(jwt);
-        return ResponseEntity.ok(orderManagementService.confirmReceived(buyerId, orderId));
+        return ResponseEntity.ok(orderManagementService.confirmReceived(buyerId, orderId, request));
     }
 
     @PostMapping("/orders/{orderId}/early-complete")
