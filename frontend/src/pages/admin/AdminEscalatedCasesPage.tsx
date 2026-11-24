@@ -83,7 +83,7 @@ export const AdminEscalatedCasesPage: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <PageHeader
         title="Hồ sơ Trả hàng Leo thang SLA (Admin)"
-        subtitle="Danh sách các hồ sơ Vòng 2 quá hạn SLA 48 giờ của KTV cần Quản trị viên ra phán quyết cuối cùng."
+        description="Danh sách các hồ sơ Vòng 2 quá hạn SLA 48 giờ của KTV cần Quản trị viên ra phán quyết cuối cùng."
       />
 
       {bannerSuccess && (

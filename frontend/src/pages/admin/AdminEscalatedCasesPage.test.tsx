@@ -1,5 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AdminEscalatedCasesPage } from './AdminEscalatedCasesPage';
 import { returnCaseApi } from '../../features/disputes/returnCaseApi';
@@ -23,7 +22,6 @@ describe('AdminEscalatedCasesPage', () => {
   });
 
   it('loads escalated cases and allows Admin to issue final Round 2 decision', async () => {
-    const user = userEvent.setup();
     vi.mocked(returnCaseApi.getAdminEscalatedCases).mockResolvedValue({
       content: [
         {
@@ -48,13 +46,12 @@ describe('AdminEscalatedCasesPage', () => {
     render(<AdminEscalatedCasesPage />);
 
     expect(await screen.findByText('#901')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Xét duyệt Vòng 2/i }));
-    await user.type(
-      screen.getByPlaceholderText(/Nhập căn cứ bằng chứng/i),
-      'Hàng trả về đầy đủ phụ kiện, duyệt hoàn tiền 100%.'
-    );
-    await user.click(screen.getByRole('button', { name: /Tiếp tục xác nhận phán quyết/i }));
-    await user.click(screen.getByRole('button', { name: /Xác nhận ban hành phán quyết cuối cùng/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Xét duyệt Vòng 2/i }));
+    fireEvent.change(screen.getByPlaceholderText(/Nhập căn cứ bằng chứng/i), {
+      target: { value: 'Hàng trả về đầy đủ phụ kiện, duyệt hoàn tiền 100%.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Tiếp tục xác nhận phán quyết/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Xác nhận ban hành phán quyết cuối cùng/i }));
 
     await waitFor(() => {
       expect(returnCaseApi.adminDecideRound2).toHaveBeenCalledWith(901, {
