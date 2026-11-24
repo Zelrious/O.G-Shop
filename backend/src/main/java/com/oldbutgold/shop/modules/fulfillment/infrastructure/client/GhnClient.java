@@ -1,5 +1,7 @@
 package com.oldbutgold.shop.modules.fulfillment.infrastructure.client;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.client.dto.GhnApiResponse;
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.client.dto.GhnMasterDataDtos;
 import com.oldbutgold.shop.modules.fulfillment.infrastructure.client.dto.GhnShippingDtos.AvailableServiceDto;
@@ -17,6 +19,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -37,10 +40,18 @@ public class GhnClient {
         factory.setConnectTimeout(properties.connectTimeout());
         factory.setReadTimeout(properties.readTimeout());
 
+        ObjectMapper ghnObjectMapper = new ObjectMapper()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        MappingJackson2HttpMessageConverter jacksonConverter = new MappingJackson2HttpMessageConverter(ghnObjectMapper);
+
         this.shopId = properties.shopId();
         this.restClient = RestClient.builder()
                 .baseUrl(properties.baseUrl())
                 .requestFactory(factory)
+                .messageConverters(converters -> {
+                    converters.removeIf(MappingJackson2HttpMessageConverter.class::isInstance);
+                    converters.add(jacksonConverter);
+                })
                 .defaultHeader("Token", properties.apiToken())
                 .defaultHeader("ShopId", String.valueOf(properties.shopId()))
                 .build();
@@ -99,7 +110,8 @@ public class GhnClient {
     }
 
     public OrderDetailResponseDto getOrderDetailByClientCode(String clientOrderCode) {
-        return get("/v2/shipping-order/detail-by-client-code?client_order_code=" + clientOrderCode,
+        return post("/v2/shipping-order/detail-by-client-code",
+                Map.of("client_order_code", clientOrderCode),
                 new ParameterizedTypeReference<GhnApiResponse<OrderDetailResponseDto>>() {});
     }
 

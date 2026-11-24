@@ -4,10 +4,14 @@ import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.AddressEn
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.AddressRepository;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderEntity;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -17,10 +21,21 @@ public class DefaultFulfillmentCommerceFacade implements FulfillmentCommerceFaca
 
     private final OrderRepository orderRepository;
     private final AddressRepository addressRepository;
+    private final JdbcTemplate jdbcTemplate;
 
-    public DefaultFulfillmentCommerceFacade(OrderRepository orderRepository, AddressRepository addressRepository) {
+    @Autowired
+    public DefaultFulfillmentCommerceFacade(
+            OrderRepository orderRepository,
+            AddressRepository addressRepository,
+            @Autowired(required = false) JdbcTemplate jdbcTemplate
+    ) {
         this.orderRepository = orderRepository;
         this.addressRepository = addressRepository;
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    public DefaultFulfillmentCommerceFacade(OrderRepository orderRepository, AddressRepository addressRepository) {
+        this(orderRepository, addressRepository, null);
     }
 
     @Override
@@ -74,7 +89,9 @@ public class DefaultFulfillmentCommerceFacade implements FulfillmentCommerceFaca
                 o.getShippingWard(),
                 o.getShippingDetailAddress(),
                 o.getShippingGhnDistrictId(),
-                o.getShippingGhnWardCode()
+                o.getShippingGhnWardCode(),
+                o.getWorkflowModel(),
+                o.getShippingFee()
         );
     }
 
@@ -91,7 +108,8 @@ public class DefaultFulfillmentCommerceFacade implements FulfillmentCommerceFaca
         OrderEntity order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn hàng #" + orderId));
         order.markDelivered(deliveredAt);
-        orderRepository.save(order);
+        orderRepository.saveAndFlush(order);
+        syncUc83DeliveryTimestamps(order, deliveredAt);
     }
 
     @Override
@@ -99,7 +117,23 @@ public class DefaultFulfillmentCommerceFacade implements FulfillmentCommerceFaca
         OrderEntity order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn hàng #" + orderId));
         order.markDeliveredDirectFromCarrier(deliveredAt);
-        orderRepository.save(order);
+        orderRepository.saveAndFlush(order);
+        syncUc83DeliveryTimestamps(order, deliveredAt);
+    }
+
+    private void syncUc83DeliveryTimestamps(OrderEntity order, Instant deliveredAt) {
+        if (!"UC83".equals(order.getWorkflowModel()) || jdbcTemplate == null || deliveredAt == null) {
+            return;
+        }
+        Instant returnDueAt = Boolean.TRUE.equals(order.getReturnAllowed())
+                ? deliveredAt.plus(Duration.ofDays(3))
+                : null;
+        jdbcTemplate.update(
+                "UPDATE og_compat.orders SET valid_delivered_at = ?, return_due_at = ? WHERE order_id = ?",
+                Timestamp.from(deliveredAt),
+                returnDueAt != null ? Timestamp.from(returnDueAt) : null,
+                order.getId()
+        );
     }
 
     @Override

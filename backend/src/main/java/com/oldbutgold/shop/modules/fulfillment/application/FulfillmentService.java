@@ -172,9 +172,11 @@ public class FulfillmentService implements FulfillmentShippingFacade {
         // Bắt buộc đối soát GHN trước bằng client_order_code, tránh tạo đơn thứ hai khi GHN đã tạo thành công
         if (ready.isReconciliationFirst()) {
             log.info("Thực hiện đối soát ưu tiên bằng clientOrderCode={} trước khi gọi tạo mới", clientOrderCode);
-            createResponse = reconcileAfterTimeout(clientOrderCode);
-            if (createResponse == null) {
-                // GHN chưa trả về kết quả qua đối soát: TUYỆT ĐỐI KHÔNG tự động gọi lại API tạo vận đơn (tránh trùng đơn mù)!
+            ReconciliationCheck check = reconcileBeforeRetry(clientOrderCode);
+            if (check.foundResponse() != null) {
+                createResponse = check.foundResponse();
+            } else if (!check.confirmedNotFound()) {
+                // Kết quả đối soát chưa chắc chắn (timeout/mạng): KHÔNG tự động gọi lại API tạo vận đơn (tránh trùng đơn mù)!
                 // Giải phóng claim và cập nhật thời điểm đối soát tiếp theo (backoff 30s) bằng query nguyên tử
                 transactionTemplate.execute(status -> {
                     shipmentRepository.releaseClaimWithBackoff(
@@ -188,6 +190,8 @@ public class FulfillmentService implements FulfillmentShippingFacade {
                     return null;
                 });
                 throw new GhnApiException("Vận đơn đang trong tiến trình chờ GHN xác nhận (mã đối soát: " + clientOrderCode + "). Hệ thống đang tiếp tục tự động đối soát, vui lòng không gửi lại yêu cầu tạo đơn mới để tránh trùng lặp.");
+            } else {
+                log.info("GHN xác nhận chưa tồn tại vận đơn cho clientOrderCode={}, cho phép tiếp tục tạo vận đơn mới.", clientOrderCode);
             }
         }
 
@@ -416,15 +420,30 @@ public class FulfillmentService implements FulfillmentShippingFacade {
     // ========================================================================
 
     public List<GhnMasterDataDtos.ProvinceDto> getProvinces() {
-        return ghnClient.getProvinces();
+        List<GhnMasterDataDtos.ProvinceDto> raw = ghnClient.getProvinces();
+        if (raw == null) {
+            return List.of();
+        }
+        return raw.stream()
+                .filter(p -> p != null && p.provinceId() != null && p.provinceName() != null)
+                .filter(p -> {
+                    String name = p.provinceName().trim().toLowerCase(Locale.ROOT);
+                    // Lọc bỏ các bản ghi tỉnh rác/test trên GHN Sandbox (như "Hà Nội 02" id=2002 hoặc "Test - Alert - Tỉnh - 001" id=298)
+                    if (p.provinceId() >= 1000) return false;
+                    if (name.contains("test") || name.contains("alert") || name.matches(".*\\b0[0-9]+$")) return false;
+                    return true;
+                })
+                .toList();
     }
 
     public List<GhnMasterDataDtos.DistrictDto> getDistricts(int provinceId) {
-        return ghnClient.getDistricts(provinceId);
+        List<GhnMasterDataDtos.DistrictDto> raw = ghnClient.getDistricts(provinceId);
+        return raw != null ? raw : List.of();
     }
 
     public List<GhnMasterDataDtos.WardDto> getWards(int districtId) {
-        return ghnClient.getWards(districtId);
+        List<GhnMasterDataDtos.WardDto> raw = ghnClient.getWards(districtId);
+        return raw != null ? raw : List.of();
     }
 
     // ========================================================================
@@ -479,6 +498,12 @@ public class FulfillmentService implements FulfillmentShippingFacade {
         // 6. Chưa có shipment: Sinh client_order_code DUY NHẤT một lần và lưu Shipment PENDING kèm claim
         String clientOrderCode = clientOrderCodeGenerator.generate(orderId);
         ShipmentEntity shipment = new ShipmentEntity(orderId, clientOrderCode, claimToken, claimExpiry, now);
+        if ("UC83".equals(order.workflowModel())) {
+            shipment.setWorkflowModel("UC83");
+            shipment.setDeliveryMethod(ShipmentEntity.DELIVERY_METHOD_CARRIER);
+            shipment.setFeePayer(ShipmentEntity.FEE_PAYER_BUYER);
+            shipment.setFeeSnapshot(order.shippingFee() != null ? order.shippingFee() : BigDecimal.ZERO);
+        }
         shipment.setRawGhnStatus("pending_carrier_confirmation");
         shipmentRepository.save(shipment);
 
@@ -604,23 +629,31 @@ public class FulfillmentService implements FulfillmentShippingFacade {
         );
     }
 
-    private CreateOrderResponseDto reconcileAfterTimeout(String clientOrderCode) {
+    private record ReconciliationCheck(CreateOrderResponseDto foundResponse, boolean confirmedNotFound) {}
+
+    private ReconciliationCheck reconcileBeforeRetry(String clientOrderCode) {
         try {
             OrderDetailResponseDto detail = ghnClient.getOrderDetailByClientCode(clientOrderCode);
             if (detail != null && detail.orderCode() != null && !detail.orderCode().isBlank()) {
-                log.info("Đối soát thành công sau timeout cho clientOrderCode={}: tìm thấy orderCode={}", clientOrderCode, detail.orderCode());
-                return new CreateOrderResponseDto(
-                        detail.orderCode(),
-                        null,
-                        null,
-                        null,
-                        null
+                log.info("Đối soát thành công cho clientOrderCode={}: tìm thấy orderCode={}", clientOrderCode, detail.orderCode());
+                return new ReconciliationCheck(
+                        new CreateOrderResponseDto(detail.orderCode(), null, null, null, null),
+                        false
                 );
             }
         } catch (Exception ex) {
-            log.warn("Không tìm thấy vận đơn khi đối soát bằng clientOrderCode={}: {}", clientOrderCode, ex.getMessage());
+            String msg = ex.getMessage() != null ? ex.getMessage() : "";
+            boolean isExplicitNotFound = msg.contains("Đơn hàng không tồn tại")
+                    || msg.toLowerCase(Locale.ROOT).contains("order not found");
+            log.warn("Không tìm thấy vận đơn khi đối soát bằng clientOrderCode={} (confirmedNotFound={}): {}",
+                    clientOrderCode, isExplicitNotFound, msg);
+            return new ReconciliationCheck(null, isExplicitNotFound);
         }
-        return null;
+        return new ReconciliationCheck(null, false);
+    }
+
+    private CreateOrderResponseDto reconcileAfterTimeout(String clientOrderCode) {
+        return reconcileBeforeRetry(clientOrderCode).foundResponse();
     }
 
     private ShipmentResponse finalizeGhnCreated(long orderId, CreateOrderResponseDto ghnResponse, Instant now) {

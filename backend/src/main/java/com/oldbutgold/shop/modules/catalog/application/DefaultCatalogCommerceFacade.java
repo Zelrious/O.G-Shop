@@ -63,7 +63,10 @@ public class DefaultCatalogCommerceFacade implements CatalogCommerceFacade {
                 product.getStatus(),
                 thumb,
                 product.isRequiresBuyerEkyc(),
-                product.getVersion()
+                product.getVersion(),
+                product.getWorkflowModel(),
+                product.getPublicRevisionId(),
+                product.getReturnAllowed()
         );
     }
 
@@ -72,6 +75,19 @@ public class DefaultCatalogCommerceFacade implements CatalogCommerceFacade {
         ProductEntity product = productRepository.findById(productId)
                 .filter(p -> p.getDeletedAt() == null)
                 .orElseThrow(() -> new ProductNotFoundException("Sản phẩm không tồn tại: " + productId));
+
+        if ("UC83".equals(product.getWorkflowModel())) {
+            int avail = product.getQuantityAvailable() != null ? product.getQuantityAvailable() : 0;
+            if (!ProductEntity.STATUS_ACTIVE.equals(product.getStatus()) || avail < 1) {
+                throw new ProductStateConflictException(
+                        "Sản phẩm '" + product.getTitle() + "' hiện không còn số lượng khả dụng để đặt mua."
+                );
+            }
+            product.setQuantityHeld(product.getQuantityHeld() + 1);
+            product.touch(now);
+            productRepository.save(product);
+            return;
+        }
 
         product.reserve(orderId, reservedUntil, now);
         productRepository.save(product);
@@ -84,6 +100,14 @@ public class DefaultCatalogCommerceFacade implements CatalogCommerceFacade {
                 .orElse(null);
 
         if (product != null) {
+            if ("UC83".equals(product.getWorkflowModel())) {
+                if (product.getQuantityHeld() > 0) {
+                    product.setQuantityHeld(product.getQuantityHeld() - 1);
+                    product.touch(now);
+                    productRepository.save(product);
+                }
+                return;
+            }
             product.releaseReservation(orderId, now);
             productRepository.save(product);
         }
@@ -96,6 +120,15 @@ public class DefaultCatalogCommerceFacade implements CatalogCommerceFacade {
                 .orElse(null);
 
         if (product != null) {
+            if ("UC83".equals(product.getWorkflowModel())) {
+                if (product.getQuantityHeld() > 0) {
+                    product.setQuantityHeld(product.getQuantityHeld() - 1);
+                }
+                product.setQuantitySold(product.getQuantitySold() + 1);
+                product.touch(now);
+                productRepository.save(product);
+                return;
+            }
             product.markSold(orderId, now);
             productRepository.save(product);
         }
