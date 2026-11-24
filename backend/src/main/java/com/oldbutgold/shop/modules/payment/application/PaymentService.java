@@ -266,11 +266,22 @@ public class PaymentService {
         UUID intentId = UUID.randomUUID();
         UUID confirmationId = UUID.randomUUID();
         UUID allocationId = UUID.randomUUID();
-        String uc83Method = switch (method) {
-            case PaymentEntity.METHOD_E_WALLET -> "E_WALLET_MOCK";
-            case PaymentEntity.METHOD_COD -> "COD_MOCK";
-            default -> "BANK_TRANSFER_MOCK";
-        };
+        // Match checkout_groups.payment_method to satisfy og_guard_payment_intent when Buyer chooses any mock method on the payment page
+        String groupPaymentMethod = null;
+        try {
+            groupPaymentMethod = jdbcTemplate.queryForObject(
+                    "SELECT payment_method FROM og_compat.checkout_groups WHERE group_id = ?",
+                    String.class,
+                    groupId
+            );
+        } catch (Exception ignored) {}
+        String uc83Method = (groupPaymentMethod != null && !groupPaymentMethod.isBlank())
+                ? groupPaymentMethod
+                : switch (method) {
+                    case PaymentEntity.METHOD_E_WALLET -> "E_WALLET_MOCK";
+                    case PaymentEntity.METHOD_COD -> "COD_MOCK";
+                    default -> "BANK_TRANSFER_MOCK";
+                };
         java.sql.Timestamp tsNow = java.sql.Timestamp.from(now);
         java.sql.Timestamp tsDue = java.sql.Timestamp.from(order.getPaymentDueAt());
 
