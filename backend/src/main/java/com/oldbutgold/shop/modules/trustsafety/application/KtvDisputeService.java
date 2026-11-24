@@ -71,6 +71,18 @@ public class KtvDisputeService {
                     disputeRepository.recordPenalty(dispute.sellerId(), penaltyPoints,
                             "KTV phán quyết chấp thuận trả hàng do lỗi người bán (Đơn #" + dispute.orderId() + "): " + notes, ktvId);
                 }
+                disputeRepository.recordNotification(
+                        dispute.buyerId(),
+                        "DISPUTE_BUYER",
+                        "KTV đã chấp thuận yêu cầu trả hàng đơn #" + dispute.orderId(),
+                        "Yêu cầu trả hàng của bạn đã được chấp thuận. Vui lòng tạo vận đơn hoàn trả trên trang chi tiết đơn hàng #" + dispute.orderId() + ". Ghi chú KTV: " + notes
+                );
+                disputeRepository.recordNotification(
+                        dispute.sellerId(),
+                        "DISPUTE_SELLER",
+                        "KTV chấp thuận cho Người mua trả hàng đơn #" + dispute.orderId(),
+                        "KTV đã duyệt cho Người mua gửi trả lại hàng đơn #" + dispute.orderId() + ". Vui lòng theo dõi vận đơn hoàn trả và xác nhận khi nhận lại hàng. Ghi chú KTV: " + notes
+                );
             }
             case "RESOLVED_REFUND" -> {
                 refundAmount = dispute.disputeAmount();
@@ -80,6 +92,18 @@ public class KtvDisputeService {
                     disputeRepository.recordPenalty(dispute.sellerId(), penaltyPoints,
                             "KTV phán quyết hoàn tiền do lỗi người bán (Đơn #" + dispute.orderId() + "): " + notes, ktvId);
                 }
+                disputeRepository.recordNotification(
+                        dispute.buyerId(),
+                        "DISPUTE_BUYER",
+                        "Đã hoàn tiền 100% cho đơn hàng #" + dispute.orderId(),
+                        "KTV đã phán quyết hoàn tiền cho đơn hàng #" + dispute.orderId() + ". Ghi chú: " + notes
+                );
+                disputeRepository.recordNotification(
+                        dispute.sellerId(),
+                        "DISPUTE_SELLER",
+                        "Phán quyết hoàn tiền cho Người mua đơn #" + dispute.orderId(),
+                        "KTV đã phán quyết hoàn tiền cho Người mua ở đơn hàng #" + dispute.orderId() + ". Ghi chú: " + notes
+                );
             }
             case "RESOLVED_RELEASE" -> {
                 refundAmount = BigDecimal.ZERO;
@@ -89,6 +113,18 @@ public class KtvDisputeService {
                     disputeRepository.recordPenalty(dispute.buyerId(), penaltyPoints,
                             "KTV phán quyết bác khiếu nại do người mua khiếu nại sai/bom hàng (Đơn #" + dispute.orderId() + "): " + notes, ktvId);
                 }
+                disputeRepository.recordNotification(
+                        dispute.buyerId(),
+                        "DISPUTE_BUYER",
+                        "KTV đã bác khiếu nại đơn hàng #" + dispute.orderId(),
+                        "Khiếu nại đơn hàng #" + dispute.orderId() + " đã bị bác và tiền ký quỹ đã được giải ngân cho Người bán. Ghi chú: " + notes
+                );
+                disputeRepository.recordNotification(
+                        dispute.sellerId(),
+                        "DISPUTE_SELLER",
+                        "Đã giải ngân tiền ký quỹ đơn hàng #" + dispute.orderId(),
+                        "KTV đã bác khiếu nại của Người mua và giải ngân tiền bán hàng đơn #" + dispute.orderId() + " cho bạn."
+                );
             }
             default -> throw new IllegalStateException("Trạng thái phán quyết không mong muốn: " + verdict);
         }

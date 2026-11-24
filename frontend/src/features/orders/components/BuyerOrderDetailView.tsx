@@ -8,8 +8,9 @@ import { TrackingResponse, formatGhnStatus } from '../../fulfillment/fulfillment
 import { BuyerDisputeModal } from '../../disputes/BuyerDisputeModal';
 import { OrderReviewModal } from '../../disputes/OrderReviewModal';
 import { Uc83BuyerOrderPanel } from '../../disputes/Uc83BuyerOrderPanel';
+import { disputeApi } from '../../disputes/disputeApi';
 import { reviewApi } from '../../disputes/reviewApi';
-import type { OrderReviewsResponse } from '../../disputes/types';
+import type { DisputeDetail, OrderReviewsResponse } from '../../disputes/types';
 
 interface BuyerOrderDetailViewProps {
   orderId: number;
@@ -29,6 +30,8 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviews, setReviews] = useState<OrderReviewsResponse | null>(null);
+  const [dispute, setDispute] = useState<DisputeDetail | null>(null);
+  const [creatingReturnShipment, setCreatingReturnShipment] = useState(false);
 
   const loadOrder = useCallback(() => {
     setLoading(true);
@@ -42,6 +45,13 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
         reviewApi.getOrderReviews(orderId)
           .then((res) => setReviews(res))
           .catch(() => setReviews(null));
+        if (['DISPUTED', 'REFUNDED', 'COMPLETED'].includes(data.status)) {
+          disputeApi.getDisputeByOrder(orderId)
+            .then((res) => setDispute(res))
+            .catch(() => setDispute(null));
+        } else {
+          setDispute(null);
+        }
       })
       .catch((err) => {
         setErrorMsg(err.message || 'Không thể tải chi tiết đơn hàng.');
@@ -493,16 +503,104 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
               )}
 
               {order.status === 'DISPUTED' && (
-                <div style={{
-                  background: '#fef3c7',
-                  border: '1px solid #fde68a',
-                  borderRadius: 8,
-                  padding: 12,
-                  fontSize: '0.85rem',
-                  color: '#b45309',
-                  lineHeight: 1.5,
-                }}>
-                  <strong>Đang xử lý tranh chấp (UC62/UC75):</strong> Hồ sơ khiếu nại của bạn đã được chuyển đến Kỹ thuật viên đối soát 2 chiều để ra phán quyết hoàn tiền hoặc trả hàng.
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {dispute?.status === 'RETURN_APPROVED' ? (
+                    <div style={{
+                      background: '#eff6ff',
+                      border: '1px solid #93c5fd',
+                      borderRadius: 8,
+                      padding: 14,
+                      fontSize: '0.85rem',
+                      color: '#1e3a8a',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 10,
+                      lineHeight: 1.5,
+                    }}>
+                      <div>
+                        <strong>✅ KTV đã chấp thuận yêu cầu trả hàng &amp; hoàn tiền (RETURN_APPROVED):</strong>
+                        {dispute.verdictNotes && (
+                          <div style={{ marginTop: 4 }}>
+                            Ghi chú phán quyết của KTV: <em>"{dispute.verdictNotes}"</em>
+                          </div>
+                        )}
+                        <div style={{ marginTop: 4 }}>
+                          Số tiền hoàn dự kiến: <strong>{formatVnd(dispute.refundAmount || order.totalAmount)}</strong>
+                        </div>
+                      </div>
+
+                      {dispute.returnTrackingCode ? (
+                        <div style={{
+                          background: '#fff',
+                          border: '1px solid #bfdbfe',
+                          borderRadius: 8,
+                          padding: 10,
+                          color: '#0f172a',
+                        }}>
+                          <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                            🚚 Theo dõi Vận đơn Hoàn trả (Chiều về)
+                          </div>
+                          <div>Đơn vị vận chuyển: <strong>{dispute.returnCarrier || 'GHN'}</strong></div>
+                          <div>Mã vận đơn hoàn trả: <strong style={{ color: '#2563eb' }}>{dispute.returnTrackingCode}</strong></div>
+                          <div>
+                            Trạng thái:{' '}
+                            <strong style={{ color: '#d97706' }}>
+                              {dispute.returnShipmentStatus === 'RETURN_DELIVERED'
+                                ? 'Đã giao trả thành công cho Người bán'
+                                : 'Đang vận chuyển hoàn trả về Người bán (chờ Người bán xác nhận hoàn tiền)'}
+                            </strong>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={creatingReturnShipment}
+                          onClick={async () => {
+                            setCreatingReturnShipment(true);
+                            try {
+                              const updated = await disputeApi.submitReturnShipment(order.orderId);
+                              setDispute(updated);
+                            } catch (err) {
+                              alert(err instanceof Error ? err.message : 'Không thể tạo vận đơn hoàn trả.');
+                            } finally {
+                              setCreatingReturnShipment(false);
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '10px 16px',
+                            background: '#2563eb',
+                            border: 'none',
+                            color: '#fff',
+                            borderRadius: 8,
+                            fontWeight: 700,
+                            cursor: creatingReturnShipment ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          {creatingReturnShipment
+                            ? 'Đang tạo vận đơn hoàn trả...'
+                            : '📦 Tạo vận đơn GHN Hoàn trả & Gửi hàng về Người bán'}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{
+                      background: '#fef3c7',
+                      border: '1px solid #fde68a',
+                      borderRadius: 8,
+                      padding: 12,
+                      fontSize: '0.85rem',
+                      color: '#b45309',
+                      lineHeight: 1.5,
+                    }}>
+                      <strong>Đang xử lý tranh chấp (UC62/UC75):</strong> Hồ sơ khiếu nại của bạn đã được chuyển đến Kỹ thuật viên đối soát 2 chiều để ra phán quyết hoàn tiền hoặc trả hàng.
+                      {dispute?.sellerResponse && (
+                        <div style={{ marginTop: 6, padding: 8, background: '#fff', borderRadius: 6, color: '#334155' }}>
+                          <strong>Phản hồi của Người bán:</strong> "{dispute.sellerResponse}"
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -58,6 +58,9 @@ export interface DisputeDetail {
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  returnTrackingCode?: string | null;
+  returnCarrier?: string | null;
+  returnShipmentStatus?: string | null;
 }
 
 export interface DisputeDecisionRequest {

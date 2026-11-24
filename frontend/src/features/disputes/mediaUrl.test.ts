@@ -14,3 +14,4 @@ describe('resolveReturnMediaUrl', () => {
     expect(resolveReturnMediaUrl('')).toBe('');
   });
 });
+

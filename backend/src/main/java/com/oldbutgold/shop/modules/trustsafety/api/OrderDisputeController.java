@@ -36,7 +36,7 @@ public class OrderDisputeController {
         return ResponseEntity.ok(buyerDisputeService.createDispute(buyerId, normalized));
     }
 
-    @PostMapping("/{orderId}/seller-response")
+    @PostMapping({"/{orderId}/seller-response", "/{orderId}/dispute/seller-response"})
     public ResponseEntity<DisputeDetailDto> submitSellerResponse(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long orderId,
@@ -44,6 +44,25 @@ public class OrderDisputeController {
     ) {
         long sellerId = extractUserId(jwt);
         return ResponseEntity.ok(buyerDisputeService.submitSellerResponse(sellerId, orderId, request));
+    }
+
+    @PostMapping("/{orderId}/dispute/return-shipment")
+    public ResponseEntity<DisputeDetailDto> submitReturnShipment(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long orderId,
+            @RequestBody(required = false) ReturnShipmentRequest request
+    ) {
+        long buyerId = extractUserId(jwt);
+        return ResponseEntity.ok(buyerDisputeService.submitReturnShipment(buyerId, orderId, request));
+    }
+
+    @PostMapping("/{orderId}/dispute/confirm-return-received")
+    public ResponseEntity<DisputeDetailDto> confirmReturnReceived(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long orderId
+    ) {
+        long actorId = extractUserId(jwt);
+        return ResponseEntity.ok(buyerDisputeService.confirmReturnReceivedAndRefund(actorId, orderId));
     }
 
     @GetMapping("/{orderId}/dispute")

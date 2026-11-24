@@ -7,8 +7,9 @@ import { TrackingResponse, formatGhnStatus } from '../../fulfillment/fulfillment
 import { SellerDisputeResponseModal } from '../../disputes/SellerDisputeResponseModal';
 import { Uc83SellerReturnPanel } from '../../disputes/Uc83SellerReturnPanel';
 import { OrderReviewModal } from '../../disputes/OrderReviewModal';
+import { disputeApi } from '../../disputes/disputeApi';
 import { reviewApi } from '../../disputes/reviewApi';
-import type { OrderReviewsResponse } from '../../disputes/types';
+import type { DisputeDetail, OrderReviewsResponse } from '../../disputes/types';
 
 interface SellerOrderDetailViewProps {
   orderId: number;
@@ -36,6 +37,8 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
   const [showDisputeResponseModal, setShowDisputeResponseModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviews, setReviews] = useState<OrderReviewsResponse | null>(null);
+  const [dispute, setDispute] = useState<DisputeDetail | null>(null);
+  const [confirmingReturn, setConfirmingReturn] = useState(false);
   const [shipmentNote, setShipmentNote] = useState('Cho xem hàng không cho thử');
   const [creatingShipment, setCreatingShipment] = useState(false);
   const [shipmentError, setShipmentError] = useState<string | null>(null);
@@ -65,6 +68,13 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
         reviewApi.getOrderReviews(orderId)
           .then((res) => setReviews(res))
           .catch(() => setReviews(null));
+        if (['DISPUTED', 'REFUNDED', 'COMPLETED'].includes(data.status)) {
+          disputeApi.getDisputeByOrder(orderId)
+            .then((res) => setDispute(res))
+            .catch(() => setDispute(null));
+        } else {
+          setDispute(null);
+        }
       })
       .catch((err) => {
         setErrorMsg(err.message || 'Không thể tải chi tiết đơn bán.');
@@ -521,33 +531,117 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
 
               {order.status === 'DISPUTED' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{
-                    background: '#fef3c7',
-                    border: '1px solid #fde68a',
-                    borderRadius: 8,
-                    padding: 12,
-                    fontSize: '0.85rem',
-                    color: '#b45309',
-                    lineHeight: 1.5,
-                  }}>
-                    <strong>Đơn hàng đang có tranh chấp (UC62/UC63):</strong> Người mua đã gửi yêu cầu khiếu nại. Bạn cần gửi phản hồi giải trình và ảnh kiện hàng để bảo vệ quyền lợi.
-                  </div>
-                  <button
-                    type="button"
-                    style={{
-                      width: '100%',
-                      padding: '10px 16px',
-                      background: '#ea580c',
-                      border: 'none',
-                      color: '#fff',
+                  {dispute?.status === 'RETURN_APPROVED' ? (
+                    <div style={{
+                      background: '#eff6ff',
+                      border: '1px solid #93c5fd',
                       borderRadius: 8,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => setShowDisputeResponseModal(true)}
-                  >
-                    Gửi phản hồi giải trình & Bằng chứng (UC63)
-                  </button>
+                      padding: 14,
+                      fontSize: '0.85rem',
+                      color: '#1e3a8a',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 10,
+                      lineHeight: 1.5,
+                    }}>
+                      <div>
+                        <strong>⚖️ KTV đã chấp thuận cho Người mua trả hàng (RETURN_APPROVED):</strong>
+                        {dispute.verdictNotes && (
+                          <div style={{ marginTop: 4 }}>
+                            Ghi chú phán quyết của KTV: <em>"{dispute.verdictNotes}"</em>
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{
+                        background: '#fff',
+                        border: '1px solid #bfdbfe',
+                        borderRadius: 8,
+                        padding: 10,
+                        color: '#0f172a',
+                      }}>
+                        <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                          🚚 Theo dõi Vận đơn Hoàn trả (Chiều về)
+                        </div>
+                        {dispute.returnTrackingCode ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <div>Đơn vị vận chuyển: <strong>{dispute.returnCarrier || 'GHN'}</strong></div>
+                            <div>Mã vận đơn hoàn trả: <strong style={{ color: '#2563eb' }}>{dispute.returnTrackingCode}</strong></div>
+                            <div>Trạng thái: <strong style={{ color: '#d97706' }}>Đang vận chuyển hoàn trả về kho của bạn</strong></div>
+                          </div>
+                        ) : (
+                          <div style={{ color: '#64748b' }}>
+                            Đang chờ Người mua khởi tạo vận đơn hoàn trả và gửi hàng về...
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={confirmingReturn}
+                        onClick={async () => {
+                          setConfirmingReturn(true);
+                          try {
+                            await disputeApi.confirmReturnReceived(order.orderId);
+                            loadOrder();
+                          } catch (err) {
+                            alert(err instanceof Error ? err.message : 'Không thể xác nhận nhận hàng hoàn trả.');
+                          } finally {
+                            setConfirmingReturn(false);
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '10px 16px',
+                          background: '#16a34a',
+                          border: 'none',
+                          color: '#fff',
+                          borderRadius: 8,
+                          fontWeight: 700,
+                          cursor: confirmingReturn ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        {confirmingReturn
+                          ? 'Đang xử lý hoàn tiền...'
+                          : '✅ Xác nhận đã nhận lại hàng trả & Hoàn tiền cho Người mua'}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{
+                        background: '#fef3c7',
+                        border: '1px solid #fde68a',
+                        borderRadius: 8,
+                        padding: 12,
+                        fontSize: '0.85rem',
+                        color: '#b45309',
+                        lineHeight: 1.5,
+                      }}>
+                        <strong>Đơn hàng đang có tranh chấp (UC62/UC63):</strong> Người mua đã gửi yêu cầu khiếu nại. Bạn cần gửi phản hồi giải trình và ảnh kiện hàng để bảo vệ quyền lợi.
+                        {dispute?.sellerResponse && (
+                          <div style={{ marginTop: 6, padding: 8, background: '#fff', borderRadius: 6, color: '#334155' }}>
+                            <strong>Giải trình đã gửi:</strong> "{dispute.sellerResponse}"
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        style={{
+                          width: '100%',
+                          padding: '10px 16px',
+                          background: '#ea580c',
+                          border: 'none',
+                          color: '#fff',
+                          borderRadius: 8,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setShowDisputeResponseModal(true)}
+                      >
+                        {dispute?.sellerResponse ? 'Cập nhật giải trình & Bằng chứng (UC63)' : 'Gửi phản hồi giải trình & Bằng chứng (UC63)'}
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
 

@@ -48,11 +48,17 @@ public class DisputeRepository {
                   penalty_points INT NOT NULL DEFAULT 0,
                   resolved_by BIGINT NULL,
                   resolved_at TIMESTAMP WITH TIME ZONE NULL,
+                  return_tracking_code VARCHAR(100) NULL,
+                  return_carrier VARCHAR(64) NULL,
+                  return_shipment_status VARCHAR(32) NULL,
                   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """);
         } catch (Exception ignored) {}
+        try { jdbc.execute("ALTER TABLE public.dispute_cases ADD COLUMN IF NOT EXISTS return_tracking_code VARCHAR(100) NULL"); } catch (Exception ignored) {}
+        try { jdbc.execute("ALTER TABLE public.dispute_cases ADD COLUMN IF NOT EXISTS return_carrier VARCHAR(64) NULL"); } catch (Exception ignored) {}
+        try { jdbc.execute("ALTER TABLE public.dispute_cases ADD COLUMN IF NOT EXISTS return_shipment_status VARCHAR(32) NULL"); } catch (Exception ignored) {}
 
         try {
             jdbc.execute("CREATE SCHEMA IF NOT EXISTS og_compat");
@@ -199,6 +205,7 @@ public class DisputeRepository {
                    d.video_unboxing_url, d.seller_response, d.seller_evidence_urls, d.seller_response_due_at,
                    d.status, d.verdict_action, d.verdict_notes, d.refund_amount, d.penalty_points,
                    d.resolved_by, d.resolved_at, d.created_at, d.updated_at,
+                   d.return_tracking_code, d.return_carrier, d.return_shipment_status,
                    COALESCE((SELECT oi.product_title FROM public.order_items oi WHERE oi.order_id = d.order_id ORDER BY oi.order_item_id ASC LIMIT 1), 'Đơn hàng #' || d.order_id) AS product_title
             FROM public.dispute_cases d
             LEFT JOIN public.orders o ON d.order_id = o.order_id
@@ -218,6 +225,7 @@ public class DisputeRepository {
                    d.video_unboxing_url, d.seller_response, d.seller_evidence_urls, d.seller_response_due_at,
                    d.status, d.verdict_action, d.verdict_notes, d.refund_amount, d.penalty_points,
                    d.resolved_by, d.resolved_at, d.created_at, d.updated_at,
+                   d.return_tracking_code, d.return_carrier, d.return_shipment_status,
                    COALESCE((SELECT oi.product_title FROM public.order_items oi WHERE oi.order_id = d.order_id ORDER BY oi.order_item_id ASC LIMIT 1), 'Đơn hàng #' || d.order_id) AS product_title
             FROM public.dispute_cases d
             LEFT JOIN public.orders o ON d.order_id = o.order_id
@@ -271,6 +279,62 @@ public class DisputeRepository {
             """;
         jdbc.update(sql, verdictAction, verdictAction, refundAmount, verdictNotes,
                 penaltyPoints, ktvId, Timestamp.from(now), Timestamp.from(now), disputeId);
+    }
+
+    public void saveReturnShipment(long disputeId, String trackingCode, String carrier, String shipmentStatus) {
+        Instant now = Instant.now();
+        jdbc.update("""
+                UPDATE public.dispute_cases
+                SET return_tracking_code = ?, return_carrier = ?, return_shipment_status = ?, updated_at = ?
+                WHERE dispute_id = ?
+                """,
+                trackingCode, carrier, shipmentStatus, Timestamp.from(now), disputeId);
+    }
+
+    public void markReturnDeliveredAndRefunded(long disputeId, long actorId, BigDecimal refundAmount) {
+        Instant now = Instant.now();
+        jdbc.update("""
+                UPDATE public.dispute_cases
+                SET status = 'RESOLVED_REFUND',
+                    verdict_action = 'RESOLVED_REFUND',
+                    return_shipment_status = 'RETURN_DELIVERED',
+                    refund_amount = COALESCE(?, refund_amount),
+                    resolved_at = COALESCE(resolved_at, ?),
+                    updated_at = ?
+                WHERE dispute_id = ?
+                """,
+                refundAmount, Timestamp.from(now), Timestamp.from(now), disputeId);
+    }
+
+    public void recordNotification(long userId, String type, String title, String content) {
+        Instant now = Instant.now();
+        jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) conn -> {
+            java.sql.Savepoint sp = null;
+            try {
+                sp = conn.setSavepoint("sp_dispute_notif");
+            } catch (SQLException ignored) {}
+            try (var ps = conn.prepareStatement("""
+                    INSERT INTO og_compat.notifications (
+                      user_id, type, title, content, is_read, created_at, target_data
+                    ) VALUES (?, ?, ?, ?, false, ?, '{}'::jsonb)
+                    """)) {
+                ps.setLong(1, userId);
+                ps.setString(2, type);
+                ps.setString(3, title);
+                ps.setString(4, content);
+                ps.setTimestamp(5, Timestamp.from(now));
+                ps.executeUpdate();
+                if (sp != null) {
+                    try { conn.releaseSavepoint(sp); } catch (SQLException ignored) {}
+                }
+            } catch (SQLException e) {
+                if (sp != null) {
+                    try { conn.rollback(sp); } catch (SQLException ignored) {}
+                    try { conn.releaseSavepoint(sp); } catch (SQLException ignored) {}
+                }
+            }
+            return null;
+        });
     }
 
     public void recordPenalty(long userId, int penaltyPoints, String reason, long decidedBy) {
@@ -412,6 +476,14 @@ public class DisputeRepository {
         Instant resolvedAt = getInstant(rs, "resolved_at");
         Instant createdAt = getInstant(rs, "created_at");
         Instant updatedAt = getInstant(rs, "updated_at");
+        String returnTrackingCode = null;
+        String returnCarrier = null;
+        String returnShipmentStatus = null;
+        try {
+            returnTrackingCode = rs.getString("return_tracking_code");
+            returnCarrier = rs.getString("return_carrier");
+            returnShipmentStatus = rs.getString("return_shipment_status");
+        } catch (SQLException ignored) {}
 
         String productTitle = rs.getString("product_title");
         if (productTitle == null || productTitle.isBlank()) {
@@ -445,7 +517,10 @@ public class DisputeRepository {
                 resolvedBy,
                 resolvedAt,
                 createdAt,
-                updatedAt
+                updatedAt,
+                returnTrackingCode,
+                returnCarrier,
+                returnShipmentStatus
         );
     }
 

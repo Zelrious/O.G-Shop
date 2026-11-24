@@ -17,3 +17,4 @@ export function resolveReturnMediaUrl(objectKey: string | null | undefined): str
   }
   return `${BACKEND_ORIGIN}/${objectKey}`;
 }
+

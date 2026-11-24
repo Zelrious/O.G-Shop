@@ -15,6 +15,8 @@ export const notificationApi = {
   async readAll() { const value = await authApi.authorizedFetch('/notifications/read-all', { method: 'POST' }); if (!value.ok) throw new Error('Chưa cập nhật được trạng thái đã đọc toàn bộ.'); },
 };
 export function notificationTarget(item: NotificationItem, roles: string[]): string | null {
+  if (item.type === 'DISPUTE_BUYER') return '/orders';
+  if (item.type === 'DISPUTE_SELLER' && roles.includes('SELLER')) return '/seller/orders';
   if (item.type === 'EKYC_PENDING_KTV' && roles.includes('KTV')) return '/ktv/kyc';
   if (item.type === 'EKYC_SUBMITTED' || item.type === 'EKYC_REJECTED') return '/seller-verification';
   if (item.type === 'EKYC_APPROVED') return '/profile';

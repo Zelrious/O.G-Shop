@@ -91,4 +91,93 @@ public class BuyerDisputeService {
         return disputeRepository.findDisputeByOrderId(orderId)
                 .orElseThrow(() -> new NoSuchElementException("Đơn hàng #" + orderId + " chưa có hồ sơ tranh chấp."));
     }
+
+    public DisputeDetailDto submitReturnShipment(long buyerId, long orderId, ReturnShipmentRequest request) {
+        OrderEntity order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
+
+        if (!order.getBuyerId().equals(buyerId)) {
+            throw new AccessDeniedException("Chỉ người mua của đơn hàng mới có thể tạo vận đơn hoàn trả.");
+        }
+
+        DisputeDetailDto dispute = disputeRepository.findDisputeByOrderId(orderId)
+                .orElseThrow(() -> new NoSuchElementException("Đơn hàng #" + orderId + " chưa có hồ sơ tranh chấp."));
+
+        if (!"RETURN_APPROVED".equals(dispute.status())) {
+            throw new IllegalStateException("Chỉ có thể tạo vận đơn hoàn trả khi KTV đã chấp thuận yêu cầu trả hàng (RETURN_APPROVED). Trạng thái hiện tại: " + dispute.status());
+        }
+
+        String carrier = (request != null && request.carrier() != null && !request.carrier().isBlank())
+                ? request.carrier().trim().toUpperCase()
+                : "GHN";
+        String trackingCode = (request != null && request.trackingCode() != null && !request.trackingCode().isBlank())
+                ? request.trackingCode().trim().toUpperCase()
+                : "GHN-RET-" + orderId + "-" + java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+
+        disputeRepository.saveReturnShipment(dispute.disputeId(), trackingCode, carrier, "RETURN_SHIPPING");
+
+        disputeRepository.recordNotification(
+                order.getSellerId(),
+                "DISPUTE_SELLER",
+                "Người mua đã gửi hàng hoàn trả đơn #" + orderId,
+                "Vận đơn hoàn trả " + carrier + " (" + trackingCode + ") đang trên đường giao về kho của bạn. Vui lòng kiểm tra và xác nhận khi nhận được hàng."
+        );
+        disputeRepository.recordNotification(
+                buyerId,
+                "DISPUTE_BUYER",
+                "Đã khởi tạo vận đơn hoàn trả đơn #" + orderId,
+                "Mã vận đơn hoàn trả " + carrier + ": " + trackingCode + ". Tiền ký quỹ sẽ được hoàn về ngay khi Người bán xác nhận nhận lại hàng."
+        );
+
+        return disputeRepository.findDisputeById(dispute.disputeId())
+                .orElseThrow(() -> new IllegalStateException("Không thể tải hồ sơ tranh chấp sau khi tạo vận đơn hoàn trả."));
+    }
+
+    public DisputeDetailDto confirmReturnReceivedAndRefund(long actorId, long orderId) {
+        OrderEntity order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
+
+        if (!order.getSellerId().equals(actorId) && !order.getBuyerId().equals(actorId)) {
+            throw new AccessDeniedException("Bạn không có quyền xác nhận hoàn trả cho đơn hàng này.");
+        }
+
+        DisputeDetailDto dispute = disputeRepository.findDisputeByOrderId(orderId)
+                .orElseThrow(() -> new NoSuchElementException("Đơn hàng #" + orderId + " chưa có hồ sơ tranh chấp."));
+
+        if ("RESOLVED_REFUND".equals(dispute.status())) {
+            return dispute;
+        }
+        if (!"RETURN_APPROVED".equals(dispute.status())) {
+            throw new IllegalStateException("Chỉ có thể xác nhận nhận hàng trả và hoàn tiền khi hồ sơ đang ở trạng thái RETURN_APPROVED.");
+        }
+
+        java.math.BigDecimal refundAmount = dispute.refundAmount() != null && dispute.refundAmount().compareTo(java.math.BigDecimal.ZERO) > 0
+                ? dispute.refundAmount()
+                : order.getTotalAmount();
+
+        commerceDisputeFacade.resolveDisputeRefund(
+                orderId,
+                refundAmount,
+                "Người bán xác nhận đã nhận lại hàng hoàn trả (Mã vận đơn: "
+                        + (dispute.returnTrackingCode() != null ? dispute.returnTrackingCode() : "TRỰC TIẾP") + ")"
+        );
+
+        disputeRepository.markReturnDeliveredAndRefunded(dispute.disputeId(), actorId, refundAmount);
+
+        disputeRepository.recordNotification(
+                order.getBuyerId(),
+                "DISPUTE_BUYER",
+                "Hoàn tiền thành công cho đơn hàng #" + orderId,
+                "Người bán đã xác nhận nhận lại hàng hoàn trả. Tiền ký quỹ đã được hoàn về cho bạn."
+        );
+        disputeRepository.recordNotification(
+                order.getSellerId(),
+                "DISPUTE_SELLER",
+                "Đã hoàn tất nhận hàng trả & hoàn tiền đơn #" + orderId,
+                "Đơn hàng #" + orderId + " đã chuyển sang trạng thái REFUNDED sau khi bạn xác nhận nhận lại hàng trả."
+        );
+
+        return disputeRepository.findDisputeById(dispute.disputeId())
+                .orElseThrow(() -> new IllegalStateException("Không thể tải hồ sơ tranh chấp sau khi hoàn tiền."));
+    }
 }
