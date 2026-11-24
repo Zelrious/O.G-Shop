@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ordersApi } from '../orders/ordersApi';
-import { returnCaseApi, ReturnCaseDetail } from './returnCaseApi';
+import { resolveReturnMediaUrl } from './mediaUrl';
+import { returnCaseApi, ReturnCaseDetail, ReturnReasonCode } from './returnCaseApi';
 
 interface Uc83BuyerOrderPanelProps {
   orderId: number;
@@ -29,6 +30,10 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [returnCase, setReturnCase] = useState<ReturnCaseDetail | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createReasonCode, setCreateReasonCode] = useState<ReturnReasonCode>('NOT_AS_DESCRIBED');
+  const [createDetail, setCreateDetail] = useState('');
+  const [createEvidenceUrl, setCreateEvidenceUrl] = useState('');
   const [showSupplementForm, setShowSupplementForm] = useState(false);
   const [supplementNote, setSupplementNote] = useState('');
   const [supplementUrl, setSupplementUrl] = useState('');
@@ -83,6 +88,40 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
       onUpdated();
     } catch (err) {
       setFeedback({ type: 'error', text: err instanceof Error ? err.message : 'Không thể hoàn tất sớm đơn hàng.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCreateReturnRequest = async () => {
+    const trimmedUrl = createEvidenceUrl.trim();
+    if (!trimmedUrl) {
+      setFeedback({ type: 'error', text: 'Vui lòng nhập đường dẫn ảnh/video bằng chứng mở hộp (UC62).' });
+      return;
+    }
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const created = await returnCaseApi.createReturnRequest(orderId, {
+        reasonCode: createReasonCode,
+        detail: createDetail.trim() || undefined,
+        evidenceList: [
+          {
+            mediaType: 'IMAGE',
+            objectKey: trimmedUrl,
+            contentDigest: 'c'.repeat(64),
+            fileSizeBytes: 1024,
+          },
+        ],
+      });
+      setReturnCase(created);
+      setShowCreateForm(false);
+      setCreateDetail('');
+      setCreateEvidenceUrl('');
+      setFeedback({ type: 'success', text: `Đã gửi yêu cầu trả hàng UC62 (#${created.caseId}) thành công.` });
+      onUpdated();
+    } catch (err) {
+      setFeedback({ type: 'error', text: err instanceof Error ? err.message : 'Không thể gửi yêu cầu trả hàng.' });
     } finally {
       setBusy(false);
     }
@@ -245,6 +284,65 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
         </button>
       </div>
 
+      {/* UC62 Return Request Form when no active return case */}
+      {!returnCase && (
+        <div style={{ borderTop: '1px solid var(--og-border, #e2e8f0)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setShowCreateForm((v) => !v)}
+            className="og-button og-button--secondary"
+            style={{ width: '100%', padding: '8px 12px', fontWeight: 600 }}
+          >
+            Yêu cầu trả hàng / hoàn tiền (UC62)
+          </button>
+
+          {showCreateForm && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #cbd5e1' }}>
+              <select
+                value={createReasonCode}
+                onChange={(e) => setCreateReasonCode(e.target.value as ReturnReasonCode)}
+                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
+              >
+                <option value="NOT_AS_DESCRIBED">Hàng không đúng mô tả</option>
+                <option value="DAMAGED_OR_DEFECTIVE">Hàng bị lỗi / hư hỏng</option>
+                <option value="CHANGE_MIND">Đổi ý (còn nguyên vẹn)</option>
+              </select>
+              <textarea
+                rows={2}
+                placeholder="Mô tả chi tiết tình trạng hàng nhận được..."
+                value={createDetail}
+                onChange={(e) => setCreateDetail(e.target.value)}
+                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
+              />
+              <input
+                type="text"
+                placeholder="Đường dẫn ảnh/video bằng chứng (ví dụ: /api/v1/media/...)..."
+                value={createEvidenceUrl}
+                onChange={(e) => setCreateEvidenceUrl(e.target.value)}
+                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
+              />
+              {createEvidenceUrl.trim() && (
+                <img
+                  src={resolveReturnMediaUrl(createEvidenceUrl.trim())}
+                  alt="Xem trước bằng chứng trả hàng"
+                  style={{ width: 96, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0' }}
+                />
+              )}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleCreateReturnRequest}
+                className="og-button og-button--primary"
+                style={{ padding: '6px 12px', fontWeight: 600 }}
+              >
+                Gửi yêu cầu trả hàng
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Active UC83 Return Case Actions */}
       {returnCase && (
         <div
@@ -282,6 +380,13 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
                     onChange={(e) => setSupplementUrl(e.target.value)}
                     style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
                   />
+                  {supplementUrl.trim() && (
+                    <img
+                      src={resolveReturnMediaUrl(supplementUrl.trim())}
+                      alt="Xem trước bằng chứng bổ sung"
+                      style={{ width: 96, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0' }}
+                    />
+                  )}
                   <input
                     type="text"
                     placeholder="Ghi chú mô tả thêm (tùy chọn)..."

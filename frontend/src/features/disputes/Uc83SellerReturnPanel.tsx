@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { resolveReturnMediaUrl } from './mediaUrl';
 import { returnCaseApi, ReturnCaseDetail } from './returnCaseApi';
 
 interface Uc83SellerReturnPanelProps {
@@ -200,6 +201,13 @@ export const Uc83SellerReturnPanel: React.FC<Uc83SellerReturnPanelProps> = ({
                 onChange={(e) => setExemptEvidenceUrl(e.target.value)}
                 style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
               />
+              {exemptEvidenceUrl.trim() && (
+                <img
+                  src={resolveReturnMediaUrl(exemptEvidenceUrl.trim())}
+                  alt="Xem trước bằng chứng miễn hoàn"
+                  style={{ width: 96, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0' }}
+                />
+              )}
               <button
                 type="button"
                 disabled={busy}
