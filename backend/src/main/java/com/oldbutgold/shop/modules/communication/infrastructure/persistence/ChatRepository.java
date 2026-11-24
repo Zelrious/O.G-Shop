@@ -40,7 +40,11 @@ public class ChatRepository {
         return id;
     }
     public void linkOrder(long id,long order){if(!Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM og_compat.conversation_order_links WHERE conversation_id=? AND order_id=?)",Boolean.class,id,order)))jdbc.update("INSERT INTO og_compat.conversation_order_links(conversation_id,order_id) VALUES(?,?)",id,order);}
-    public boolean blocked(long buyer,long seller){return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM public.seller_buyer_blocks WHERE seller_id=? AND buyer_id=? AND unblocked_at IS NULL)",Boolean.class,seller,buyer));}
+    public Optional<String> blockScope(long buyer,long seller){return jdbc.query("SELECT COALESCE(block_scope,'ALL') FROM public.seller_buyer_blocks WHERE seller_id=? AND buyer_id=? AND unblocked_at IS NULL",(r,n)->r.getString(1),seller,buyer).stream().findFirst();}
+    public boolean blocked(long buyer,long seller){return blockScope(buyer,seller).isPresent();}
+    public boolean blockedForChat(long buyer,long seller){return blockScope(buyer,seller).map(s->"CHAT".equals(s)||"ALL".equals(s)).orElse(false);}
+    public boolean blockedForPurchase(long buyer,long seller){return blockScope(buyer,seller).map(s->"PURCHASE".equals(s)||"ALL".equals(s)).orElse(false);}
+    public Set<Long> purchaseBlockedSellerIdsForBuyer(long buyer){return new HashSet<>(jdbc.query("SELECT seller_id FROM public.seller_buyer_blocks WHERE buyer_id=? AND unblocked_at IS NULL AND COALESCE(block_scope,'ALL') IN ('PURCHASE','ALL')",(r,n)->r.getLong(1),buyer));}
     public long peerRead(long id,long actor){return jdbc.queryForObject("SELECT COALESCE(max(last_read_message_id),0) FROM og_compat.conversation_user_state WHERE conversation_id=? AND user_id<>?",Long.class,id,actor);}
     public void read(long id,long actor,long message){
         if(!Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM og_compat.messages WHERE conversation_id=? AND message_id=?)",Boolean.class,id,message)))throw new CommunicationException(400,"READ_CURSOR_INVALID","Tin nhắn không thuộc hội thoại.");
@@ -77,12 +81,14 @@ public class ChatRepository {
         if(!Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM og_compat.chat_media_daily_quotas WHERE conversation_id=? AND sender_id=? AND quota_date=?::date)",Boolean.class,conversation,actor,q.date())))jdbc.update("INSERT INTO og_compat.chat_media_daily_quotas(conversation_id,sender_id,quota_date,images_sent,videos_sent,total_bytes_sent) VALUES(?,?,?::date,?,?,?)",conversation,actor,q.date(),images,videos,bytes);
         else jdbc.update("UPDATE og_compat.chat_media_daily_quotas SET images_sent=?,videos_sent=?,total_bytes_sent=?,updated_at=CURRENT_TIMESTAMP WHERE conversation_id=? AND sender_id=? AND quota_date=?::date",images,videos,q.bytes()+bytes,conversation,actor,q.date());
     }
-    public List<Block> blocks(long seller){return jdbc.query("SELECT b.buyer_id,u.full_name,b.blocked_at,b.reason FROM public.seller_buyer_blocks b JOIN og_compat.users u ON u.user_id=b.buyer_id WHERE b.seller_id=? AND b.unblocked_at IS NULL ORDER BY b.blocked_at DESC",(r,n)->new Block(r.getLong(1),r.getString(2),r.getTimestamp(3).toInstant(),r.getString(4)),seller);}
-    public void block(long seller,long buyer,String reason,boolean active){
+    public List<Block> blocks(long seller){return jdbc.query("SELECT b.buyer_id,u.full_name,b.blocked_at,b.reason,COALESCE(b.block_scope,'ALL') FROM public.seller_buyer_blocks b JOIN og_compat.users u ON u.user_id=b.buyer_id WHERE b.seller_id=? AND b.unblocked_at IS NULL ORDER BY b.blocked_at DESC",(r,n)->new Block(r.getLong(1),r.getString(2),r.getTimestamp(3).toInstant(),r.getString(4),r.getString(5)),seller);}
+    public void block(long seller,long buyer,String reason,boolean active){block(seller,buyer,reason,active,"ALL");}
+    public void block(long seller,long buyer,String reason,boolean active,String blockScope){
+        String normalizedScope=blockScope==null?"ALL":blockScope;
         if(active)jdbc.update("""
-            INSERT INTO public.seller_buyer_blocks(seller_id,buyer_id,reason) VALUES(?,?,?)
-            ON CONFLICT(seller_id,buyer_id) DO UPDATE SET blocked_at=CASE WHEN seller_buyer_blocks.unblocked_at IS NULL THEN seller_buyer_blocks.blocked_at ELSE CURRENT_TIMESTAMP END,unblocked_at=NULL,reason=EXCLUDED.reason
-            """,seller,buyer,reason);
+            INSERT INTO public.seller_buyer_blocks(seller_id,buyer_id,reason,block_scope) VALUES(?,?,?,?)
+            ON CONFLICT(seller_id,buyer_id) DO UPDATE SET blocked_at=CASE WHEN seller_buyer_blocks.unblocked_at IS NULL THEN seller_buyer_blocks.blocked_at ELSE CURRENT_TIMESTAMP END,unblocked_at=NULL,reason=EXCLUDED.reason,block_scope=EXCLUDED.block_scope
+            """,seller,buyer,reason,normalizedScope);
         else jdbc.update("UPDATE public.seller_buyer_blocks SET unblocked_at=CURRENT_TIMESTAMP WHERE seller_id=? AND buyer_id=? AND unblocked_at IS NULL",seller,buyer);
     }
     public List<Map<String,Object>> searchBuyers(long seller,String query){return jdbc.queryForList("""
@@ -134,6 +140,15 @@ public class ChatRepository {
             VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING report_id
             """, Long.class, conversationId, offenderId, reporterId, flaggedMessageId, violationType, severityLevel, status, flaggedContent, contextSnippet);
+    }
+    public boolean hasActiveUserReport(long messageId, long reporterId) {
+        ensureReportsTableExists();
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+            SELECT EXISTS(
+              SELECT 1 FROM public.chat_moderation_reports
+              WHERE flagged_message_id = ? AND reporter_id = ?
+            )
+            """, Boolean.class, messageId, reporterId));
     }
     public String getRecentContextJson(long conversationId) {
         return getRecentContextJson(conversationId, null, null);

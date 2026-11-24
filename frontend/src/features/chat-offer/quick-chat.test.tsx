@@ -36,7 +36,7 @@ describe('Quick chat and inbox handoff', () => {
     expect(await screen.findByRole('textbox', { name: 'Soạn tin nhắn' })).toHaveValue('Còn phụ kiện không?');
     fireEvent.click(screen.getByRole('button', { name: 'Mở hộp thư đầy đủ' }));
     expect(await screen.findByRole('textbox', { name: 'Soạn tin nhắn' })).toHaveValue('Còn phụ kiện không?');
-    expect(screen.getByRole('link', { name: 'Trở lại trang đang xem' })).toHaveAttribute('href', '/other');
+    expect(screen.queryByRole('link', { name: 'Trở lại trang đang xem' })).not.toBeInTheDocument();
   });
   it('reuses the failed command after switching from quick chat to the inbox', async () => {
     vi.mocked(chatApi.send).mockRejectedValue(new Error('Mất kết nối'));

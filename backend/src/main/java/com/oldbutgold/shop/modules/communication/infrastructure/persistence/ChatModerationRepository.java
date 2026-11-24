@@ -198,8 +198,8 @@ public class ChatModerationRepository {
             long offenderId = rs.getLong("offender_id");
             long conversationId = rs.getLong("conversation_id");
             String flaggedContent = rs.getString("flagged_content");
-            String rawSnippet = rs.getString("context_snippet");
-            String unmaskedSnippet = unmaskContextSnippet(conversationId, offenderId, flaggedContent, rawSnippet);
+            // Privacy guard (TASK-0126): do NOT expose surrounding unflagged normal messages in contextSnippet
+            String unmaskedSnippet = "[]";
             int reputation = getOffenderReputation(offenderId);
             return new ReportDetailDto(
                 rs.getLong("report_id"),
@@ -332,13 +332,27 @@ public class ChatModerationRepository {
     }
 
     // =========================================================================
-    // Dynamic Conversation Chunk Stream for KTV (aroundMessageId, before, after)
+    // Privacy-Restricted Flagged/Reported Messages Stream for KTV (TASK-0126)
+    // Only returns messages flagged by the system OR actively reported by users.
+    // Normal private messages in the conversation are NEVER returned to KTV.
     // =========================================================================
+    public boolean isMessageReportedOrFlagged(long messageId) {
+        try {
+            Boolean exists = jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM public.chat_moderation_reports WHERE flagged_message_id = ?)",
+                Boolean.class, messageId
+            );
+            return Boolean.TRUE.equals(exists);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public ConversationChunkResponse getConversationChunkForKtv(long conversationId, Long aroundMessageId,
                                                                 Long before, Long after, int size) {
         int limit = Math.max(10, Math.min(100, size <= 0 ? 60 : size));
 
-        // 1. Build log unmask lookup map
+        // 1. Build log unmask lookup map (scoped to flagged messages in this conversation)
         Map<String, String> logUnmasks = new HashMap<>();
         try {
             var logRows = jdbc.query(
@@ -353,107 +367,25 @@ public class ChatModerationRepository {
             }
         } catch (Exception ignored) {}
 
-        List<KtvMessageItemDto> messages = new ArrayList<>();
-
-        if (aroundMessageId != null && aroundMessageId > 0) {
-            int half = limit / 2;
-            // Fetch before pivot (DESC, then reverse)
-            List<KtvMessageItemDto> beforePivot = queryMessageBatch(
-                "SELECT m.*, u.full_name, u.avatar_url, r.report_id, r.violation_type, r.severity_level, r.status AS report_status " +
-                "FROM og_compat.messages m " +
-                "LEFT JOIN public.users u ON u.user_id = m.sender_id " +
-                "LEFT JOIN (SELECT flagged_message_id, MAX(report_id) AS report_id, MAX(violation_type) AS violation_type, MAX(severity_level) AS severity_level, " +
-                "  CASE WHEN MIN(CASE status WHEN 'PENDING' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END) = 1 THEN 'PENDING' " +
-                "       WHEN MIN(CASE status WHEN 'PENDING' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END) = 2 THEN 'RESOLVED' " +
-                "       ELSE 'DISMISSED' END AS status " +
-                "  FROM public.chat_moderation_reports WHERE flagged_message_id IS NOT NULL GROUP BY flagged_message_id) r ON r.flagged_message_id = m.message_id " +
-                "WHERE m.conversation_id = ? AND m.deleted_at IS NULL AND m.message_id < ? " +
-                "ORDER BY m.message_id DESC LIMIT ?",
-                logUnmasks, conversationId, aroundMessageId, half
-            );
-            Collections.reverse(beforePivot);
-
-            // Fetch pivot itself
-            List<KtvMessageItemDto> pivot = queryMessageBatch(
-                "SELECT m.*, u.full_name, u.avatar_url, r.report_id, r.violation_type, r.severity_level, r.status AS report_status " +
-                "FROM og_compat.messages m " +
-                "LEFT JOIN public.users u ON u.user_id = m.sender_id " +
-                "LEFT JOIN (SELECT flagged_message_id, MAX(report_id) AS report_id, MAX(violation_type) AS violation_type, MAX(severity_level) AS severity_level, " +
-                "  CASE WHEN MIN(CASE status WHEN 'PENDING' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END) = 1 THEN 'PENDING' " +
-                "       WHEN MIN(CASE status WHEN 'PENDING' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END) = 2 THEN 'RESOLVED' " +
-                "       ELSE 'DISMISSED' END AS status " +
-                "  FROM public.chat_moderation_reports WHERE flagged_message_id IS NOT NULL GROUP BY flagged_message_id) r ON r.flagged_message_id = m.message_id " +
-                "WHERE m.conversation_id = ? AND m.deleted_at IS NULL AND m.message_id = ?",
-                logUnmasks, conversationId, aroundMessageId
-            );
-
-            // Fetch after pivot (ASC)
-            List<KtvMessageItemDto> afterPivot = queryMessageBatch(
-                "SELECT m.*, u.full_name, u.avatar_url, r.report_id, r.violation_type, r.severity_level, r.status AS report_status " +
-                "FROM og_compat.messages m " +
-                "LEFT JOIN public.users u ON u.user_id = m.sender_id " +
-                "LEFT JOIN (SELECT flagged_message_id, MAX(report_id) AS report_id, MAX(violation_type) AS violation_type, MAX(severity_level) AS severity_level, " +
-                "  CASE WHEN MIN(CASE status WHEN 'PENDING' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END) = 1 THEN 'PENDING' " +
-                "       WHEN MIN(CASE status WHEN 'PENDING' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END) = 2 THEN 'RESOLVED' " +
-                "       ELSE 'DISMISSED' END AS status " +
-                "  FROM public.chat_moderation_reports WHERE flagged_message_id IS NOT NULL GROUP BY flagged_message_id) r ON r.flagged_message_id = m.message_id " +
-                "WHERE m.conversation_id = ? AND m.deleted_at IS NULL AND m.message_id > ? " +
-                "ORDER BY m.message_id ASC LIMIT ?",
-                logUnmasks, conversationId, aroundMessageId, half
-            );
-
-            messages.addAll(beforePivot);
-            messages.addAll(pivot);
-            messages.addAll(afterPivot);
-        } else if (before != null && before > 0) {
-            List<KtvMessageItemDto> olderBatch = queryMessageBatch(
-                "SELECT m.*, u.full_name, u.avatar_url, r.report_id, r.violation_type, r.severity_level, r.status AS report_status " +
-                "FROM og_compat.messages m " +
-                "LEFT JOIN public.users u ON u.user_id = m.sender_id " +
-                "LEFT JOIN (SELECT flagged_message_id, MAX(report_id) AS report_id, MAX(violation_type) AS violation_type, MAX(severity_level) AS severity_level, " +
-                "  CASE WHEN MIN(CASE status WHEN 'PENDING' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END) = 1 THEN 'PENDING' " +
-                "       WHEN MIN(CASE status WHEN 'PENDING' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END) = 2 THEN 'RESOLVED' " +
-                "       ELSE 'DISMISSED' END AS status " +
-                "  FROM public.chat_moderation_reports WHERE flagged_message_id IS NOT NULL GROUP BY flagged_message_id) r ON r.flagged_message_id = m.message_id " +
-                "WHERE m.conversation_id = ? AND m.deleted_at IS NULL AND m.message_id < ? " +
-                "ORDER BY m.message_id DESC LIMIT ?",
-                logUnmasks, conversationId, before, limit
-            );
-            Collections.reverse(olderBatch);
-            messages.addAll(olderBatch);
-        } else if (after != null && after > 0) {
-            List<KtvMessageItemDto> newerBatch = queryMessageBatch(
-                "SELECT m.*, u.full_name, u.avatar_url, r.report_id, r.violation_type, r.severity_level, r.status AS report_status " +
-                "FROM og_compat.messages m " +
-                "LEFT JOIN public.users u ON u.user_id = m.sender_id " +
-                "LEFT JOIN (SELECT flagged_message_id, MAX(report_id) AS report_id, MAX(violation_type) AS violation_type, MAX(severity_level) AS severity_level, " +
-                "  CASE WHEN MIN(CASE status WHEN 'PENDING' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END) = 1 THEN 'PENDING' " +
-                "       WHEN MIN(CASE status WHEN 'PENDING' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END) = 2 THEN 'RESOLVED' " +
-                "       ELSE 'DISMISSED' END AS status " +
-                "  FROM public.chat_moderation_reports WHERE flagged_message_id IS NOT NULL GROUP BY flagged_message_id) r ON r.flagged_message_id = m.message_id " +
-                "WHERE m.conversation_id = ? AND m.deleted_at IS NULL AND m.message_id > ? " +
-                "ORDER BY m.message_id ASC LIMIT ?",
-                logUnmasks, conversationId, after, limit
-            );
-            messages.addAll(newerBatch);
-        } else {
-            // Default: latest chunk (DESC, then reverse)
-            List<KtvMessageItemDto> latest = queryMessageBatch(
-                "SELECT m.*, u.full_name, u.avatar_url, r.report_id, r.violation_type, r.severity_level, r.status AS report_status " +
-                "FROM og_compat.messages m " +
-                "LEFT JOIN public.users u ON u.user_id = m.sender_id " +
-                "LEFT JOIN (SELECT flagged_message_id, MAX(report_id) AS report_id, MAX(violation_type) AS violation_type, MAX(severity_level) AS severity_level, " +
-                "  CASE WHEN MIN(CASE status WHEN 'PENDING' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END) = 1 THEN 'PENDING' " +
-                "       WHEN MIN(CASE status WHEN 'PENDING' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END) = 2 THEN 'RESOLVED' " +
-                "       ELSE 'DISMISSED' END AS status " +
-                "  FROM public.chat_moderation_reports WHERE flagged_message_id IS NOT NULL GROUP BY flagged_message_id) r ON r.flagged_message_id = m.message_id " +
-                "WHERE m.conversation_id = ? AND m.deleted_at IS NULL " +
-                "ORDER BY m.message_id DESC LIMIT ?",
-                logUnmasks, conversationId, limit
-            );
-            Collections.reverse(latest);
-            messages.addAll(latest);
-        }
+        // 2. INNER JOIN chat_moderation_reports so ONLY system-flagged or user-reported messages are visible to KTV
+        List<KtvMessageItemDto> messages = queryMessageBatch(
+            "SELECT m.*, u.full_name, u.avatar_url, r.report_id, r.violation_type, r.severity_level, r.status AS report_status, r.reporter_id " +
+            "FROM og_compat.messages m " +
+            "INNER JOIN (" +
+            "  SELECT flagged_message_id, MAX(report_id) AS report_id, MAX(violation_type) AS violation_type, " +
+            "         MAX(severity_level) AS severity_level, MAX(reporter_id) AS reporter_id, " +
+            "         CASE WHEN MIN(CASE status WHEN 'PENDING' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END) = 1 THEN 'PENDING' " +
+            "              WHEN MIN(CASE status WHEN 'PENDING' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END) = 2 THEN 'RESOLVED' " +
+            "              ELSE 'DISMISSED' END AS status " +
+            "  FROM public.chat_moderation_reports " +
+            "  WHERE conversation_id = ? AND flagged_message_id IS NOT NULL " +
+            "  GROUP BY flagged_message_id" +
+            ") r ON r.flagged_message_id = m.message_id " +
+            "LEFT JOIN public.users u ON u.user_id = m.sender_id " +
+            "WHERE m.conversation_id = ? AND m.deleted_at IS NULL " +
+            "ORDER BY m.message_id ASC LIMIT ?",
+            logUnmasks, conversationId, conversationId, limit
+        );
 
         if (messages.isEmpty()) {
             return new ConversationChunkResponse(conversationId, List.of(), false, false, null, null, aroundMessageId);
@@ -462,17 +394,8 @@ public class ChatModerationRepository {
         long minId = messages.getFirst().messageId();
         long maxId = messages.getLast().messageId();
 
-        boolean hasOlder = Boolean.TRUE.equals(jdbc.queryForObject(
-            "SELECT EXISTS(SELECT 1 FROM og_compat.messages WHERE conversation_id = ? AND deleted_at IS NULL AND message_id < ?)",
-            Boolean.class, conversationId, minId
-        ));
-
-        boolean hasNewer = Boolean.TRUE.equals(jdbc.queryForObject(
-            "SELECT EXISTS(SELECT 1 FROM og_compat.messages WHERE conversation_id = ? AND deleted_at IS NULL AND message_id > ?)",
-            Boolean.class, conversationId, maxId
-        ));
-
-        return new ConversationChunkResponse(conversationId, messages, hasOlder, hasNewer, minId, maxId, aroundMessageId);
+        // Privacy enforcement: never expose older/newer private transcript pagination
+        return new ConversationChunkResponse(conversationId, messages, false, false, minId, maxId, aroundMessageId);
     }
 
     private List<KtvMessageItemDto> queryMessageBatch(String sql, Map<String, String> logUnmasks, Object... params) {
@@ -563,11 +486,17 @@ public class ChatModerationRepository {
                 moderationStatus = "PENDING";
             }
 
+            Long reporterId = null;
+            try {
+                reporterId = rs.getObject("reporter_id", Long.class);
+            } catch (Exception ignored) {}
+            String reportSource = reporterId != null ? "USER_REPORTED" : "SYSTEM_AUTO";
+
             return new KtvMessageItemDto(
                 msgId, convId, senderId, senderName, senderAvatar, type,
                 content, maskedContent, isMaskedForUsers, hasViolation, reportId,
                 violationType, severityLevel, moderationStatus,
-                instant(rs, "created_at")
+                instant(rs, "created_at"), reporterId, reportSource
             );
         }, params);
     }

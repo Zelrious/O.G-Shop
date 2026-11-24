@@ -1,5 +1,26 @@
 # Project Status
 
+## Mở Rộng UC10 — Chặn Người Mua Theo Mức (Tin Nhắn / Mua Hàng / Cả Hai) & Tối Ưu Giao Diện Tin Nhắn — TASK-0127 / 2026-11-24
+
+- **Mục tiêu**:
+  - Flyway `V59__seller_buyer_block_scopes.sql`: thêm cột `block_scope VARCHAR(20) NOT NULL DEFAULT 'ALL'` (`CHAT` / `PURCHASE` / `ALL`) trên `public.seller_buyer_blocks` và cập nhật 3 guard functions `og31_chat_permission`, `og31_guard_blocked_order`, `og31_guard_offer_command`.
+  - Backend (`ChatDtos`, `ChatRepository`, `ChatService`, `DefaultNegotiatedCheckoutFacade`): phân tách `blockedForChat` (`CHAT`/`ALL`) và `blockedForPurchase` (`PURCHASE`/`ALL`), cho phép đổi mức chặn trực tiếp, tương thích ngược mặc định `ALL`.
+  - Frontend (`BlockedBuyersPage.tsx`, `ConversationWorkspace.tsx`, `chatApi.ts`, `chat.css`): chọn mức chặn khi chặn mới / đổi mức chặn, gắn huy hiệu mức chặn trên `/seller/blocked`, thêm nút **Chặn** nhanh ngay trên header khung chat cho Người bán; đồng thời tối ưu gọn thanh tìm hội thoại và cột hàng đợi KTV.
+- **Kiểm thử**:
+  - Backend: `SellerBuyerBlockScopeTest` + `ChatModerationPrivacyAndSyncTest` + `KtvChatModerationServiceTest` (**14/14 PASS**); full `mvnw verify` (`Tests run: 1510, Failures: 0, Errors: 0, Skipped: 387`, `BUILD SUCCESS`).
+  - Frontend: `eslint --max-warnings=0`, `tsc -b`, Vitest **57/57 files — 298/298 tests PASS**, `vite build` PASS.
+
+## Khóa Quyền Riêng Tư Kiểm Duyệt Tin Nhắn KTV, Báo Cáo Tin Nhắn Từ Người Dùng & Đồng Bộ Gỡ Cấm Chat — TASK-0126 / 2026-11-24
+
+- **Mục tiêu**:
+  - Khóa quyền xem KTV trong `ChatModerationRepository` & `KtvChatModerationService`: chỉ trả về tin nhắn bị hệ thống quét (`SYSTEM_AUTO`) hoặc bị người dùng chủ động báo cáo (`USER_REPORTED`), bỏ trích xuất ngữ cảnh tin nhắn bình thường (`context_snippet = "[]"`), chặn `403 MEDIA_ACCESS_DENIED` khi KTV truy cập media của tin nhắn không bị gắn cờ/báo cáo.
+  - Bổ sung API `POST /api/v1/chat/conversations/{conversationId}/messages/{messageId}/report` (`ChatController` / `ChatService`) và nút **Báo cáo** trên từng tin nhắn đối tác trong `ConversationWorkspace.tsx` (áp dụng cả trang `/messages` và `ChatDock`).
+  - Cập nhật `KtvChatModerationPage.tsx` hiển thị rõ chế độ bảo mật quyền riêng tư và nhãn nguồn (`Hệ thống quét` vs `Người dùng báo cáo`), ẩn phân trang toàn bộ lịch sử chat.
+  - Đồng bộ xóa `public.users.chat_restricted_until = NULL` trong `AccountManagementService` / `AccountManagementRepository` khi KTV thực hiện `ACTIVATE` hoặc `LIFT` phạm vi `CHAT`.
+- **Kiểm thử**:
+  - Backend: `ChatModerationPrivacyAndSyncTest` + `KtvChatModerationServiceTest` (**11/11 PASS**); full `mvnw verify` (`Tests run: 1507, Failures: 0, Errors: 0, Skipped: 387`, `BUILD SUCCESS`).
+  - Frontend: `eslint --max-warnings=0`, `tsc -b`, Vitest **57/57 files — 298/298 tests PASS**, `vite build` PASS.
+
 ## Nối Giao Diện Frontend Hệ Sinh Thái UC83 (Checkout Coins/0đ, UC27, UC62 7a/7c, Seller R1/R2 & KTV/Admin Xác Nhận Hoàn Tiền) — TASK-0125 / 2026-11-24
 
 - **Mục tiêu**:

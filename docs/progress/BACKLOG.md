@@ -1,5 +1,26 @@
 # Project Backlog
 
+## TASK-0128 — Kế Hoạch Dự Tính: Chặn 2 Chiều (User ↔ User) Tách Biệt Với Tố Cáo / PLANNED
+
+- [ ] **Database (`V60`)**: Mở rộng `public.seller_buyer_blocks` (hoặc chuyển ngữ nghĩa `blocker_id`/`blocked_id` giữ tương thích ngược) cho phép mọi tài khoản `BUYER`/`SELLER` chặn lẫn nhau (không khóa cứng vai trò người bán), cập nhật các guard triggers (`og31_chat_permission`, `og31_guard_blocked_order`, `og31_guard_offer_command`) kiểm tra cả 2 chiều `(a,b)` và `(b,a)`.
+- [ ] **Backend (`communication` + `catalog`)**: Mở quyền quản lý danh sách chặn cho cả `BUYER` và `SELLER`; khi A chặn B ở mức `PURCHASE`/`ALL`, tự động ẩn sản phẩm 2 chiều giữa A và B (kể cả khi A sau này đăng bài bán hàng thì B cũng không thấy và không mua được), vẫn bảo toàn lịch sử & nghĩa vụ đơn cũ.
+- [ ] **Frontend**: Mở trang quản lý danh sách chặn (`/blocked`, giữ alias `/seller/blocked`) và nút **Chặn / Đổi mức chặn / Bỏ chặn** trong khung chat cho cả Người mua lẫn Người bán, tách bạch hoàn toàn với nút **Báo cáo** gửi KTV.
+
+## TASK-0127 — Mở Rộng UC10: Chặn Người Mua Theo Mức (Tin Nhắn / Mua Hàng / Cả Hai) / COMPLETED
+
+- [x] Flyway `V59__seller_buyer_block_scopes.sql`: thêm `block_scope` (`CHAT` / `PURCHASE` / `ALL`) và cập nhật 3 guard functions `og31_chat_permission`, `og31_guard_blocked_order`, `og31_guard_offer_command`.
+- [x] Backend (`ChatDtos`, `ChatRepository`, `ChatService`, `DefaultNegotiatedCheckoutFacade`, `CatalogService`): phân tách `blockedForChat` và `blockedForPurchase`, hỗ trợ đổi mức chặn trực tiếp, và ẩn toàn bộ sản phẩm của người bán khỏi người mua bị chặn mức `PURCHASE`/`ALL` trên Marketplace & chi tiết sản phẩm.
+- [x] Frontend (`BlockedBuyersPage.tsx`, `ConversationWorkspace.tsx`, `chatApi.ts`, `chat.css`): chọn/đổi mức chặn, huy hiệu mức chặn, thu gọn bố cục dòng danh sách chặn, thêm nút **Chặn / Đổi mức chặn / Bỏ chặn** ngay trong header khung chat Người bán.
+- [x] Kiểm chứng: `SellerBuyerBlockScopeTest` + `CatalogServiceTest` + `ChatModerationPrivacyAndSyncTest` + `KtvChatModerationServiceTest` PASS, full `mvnw verify` (1510/1510 PASS), Frontend `lint`/`typecheck`/`vitest` (57/57 files — 298/298 PASS)/`build` PASS.
+
+## TASK-0126 — Khóa Quyền Riêng Tư Kiểm Duyệt Tin Nhắn KTV, Báo Cáo Tin Nhắn Từ Người Dùng & Đồng Bộ Gỡ Cấm Chat / COMPLETED
+
+- [x] Khóa `ChatModerationRepository` (`getConversationChunkForKtv`, `findReportById`) và `KtvChatModerationService.readMessageMedia` chỉ cho KTV xem tin nhắn/media bị hệ thống quét hoặc người dùng báo cáo; `ChatService.send` không lưu `context_snippet` tin nhắn thường.
+- [x] Bổ sung `POST /api/v1/chat/conversations/{conversationId}/messages/{messageId}/report` và nút **Báo cáo** trong `ConversationWorkspace.tsx` + `chatApi.ts`.
+- [x] Cập nhật `KtvChatModerationPage.tsx` + `chatModerationApi.ts` hiển thị chế độ bảo mật và nguồn phát hiện (`Hệ thống quét` vs `Người dùng báo cáo`).
+- [x] Đồng bộ xóa `users.chat_restricted_until = NULL` khi KTV thực hiện `ACTIVATE` hoặc `LIFT(CHAT)` trong `AccountManagementService` / `AccountManagementRepository`.
+- [x] Kiểm chứng: `ChatModerationPrivacyAndSyncTest` + `KtvChatModerationServiceTest` (11/11 PASS), full `mvnw verify` (1507/1507 PASS), Frontend `lint`/`typecheck`/`vitest` (57/57 files — 298/298 PASS)/`build` PASS.
+
 ## TASK-0125 — Nối Giao Diện Frontend Cho Hệ Sinh Thái UC83 / COMPLETED
 
 - [x] Tạo `frontend/src/features/disputes/returnCaseApi.ts` và mở rộng `ordersApi.ts` (`confirmReceived(videoOption)`, `earlyCompleteOrder`) + `checkoutApi.ts` (`groupCheckout`, `calculateAdjustedCoinsAfterVoucher` khớp `V58`).

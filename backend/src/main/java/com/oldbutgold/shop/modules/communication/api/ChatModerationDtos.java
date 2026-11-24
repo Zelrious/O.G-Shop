@@ -105,8 +105,20 @@ public class ChatModerationDtos {
         String violationType,
         String severityLevel,
         String moderationStatus,
-        Instant createdAt
+        Instant createdAt,
+        Long reporterId,
+        String reportSource
     ) {
+        // Overload without reporterId/reportSource for backward compatibility
+        public KtvMessageItemDto(long messageId, long conversationId, long senderId, String senderName,
+                                 String senderAvatarUrl, String type, String content, String maskedContent,
+                                 boolean isMaskedForUsers, boolean hasViolation, Long flaggedReportId,
+                                 String violationType, String severityLevel, String moderationStatus, Instant createdAt) {
+            this(messageId, conversationId, senderId, senderName, senderAvatarUrl, type, content, maskedContent,
+                 isMaskedForUsers, hasViolation, flaggedReportId, violationType, severityLevel, moderationStatus,
+                 createdAt, null, "SYSTEM_AUTO");
+        }
+
         // Overload without hasViolation for backward compatibility
         public KtvMessageItemDto(long messageId, long conversationId, long senderId, String senderName,
                                  String senderAvatarUrl, String type, String content, String maskedContent,
@@ -114,7 +126,7 @@ public class ChatModerationDtos {
                                  String severityLevel, String moderationStatus, Instant createdAt) {
             this(messageId, conversationId, senderId, senderName, senderAvatarUrl, type, content, maskedContent,
                  isMaskedForUsers, isMaskedForUsers || flaggedReportId != null, flaggedReportId,
-                 violationType, severityLevel, moderationStatus, createdAt);
+                 violationType, severityLevel, moderationStatus, createdAt, null, "SYSTEM_AUTO");
         }
     }
 

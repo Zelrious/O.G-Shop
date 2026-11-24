@@ -172,7 +172,8 @@ describe('KtvChatModerationPage Component', () => {
     // Verify detail loaded
     await waitFor(() => {
       expect(screen.getByText(/Văn bản gốc \(Raw Text\)/i)).toBeInTheDocument();
-      expect(screen.getByText(/Dòng tin nhắn hội thoại/i)).toBeInTheDocument();
+      expect(screen.getByText(/Tin nhắn bị gắn cờ \/ báo cáo/i)).toBeInTheDocument();
+      expect(screen.getByText(/Chế độ bảo mật:/i)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Xử phạt/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Bỏ qua/i })).toBeInTheDocument();
     });

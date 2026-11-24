@@ -50,11 +50,15 @@ public class AccountManagementRepository {
     }
     public void liftLegacy(long id,UUID restrictionId,Instant now) { jdbc.update("UPDATE og_compat.account_restrictions SET closed_at=? WHERE user_id=? AND restriction_id=? AND closed_at IS NULL",Timestamp.from(now),id,restrictionId); }
     public void update(State old,String state,Instant until,String reason,List<Restriction> restrictions,boolean activateAuthentication) {
+        update(old,state,until,reason,restrictions,activateAuthentication,activateAuthentication);
+    }
+    public void update(State old,String state,Instant until,String reason,List<Restriction> restrictions,boolean activateAuthentication,boolean clearChatRestriction) {
         int changed=jdbc.update("""
             UPDATE public.users SET governance_version=governance_version+1,governance_state=?,governance_until=?,governance_reason=?,
-              governance_restrictions=?::jsonb,status=CASE WHEN ? THEN 'ACTIVE' ELSE status END,updated_at=CURRENT_TIMESTAMP
+              governance_restrictions=?::jsonb,status=CASE WHEN ? THEN 'ACTIVE' ELSE status END,
+              chat_restricted_until=CASE WHEN ? THEN NULL ELSE chat_restricted_until END,updated_at=CURRENT_TIMESTAMP
             WHERE record_type='users' AND user_id=? AND governance_version=?
-            """,state,until==null?null:Timestamp.from(until),reason,encode(restrictions),activateAuthentication,old.id(),old.version());
+            """,state,until==null?null:Timestamp.from(until),reason,encode(restrictions),activateAuthentication,clearChatRestriction,old.id(),old.version());
         if(changed!=1) throw new IllegalStateException("Account version changed while locked");
     }
     private State map(ResultSet rs,int row) throws SQLException {

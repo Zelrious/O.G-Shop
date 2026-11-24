@@ -4,7 +4,8 @@ import { createSearchParams, Link, useSearchParams, type NavigateOptions, type U
 import { useAuth } from '../auth';
 import { Alert } from '../../shared/components';
 import { Icon } from '../../shared/components/Icon/Icon';
-import { chatApi, money, type ChatDetail, type ChatOffer, type ConversationPage } from './chatApi';
+import { blockScopeLabels, chatApi, money, type BlockScope, type ChatDetail, type ChatOffer, type ConversationPage } from './chatApi';
+import { ConfirmDialog } from '../../shared/components/Dialog/ConfirmDialog';
 import { ChatContext, createChatMemory } from './chatContext';
 import { OfferCard } from './OfferCard';
 import { OfferDialog } from './OfferDialog';
@@ -12,7 +13,8 @@ import { PrivateAttachment } from './PrivateAttachment';
 import './chat.css';
 
 const statusLabels: Record<string, string> = { ACTIVE: 'Đang mở bán', RESERVED: 'Đang giữ cho đơn hàng', SOLD: 'Đã bán', HIDDEN: 'Đã ẩn', REJECTED: 'Ngừng bán', PENDING: 'Chờ kiểm duyệt', APPROVED_AWAITING_FEE: 'Chưa mở bán' };
-export function ConversationWorkspace({ compact = false, initialQuery = '', isActive = true, onReady, returnTo = '/marketplace' }: { compact?: boolean; initialQuery?: string; isActive?: boolean; onReady?: (detail: ChatDetail) => void; returnTo?: string }) {
+export function ConversationWorkspace({ compact = false, initialQuery = '', isActive = true, onReady, returnTo: _returnTo = '/marketplace' }: { compact?: boolean; initialQuery?: string; isActive?: boolean; onReady?: (detail: ChatDetail) => void; returnTo?: string }) {
+  void _returnTo;
   const { user } = useAuth(); const userId = user?.userId ?? 0;
   const [routeParams, setRouteParams] = useSearchParams();
   const [quickParams, setQuickParams] = useState(() => new URLSearchParams(initialQuery));
@@ -28,6 +30,8 @@ export function ConversationWorkspace({ compact = false, initialQuery = '', isAc
   const [detailState, setDetailState] = useState<{ owner: number; data: ChatDetail } | null>(null), [detailLoading, setDetailLoading] = useState(false), [detailError, setDetailError] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState(false), [online, setOnline] = useState(navigator.onLine), [starting, setStarting] = useState(false), [olderLoading, setOlderLoading] = useState(false);
   const [draft, setDraft] = useState(''), [file, setFile] = useState<File | null>(null), [busy, setBusy] = useState(false), [sendError, setSendError] = useState<string | null>(null), [notice, setNotice] = useState<string | null>(null);
+  const [reportingId, setReportingId] = useState<number | null>(null), [reportedIds, setReportedIds] = useState<number[]>([]);
+  const [blockModalOpen, setBlockModalOpen] = useState(false), [blockMode, setBlockMode] = useState<'BLOCK' | 'UNBLOCK'>('BLOCK'), [blockScope, setBlockScope] = useState<BlockScope>('ALL'), [blockReason, setBlockReason] = useState(''), [blockBusy, setBlockBusy] = useState(false);
   const [dialog, setDialog] = useState<{ conversation: number; counter?: ChatOffer } | null>(null);
   const active = useRef(false), startKey = useRef('');
   const actor = useRef(userId), selected = useRef(selectedId), log = useRef<HTMLDivElement>(null), editor = useRef<HTMLTextAreaElement>(null), picker = useRef<HTMLInputElement>(null), atBottom = useRef(true), lastRead = useRef(0);
@@ -57,7 +61,7 @@ export function ConversationWorkspace({ compact = false, initialQuery = '', isAc
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, productId, orderId, refresh]);
   useEffect(() => {
-    setDialog(null); setFile(selectedId ? files.current.get(selectedId) ?? null : null); setSendError(null); setNotice(null); atBottom.current = true; lastRead.current = 0; setDraft(selectedId ? drafts.current.get(selectedId) ?? '' : '');
+    setDialog(null); setFile(selectedId ? files.current.get(selectedId) ?? null : null); setSendError(null); setNotice(null); setReportedIds([]); setReportingId(null); atBottom.current = true; lastRead.current = 0; setDraft(selectedId ? drafts.current.get(selectedId) ?? '' : '');
   }, [selectedId, userId, isActive, drafts, files]);
   useEffect(() => {
     const sync = () => { setBusy(!!selectedId && memory.sending.has(selectedId)); setDraft(selectedId ? drafts.current.get(selectedId) ?? '' : ''); setFile(selectedId ? files.current.get(selectedId) ?? null : null); };
@@ -88,6 +92,43 @@ export function ConversationWorkspace({ compact = false, initialQuery = '', isAc
     catch (e: unknown) { if (validAction(id, owner)) setSendError(e instanceof Error ? e.message : 'Chưa gửi được. Bản soạn đã được giữ.'); } finally { memory.sending.delete(id); window.dispatchEvent(new Event('og-chat-updated')); if (actor.current === owner) { active.current = false; setBusy(false); setTimeout(() => { if (isActive) editor.current?.focus(); }, 30); } }
   };
   const refreshThread = () => { setRefresh(n => n + 1); window.dispatchEvent(new Event('og-chat-updated')); };
+  const handleReportMessage = async (messageId: number) => {
+    if (!detail || reportingId !== null || reportedIds.includes(messageId)) return;
+    setReportingId(messageId);
+    setSendError(null);
+    try {
+      const res = await chatApi.reportMessage(detail.conversation.id, messageId);
+      setReportedIds(prev => (prev.includes(messageId) ? prev : [...prev, messageId]));
+      setNotice(res.message || 'Đã gửi báo cáo tin nhắn cho bộ phận kiểm duyệt.');
+    } catch (e: unknown) {
+      setSendError(e instanceof Error ? e.message : 'Chưa gửi được báo cáo tin nhắn.');
+    } finally {
+      setReportingId(null);
+    }
+  };
+  const handleQuickBlock = async () => {
+    if (!detail || blockBusy) return;
+    setBlockBusy(true);
+    setSendError(null);
+    try {
+      if (blockMode === 'UNBLOCK') {
+        await chatApi.block(detail.conversation.buyerId, false);
+        setBlockModalOpen(false);
+        setBlockReason('');
+        setNotice(`Đã bỏ chặn ${detail.conversation.partnerName}.`);
+      } else {
+        await chatApi.block(detail.conversation.buyerId, true, blockReason.trim() || undefined, blockScope);
+        setBlockModalOpen(false);
+        setBlockReason('');
+        setNotice(`Đã áp dụng ${blockScopeLabels[blockScope].toLowerCase()} với ${detail.conversation.partnerName}.`);
+      }
+      refreshThread();
+    } catch (e: unknown) {
+      setSendError(e instanceof Error ? e.message : 'Chưa cập nhật được quan hệ chặn.');
+    } finally {
+      setBlockBusy(false);
+    }
+  };
   const offers = new Map(detail?.offers.map(o => [o.id, o]) ?? []);
   const activeAcceptedOffer = useMemo(() => {
     if (!detail || detail.conversation.role !== 'BUYER') return null;
@@ -96,13 +137,36 @@ export function ConversationWorkspace({ compact = false, initialQuery = '', isAc
   const hasMaskedMessage = useMemo(() => {
     return detail?.messages.items.some(m => m.moderationStatus === 'MASKED' || m.content.includes('***')) ?? false;
   }, [detail]);
-  return <section className={"og-chat-page" + (compact ? " og-chat-page--compact" : "")}><header className="og-chat-heading" hidden={compact}><h1 className="og-chat-accessible-title">Tin nhắn</h1><Link className="og-chat-return-link" to={returnTo} state={{ restoreScroll: true }}><Icon name="back" size={17} />Trở lại trang đang xem</Link><div className="og-chat-heading-actions"><span className={'og-chat-connection' + (!online || connectionError ? ' og-chat-connection--offline' : '')}><i aria-hidden="true" />{!online ? 'Đang ngoại tuyến' : connectionError ? 'Đang kết nối lại' : 'Tự cập nhật định kỳ (2.5 giây/lần)'}</span>{user?.roles.includes('SELLER') && <Link className="og-button og-button--outline" to="/seller/blocked">Danh sách chặn</Link>}</div></header>
-    <div className={'og-chat-workspace' + (selectedId ? ' og-chat-workspace--selected' : '')}><aside className="og-chat-inbox" aria-label="Hộp thư" hidden={compact}><form className="og-chat-search" onSubmit={e => { e.preventDefault(); setFilter(query); setPage(0); }}><label htmlFor="chat-search">Tìm hội thoại</label><div><input id="chat-search" type="search" maxLength={100} placeholder="Tên món đồ..." value={query} onChange={e => setQuery(e.target.value)} /><button className="og-button og-button--outline">Tìm</button></div></form><div className="og-chat-inbox-meta"><strong>{list?.total ?? 0} hội thoại</strong><span>{list?.unread ?? 0} chưa đọc</span></div>
+  return <section className={"og-chat-page" + (compact ? " og-chat-page--compact" : "")}><h1 className="og-chat-accessible-title">Tin nhắn</h1>
+    <div className={'og-chat-workspace' + (selectedId ? ' og-chat-workspace--selected' : '')}><aside className="og-chat-inbox" aria-label="Hộp thư" hidden={compact}><form className="og-chat-search" onSubmit={e => { e.preventDefault(); setFilter(query); setPage(0); }}><div className="og-chat-search-head"><label htmlFor="chat-search">Tìm hội thoại</label>{user?.roles.includes('SELLER') && <Link className="og-chat-blocked-link" to="/seller/blocked">Danh sách chặn</Link>}</div><div className="og-chat-search-row"><input id="chat-search" type="search" maxLength={100} placeholder="Tên món đồ..." value={query} onChange={e => setQuery(e.target.value)} /><button className="og-button og-button--outline">Tìm</button></div></form><div className="og-chat-inbox-meta"><strong>{list?.total ?? 0} hội thoại</strong><span>{!online ? 'Đang ngoại tuyến' : connectionError ? 'Đang kết nối lại...' : `${list?.unread ?? 0} chưa đọc`}</span></div>
       {listLoading && !list ? <p role="status" className="og-chat-empty">Đang tải hộp thư...</p> : listError && !list ? <div className="og-chat-empty"><Alert type="danger">{listError}</Alert><button className="og-button og-button--outline" onClick={refreshThread}>Thử lại</button></div> : !list?.items.length ? <div className="og-chat-empty"><h3>{filter ? 'Không có hội thoại phù hợp' : 'Bắt đầu cuộc trò chuyện'}</h3><p>Mở một món đồ và chọn nhắn tin để hỏi người bán.</p><Link to="/marketplace" className="og-button og-button--outline">Khám phá món đồ</Link></div> : <ul className="og-chat-threads">{list.items.map(c => <li key={c.id}><button className={'og-chat-thread' + (selectedId === c.id ? ' og-chat-thread--selected' : '')} aria-current={selectedId === c.id} aria-label={'Mở hội thoại với ' + c.partnerName + ': ' + c.title} disabled={busy} onClick={() => setParams({ conversationId: String(c.id) })}><span className="og-chat-avatar">{c.partnerName.slice(0, 1).toUpperCase()}</span><span className="og-chat-thread-body"><strong>{c.partnerName}</strong><span>{c.title}</span><small>{c.preview || 'Chưa có tin nhắn'}{c.blocked ? ' · Có quan hệ chặn' : ''}</small></span><span className="og-chat-thread-side"><time>{new Date(c.lastActivity).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</time>{c.unread > 0 && <b aria-label={c.unread + ' tin chưa đọc'}>{c.unread > 99 ? '99+' : c.unread}</b>}</span></button></li>)}</ul>}
       {list && list.total > list.size && <nav className="og-chat-pagination" aria-label="Trang hộp thư"><button className="og-button og-button--ghost" disabled={page === 0 || listLoading} onClick={() => setPage(n => n - 1)}>Trước</button><span>{page + 1}/{Math.ceil(list.total / list.size)}</span><button className="og-button og-button--ghost" disabled={(page + 1) * list.size >= list.total || listLoading} onClick={() => setPage(n => n + 1)}>Sau</button></nav>}
     </aside><div className="og-chat-conversation" aria-label="Hội thoại được chọn" aria-busy={detailLoading || starting}>
       {starting || detailLoading && !detail ? <div role="status" className="og-chat-welcome">Đang mở hội thoại...</div> : detailError && !detail ? <div className="og-chat-welcome"><Alert type="danger">{detailError}</Alert><button className="og-button og-button--outline" onClick={refreshThread}>Thử lại</button><button className="og-button og-button--ghost" onClick={() => setParams({})}>Về hộp thư</button></div> : !detail ? <div className="og-chat-welcome"><Icon name="message" size={42} /><h2>Chọn cuộc trò chuyện</h2><p>Hỏi rõ tình trạng món đồ và thương lượng ngay trong hội thoại.</p><small>Chỉ người tham gia được xem lịch sử riêng.</small></div> : <>
-        <header className="og-chat-conversation-header"><button className="og-button og-button--ghost og-chat-back" onClick={() => setParams({})} aria-label="Trở lại hộp thư"><Icon name="back" /></button><span className="og-chat-avatar">{detail.conversation.partnerName.slice(0, 1).toUpperCase()}</span><div><h2>{detail.conversation.partnerName}</h2><span>{detail.conversation.role === 'SELLER' ? 'Người mua' : 'Người bán'} · Hội thoại riêng</span></div><button className="og-button og-button--ghost" onClick={refreshThread} aria-label="Làm mới hội thoại"><Icon name="refresh" /></button></header>
+        <header className="og-chat-conversation-header">
+          <span className="og-chat-avatar">{detail.conversation.partnerName.slice(0, 1).toUpperCase()}</span>
+          <div><h2>{detail.conversation.partnerName}</h2><span>{detail.conversation.role === 'SELLER' ? 'Người mua' : 'Người bán'} · Hội thoại riêng</span></div>
+          {detail.conversation.role === 'SELLER' && (
+            <div className="og-chat-header-actions">
+              <button
+                type="button"
+                className="og-chat-block-btn"
+                onClick={() => { setBlockMode('BLOCK'); setBlockScope('ALL'); setBlockReason(''); setBlockModalOpen(true); }}
+              >
+                {detail.conversation.blocked ? 'Đổi mức chặn' : 'Chặn'}
+              </button>
+              {detail.conversation.blocked && (
+                <button
+                  type="button"
+                  className="og-chat-unblock-btn"
+                  onClick={() => { setBlockMode('UNBLOCK'); setBlockReason(''); setBlockModalOpen(true); }}
+                >
+                  Bỏ chặn
+                </button>
+              )}
+            </div>
+          )}
+        </header>
         <div className="og-chat-product">
           {detail.conversation.thumbnail && <img src={detail.conversation.thumbnail} alt="" />}
           <div className="og-chat-product-info">
@@ -162,7 +226,24 @@ export function ConversationWorkspace({ compact = false, initialQuery = '', isAc
                   </div>
                   {isMasked && <span className="og-chat-masked-badge">[Đã ẩn thông tin liên hệ]</span>}
                 </div>
-                <small>{mine ? 'Bạn' : m.type === 'SYSTEM' ? 'Cập nhật' : detail.conversation.partnerName} · {new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}{mine && m.id <= detail.peerReadMessageId ? ' · Đã xem' : ''}</small>
+                <small>
+                  {mine ? 'Bạn' : m.type === 'SYSTEM' ? 'Cập nhật' : detail.conversation.partnerName} · {new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}{mine && m.id <= detail.peerReadMessageId ? ' · Đã xem' : ''}
+                  {!mine && m.type !== 'SYSTEM' && (
+                    <>
+                      {' · '}
+                      <button
+                        type="button"
+                        className="og-chat-report-btn"
+                        disabled={reportingId === m.id || reportedIds.includes(m.id)}
+                        onClick={() => void handleReportMessage(m.id)}
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: reportedIds.includes(m.id) ? 'default' : 'pointer', color: 'inherit', textDecoration: reportedIds.includes(m.id) ? 'none' : 'underline', fontSize: 'inherit' }}
+                        aria-label={`Báo cáo tin nhắn #${m.id}`}
+                      >
+                        {reportedIds.includes(m.id) ? 'Đã báo cáo' : reportingId === m.id ? 'Đang báo cáo...' : 'Báo cáo'}
+                      </button>
+                    </>
+                  )}
+                </small>
               </div>
             );
           })}
@@ -175,5 +256,41 @@ export function ConversationWorkspace({ compact = false, initialQuery = '', isAc
       </>}
     </div></div>
     {detail && dialog?.conversation === detail.conversation.id && createPortal(<OfferDialog detail={detail} counter={dialog.counter} onClose={() => setDialog(null)} onDone={() => { setDialog(null); setNotice('Đề nghị đã được ghi nhận.'); refreshThread(); }} />, document.body)}
+    {detail && blockModalOpen && createPortal(
+      <ConfirmDialog
+        isOpen
+        title={blockMode === 'UNBLOCK' ? `Bỏ chặn ${detail.conversation.partnerName}` : `Chặn ${detail.conversation.partnerName}`}
+        message={
+          blockMode === 'UNBLOCK' ? (
+            <p>Cho phép <strong>{detail.conversation.partnerName}</strong> tiếp tục xem sản phẩm, nhắn tin và mua hàng mới với shop của bạn?</p>
+          ) : (
+            <>
+              <div className="og-block-scope-options" role="radiogroup" aria-label="Chọn mức chặn">
+                {(['CHAT', 'PURCHASE', 'ALL'] as BlockScope[]).map(sc => (
+                  <label key={sc} className={'og-block-scope-option' + (blockScope === sc ? ' og-block-scope-option--active' : '')}>
+                    <input type="radio" name="quick-block-scope" value={sc} checked={blockScope === sc} disabled={blockBusy} onChange={() => setBlockScope(sc)} />
+                    <span>
+                      <strong>{blockScopeLabels[sc]}</strong>
+                      <small>
+                        {sc === 'CHAT' ? 'Ngăn nhắn tin mới, vẫn cho mua hàng & giữ đơn cũ.' : sc === 'PURCHASE' ? 'Ẩn sản phẩm của shop, ngăn trả giá và đặt mua mới; vẫn giữ đơn cũ.' : 'Ẩn sản phẩm của shop và chặn cả tin nhắn lẫn mua/trả giá mới; giữ đơn cũ.'}
+                      </small>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <label className="og-block-reason-label">
+                Lý do (tùy chọn)
+                <textarea className="og-input" maxLength={500} rows={2} value={blockReason} onChange={e => setBlockReason(e.target.value)} disabled={blockBusy} />
+              </label>
+            </>
+          )
+        }
+        isLoading={blockBusy}
+        confirmText={blockMode === 'UNBLOCK' ? 'Xác nhận bỏ chặn' : 'Xác nhận chặn'}
+        onConfirm={() => void handleQuickBlock()}
+        onCancel={() => { if (!blockBusy) setBlockModalOpen(false); }}
+      />,
+      document.body
+    )}
   </section>;
 }

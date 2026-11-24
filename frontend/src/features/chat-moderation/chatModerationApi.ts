@@ -86,6 +86,8 @@ export interface KtvMessageItem {
   severityLevel?: string | null;
   moderationStatus?: string | null;
   createdAt: string;
+  reporterId?: number | null;
+  reportSource?: 'SYSTEM_AUTO' | 'USER_REPORTED';
 }
 
 export interface ConversationChunkResponse {

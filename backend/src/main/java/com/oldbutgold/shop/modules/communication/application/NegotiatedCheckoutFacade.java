@@ -9,5 +9,6 @@ public interface NegotiatedCheckoutFacade {
     Optional<Long> existingCheckout(long actor,long product,long offerId,String requestFingerprint);
     Optional<Agreement> findActiveAcceptedOffer(long actor,long product);
     java.util.Map<Long, Agreement> findActiveAcceptedOffersForBuyer(long actor);
+    default java.util.Set<Long> findPurchaseBlockedSellerIdsForBuyer(long buyerId) { return java.util.Set.of(); }
     void linkOrder(long actor,long offerId,long orderId);
 }

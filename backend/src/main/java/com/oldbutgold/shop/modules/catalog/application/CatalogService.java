@@ -152,10 +152,22 @@ public class CatalogService {
         int clampedSize = Math.min(Math.max(size, 1), 48);
         Pageable pageable = PageRequest.of(clampedPage, clampedSize, sortOrder);
 
+        Set<Long> hiddenSellerIds = Set.of();
+        if (buyerId != null && negotiatedCheckoutFacade != null) {
+            try {
+                hiddenSellerIds = negotiatedCheckoutFacade.findPurchaseBlockedSellerIdsForBuyer(buyerId);
+            } catch (Exception ignored) {
+            }
+        }
+        Set<Long> finalHiddenSellerIds = hiddenSellerIds;
+
         Specification<ProductEntity> spec = (root, q, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.equal(root.get("status"), ProductEntity.STATUS_ACTIVE));
             predicates.add(cb.isNull(root.get("deletedAt")));
+            if (!finalHiddenSellerIds.isEmpty()) {
+                predicates.add(cb.not(root.get("sellerId").in(finalHiddenSellerIds)));
+            }
 
             if (query != null && !query.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("title")), "%" + query.trim().toLowerCase() + "%"));
@@ -258,6 +270,16 @@ public class CatalogService {
     public CatalogDtos.ProductDetailResponse getProductDetail(long productId, Long buyerId) {
         ProductEntity product = productRepository.findByIdAndStatusAndDeletedAtIsNull(productId, ProductEntity.STATUS_ACTIVE)
                 .orElseThrow(ProductNotFoundException::new);
+        if (buyerId != null && !Long.valueOf(product.getSellerId()).equals(buyerId) && negotiatedCheckoutFacade != null) {
+            try {
+                if (negotiatedCheckoutFacade.findPurchaseBlockedSellerIdsForBuyer(buyerId).contains(product.getSellerId())) {
+                    throw new ProductNotFoundException();
+                }
+            } catch (ProductNotFoundException ex) {
+                throw ex;
+            } catch (Exception ignored) {
+            }
+        }
 
         List<CategoryEntity> categories = categoryRepository.findForProduct(product);
 

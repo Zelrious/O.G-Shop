@@ -73,6 +73,7 @@ public class AccountManagementService {
         if(old.version()!=command.expectedVersion()) throw problem("ACCOUNT_VERSION_CONFLICT","Tài khoản đã thay đổi. Tải lại trước khi quyết định.",409);
         Instant now=clock.instant().truncatedTo(java.time.temporal.ChronoUnit.MICROS),until=old.until();String state=old.state(),reason=old.reason();
         List<Restriction> restrictions=new ArrayList<>(old.restrictions());
+        boolean clearChatRestriction=command.action()==Action.ACTIVATE;
         String decisionReason=command.reason().strip();
         if(decisionReason.isEmpty()) throw problem("ACCOUNT_REASON_REQUIRED","Cần nêu lý do quyết định.",400);
         switch(command.action()) {
@@ -91,6 +92,7 @@ public class AccountManagementService {
             case LIFT -> {
                 Restriction r=restrictions(old).stream().filter(v->v.id().equals(command.restrictionId())&&v.active(now)).findFirst()
                     .orElseThrow(()->problem("ACCOUNT_RESTRICTION_NOT_FOUND","Không có hạn chế đang áp dụng với mã này.",404));
+                if("CHAT".equals(r.scope())) clearChatRestriction=true;
                 if(r.legacy()) repository.liftLegacy(target,r.id(),now);
                 else for(int i=0;i<restrictions.size();i++) if(restrictions.get(i).id().equals(r.id())) restrictions.set(i,new Restriction(r.id(),r.scope(),r.imposedBy(),r.reason(),r.openedAt(),r.expiresAt(),now,false));
             }
@@ -120,7 +122,8 @@ public class AccountManagementService {
         var before=repository.snapshot(old.version(),old.state(),old.until(),old.reason(),old.restrictions());
         var after=repository.snapshot(old.version()+1,state,until,reason,restrictions);
         history.record(actor,target,command.action().name(),command.commandKey(),request,before,after);
-        repository.update(old,state,until,reason,restrictions,command.action()==Action.ACTIVATE);
+        if(clearChatRestriction) repository.update(old,state,until,reason,restrictions,command.action()==Action.ACTIVATE,true);
+        else repository.update(old,state,until,reason,restrictions,false);
         String description="Quyết định "+actionLabel(command.action())+": "+decisionReason+". Lịch sử và nghĩa vụ đơn cũ được giữ. Xem thời hạn/phạm vi tại tình trạng tài khoản; liên hệ hỗ trợ nếu không đồng ý.";
         notices.enqueue("ACCOUNT:"+command.commandKey(),target,List.of(
             new PlatformNotificationFacade.Notice(target,"ACCOUNT_REVIEWED","Tình trạng tài khoản đã cập nhật",description,PlatformNotificationFacade.Destination.ACCOUNT_SELF,target,old.version()+1),
