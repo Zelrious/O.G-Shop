@@ -231,12 +231,21 @@ public class OrderManagementService {
         }
 
         order.confirmBySeller(now);
-        orderRepository.save(order);
-
-        // Product is permanently marked as SOLD via facade
-        List<OrderItemEntity> items = orderItemRepository.findByOrderId(orderId);
-        for (OrderItemEntity item : items) {
-            catalogCommerceFacade.markProductSold(item.getProductId(), orderId, now);
+        if ("UC83".equals(order.getWorkflowModel()) && jdbcTemplate != null) {
+            orderRepository.saveAndFlush(order);
+            jdbcTemplate.update("""
+                    UPDATE og_compat.inventory_reservations
+                    SET state = 'CONSUMED'
+                    WHERE order_item_id IN (SELECT order_item_id FROM og_compat.order_items WHERE order_id = ?)
+                      AND state = 'FUNDED'
+                    """, orderId);
+        } else {
+            orderRepository.save(order);
+            // Product is permanently marked as SOLD via facade
+            List<OrderItemEntity> items = orderItemRepository.findByOrderId(orderId);
+            for (OrderItemEntity item : items) {
+                catalogCommerceFacade.markProductSold(item.getProductId(), orderId, now);
+            }
         }
 
         return new OrderManagementDtos.OrderActionResponse(
