@@ -442,6 +442,27 @@ public class OrderManagementService {
      */
     @Transactional
     public OrderManagementDtos.OrderActionResponse confirmReceived(Long buyerId, Long orderId) {
+        return confirmReceived(buyerId, orderId, null);
+    }
+
+    @Transactional
+    public OrderManagementDtos.OrderActionResponse confirmReceived(
+            Long buyerId,
+            Long orderId,
+            OrderManagementDtos.ConfirmReceivedRequest request
+    ) {
+        String normalizedVideoOption = null;
+        if (request != null && request.videoOption() != null && !request.videoOption().isBlank()) {
+            String candidate = request.videoOption().trim().toUpperCase(java.util.Locale.ROOT);
+            if (!OrderManagementDtos.ConfirmReceivedRequest.VIDEO_OPTION_RECORDED.equals(candidate)
+                    && !OrderManagementDtos.ConfirmReceivedRequest.VIDEO_OPTION_SKIPPED_AFTER_WARNING.equals(candidate)) {
+                throw new IllegalArgumentException(
+                        "Lựa chọn video unboxing không hợp lệ: " + request.videoOption()
+                                + ". Giá trị hợp lệ: VIDEO_RECORDED hoặc SKIPPED_AFTER_WARNING.");
+            }
+            normalizedVideoOption = candidate;
+        }
+
         Instant now = clock.instant();
 
         OrderEntity order = orderRepository.findByIdForUpdate(orderId)
@@ -466,8 +487,30 @@ public class OrderManagementService {
         order.setReceivedAt(now);
         orderRepository.save(order);
 
-        log.info("Đơn hàng #{} đã được Buyer #{} xác nhận đã nhận hàng (received_at = {}). Trạng thái đơn vẫn là {}.",
-                orderId, buyerId, now, order.getStatus());
+        if (jdbcTemplate != null && normalizedVideoOption != null) {
+            String metadataJson = "{\"videoOption\":\"" + normalizedVideoOption + "\"}";
+            String cmdKey = "RECEIPT_CONFIRMED:" + orderId;
+            try {
+                jdbcTemplate.update("""
+                        INSERT INTO og_compat.order_events(
+                            event_id, order_id, actor_id, event_type, metadata, occurred_at, command_key
+                        ) VALUES (?, ?, ?, 'RECEIPT_CONFIRMED', ?::jsonb, ?, ?)
+                        """,
+                        UUID.randomUUID(),
+                        orderId,
+                        buyerId,
+                        metadataJson,
+                        java.sql.Timestamp.from(now),
+                        cmdKey
+                );
+            } catch (Exception ex) {
+                log.debug("Skipped order_events RECEIPT_CONFIRMED insert for order {} (non-PostgreSQL or already recorded): {}",
+                        orderId, ex.getMessage());
+            }
+        }
+
+        log.info("Đơn hàng #{} đã được Buyer #{} xác nhận đã nhận hàng (received_at = {}, videoOption = {}). Trạng thái đơn vẫn là {}.",
+                orderId, buyerId, now, normalizedVideoOption != null ? normalizedVideoOption : "UNSPECIFIED", order.getStatus());
 
         return new OrderManagementDtos.OrderActionResponse(
                 orderId,

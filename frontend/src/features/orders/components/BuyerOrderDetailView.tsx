@@ -7,6 +7,7 @@ import { OrderDetail } from '../types';
 import { TrackingResponse, formatGhnStatus } from '../../fulfillment/fulfillmentApi';
 import { BuyerDisputeModal } from '../../disputes/BuyerDisputeModal';
 import { OrderReviewModal } from '../../disputes/OrderReviewModal';
+import { Uc83BuyerOrderPanel } from '../../disputes/Uc83BuyerOrderPanel';
 import { reviewApi } from '../../disputes/reviewApi';
 import type { OrderReviewsResponse } from '../../disputes/types';
 
@@ -483,6 +484,11 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
                   >
                     Yêu cầu Trả hàng / Khiếu nại (UC62)
                   </button>
+                  <Uc83BuyerOrderPanel
+                    orderId={order.orderId}
+                    orderStatus={order.status}
+                    onUpdated={loadOrder}
+                  />
                 </div>
               )}
 

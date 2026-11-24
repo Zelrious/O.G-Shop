@@ -1,5 +1,27 @@
 # Commerce Module
 
+## Gói 3 UC83: UC27 videoOption khi xác nhận nhận hàng & bổ sung bằng chứng Vòng 1 — TASK-0123 / 2026-11-23
+
+- `OrderController` / `OrderManagementService`: mở rộng `POST /api/v1/commerce/orders/{orderId}/confirm-received` nhận tùy chọn `ConfirmReceivedRequest(videoOption)` (`VIDEO_RECORDED` / `SKIPPED_AFTER_WARNING`), ghi `RECEIPT_CONFIRMED` vào `og_compat.order_events`, tương thích ngược 100%.
+- `ReturnCaseCommerceController`: bổ sung `POST /api/v1/commerce/orders/{orderId}/return-case/supplement-evidence` ủy quyền sang `ReturnCaseService.supplementBuyerEvidenceRound1ForOrder(...)`.
+
+## V58: Xu trừ trực tiếp phí vận chuyển & tự động điều chỉnh xu ưu tiên voucher — TASK-0122 / 2026-11-23
+
+- `V58__allow_points_on_shipping_and_voucher_priority.sql` bổ sung `orders.points_shipping_discount_amount` (mặc định `0`), mở rộng `og_compat.orders`, `og70_write_view`, `og70_dispatch`, `og70_validate_graph` (`uq_discount_points_item` theo `(reward_entry_id, order_item_id, component)`), `og70_validate_row` và `og58_validate_discount_totals_for_group`.
+- `GroupCheckoutService` áp dụng Voucher trước, tự động điều chỉnh (auto-clamp) `coinsToRedeem = min(coinsRequested, maxRedeemableCoins)` để không làm mất xu khi áp voucher sau khi chọn xu, phân bổ xu vào tiền hàng trước rồi phần dư trừ trực tiếp phí vận chuyển `CARRIER`.
+- Kiểm chứng: `GroupCheckoutPackage2UnitTest` (5/5), `GroupCheckoutPostgresTest` (8/8 trên PostgreSQL 17 thật).
+
+## Gói 2 UC83: Đơn 0đ fast-path, Voucher & Negotiated Offer trong GroupCheckoutService — TASK-0121 / 2026-11-23
+
+- `GroupCheckoutService`: tích hợp `VoucherService` (voucher hàng hóa và `SHIPPING_DISCOUNT`, ghi `checkout_redemptions` và `discount_allocations`) và `NegotiatedCheckoutFacade` (`requireNotBlocked`, `bind`, `linkOrder` cho `acceptedOfferId`).
+- Fast-path đơn 0đ (`expectedTotal == 0`): ghi `og_compat.zero_checkout_confirmations`, `order_fund_components` (`PLATFORM_GOODS_SUBSIDY` / `PLATFORM_SHIPPING_SUBSIDY`), `reward_ledger` (`DEBIT_CHECKOUT`) + `discount_allocations`, chuyển `orders -> PAID_HELD`, `inventory_reservations -> FUNDED`, `checkout_groups -> PAID` không qua VNPay.
+- Kiểm chứng: `GroupCheckoutPackage2UnitTest` (3/3), `GroupCheckoutPostgresTest` (7/7 trên PostgreSQL 17 thật).
+
+## Tách ranh giới ReturnCaseCommerceController — TASK-0120 / 2026-11-23
+
+- `ReturnCaseCommerceController` loại bỏ phụ thuộc trực tiếp vào `OrderRepository` và `CaseRepository` (module `trustsafety`), chuyển toàn bộ sang gọi các phương thức order-scoped facade trên `ReturnCaseService`.
+- Kiểm chứng: `ReturnCaseCommerceControllerTest` PASS.
+
 ## Order dispute & review integration — TASK-0117 / 2026-11-17
 
 - Thêm `CommerceDisputeFacade` và `DefaultCommerceDisputeFacade` xử lý chuyển trạng thái đơn hàng và ký quỹ khi có khiếu nại (`markOrderDisputed`, `resolveDisputeReturnApproved`, `resolveDisputeRefund`, `resolveDisputeRelease`).

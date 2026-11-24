@@ -95,6 +95,9 @@ public class OrderEntity {
     @Column(name = "points_discount_amount", precision = 19, scale = 2)
     private BigDecimal pointsDiscountAmount = BigDecimal.ZERO;
 
+    @Column(name = "points_shipping_discount_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal pointsShippingDiscountAmount = BigDecimal.ZERO;
+
     @Column(name = "sponsor_type", nullable = false, length = 20)
     private String sponsorType = "PLATFORM";
 
@@ -287,6 +290,9 @@ public class OrderEntity {
     public BigDecimal getShippingDiscountAmount() { return shippingDiscountAmount; }
     public BigDecimal getPointsDiscountAmount() { return pointsDiscountAmount != null ? pointsDiscountAmount : BigDecimal.ZERO; }
     public void setPointsDiscountAmount(BigDecimal pointsDiscountAmount) { this.pointsDiscountAmount = pointsDiscountAmount != null ? pointsDiscountAmount : BigDecimal.ZERO; }
+    public BigDecimal getPointsShippingDiscountAmount() { return pointsShippingDiscountAmount != null ? pointsShippingDiscountAmount : BigDecimal.ZERO; }
+    public void setPointsShippingDiscountAmount(BigDecimal pointsShippingDiscountAmount) { this.pointsShippingDiscountAmount = pointsShippingDiscountAmount != null ? pointsShippingDiscountAmount : BigDecimal.ZERO; }
+    public BigDecimal getTotalPointsDiscountAmount() { return getPointsDiscountAmount().add(getPointsShippingDiscountAmount()); }
     public String getSponsorType() { return sponsorType; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public String getCurrency() { return currency; }
