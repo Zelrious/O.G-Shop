@@ -57,6 +57,7 @@ import {
 } from '../pages';
 import { SellerDashboardPage } from '../pages/seller/SellerDashboardPage';
 import { SellerSettingsPage } from '../pages/seller/SellerSettingsPage';
+import { PublicSellerProfilePage } from '../pages/PublicSellerProfilePage';
 import './styles.css';
 import './ui-theme.css';
 import { ChatProvider } from '../features/chat-offer/ChatProvider';
@@ -103,6 +104,7 @@ export function App() {
                     <Route path="/marketplace" element={<MarketplacePage />} />
                     <Route path="/vouchers" element={<ProtectedRoute allowedRoles={['BUYER', 'SELLER']}><VouchersPage /></ProtectedRoute>} />
                     <Route path="/products/:productId" element={<ProductDetailPage />} />
+                    <Route path="/sellers/:sellerId" element={<PublicSellerProfilePage />} />
                     <Route path="/cart" element={<CartPage />} />
                   <Route
                     path="/checkout"

@@ -13,12 +13,14 @@ export interface SellerSettings {
   ekycState: string;
   hasStoreInfo?: boolean;
   sellerOnboarded?: boolean;
+  allowPublicAvatar?: boolean;
 }
 
 export interface UpdateSellerSettingsInput {
   storeName?: string;
   pickupAddressId?: number | null;
   returnAddressId?: number | null;
+  allowPublicAvatar?: boolean;
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {

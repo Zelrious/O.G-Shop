@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CONDITION_LABELS, ProductDetail } from '../types';
 import { AuthContext } from '../../auth/context';
@@ -6,6 +6,8 @@ import { ConditionBadge } from '../../../shared/components';
 import { ChatContext } from '../../chat-offer/chatContext';
 import { Icon } from '../../../shared/components/Icon/Icon';
 import { useCart } from '../../../shared/context';
+import { publicSellerApi, PublicSellerProfile } from '../../seller/publicSellerApi';
+import { resolveReturnMediaUrl } from '../../disputes/mediaUrl';
 
 interface ProductDetailViewProps {
   product: ProductDetail;
@@ -24,6 +26,22 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
   const [authActionName, setAuthActionName] = useState<string>('');
   const [cartSuccessMsg, setCartSuccessMsg] = useState<string | null>(null);
   const [isFavorited, setIsFavorited] = useState(false);
+  const [publicSeller, setPublicSeller] = useState<PublicSellerProfile | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+    publicSellerApi
+      .getPublicProfile(product.seller.sellerId)
+      .then((data) => {
+        if (!ignore) setPublicSeller(data);
+      })
+      .catch(() => {
+        if (!ignore) setPublicSeller(null);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [product.seller.sellerId]);
 
   const formattedPrice = `${new Intl.NumberFormat('vi-VN').format(product.listedPrice)} đ`;
   const conditionText = CONDITION_LABELS[product.condition] || product.condition;
@@ -473,15 +491,29 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
       {/* 3. Middle Section: Seller Profile (Oreka Style) */}
       <section className="og-seller-section" aria-label="Thông tin người bán">
         <div className="og-seller-left">
-          <div className="og-seller-avatar-wrap">
-            <span>{product.seller.displayName.charAt(0).toUpperCase()}</span>
+          <Link to={`/sellers/${product.seller.sellerId}`} className="og-seller-avatar-wrap" style={{ textDecoration: 'none', overflow: 'hidden' }}>
+            {publicSeller?.avatarUrl ? (
+              <img
+                src={resolveReturnMediaUrl(publicSeller.avatarUrl)}
+                alt={publicSeller.displayName || product.seller.displayName}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+              />
+            ) : (
+              <span>{(publicSeller?.displayName || product.seller.displayName).charAt(0).toUpperCase()}</span>
+            )}
             {product.seller.trustLabel === 'Đã xác minh eKYC' && (
               <span className="og-seller-avatar-badge" title="Đã xác thực eKYC">Đã eKYC</span>
             )}
-          </div>
+          </Link>
           <div className="og-seller-info">
             <div className="og-seller-name-row" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span className="og-seller-name">{product.seller.displayName}</span>
+              <Link
+                to={`/sellers/${product.seller.sellerId}`}
+                className="og-seller-name"
+                style={{ textDecoration: 'none', color: 'inherit' }}
+              >
+                {publicSeller?.displayName || product.seller.displayName}
+              </Link>
               {product.seller.trustLabel === 'Đã xác minh eKYC' ? (
                 <span
                   style={{
@@ -523,11 +555,33 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
               )}
             </div>
             <div className="og-seller-stats">
-              <span><Icon name="star" size={15} /> 5.0 (18 đánh giá)</span>
+              <span>
+                <Icon name="star" size={15} />{' '}
+                {publicSeller
+                  ? publicSeller.stats.averageRating !== null
+                    ? `${publicSeller.stats.averageRating.toFixed(1)} (${publicSeller.stats.totalReviews} đánh giá)`
+                    : 'Chưa có đánh giá'
+                  : 'Đang tải đánh giá...'}
+              </span>
               <span>•</span>
-              <span>12 sản phẩm đang bán</span>
+              <span>
+                {publicSeller
+                  ? `${publicSeller.stats.activeProductsCount} sản phẩm đang bán`
+                  : '— sản phẩm đang bán'}
+              </span>
               <span>•</span>
-              <span>8 đã giao dịch</span>
+              <span>
+                {publicSeller
+                  ? `${publicSeller.stats.completedTransactionsCount} giao dịch hoàn tất`
+                  : '— giao dịch hoàn tất'}
+              </span>
+              <span>•</span>
+              <Link
+                to={`/sellers/${product.seller.sellerId}`}
+                style={{ color: 'var(--og-color-primary)', fontWeight: 600, textDecoration: 'none' }}
+              >
+                Xem hồ sơ gian hàng &rarr;
+              </Link>
             </div>
           </div>
         </div>

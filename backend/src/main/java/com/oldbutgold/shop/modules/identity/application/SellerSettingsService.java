@@ -50,9 +50,10 @@ public class SellerSettingsService {
         String storeName = user.getFullName() != null ? user.getFullName() + "'s Shop" : "Cửa hàng O.G";
         Long pickupAddressId = null;
         Long returnAddressId = null;
+        boolean allowPublicAvatar = false;
 
         String sql = """
-            SELECT store_name, pickup_address_id, return_address_id
+            SELECT store_name, pickup_address_id, return_address_id, allow_public_avatar
             FROM public.seller_profiles
             WHERE user_id = ? AND record_type = 'seller_profiles'
             ORDER BY seller_profile_id DESC LIMIT 1
@@ -69,6 +70,9 @@ public class SellerSettingsService {
             if (row.get("return_address_id") instanceof Number n) {
                 returnAddressId = n.longValue();
             }
+            if (row.get("allow_public_avatar") instanceof Boolean b) {
+                allowPublicAvatar = b;
+            }
         }
 
         boolean isVerified = ekycRepository.hasVerifiedProfile(userId);
@@ -84,7 +88,8 @@ public class SellerSettingsService {
                 maskAccountNumber(user.getBankAccountNumber()),
                 user.getBankAccountHolder(),
                 isVerified,
-                ekycState
+                ekycState,
+                allowPublicAvatar
         );
     }
 
@@ -104,34 +109,74 @@ public class SellerSettingsService {
 
         Instant now = clock.instant();
         String checkSql = """
-            SELECT seller_profile_id, state, pickup_address_id
+            SELECT seller_profile_id, state, pickup_address_id, allow_public_avatar
             FROM public.seller_profiles
             WHERE user_id = ? AND record_type = 'seller_profiles'
             ORDER BY seller_profile_id DESC LIMIT 1
             """;
         List<Map<String, Object>> rows = jdbc.queryForList(checkSql, userId);
 
+        boolean previousConsent = false;
+        boolean newConsent = Boolean.TRUE.equals(request.allowPublicAvatar());
+        boolean consentChanged = false;
+
         if (rows.isEmpty()) {
+            consentChanged = request.allowPublicAvatar() != null && newConsent != previousConsent;
             String insertSql = """
-                INSERT INTO public.seller_profiles(user_id, state, store_name, contact_phone, pickup_address_id, return_address_id, bank_snapshot, updated_at, record_type)
-                VALUES(?, 'PENDING_EKYC', ?, ?, ?, ?, '{}'::jsonb, ?, 'seller_profiles')
+                INSERT INTO public.seller_profiles(user_id, state, store_name, contact_phone, pickup_address_id, return_address_id, bank_snapshot, allow_public_avatar, updated_at, record_type)
+                VALUES(?, 'PENDING_EKYC', ?, ?, ?, ?, '{}'::jsonb, ?, ?, 'seller_profiles')
                 """;
-            jdbc.update(insertSql, userId, request.storeName(), user.getPhoneNumber(), request.pickupAddressId(), request.returnAddressId(), Timestamp.from(now));
+            jdbc.update(insertSql, userId, request.storeName(), user.getPhoneNumber(), request.pickupAddressId(), request.returnAddressId(), newConsent, Timestamp.from(now));
         } else {
-            long profileId = ((Number) rows.get(0).get("seller_profile_id")).longValue();
+            Map<String, Object> row = rows.get(0);
+            long profileId = ((Number) row.get("seller_profile_id")).longValue();
+            previousConsent = row.get("allow_public_avatar") instanceof Boolean b && b;
+            boolean effectiveConsent = request.allowPublicAvatar() != null ? request.allowPublicAvatar() : previousConsent;
+            consentChanged = request.allowPublicAvatar() != null && effectiveConsent != previousConsent;
+            newConsent = effectiveConsent;
+
             String updateSql = """
                 UPDATE public.seller_profiles
                 SET store_name = COALESCE(?, store_name),
                     pickup_address_id = COALESCE(?, pickup_address_id),
                     return_address_id = COALESCE(?, return_address_id),
                     contact_phone = COALESCE(?, contact_phone),
+                    allow_public_avatar = ?,
                     updated_at = ?
                 WHERE seller_profile_id = ?
                 """;
-            jdbc.update(updateSql, request.storeName(), request.pickupAddressId(), request.returnAddressId(), user.getPhoneNumber(), Timestamp.from(now), profileId);
+            jdbc.update(updateSql, request.storeName(), request.pickupAddressId(), request.returnAddressId(), user.getPhoneNumber(), effectiveConsent, Timestamp.from(now), profileId);
+        }
+
+        if (consentChanged) {
+            recordAvatarConsentAudit(userId, previousConsent, newConsent, now);
         }
 
         return getSettings(userId);
+    }
+
+    private void recordAvatarConsentAudit(long userId, boolean oldValue, boolean newValue, Instant now) {
+        try {
+            jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) conn -> {
+                java.sql.Savepoint sp = conn.setSavepoint("sp_avatar_consent_audit");
+                try (var ps = conn.prepareStatement("""
+                        INSERT INTO og_compat.audit_logs(user_id, action, entity_type, entity_id, old_values, new_values, created_at)
+                        VALUES(?, 'SELLER_PUBLIC_AVATAR_CONSENT_UPDATED', 'SELLER_PROFILE', ?, ?::jsonb, ?::jsonb, ?)
+                        """)) {
+                    ps.setLong(1, userId);
+                    ps.setLong(2, userId);
+                    ps.setString(3, "{\"allowPublicAvatar\":" + oldValue + "}");
+                    ps.setString(4, "{\"allowPublicAvatar\":" + newValue + "}");
+                    ps.setTimestamp(5, Timestamp.from(now));
+                    ps.executeUpdate();
+                } catch (Exception ex) {
+                    conn.rollback(sp);
+                }
+                return null;
+            });
+        } catch (Exception ignored) {
+            // Best-effort audit logging must not break settings update
+        }
     }
 
     private static String maskAccountNumber(String raw) {

@@ -17,7 +17,8 @@ public final class SellerSettingsDtos {
             boolean verifiedSeller,
             String ekycState,
             boolean hasStoreInfo,
-            boolean sellerOnboarded
+            boolean sellerOnboarded,
+            boolean allowPublicAvatar
     ) {
         public SellerSettingsResponse(
                 Long userId,
@@ -42,8 +43,37 @@ public final class SellerSettingsDtos {
                     bankAccountHolder,
                     verifiedSeller,
                     ekycState,
+                    false
+            );
+        }
+
+        public SellerSettingsResponse(
+                Long userId,
+                String storeName,
+                String hotlinePhone,
+                Long pickupAddressId,
+                Long returnAddressId,
+                String bankName,
+                String bankAccountNumberMasked,
+                String bankAccountHolder,
+                boolean verifiedSeller,
+                String ekycState,
+                boolean allowPublicAvatar
+        ) {
+            this(
+                    userId,
+                    storeName,
+                    hotlinePhone,
+                    pickupAddressId,
+                    returnAddressId,
+                    bankName,
+                    bankAccountNumberMasked,
+                    bankAccountHolder,
+                    verifiedSeller,
+                    ekycState,
                     (pickupAddressId != null && returnAddressId != null && storeName != null && !storeName.isBlank() && bankAccountNumberMasked != null),
-                    (verifiedSeller && pickupAddressId != null && returnAddressId != null && storeName != null && !storeName.isBlank() && bankAccountNumberMasked != null)
+                    (verifiedSeller && pickupAddressId != null && returnAddressId != null && storeName != null && !storeName.isBlank() && bankAccountNumberMasked != null),
+                    allowPublicAvatar
             );
         }
     }
@@ -53,6 +83,11 @@ public final class SellerSettingsDtos {
             String storeName,
 
             Long pickupAddressId,
-            Long returnAddressId
-    ) {}
+            Long returnAddressId,
+            Boolean allowPublicAvatar
+    ) {
+        public UpdateSellerSettingsRequest(String storeName, Long pickupAddressId, Long returnAddressId) {
+            this(storeName, pickupAddressId, returnAddressId, null);
+        }
+    }
 }
