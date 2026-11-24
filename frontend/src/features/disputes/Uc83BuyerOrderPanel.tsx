@@ -93,6 +93,24 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
     }
   };
 
+  const handleUploadEvidenceFile = async (
+    file: File | undefined,
+    setter: (url: string) => void,
+  ) => {
+    if (!file) return;
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const isVideo = file.type.startsWith('video/') || /\.(mp4|webm)$/i.test(file.name);
+      const dto = await returnCaseApi.uploadEvidence(file, isVideo ? 'VIDEO' : 'IMAGE', isVideo ? 15 : undefined);
+      setter(resolveReturnMediaUrl(dto.objectKey || ''));
+    } catch (err) {
+      setFeedback({ type: 'error', text: err instanceof Error ? err.message : 'Không thể tải tệp bằng chứng lên.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleCreateReturnRequest = async () => {
     const trimmedUrl = createEvidenceUrl.trim();
     if (!trimmedUrl) {
@@ -315,13 +333,39 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
                 onChange={(e) => setCreateDetail(e.target.value)}
                 style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
               />
-              <input
-                type="text"
-                placeholder="Đường dẫn ảnh/video bằng chứng (ví dụ: /api/v1/media/...)..."
-                value={createEvidenceUrl}
-                onChange={(e) => setCreateEvidenceUrl(e.target.value)}
-                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
-              />
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder="Chọn ảnh/video từ máy hoặc dán link bằng chứng..."
+                  value={createEvidenceUrl}
+                  onChange={(e) => setCreateEvidenceUrl(e.target.value)}
+                  style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
+                />
+                <label
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    background: '#e0f2fe',
+                    color: '#0369a1',
+                    fontWeight: 600,
+                    fontSize: '0.78rem',
+                    cursor: busy ? 'not-allowed' : 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  + Chọn tệp
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+                    disabled={busy}
+                    onChange={(e) => {
+                      void handleUploadEvidenceFile(e.target.files?.[0], setCreateEvidenceUrl);
+                      e.target.value = '';
+                    }}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
               {createEvidenceUrl.trim() && (
                 <img
                   src={resolveReturnMediaUrl(createEvidenceUrl.trim())}
@@ -373,13 +417,39 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
 
               {showSupplementForm && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #cbd5e1' }}>
-                  <input
-                    type="text"
-                    placeholder="Đường dẫn ảnh/video bằng chứng bổ sung..."
-                    value={supplementUrl}
-                    onChange={(e) => setSupplementUrl(e.target.value)}
-                    style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
-                  />
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      placeholder="Đường dẫn ảnh/video bằng chứng bổ sung..."
+                      value={supplementUrl}
+                      onChange={(e) => setSupplementUrl(e.target.value)}
+                      style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
+                    />
+                    <label
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: 6,
+                        background: '#e0f2fe',
+                        color: '#0369a1',
+                        fontWeight: 600,
+                        fontSize: '0.78rem',
+                        cursor: busy ? 'not-allowed' : 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      + Chọn tệp
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+                        disabled={busy}
+                        onChange={(e) => {
+                          void handleUploadEvidenceFile(e.target.files?.[0], setSupplementUrl);
+                          e.target.value = '';
+                        }}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+                  </div>
                   {supplementUrl.trim() && (
                     <img
                       src={resolveReturnMediaUrl(supplementUrl.trim())}

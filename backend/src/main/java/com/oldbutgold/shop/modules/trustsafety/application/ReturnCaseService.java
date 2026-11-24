@@ -1204,6 +1204,84 @@ public class ReturnCaseService {
         return mapToDetailResponse(returnCase);
     }
 
+    /**
+     * Tải lên tệp bằng chứng trả hàng / khiếu nại lên đĩa cục bộ và tính mã băm SHA-256 (BG-1).
+     */
+    public ReturnCaseDtos.EvidenceItemDto uploadReturnEvidence(
+            Long actorId,
+            org.springframework.web.multipart.MultipartFile file,
+            String mediaType,
+            Integer durationSeconds
+    ) {
+        if (actorId == null) {
+            throw new SecurityException("Chưa xác thực danh tính");
+        }
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Tệp bằng chứng tải lên không được rỗng");
+        }
+        String normalizedType = mediaType != null ? mediaType.trim().toUpperCase(Locale.ROOT) : "IMAGE";
+        String contentType = file.getContentType() != null ? file.getContentType().toLowerCase(Locale.ROOT) : "";
+        long size = file.getSize();
+        Integer resolvedDuration = null;
+
+        if ("IMAGE".equals(normalizedType)) {
+            if (!Set.of("image/jpeg", "image/png", "image/webp").contains(contentType)) {
+                throw new IllegalArgumentException("Định dạng ảnh bằng chứng không hợp lệ. Chỉ chấp nhận JPG, PNG, WEBP");
+            }
+            if (size > MAX_IMAGE_SIZE_BYTES) {
+                throw new IllegalArgumentException("Dung lượng ảnh bằng chứng vượt quá giới hạn 5 MB");
+            }
+        } else if ("VIDEO".equals(normalizedType)) {
+            if (!Set.of("video/mp4", "video/webm").contains(contentType)) {
+                throw new IllegalArgumentException("Định dạng video bằng chứng không hợp lệ. Chỉ chấp nhận MP4, WEBM");
+            }
+            if (size > MAX_VIDEO_SIZE_BYTES) {
+                throw new IllegalArgumentException("Dung lượng video bằng chứng vượt quá giới hạn 50 MB");
+            }
+            if (durationSeconds != null && (durationSeconds <= 0 || durationSeconds > MAX_VIDEO_DURATION_SECONDS)) {
+                throw new IllegalArgumentException("Thời lượng video bằng chứng phải nằm trong khoảng 1 đến " + MAX_VIDEO_DURATION_SECONDS + " giây");
+            }
+            resolvedDuration = durationSeconds != null ? durationSeconds : 30;
+        } else {
+            throw new IllegalArgumentException("Loại bằng chứng không hợp lệ: " + mediaType + " (chỉ hỗ trợ IMAGE hoặc VIDEO)");
+        }
+
+        String extension = switch (contentType) {
+            case "image/jpeg" -> "jpg";
+            case "image/png" -> "png";
+            case "image/webp" -> "webp";
+            case "video/mp4" -> "mp4";
+            case "video/webm" -> "webm";
+            default -> throw new IllegalArgumentException("Định dạng tệp không được hỗ trợ");
+        };
+
+        Path uploadDir = Paths.get("uploads/media").toAbsolutePath().normalize();
+        try {
+            Files.createDirectories(uploadDir);
+        } catch (IOException e) {
+            throw new IllegalStateException("Không thể khởi tạo thư mục lưu trữ bằng chứng: " + e.getMessage(), e);
+        }
+
+        String uniqueFilename = UUID.randomUUID() + "." + extension;
+        Path targetPath = uploadDir.resolve(uniqueFilename);
+        try (InputStream in = file.getInputStream()) {
+            Files.copy(in, targetPath);
+        } catch (IOException e) {
+            throw new IllegalStateException("Lưu tệp bằng chứng thất bại: " + e.getMessage(), e);
+        }
+
+        String sha256 = computeSha256(targetPath);
+        String objectKey = "/api/v1/media/" + uniqueFilename;
+        return new ReturnCaseDtos.EvidenceItemDto(
+                normalizedType,
+                objectKey,
+                null,
+                sha256,
+                size,
+                resolvedDuration
+        );
+    }
+
     private String resolveDamageEvidenceDigest(String clientDigest, String objectKey) {
         // 1. Kiểm tra xem file có tồn tại trên hệ thống lưu trữ cục bộ không
         Path filePath = resolveLocalFilePath(objectKey);

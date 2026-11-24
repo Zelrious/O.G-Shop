@@ -78,6 +78,21 @@ export const Uc83SellerReturnPanel: React.FC<Uc83SellerReturnPanelProps> = ({
     }
   };
 
+  const handleUploadExemptionFile = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const isVideo = file.type.startsWith('video/') || /\.(mp4|webm)$/i.test(file.name);
+      const dto = await returnCaseApi.uploadEvidence(file, isVideo ? 'VIDEO' : 'IMAGE', isVideo ? 15 : undefined);
+      setExemptEvidenceUrl(resolveReturnMediaUrl(dto.objectKey || ''));
+    } catch (err) {
+      setFeedback({ type: 'error', text: err instanceof Error ? err.message : 'Không thể tải tệp bằng chứng lên.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleSubmitExemption = async () => {
     if (exemptReason.trim().length < 10 || !exemptEvidenceUrl.trim()) {
       setFeedback({ type: 'error', text: 'Cần nhập lý do tối thiểu 10 ký tự và ít nhất 1 ảnh/video bằng chứng.' });
@@ -194,13 +209,39 @@ export const Uc83SellerReturnPanel: React.FC<Uc83SellerReturnPanelProps> = ({
                 onChange={(e) => setExemptReason(e.target.value)}
                 style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
               />
-              <input
-                type="text"
-                placeholder="Đường dẫn ảnh/video bằng chứng..."
-                value={exemptEvidenceUrl}
-                onChange={(e) => setExemptEvidenceUrl(e.target.value)}
-                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
-              />
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder="Chọn ảnh/video từ máy hoặc dán đường dẫn..."
+                  value={exemptEvidenceUrl}
+                  onChange={(e) => setExemptEvidenceUrl(e.target.value)}
+                  style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
+                />
+                <label
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    background: '#e0f2fe',
+                    color: '#0369a1',
+                    fontWeight: 600,
+                    fontSize: '0.78rem',
+                    cursor: busy ? 'not-allowed' : 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  + Chọn tệp
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+                    disabled={busy}
+                    onChange={(e) => {
+                      void handleUploadExemptionFile(e.target.files?.[0]);
+                      e.target.value = '';
+                    }}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
               {exemptEvidenceUrl.trim() && (
                 <img
                   src={resolveReturnMediaUrl(exemptEvidenceUrl.trim())}

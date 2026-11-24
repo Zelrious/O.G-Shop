@@ -277,21 +277,36 @@ public class DisputeRepository {
         if (penaltyPoints <= 0) return;
         UUID entryId = UUID.randomUUID();
         Instant now = Instant.now();
-        try {
-            jdbc.update("""
-                INSERT INTO og_compat.penalty_ledger (
-                  entry_id, user_id, points_delta, reason, decided_by, created_at, command_key, record_type
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'penalty_ledger')
-                """, entryId, userId, penaltyPoints, reason, decidedBy, Timestamp.from(now), "DISPUTE_PENALTY:" + entryId);
-        } catch (Exception e) {
+        String cmdKey = "DISPUTE_PENALTY:" + entryId;
+        jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) conn -> {
+            java.sql.Savepoint sp = null;
             try {
-                jdbc.update("""
-                    INSERT INTO public.penalty_ledger (
-                      entry_id, user_id, points_delta, reason, decided_by, created_at, command_key, record_type
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'penalty_ledger')
-                    """, entryId, userId, penaltyPoints, reason, decidedBy, Timestamp.from(now), "DISPUTE_PENALTY:" + entryId);
-            } catch (Exception ignored) {}
-        }
+                sp = conn.setSavepoint("sp_dispute_penalty");
+            } catch (SQLException ignored) {}
+            try (var ps = conn.prepareStatement("""
+                    INSERT INTO og_compat.penalty_ledger (
+                      entry_id, user_id, points_delta, reason, decided_by, created_at, command_key
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """)) {
+                ps.setObject(1, entryId);
+                ps.setLong(2, userId);
+                ps.setInt(3, penaltyPoints);
+                ps.setString(4, reason);
+                ps.setLong(5, decidedBy);
+                ps.setTimestamp(6, Timestamp.from(now));
+                ps.setString(7, cmdKey);
+                ps.executeUpdate();
+                if (sp != null) {
+                    try { conn.releaseSavepoint(sp); } catch (SQLException ignored) {}
+                }
+            } catch (SQLException e) {
+                if (sp != null) {
+                    try { conn.rollback(sp); } catch (SQLException ignored) {}
+                    try { conn.releaseSavepoint(sp); } catch (SQLException ignored) {}
+                }
+            }
+            return null;
+        });
     }
 
     public void saveReview(long orderId, long reviewerId, long revieweeId, int rating, String comment) {
@@ -316,7 +331,7 @@ public class DisputeRepository {
             }
         } else {
             try {
-                jdbc.update("INSERT INTO og_compat.reviews (order_id, reviewer_id, reviewee_id, rating, comment, created_at, updated_at, record_type) VALUES (?, ?, ?, ?, ?, ?, ?, 'reviews')",
+                jdbc.update("INSERT INTO og_compat.reviews (order_id, reviewer_id, reviewee_id, rating, comment, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         orderId, reviewerId, revieweeId, rating, comment, Timestamp.from(now), Timestamp.from(now));
             } catch (Exception e) {
                 jdbc.update("INSERT INTO public.reviews (order_id, reviewer_id, reviewee_id, rating, comment, created_at, updated_at, record_type) VALUES (?, ?, ?, ?, ?, ?, ?, 'reviews')",

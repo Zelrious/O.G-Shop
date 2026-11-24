@@ -54,6 +54,22 @@ public class ReturnCaseController {
     // ==================== BUYER ENDPOINTS ====================
 
     /**
+     * Tải lên tệp bằng chứng trả hàng / khiếu nại (BG-1)
+     * POST /api/v1/trustsafety/returns/evidence/upload
+     */
+    @PostMapping(value = "/evidence/upload", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ReturnCaseDtos.EvidenceItemDto> uploadEvidence(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam(value = "mediaType", defaultValue = "IMAGE") String mediaType,
+            @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds
+    ) {
+        long actorId = extractUserId(jwt);
+        ReturnCaseDtos.EvidenceItemDto response = returnCaseService.uploadReturnEvidence(actorId, file, mediaType, durationSeconds);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * Tạo yêu cầu trả hàng/khiếu nại (UC62)
      * POST /api/v1/trustsafety/returns/{orderId}
      */

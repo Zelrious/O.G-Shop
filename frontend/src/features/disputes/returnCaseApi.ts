@@ -94,6 +94,24 @@ export function createUc83CommandKey(prefix: string, id: number | string): strin
 }
 
 export const returnCaseApi = {
+  async uploadEvidence(
+    file: File,
+    mediaType: 'IMAGE' | 'VIDEO' = 'IMAGE',
+    durationSeconds?: number,
+  ): Promise<ReturnEvidenceItemInput> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('mediaType', mediaType);
+    if (durationSeconds != null) {
+      formData.append('durationSeconds', String(durationSeconds));
+    }
+    const res = await authApi.authorizedFetch('/trustsafety/returns/evidence/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    return parseJsonOrThrow<ReturnEvidenceItemInput>(res);
+  },
+
   // Buyer order-scoped endpoints
   async getActiveReturnCase(orderId: number): Promise<ReturnCaseDetail | null> {
     const res = await authApi.authorizedFetch(`/commerce/orders/${orderId}/return-case`);
