@@ -479,22 +479,28 @@ public class CheckoutService {
             } catch (Exception e) {
                 addressSnapshotJson = "{}";
             }
-            jdbcTemplate.update("""
-                    INSERT INTO og_compat.checkout_groups (
-                        group_id, buyer_id, command_key, request_digest, address_snapshot,
-                        delivery_method, carrier, payment_method, expected_total, state, created_at, payment_due_at
-                    ) VALUES (?, ?, ?, ?, CAST(? AS jsonb), 'CARRIER', 'GHN', 'BANK_TRANSFER_MOCK', ?, 'READY', ?, ?)
-                    ON CONFLICT (group_id) DO NOTHING
-                    """,
-                    checkoutGroupId,
-                    buyerId,
-                    normalizedKey,
-                    requestHash,
-                    addressSnapshotJson,
-                    totalAmount,
-                    Timestamp.from(now),
-                    Timestamp.from(paymentDueAt)
+            Long existingGroupCount = jdbcTemplate.queryForObject(
+                    "SELECT count(*) FROM og_compat.checkout_groups WHERE group_id = ?",
+                    Long.class,
+                    checkoutGroupId
             );
+            if (existingGroupCount == null || existingGroupCount == 0L) {
+                jdbcTemplate.update("""
+                        INSERT INTO og_compat.checkout_groups (
+                            group_id, buyer_id, command_key, request_digest, address_snapshot,
+                            delivery_method, carrier, payment_method, expected_total, state, created_at, payment_due_at
+                        ) VALUES (?, ?, ?, ?, CAST(? AS jsonb), 'CARRIER', 'GHN', 'BANK_TRANSFER_MOCK', ?, 'READY', ?, ?)
+                        """,
+                        checkoutGroupId,
+                        buyerId,
+                        normalizedKey,
+                        requestHash,
+                        addressSnapshotJson,
+                        totalAmount,
+                        Timestamp.from(now),
+                        Timestamp.from(paymentDueAt)
+                );
+            }
             order = new OrderEntity(
                     checkoutGroupId,
                     buyerId,
