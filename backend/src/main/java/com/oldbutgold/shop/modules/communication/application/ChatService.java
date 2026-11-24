@@ -35,7 +35,7 @@ public class ChatService {
             throw problem(403, "CHAT_RESTRICTED", "Tài khoản của bạn đang bị tạm ngưng quyền gửi tin nhắn do vi phạm chính sách kiểm duyệt.");
         }
         if(!"ACTIVE".equals(c.status()))throw problem(409,"CONVERSATION_CLOSED","Hội thoại chỉ có thể xem lịch sử.");
-        if(repository.blocked(c.buyer(),c.seller())&&!commerce.openObligations(c.buyer(),c.seller(),c.product()))throw problem(403,"SELLER_BUYER_BLOCKED","Người bán đã chặn tương tác mới. Hồ sơ và nghĩa vụ cũ vẫn được giữ.");
+        if(repository.blockedForChat(c.buyer(),c.seller())&&!commerce.openObligations(c.buyer(),c.seller(),c.product()))throw problem(403,"SELLER_BUYER_BLOCKED","Người bán đã chặn tin nhắn mới. Hồ sơ và nghĩa vụ cũ vẫn được giữ.");
     }
     public void requireNegotiation(Thread c,Product p){
         identity.requireChat(c.buyer());identity.requireChat(c.seller());
@@ -46,7 +46,7 @@ public class ChatService {
     public void requirePurchase(Thread c,Product p){
         identity.requireTrade(c.buyer(),c.seller(),p.requiresEkyc());
         if(p.deleted()||!"ACTIVE".equals(p.status())||p.available()<1)throw problem(409,"PRODUCT_UNAVAILABLE","Sản phẩm không còn đủ điều kiện mua hoặc thương lượng. Bạn vẫn xem được lịch sử chat.");
-        if(repository.blocked(c.buyer(),c.seller()))throw problem(403,"SELLER_BUYER_BLOCKED","Quan hệ chặn ngăn thương lượng và mua mới với người bán này.");
+        if(repository.blockedForPurchase(c.buyer(),c.seller()))throw problem(403,"SELLER_BUYER_BLOCKED","Người bán đã chặn mua hàng và thương lượng mới với tài khoản này.");
     }
     @Transactional(readOnly=true) public Conversations list(long actor,String query,int page,int size){
         identity.customer(actor);String q=query==null?"":query.strip();if(q.length()>100)throw problem(400,"CHAT_QUERY_INVALID","Từ khóa tối đa100 ký tự.");
@@ -64,7 +64,7 @@ public class ChatService {
         else {
             identity.requireChat(actor);
             if(order==null){identity.requireNewConversation(buyer,seller);p=product(p.id(),true);if(p.deleted()||!"ACTIVE".equals(p.status())||p.available()<1)throw problem(409,"PRODUCT_UNAVAILABLE","Tin không còn mở bán; hãy mở chat từ đơn cũ nếu có.");}
-            if(repository.blocked(buyer,seller)&&(order==null||!commerce.openObligations(buyer,seller,p.id())))throw problem(403,"SELLER_BUYER_BLOCKED","Người bán đã chặn tương tác mới.");
+            if(repository.blockedForChat(buyer,seller)&&(order==null||!commerce.openObligations(buyer,seller,p.id())))throw problem(403,"SELLER_BUYER_BLOCKED","Người bán đã chặn tin nhắn mới.");
             id=repository.create(buyer,seller,p.id(),p.title(),p.price(),p.thumbnail(),clock.instant());
         }
         if(order!=null){owned(actor,id,true);repository.linkOrder(id,order.id());}
@@ -107,8 +107,7 @@ public class ChatService {
             repository.setChatRestrictedUntil(actor, banUntil);
             repository.incrementViolationScore(actor);
             repository.logModeration(id, actor, text, moderation.maskedText(), moderation.violationType(), moderation.reason());
-            String contextJson = repository.getRecentContextJson(id, actor, text);
-            repository.createModerationReport(id, actor, null, moderation.violationType(), "CRITICAL", "PENDING", text, contextJson);
+            repository.createModerationReport(id, actor, null, moderation.violationType(), "CRITICAL", "PENDING", text, "[]");
             throw problem(403, "MESSAGE_BLOCKED_SECURITY", "Tin nhắn bị chặn do vi phạm nghiêm trọng an ninh thông tin và chính sách pháp luật O.G Shop.");
         }
 
@@ -131,14 +130,30 @@ public class ChatService {
             int newScore = repository.getViolationScore(actor);
             boolean triggerKtv = "HIGH".equals(moderation.severityLevel()) || newScore >= 4;
             if (triggerKtv) {
-                String contextJson = repository.getRecentContextJson(id, actor, text);
                 repository.createModerationReport(id, actor, null, message, moderation.violationType(),
                     moderation.severityLevel() != null ? moderation.severityLevel() : "MEDIUM",
-                    "PENDING", text, contextJson);
+                    "PENDING", text, "[]");
             }
         }
 
         return message(repository.message(message).orElseThrow());
+    }
+    @Transactional public ReportResult reportMessage(long actor,long conversationId,long messageId,ReportMessage request){
+        owned(actor,conversationId,false);
+        var msg=repository.message(messageId).filter(m->m.conversation()==conversationId)
+            .orElseThrow(()->problem(404,"CHAT_MESSAGE_NOT_FOUND","Không tìm thấy tin nhắn trong hội thoại này."));
+        if(msg.sender()==actor)throw problem(400,"CANNOT_REPORT_OWN_MESSAGE","Không thể tự báo cáo tin nhắn của chính mình.");
+        if(repository.hasActiveUserReport(messageId,actor)){
+            return new ReportResult(messageId,conversationId,"ALREADY_REPORTED","Bạn đã báo cáo tin nhắn này trước đó. Bộ phận kiểm duyệt sẽ xem xét.");
+        }
+        String reason=request!=null&&request.reason()!=null?request.reason().strip():"";
+        String rawContent=msg.metadata()!=null&&msg.metadata().get("rawContent")!=null
+            ?Objects.toString(msg.metadata().get("rawContent"),msg.content())
+            :msg.content();
+        if(rawContent==null||rawContent.isBlank())rawContent="["+msg.type()+"]";
+        String flaggedContent=reason.isEmpty()?rawContent:"[Lý do báo cáo: "+reason+"] "+rawContent;
+        repository.createModerationReport(conversationId,msg.sender(),actor,messageId,"USER_REPORTED","MEDIUM","PENDING",flaggedContent,"[]");
+        return new ReportResult(messageId,conversationId,"REPORTED","Đã gửi báo cáo tin nhắn cho bộ phận kiểm duyệt.");
     }
     public Message message(StoredMessage m){
         Media media=null;boolean attachment=Set.of("IMAGE","VIDEO").contains(m.type());boolean managed="CHAT_V31".equals(m.metadata().get("managedBy"));
@@ -158,6 +173,6 @@ public class ChatService {
     @Transactional public void read(long actor,long id,long message){owned(actor,id,true);repository.read(id,actor,message);}
     @Transactional(readOnly=true) public List<Block> blocks(long actor){if(!identity.customer(actor).seller())throw problem(403,"SELLER_REQUIRED","Chỉ người bán có danh sách chặn.");return repository.blocks(actor);}
     @Transactional(readOnly=true) public List<Map<String,Object>> searchBuyers(long actor,String query){if(!identity.customer(actor).seller())throw problem(403,"SELLER_REQUIRED","Chỉ người bán tìm người mua để quản lý chặn.");String q=query==null?"":query.strip();if(q.length()<2)return List.of();if(q.length()>100)throw problem(400,"CHAT_QUERY_INVALID","Từ khóa quá dài.");return repository.searchBuyers(actor,q);}
-    @Transactional public List<Block> block(long actor,BlockInput request){identity.requireBlockManager(actor);if(actor==request.buyerId()||!identity.customer(request.buyerId()).buyer())throw problem(400,"BLOCK_TARGET_INVALID","Người mua cần chặn không hợp lệ.");identity.lockPair(request.buyerId(),actor);String reason=request.reason()==null?null:request.reason().strip();boolean before=repository.blocked(request.buyerId(),actor);String oldReason=repository.blocks(actor).stream().filter(b->b.buyerId()==request.buyerId()).map(b->Objects.toString(b.reason(),"")).findFirst().orElse("");if(before!=request.blocked()||request.blocked()&&!Objects.equals(oldReason,Objects.toString(reason,""))){repository.block(actor,request.buyerId(),reason,request.blocked());audit.blockChanged(actor,request.buyerId(),before,request.blocked(),reason);}return repository.blocks(actor);}
+    @Transactional public List<Block> block(long actor,BlockInput request){identity.requireBlockManager(actor);if(actor==request.buyerId()||!identity.customer(request.buyerId()).buyer())throw problem(400,"BLOCK_TARGET_INVALID","Người mua cần chặn không hợp lệ.");identity.lockPair(request.buyerId(),actor);String reason=request.reason()==null?null:request.reason().strip();String scope=request.blockScope()==null?"ALL":request.blockScope().name();boolean before=repository.blocked(request.buyerId(),actor);var existing=repository.blocks(actor).stream().filter(b->b.buyerId()==request.buyerId()).findFirst();String oldReason=existing.map(b->Objects.toString(b.reason(),"")).orElse("");String oldScope=existing.map(b->Objects.toString(b.blockScope(),"ALL")).orElse("ALL");if(before!=request.blocked()||request.blocked()&&(!Objects.equals(oldReason,Objects.toString(reason,""))||!Objects.equals(oldScope,scope))){repository.block(actor,request.buyerId(),reason,request.blocked(),scope);audit.blockChanged(actor,request.buyerId(),before,request.blocked(),reason);}return repository.blocks(actor);}
     public static CommunicationException problem(int status,String code,String message){return new CommunicationException(status,code,message);}
 }

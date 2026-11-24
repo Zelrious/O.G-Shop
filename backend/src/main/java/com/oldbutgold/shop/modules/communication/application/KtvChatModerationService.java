@@ -50,6 +50,10 @@ public class KtvChatModerationService {
         if (chatMediaService == null) {
             throw new CommunicationException(503, "CHAT_MEDIA_SERVICE_UNAVAILABLE", "Dịch vụ tải media chưa sẵn sàng.");
         }
+        if (!repository.isMessageReportedOrFlagged(messageId)) {
+            throw new CommunicationException(403, "MEDIA_ACCESS_DENIED",
+                "KTV chỉ được xem media của tin nhắn bị hệ thống phát hiện hoặc bị người dùng báo cáo.");
+        }
         return chatMediaService.readForModeration(messageId);
     }
 

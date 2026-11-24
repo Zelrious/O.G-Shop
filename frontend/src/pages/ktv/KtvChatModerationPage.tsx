@@ -26,6 +26,7 @@ const VIOLATION_TYPE_LABELS: Record<string, string> = {
   PLATFORM_REDIRECT: 'Điều hướng ngoại sàn',
   OFF_PLATFORM_PAYMENT: 'Giao dịch / Cọc ngoài sàn',
   PII_LEAK: 'Rò rỉ CCCD / CMND',
+  USER_REPORTED: 'Người dùng báo cáo',
 };
 
 const STATUS_OPTIONS: SelectOption[] = [
@@ -53,6 +54,7 @@ const TYPE_OPTIONS: SelectOption[] = [
   { value: 'PLATFORM_REDIRECT', label: 'Điều hướng ngoại sàn' },
   { value: 'OFF_PLATFORM_PAYMENT', label: 'Giao dịch ngoài sàn' },
   { value: 'PII_LEAK', label: 'Rò rỉ CCCD / CMND' },
+  { value: 'USER_REPORTED', label: 'Người dùng báo cáo' },
 ];
 
 const PENALTY_OPTIONS: SelectOption[] = [
@@ -795,7 +797,7 @@ export const KtvChatModerationPage: React.FC = () => {
                     >
                       <div className="og-chat-mod-row__top">
                         <span className="og-chat-mod-row__name">{item.offenderName}</span>
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
                           {item.pendingViolationCount && item.pendingViolationCount > 1 ? (
                             <span
                               className="og-badge-severity og-badge-severity--high"
@@ -809,17 +811,11 @@ export const KtvChatModerationPage: React.FC = () => {
                           </span>
                         </div>
                       </div>
-                      <div className="og-chat-mod-row__sub">
-                        {item.offenderEmail} · #{item.offenderId}
-                      </div>
-                      <div className="og-chat-mod-row__snippet">
-                        {item.flaggedContent}
-                      </div>
                       <div className="og-chat-mod-row__footer">
-                        <span className="og-chat-mod-row__type-badge">
-                          {VIOLATION_TYPE_LABELS[item.violationType] || item.violationType}
+                        <span className="og-chat-mod-row__sub">
+                          {item.offenderEmail} · #{item.offenderId}
                         </span>
-                        <span>
+                        <span style={{ flexShrink: 0 }}>
                           {new Date(item.createdAt).toLocaleTimeString('vi-VN', {
                             hour: '2-digit',
                             minute: '2-digit',
@@ -849,11 +845,11 @@ export const KtvChatModerationPage: React.FC = () => {
             />
           ) : (
             <>
-              {/* Header: Clean Conversation Title & Message Count & Select All Violations */}
+              {/* Header: Privacy-scoped flagged messages title */}
               <div className="og-conversation-header">
                 <div className="og-conversation-header__info">
                   <h3 className="og-conversation-title">
-                    Dòng tin nhắn hội thoại #{detail.conversationId}
+                    Tin nhắn bị gắn cờ / báo cáo · Hội thoại #{detail.conversationId}
                   </h3>
                   <span className="og-conversation-header__meta">
                     ({streamMessages.length > 0 ? `${streamMessages.length} tin` : `${contextMessages.length} tin`})
@@ -885,25 +881,36 @@ export const KtvChatModerationPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Privacy Notice Banner */}
+              <div
+                className="og-chat-privacy-notice"
+                role="note"
+                style={{
+                  padding: '8px 14px',
+                  fontSize: '0.8rem',
+                  color: 'var(--og-color-text-secondary)',
+                  background: 'var(--og-color-surface-subtle, #f8fafc)',
+                  borderBottom: '1px solid var(--og-color-border)',
+                }}
+              >
+                Chế độ bảo mật: Chỉ hiển thị tin nhắn bị hệ thống quét phát hiện hoặc do người dùng chủ động báo cáo. Các tin nhắn riêng tư bình thường được ẩn.
+              </div>
+
               {/* Chat Stream Area */}
               <div className="og-chat-stream-box" ref={chatStreamRef}>
-                {/* Top: Load older messages */}
-                <div className="og-chat-stream-load-bar">
-                  <button
-                    type="button"
-                    className="og-chat-stream-load-btn"
-                    disabled={!hasOlder || loadingOlder}
-                    onClick={handleLoadOlder}
-                  >
-                    {loadingOlder ? (
-                      'Đang tải tin cũ hơn...'
-                    ) : hasOlder ? (
-                      'Tải tin cũ hơn'
-                    ) : (
-                      'Đã tới đầu cuộc trò chuyện'
-                    )}
-                  </button>
-                </div>
+                {/* Top: Load older messages (only if available) */}
+                {hasOlder && (
+                  <div className="og-chat-stream-load-bar">
+                    <button
+                      type="button"
+                      className="og-chat-stream-load-btn"
+                      disabled={loadingOlder}
+                      onClick={handleLoadOlder}
+                    >
+                      {loadingOlder ? 'Đang tải tin cũ hơn...' : 'Tải tin cũ hơn'}
+                    </button>
+                  </div>
+                )}
 
                 {streamLoading ? (
                   <div style={{ textAlign: 'center', padding: 24, color: 'var(--og-color-text-secondary)', fontSize: '0.88rem' }}>
@@ -1000,6 +1007,12 @@ export const KtvChatModerationPage: React.FC = () => {
                               {isResolved
                                 ? `[Đã xử lý: ${violationLabel || 'Vi phạm'}]`
                                 : `[Vi phạm: ${violationLabel || 'Chính sách hội thoại'}]`}
+                              {' · '}
+                              <span>
+                                {msg.reportSource === 'USER_REPORTED' || msg.reporterId != null
+                                  ? 'Người dùng báo cáo'
+                                  : 'Hệ thống quét'}
+                              </span>
                             </div>
                           )}
 
@@ -1157,23 +1170,19 @@ export const KtvChatModerationPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Bottom: Load newer messages */}
-                <div className="og-chat-stream-load-bar">
-                  <button
-                    type="button"
-                    className="og-chat-stream-load-btn"
-                    disabled={!hasNewer || loadingNewer}
-                    onClick={handleLoadNewer}
-                  >
-                    {loadingNewer ? (
-                      'Đang tải tin mới hơn...'
-                    ) : hasNewer ? (
-                      'Tải tin mới hơn'
-                    ) : (
-                      'Đã tới tin nhắn mới nhất'
-                    )}
-                  </button>
-                </div>
+                {/* Bottom: Load newer messages (only if available) */}
+                {hasNewer && (
+                  <div className="og-chat-stream-load-bar">
+                    <button
+                      type="button"
+                      className="og-chat-stream-load-btn"
+                      disabled={loadingNewer}
+                      onClick={handleLoadNewer}
+                    >
+                      {loadingNewer ? 'Đang tải tin mới hơn...' : 'Tải tin mới hơn'}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Floating Action Bar in Multi-Select Mode */}
@@ -1287,6 +1296,14 @@ export const KtvChatModerationPage: React.FC = () => {
                   <div className="og-detail-keyval-row">
                     <span>Loại vi phạm:</span>
                     <strong>{VIOLATION_TYPE_LABELS[detail.violationType] || detail.violationType}</strong>
+                  </div>
+                  <div className="og-detail-keyval-row">
+                    <span>Nguồn phát hiện:</span>
+                    <strong>
+                      {detail.reporterId != null
+                        ? `Người dùng báo cáo (#${detail.reporterId})`
+                        : 'Hệ thống tự động quét'}
+                    </strong>
                   </div>
                   <div className="og-detail-keyval-row">
                     <span>Mã cuộc trò chuyện:</span>

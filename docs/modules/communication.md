@@ -1,5 +1,17 @@
 # Communication Module
 
+## Mở Rộng UC10 — Chặn Người Mua Theo Mức (Tin Nhắn / Mua Hàng / Cả Hai) — TASK-0127 / 2026-11-24
+
+- **Mở rộng ngoài đặc tả gốc UC10 (đã được chủ dự án phê duyệt)**: Flyway `V59__seller_buyer_block_scopes.sql` thêm cột `block_scope` (`CHAT` / `PURCHASE` / `ALL`, mặc định `ALL`) vào `public.seller_buyer_blocks` và đồng bộ 3 trigger/function guard từ `V31` (`og31_chat_permission`, `og31_guard_blocked_order`, `og31_guard_offer_command`).
+- **Backend**: `ChatRepository` tách `blockedForChat` (`CHAT`/`ALL`) và `blockedForPurchase` (`PURCHASE`/`ALL`); `ChatService` và `DefaultNegotiatedCheckoutFacade` kiểm tra đúng phạm vi chặn và cho phép đổi mức chặn trực tiếp.
+- **Frontend**: `BlockedBuyersPage.tsx` và `ConversationWorkspace.tsx` cho phép Người bán chọn/đổi mức chặn (`Chặn tin nhắn`, `Chặn mua hàng`, `Chặn cả tin nhắn & mua hàng`) kèm nút **Chặn** nhanh ngay trên header khung chat.
+
+## Khóa Quyền Riêng Tư Kiểm Duyệt Tin Nhắn KTV & Báo Cáo Tin Nhắn Từ Người Dùng — TASK-0126 / 2026-11-24
+
+- **Phạm vi truy cập KTV tối thiểu**: `ChatModerationRepository.getConversationChunkForKtv` sử dụng `INNER JOIN public.chat_moderation_reports` để chỉ trả về các tin nhắn bị hệ thống tự động phát hiện (`reporter_id IS NULL`, `reportSource = "SYSTEM_AUTO"`) hoặc do người dùng chủ động báo cáo (`reporter_id IS NOT NULL`, `reportSource = "USER_REPORTED"`). Không còn trả `context_snippet` chứa các tin nhắn bình thường xung quanh; `KtvChatModerationService.readMessageMedia` chặn `403 MEDIA_ACCESS_DENIED` đối với media của tin nhắn không có hồ sơ báo cáo/gắn cờ.
+- **Báo cáo tin nhắn chủ động từ người dùng**: Bổ sung `POST /api/v1/chat/conversations/{conversationId}/messages/{messageId}/report` (`ChatController`, `ChatService.reportMessage`, `ChatRepository.hasActiveUserReport`) chặn tự báo cáo (`400 CANNOT_REPORT_OWN_MESSAGE`), xử lý idempotent khi báo cáo lặp (`ALREADY_REPORTED`), gắn nút **Báo cáo** trên từng tin nhắn đối tác trong `ConversationWorkspace.tsx`.
+- **Giao diện KTV**: `KtvChatModerationPage.tsx` hiển thị banner chế độ bảo mật, nhãn nguồn phát hiện (`Hệ thống quét` / `Người dùng báo cáo`), hỗ trợ lọc `USER_REPORTED` và ẩn phân trang toàn bộ hội thoại khi không còn trang.
+
 ## Kiểm Duyệt Bảo Mật Tin Nhắn Đa Tầng và Điều Phối KTV — TASK-0116 / 2026-11-08
 
 - `V38__chat_moderation_reports.sql`: Bảng `chat_moderation_reports` hỗ trợ hàng đợi KTV (UC56) và lưu vết quyết định xử phạt (UC74).

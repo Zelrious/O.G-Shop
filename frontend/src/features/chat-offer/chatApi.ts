@@ -10,7 +10,10 @@ export interface ChatQuota { images: number; videos: number; bytes: number; maxI
 export interface ChatDetail { conversation: Conversation; product: ChatProduct; messages: { items: ChatMessage[]; nextBefore: number | null }; offers: ChatOffer[]; peerReadMessageId: number; canSend: boolean; canOffer: boolean; restrictionReason: string | null; quota: ChatQuota; serverTime: string }
 export interface ProposalInput { clientId: string; price: number; expiresAt?: string }
 export interface DecisionInput { commandKey: string; action: OfferAction; expectedVersion: number; price?: number; expiresAt?: string }
-export interface BlockedBuyer { buyerId: number; name: string; blockedAt: string; reason: string | null }
+export type BlockScope = 'CHAT' | 'PURCHASE' | 'ALL';
+export interface BlockedBuyer { buyerId: number; name: string; blockedAt: string; reason: string | null; blockScope?: BlockScope }
+export const blockScopeLabels: Record<BlockScope, string> = { CHAT: 'Chặn tin nhắn', PURCHASE: 'Chặn mua hàng', ALL: 'Chặn cả tin nhắn & mua hàng' };
+export interface ReportMessageResult { messageId: number; conversationId: number; status: string; message: string }
 export class ChatApiError extends Error { constructor(message: string, readonly status: number, readonly code?: string) { super(message); this.name = 'ChatApiError'; } }
 async function result<T>(response: Response): Promise<T> { if (!response.ok) { const body = await response.json().catch(() => ({})) as { message?: string; code?: string }; throw new ChatApiError(body.message || 'Chưa thực hiện được thao tác. Thử lại sau.', response.status, body.code); } return response.status === 204 ? undefined as T : response.json() as Promise<T>; }
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
@@ -28,6 +31,7 @@ export const chatApi = {
   start(productId: number, orderId?: number) { return post<ChatDetail>('/conversations', { productId, orderId }); },
   async detail(id: number, before?: number, signal?: AbortSignal) { return result<ChatDetail>(await request('/chat/conversations/' + id + (before ? '?before=' + before : ''), { signal })); },
   send(id: number, clientId: string, text: string, replyTo?: number) { return post<ChatMessage>('/conversations/' + id + '/messages', { clientId, text, replyTo }); },
+  reportMessage(conversationId: number, messageId: number, reason?: string) { return post<ReportMessageResult>('/conversations/' + conversationId + '/messages/' + messageId + '/report', { reason: reason ?? '' }); },
   read(id: number, messageId: number) { return post<void>('/conversations/' + id + '/read', { messageId }); },
   propose(id: number, input: ProposalInput) { return post<ChatOffer>('/conversations/' + id + '/offers', input); },
   decide(id: number, input: DecisionInput) { return post<ChatOffer>('/offers/' + id + '/decision', input); },
@@ -35,7 +39,7 @@ export const chatApi = {
   async mediaBlob(id: number, signal?: AbortSignal) { const response = await request('/chat/messages/' + id + '/media', { signal }); if (!response.ok) await result<never>(response); return response.blob(); },
   async blocks() { return result<BlockedBuyer[]>(await request('/chat/blocks')); },
   async searchBuyers(query: string) { return result<{ userId: number; name: string }[]>(await request('/chat/blocks/search?' + new URLSearchParams({ query }))); },
-  block(buyerId: number, blocked: boolean, reason?: string) { return post<BlockedBuyer[]>('/blocks', { buyerId, blocked, reason }); },
+  block(buyerId: number, blocked: boolean, reason?: string, blockScope: BlockScope = 'ALL') { return post<BlockedBuyer[]>('/blocks', { buyerId, blocked, reason, blockScope }); },
 };
 export const offerLabels: Record<ChatOffer['status'], string> = { PENDING: 'Chờ phản hồi', ACCEPTED: 'Đã chấp nhận', REJECTED: 'Đã từ chối', COUNTERED: 'Đã trả giá khác', WITHDRAWN: 'Đã rút', EXPIRED: 'Đã hết hạn' };
 export const money = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value);

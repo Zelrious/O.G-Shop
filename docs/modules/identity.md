@@ -1,5 +1,10 @@
 # Identity Module
 
+## Đồng Bộ Gỡ Cấm Chat Khi KTV Mở Khóa / Gỡ Hạn Chế Tài Khoản — TASK-0126 / 2026-11-24
+
+- `AccountManagementRepository.update(...)`: bổ sung overload có tham số `clearChatRestriction` cập nhật `chat_restricted_until = CASE WHEN ? THEN NULL ELSE chat_restricted_until END` trên `public.users`.
+- `AccountManagementService.command(...)`: tự động xóa `chat_restricted_until` khi KTV thực hiện `Action.ACTIVATE` hoặc `Action.LIFT` cho `Scope.CHAT`, đảm bảo người dùng không bị kẹt lỗi `403 CHAT_RESTRICTED` còn sót lại từ phân hệ kiểm duyệt tin nhắn sau khi đã được gỡ hạn chế ở trang Quản lý tài khoản.
+
 ## Tối Ưu Thuật Toán Quét Khuôn Mặt Xác Thực Nhanh (Quick Face Auth UC08) và Nâng Cao Trải Nghiệm Người Dùng — TASK-0114 / 2026-11-02
 
 ### 1. Quét Tức Thì Không Độ Trễ, Phản Hồi Thời Gian Thực & Nút Test Bỏ Qua (Frontend `QuickFaceAuthModal.tsx` & `FaceScanner.tsx`)

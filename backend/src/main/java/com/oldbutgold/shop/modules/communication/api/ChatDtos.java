@@ -30,6 +30,13 @@ public final class ChatDtos {
     public record Quota(int images,int videos,long bytes,int maxImages,int maxVideos,long maxBytes,String date) {}
     public record Detail(Conversation conversation,Product product,Messages messages,List<Offer> offers,
                          long peerReadMessageId,boolean canSend,boolean canOffer,String restrictionReason,Quota quota,Instant serverTime) {}
-    public record Block(long buyerId,String name,Instant blockedAt,String reason) {}
-    public record BlockInput(@Positive long buyerId,@Size(max=500) String reason,boolean blocked) {}
+    public enum BlockScope { CHAT, PURCHASE, ALL }
+    public record Block(long buyerId,String name,Instant blockedAt,String reason,String blockScope) {
+        public Block(long buyerId,String name,Instant blockedAt,String reason){this(buyerId,name,blockedAt,reason,"ALL");}
+    }
+    public record BlockInput(@Positive long buyerId,@Size(max=500) String reason,boolean blocked,BlockScope blockScope) {
+        public BlockInput(long buyerId,String reason,boolean blocked){this(buyerId,reason,blocked,BlockScope.ALL);}
+    }
+    public record ReportMessage(@Size(max=500) String reason) {}
+    public record ReportResult(long messageId,long conversationId,String status,String message) {}
 }
