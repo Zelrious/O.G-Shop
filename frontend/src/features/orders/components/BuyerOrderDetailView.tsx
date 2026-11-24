@@ -4,12 +4,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ordersApi } from '../ordersApi';
 import { OrderDetail } from '../types';
-import { TrackingResponse, formatGhnStatus } from '../../fulfillment/fulfillmentApi';
+import { TrackingResponse, resolveOutboundGhnDisplayStatus } from '../../fulfillment/fulfillmentApi';
 import { BuyerDisputeModal } from '../../disputes/BuyerDisputeModal';
 import { OrderReviewModal } from '../../disputes/OrderReviewModal';
+import { ReturnShipmentCard, getReturnShipmentStatusMeta } from '../../disputes/ReturnShipmentCard';
 import { Uc83BuyerOrderPanel } from '../../disputes/Uc83BuyerOrderPanel';
 import { disputeApi } from '../../disputes/disputeApi';
 import { reviewApi } from '../../disputes/reviewApi';
+import { buildOrderTimelineSteps } from '../orderTimeline';
 import type { DisputeDetail, OrderReviewsResponse } from '../../disputes/types';
 
 interface BuyerOrderDetailViewProps {
@@ -32,6 +34,7 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
   const [reviews, setReviews] = useState<OrderReviewsResponse | null>(null);
   const [dispute, setDispute] = useState<DisputeDetail | null>(null);
   const [creatingReturnShipment, setCreatingReturnShipment] = useState(false);
+  const [confirmingHandover, setConfirmingHandover] = useState(false);
 
   const loadOrder = useCallback(() => {
     setLoading(true);
@@ -127,15 +130,9 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
     );
   }
 
-  // Determine timeline steps
-  const steps = [
-    { key: 'CREATED', label: 'Đặt hàng', done: true, time: order.createdAt },
-    { key: 'PAID', label: 'Ký quỹ Escrow', done: order.status !== 'PAYMENT_PENDING' && order.status !== 'CANCELLED', time: order.heldAt || order.paidAt },
-    { key: 'CONFIRMED', label: 'Người bán xác nhận', done: ['SELLER_CONFIRMED', 'SHIPPED', 'DELIVERED', 'COMPLETED'].includes(order.status) || Boolean(tracking?.trackingNumber) },
-    { key: 'SHIPPED', label: 'Đang vận chuyển', done: ['SHIPPED', 'DELIVERED', 'COMPLETED'].includes(order.status) || (Boolean(tracking?.rawGhnStatus) && tracking?.rawGhnStatus !== 'ready_to_pick'), time: order.shippedAt },
-    { key: 'DELIVERED', label: 'Đã giao hàng', done: ['DELIVERED', 'COMPLETED'].includes(order.status) || tracking?.status === 'DELIVERED', time: order.deliveredAt },
-    { key: 'COMPLETED', label: 'Hoàn tất giao dịch', done: order.status === 'COMPLETED', time: order.completedAt },
-  ];
+  // Authoritative timeline preserving outbound delivery milestones & return shipment lifecycle
+  const steps = buildOrderTimelineSteps(order, tracking, dispute);
+  const outboundGhnMeta = resolveOutboundGhnDisplayStatus(order, tracking);
 
 
   return (
@@ -278,16 +275,20 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: 'var(--og-color-text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>🚚</span> Thông tin vận chuyển (GHN)
                 </h3>
-                {tracking?.rawGhnStatus && (
-                  <span style={{
-                    background: formatGhnStatus(tracking.rawGhnStatus).bg,
-                    color: formatGhnStatus(tracking.rawGhnStatus).color,
-                    padding: '4px 12px',
-                    borderRadius: 12,
-                    fontWeight: 600,
-                    fontSize: '0.82rem',
-                  }}>
-                    {formatGhnStatus(tracking.rawGhnStatus).label}
+                {(tracking?.rawGhnStatus || outboundGhnMeta.isDeliveredConfirmed) && (
+                  <span
+                    data-testid="outbound-ghn-status-badge"
+                    title={outboundGhnMeta.rawDiagnosticStatus ? `GHN raw status: ${outboundGhnMeta.rawDiagnosticStatus}` : undefined}
+                    style={{
+                      background: outboundGhnMeta.bg,
+                      color: outboundGhnMeta.color,
+                      padding: '4px 12px',
+                      borderRadius: 12,
+                      fontWeight: 600,
+                      fontSize: '0.82rem',
+                    }}
+                  >
+                    {outboundGhnMeta.label}
                   </span>
                 )}
               </div>
@@ -327,6 +328,13 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
               </div>
             </div>
           )}
+
+          {/* Return Shipment Info Card (GHN - Return Leg) */}
+          <ReturnShipmentCard
+            dispute={dispute}
+            buyerSenderName={order.shippingRecipientName}
+            buyerSenderAddress={order.fullShippingAddress}
+          />
 
           {/* Escrow Status Card */}
           <div style={{
@@ -536,20 +544,63 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
                           borderRadius: 8,
                           padding: 10,
                           color: '#0f172a',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 6,
                         }}>
-                          <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                            🚚 Theo dõi Vận đơn Hoàn trả (Chiều về)
+                          <div style={{ fontWeight: 700 }}>
+                            🔄 Trạng thái Vận đơn Hoàn trả (Chiều về)
                           </div>
                           <div>Đơn vị vận chuyển: <strong>{dispute.returnCarrier || 'GHN'}</strong></div>
                           <div>Mã vận đơn hoàn trả: <strong style={{ color: '#2563eb' }}>{dispute.returnTrackingCode}</strong></div>
                           <div>
                             Trạng thái:{' '}
-                            <strong style={{ color: '#d97706' }}>
-                              {dispute.returnShipmentStatus === 'RETURN_DELIVERED'
-                                ? 'Đã giao trả thành công cho Người bán'
-                                : 'Đang vận chuyển hoàn trả về Người bán (chờ Người bán xác nhận hoàn tiền)'}
+                            <strong style={{ color: getReturnShipmentStatusMeta(dispute.returnShipmentStatus).color }}>
+                              {getReturnShipmentStatusMeta(dispute.returnShipmentStatus).label}
                             </strong>
                           </div>
+
+                          {dispute.returnShipmentStatus === 'RETURN_CREATED' && (
+                            <button
+                              type="button"
+                              disabled={confirmingHandover}
+                              onClick={async () => {
+                                if (!window.confirm(`Xác nhận bạn đã đóng gói và bàn giao kiện hàng hoàn trả (${dispute.returnTrackingCode}) cho shipper GHN?`)) {
+                                  return;
+                                }
+                                setConfirmingHandover(true);
+                                try {
+                                  const updated = await disputeApi.confirmReturnHandover(order.orderId);
+                                  setDispute(updated);
+                                } catch (err) {
+                                  alert(err instanceof Error ? err.message : 'Không thể xác nhận bàn giao kiện hàng hoàn trả.');
+                                } finally {
+                                  setConfirmingHandover(false);
+                                }
+                              }}
+                              style={{
+                                marginTop: 4,
+                                width: '100%',
+                                padding: '10px 14px',
+                                background: '#ea580c',
+                                border: 'none',
+                                color: '#fff',
+                                borderRadius: 8,
+                                fontWeight: 700,
+                                cursor: confirmingHandover ? 'not-allowed' : 'pointer',
+                              }}
+                            >
+                              {confirmingHandover
+                                ? 'Đang xác nhận bàn giao...'
+                                : '🚚 Xác nhận đã bàn giao kiện hàng hoàn trả cho GHN'}
+                            </button>
+                          )}
+
+                          {dispute.returnShipmentStatus === 'RETURN_DELIVERED' && (
+                            <div style={{ fontSize: '0.82rem', color: '#15803d', background: '#f0fdf4', padding: 8, borderRadius: 6 }}>
+                              Kiện hàng hoàn trả đã giao tới Người bán. Đang chờ Người bán kiểm tra tình trạng hàng và hoàn tất quy trình hoàn tiền.
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <button
@@ -579,7 +630,7 @@ export const BuyerOrderDetailView: React.FC<BuyerOrderDetailViewProps> = ({ orde
                         >
                           {creatingReturnShipment
                             ? 'Đang tạo vận đơn hoàn trả...'
-                            : '📦 Tạo vận đơn GHN Hoàn trả & Gửi hàng về Người bán'}
+                            : '📦 Tạo vận đơn GHN Hoàn trả'}
                         </button>
                       )}
                     </div>

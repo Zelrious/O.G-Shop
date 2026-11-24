@@ -51,6 +51,9 @@ public class DisputeRepository {
                   return_tracking_code VARCHAR(100) NULL,
                   return_carrier VARCHAR(64) NULL,
                   return_shipment_status VARCHAR(32) NULL,
+                  return_handed_over_at TIMESTAMP WITH TIME ZONE NULL,
+                  return_handed_over_by BIGINT NULL,
+                  return_delivered_at TIMESTAMP WITH TIME ZONE NULL,
                   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
@@ -59,6 +62,9 @@ public class DisputeRepository {
         try { jdbc.execute("ALTER TABLE public.dispute_cases ADD COLUMN IF NOT EXISTS return_tracking_code VARCHAR(100) NULL"); } catch (Exception ignored) {}
         try { jdbc.execute("ALTER TABLE public.dispute_cases ADD COLUMN IF NOT EXISTS return_carrier VARCHAR(64) NULL"); } catch (Exception ignored) {}
         try { jdbc.execute("ALTER TABLE public.dispute_cases ADD COLUMN IF NOT EXISTS return_shipment_status VARCHAR(32) NULL"); } catch (Exception ignored) {}
+        try { jdbc.execute("ALTER TABLE public.dispute_cases ADD COLUMN IF NOT EXISTS return_handed_over_at TIMESTAMP WITH TIME ZONE NULL"); } catch (Exception ignored) {}
+        try { jdbc.execute("ALTER TABLE public.dispute_cases ADD COLUMN IF NOT EXISTS return_handed_over_by BIGINT NULL"); } catch (Exception ignored) {}
+        try { jdbc.execute("ALTER TABLE public.dispute_cases ADD COLUMN IF NOT EXISTS return_delivered_at TIMESTAMP WITH TIME ZONE NULL"); } catch (Exception ignored) {}
 
         try {
             jdbc.execute("CREATE SCHEMA IF NOT EXISTS og_compat");
@@ -206,11 +212,18 @@ public class DisputeRepository {
                    d.status, d.verdict_action, d.verdict_notes, d.refund_amount, d.penalty_points,
                    d.resolved_by, d.resolved_at, d.created_at, d.updated_at,
                    d.return_tracking_code, d.return_carrier, d.return_shipment_status,
+                   d.return_handed_over_at, d.return_delivered_at,
+                   sa.recipient_name AS return_recipient_name,
+                   sa.phone_number AS return_recipient_phone,
+                   CASE WHEN sa.address_id IS NOT NULL
+                        THEN CONCAT_WS(', ', sa.detail_address, sa.ward, sa.district, sa.province)
+                        ELSE NULL END AS return_recipient_address,
                    COALESCE((SELECT oi.product_title FROM public.order_items oi WHERE oi.order_id = d.order_id ORDER BY oi.order_item_id ASC LIMIT 1), 'Đơn hàng #' || d.order_id) AS product_title
             FROM public.dispute_cases d
             LEFT JOIN public.orders o ON d.order_id = o.order_id
             LEFT JOIN public.users b ON d.buyer_id = b.user_id
             LEFT JOIN public.users s ON d.seller_id = s.user_id
+            LEFT JOIN og_compat.addresses sa ON o.source_address_id = sa.address_id
             WHERE d.dispute_id = ?
             """;
         List<DisputeDetailDto> list = jdbc.query(sql, this::mapDisputeDetail, disputeId);
@@ -226,11 +239,18 @@ public class DisputeRepository {
                    d.status, d.verdict_action, d.verdict_notes, d.refund_amount, d.penalty_points,
                    d.resolved_by, d.resolved_at, d.created_at, d.updated_at,
                    d.return_tracking_code, d.return_carrier, d.return_shipment_status,
+                   d.return_handed_over_at, d.return_delivered_at,
+                   sa.recipient_name AS return_recipient_name,
+                   sa.phone_number AS return_recipient_phone,
+                   CASE WHEN sa.address_id IS NOT NULL
+                        THEN CONCAT_WS(', ', sa.detail_address, sa.ward, sa.district, sa.province)
+                        ELSE NULL END AS return_recipient_address,
                    COALESCE((SELECT oi.product_title FROM public.order_items oi WHERE oi.order_id = d.order_id ORDER BY oi.order_item_id ASC LIMIT 1), 'Đơn hàng #' || d.order_id) AS product_title
             FROM public.dispute_cases d
             LEFT JOIN public.orders o ON d.order_id = o.order_id
             LEFT JOIN public.users b ON d.buyer_id = b.user_id
             LEFT JOIN public.users s ON d.seller_id = s.user_id
+            LEFT JOIN og_compat.addresses sa ON o.source_address_id = sa.address_id
             WHERE d.order_id = ?
             ORDER BY d.created_at DESC LIMIT 1
             """;
@@ -291,6 +311,33 @@ public class DisputeRepository {
                 trackingCode, carrier, shipmentStatus, Timestamp.from(now), disputeId);
     }
 
+    public int markReturnHandedOver(long disputeId, long buyerId, Instant handedOverAt) {
+        Instant effective = handedOverAt != null ? handedOverAt : Instant.now();
+        return jdbc.update("""
+                UPDATE public.dispute_cases
+                SET return_shipment_status = 'RETURN_SHIPPING',
+                    return_handed_over_at = ?,
+                    return_handed_over_by = ?,
+                    updated_at = ?
+                WHERE dispute_id = ?
+                  AND return_shipment_status = 'RETURN_CREATED'
+                """,
+                Timestamp.from(effective), buyerId, Timestamp.from(effective), disputeId);
+    }
+
+    public int markReturnDelivered(long disputeId, Instant deliveredAt) {
+        Instant effective = deliveredAt != null ? deliveredAt : Instant.now();
+        return jdbc.update("""
+                UPDATE public.dispute_cases
+                SET return_shipment_status = 'RETURN_DELIVERED',
+                    return_delivered_at = ?,
+                    updated_at = ?
+                WHERE dispute_id = ?
+                  AND return_shipment_status = 'RETURN_SHIPPING'
+                """,
+                Timestamp.from(effective), Timestamp.from(effective), disputeId);
+    }
+
     public void markReturnDeliveredAndRefunded(long disputeId, long actorId, BigDecimal refundAmount) {
         Instant now = Instant.now();
         jdbc.update("""
@@ -298,12 +345,13 @@ public class DisputeRepository {
                 SET status = 'RESOLVED_REFUND',
                     verdict_action = 'RESOLVED_REFUND',
                     return_shipment_status = 'RETURN_DELIVERED',
+                    return_delivered_at = COALESCE(return_delivered_at, ?),
                     refund_amount = COALESCE(?, refund_amount),
                     resolved_at = COALESCE(resolved_at, ?),
                     updated_at = ?
                 WHERE dispute_id = ?
                 """,
-                refundAmount, Timestamp.from(now), Timestamp.from(now), disputeId);
+                Timestamp.from(now), refundAmount, Timestamp.from(now), Timestamp.from(now), disputeId);
     }
 
     public void recordNotification(long userId, String type, String title, String content) {
@@ -479,10 +527,20 @@ public class DisputeRepository {
         String returnTrackingCode = null;
         String returnCarrier = null;
         String returnShipmentStatus = null;
+        Instant returnHandedOverAt = null;
+        Instant returnDeliveredAt = null;
+        String returnRecipientName = null;
+        String returnRecipientPhone = null;
+        String returnRecipientAddress = null;
         try {
             returnTrackingCode = rs.getString("return_tracking_code");
             returnCarrier = rs.getString("return_carrier");
             returnShipmentStatus = rs.getString("return_shipment_status");
+            returnHandedOverAt = getInstant(rs, "return_handed_over_at");
+            returnDeliveredAt = getInstant(rs, "return_delivered_at");
+            returnRecipientName = rs.getString("return_recipient_name");
+            returnRecipientPhone = rs.getString("return_recipient_phone");
+            returnRecipientAddress = rs.getString("return_recipient_address");
         } catch (SQLException ignored) {}
 
         String productTitle = rs.getString("product_title");
@@ -520,7 +578,12 @@ public class DisputeRepository {
                 updatedAt,
                 returnTrackingCode,
                 returnCarrier,
-                returnShipmentStatus
+                returnShipmentStatus,
+                returnHandedOverAt,
+                returnDeliveredAt,
+                returnRecipientName,
+                returnRecipientPhone,
+                returnRecipientAddress
         );
     }
 

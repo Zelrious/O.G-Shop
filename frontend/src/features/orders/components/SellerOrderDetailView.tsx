@@ -3,12 +3,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { ordersApi } from '../ordersApi';
 import { OrderDetail } from '../types';
-import { TrackingResponse, formatGhnStatus } from '../../fulfillment/fulfillmentApi';
+import { TrackingResponse, resolveOutboundGhnDisplayStatus } from '../../fulfillment/fulfillmentApi';
 import { SellerDisputeResponseModal } from '../../disputes/SellerDisputeResponseModal';
+import { ReturnShipmentCard, getReturnShipmentStatusMeta } from '../../disputes/ReturnShipmentCard';
 import { Uc83SellerReturnPanel } from '../../disputes/Uc83SellerReturnPanel';
 import { OrderReviewModal } from '../../disputes/OrderReviewModal';
 import { disputeApi } from '../../disputes/disputeApi';
 import { reviewApi } from '../../disputes/reviewApi';
+import { buildOrderTimelineSteps } from '../orderTimeline';
 import type { DisputeDetail, OrderReviewsResponse } from '../../disputes/types';
 
 interface SellerOrderDetailViewProps {
@@ -38,6 +40,7 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviews, setReviews] = useState<OrderReviewsResponse | null>(null);
   const [dispute, setDispute] = useState<DisputeDetail | null>(null);
+  const [simulatingReturnDelivery, setSimulatingReturnDelivery] = useState(false);
   const [confirmingReturn, setConfirmingReturn] = useState(false);
   const [shipmentNote, setShipmentNote] = useState('Cho xem hàng không cho thử');
   const [creatingShipment, setCreatingShipment] = useState(false);
@@ -219,7 +222,8 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
   }
 
   const hasTracking = Boolean(tracking && tracking.trackingNumber);
-  const ghnStatusInfo = hasTracking ? formatGhnStatus(tracking?.rawGhnStatus) : null;
+  const ghnStatusInfo = hasTracking ? resolveOutboundGhnDisplayStatus(order, tracking) : null;
+  const timelineSteps = buildOrderTimelineSteps(order, tracking, dispute);
 
   return (
     <div style={{ maxWidth: 960, margin: '20px auto', padding: '0 16px 60px' }}>
@@ -264,6 +268,37 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
             </span>
           </div>
         </div>
+        {order.status !== 'CANCELLED' && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative', marginTop: 20 }}>
+            {timelineSteps.map((step, idx) => (
+              <div key={step.key} style={{ textAlign: 'center', flex: 1, position: 'relative' }}>
+                <div style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: '50%',
+                  background: step.done ? 'var(--og-color-primary)' : 'var(--og-color-border)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 6px',
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}>
+                  {step.done ? '✓' : idx + 1}
+                </div>
+                <div style={{ fontSize: '0.78rem', fontWeight: step.done ? 600 : 400, color: step.done ? 'var(--og-color-text-primary)' : 'var(--og-color-text-secondary)' }}>
+                  {step.label}
+                </div>
+                {step.time && (
+                  <div style={{ fontSize: '0.68rem', color: 'var(--og-color-text-tertiary)', marginTop: 2 }}>
+                    {formatDate(step.time)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20 }}>
@@ -329,14 +364,18 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
                     <strong style={{ fontSize: '1.05rem', color: 'var(--og-color-primary)' }}>{tracking?.trackingNumber}</strong>
                   </div>
                   {ghnStatusInfo && (
-                    <span style={{
-                      background: ghnStatusInfo.bg,
-                      color: ghnStatusInfo.color,
-                      padding: '4px 12px',
-                      borderRadius: 12,
-                      fontWeight: 600,
-                      fontSize: '0.82rem',
-                    }}>
+                    <span
+                      data-testid="outbound-ghn-status-badge"
+                      title={ghnStatusInfo.rawDiagnosticStatus ? `GHN raw: ${ghnStatusInfo.rawDiagnosticStatus}` : undefined}
+                      style={{
+                        background: ghnStatusInfo.bg,
+                        color: ghnStatusInfo.color,
+                        padding: '4px 12px',
+                        borderRadius: 12,
+                        fontWeight: 600,
+                        fontSize: '0.82rem',
+                      }}
+                    >
                       {ghnStatusInfo.label}
                     </span>
                   )}
@@ -400,6 +439,13 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
               </div>
             )}
           </div>
+
+          {/* Return Shipment Info Card (GHN - Return Leg) */}
+          <ReturnShipmentCard
+            dispute={dispute}
+            buyerSenderName={order.shippingRecipientName}
+            buyerSenderAddress={order.fullShippingAddress}
+          />
         </div>
 
         {/* Right Column: Seller Proceeds & Action */}
@@ -561,50 +607,95 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
                         color: '#0f172a',
                       }}>
                         <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                          🚚 Theo dõi Vận đơn Hoàn trả (Chiều về)
+                          🔄 Vận đơn Hoàn trả (GHN — Chiều về)
                         </div>
                         {dispute.returnTrackingCode ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                             <div>Đơn vị vận chuyển: <strong>{dispute.returnCarrier || 'GHN'}</strong></div>
                             <div>Mã vận đơn hoàn trả: <strong style={{ color: '#2563eb' }}>{dispute.returnTrackingCode}</strong></div>
-                            <div>Trạng thái: <strong style={{ color: '#d97706' }}>Đang vận chuyển hoàn trả về kho của bạn</strong></div>
+                            <div>
+                              Trạng thái:{' '}
+                              <strong style={{ color: getReturnShipmentStatusMeta(dispute.returnShipmentStatus).color }}>
+                                {getReturnShipmentStatusMeta(dispute.returnShipmentStatus).label}
+                              </strong>
+                            </div>
                           </div>
                         ) : (
                           <div style={{ color: '#64748b' }}>
-                            Đang chờ Người mua khởi tạo vận đơn hoàn trả và gửi hàng về...
+                            Đang chờ Người mua khởi tạo mã vận đơn hoàn trả...
                           </div>
                         )}
                       </div>
 
-                      <button
-                        type="button"
-                        disabled={confirmingReturn}
-                        onClick={async () => {
-                          setConfirmingReturn(true);
-                          try {
-                            await disputeApi.confirmReturnReceived(order.orderId);
-                            loadOrder();
-                          } catch (err) {
-                            alert(err instanceof Error ? err.message : 'Không thể xác nhận nhận hàng hoàn trả.');
-                          } finally {
-                            setConfirmingReturn(false);
-                          }
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '10px 16px',
-                          background: '#16a34a',
-                          border: 'none',
-                          color: '#fff',
-                          borderRadius: 8,
-                          fontWeight: 700,
-                          cursor: confirmingReturn ? 'not-allowed' : 'pointer',
-                        }}
-                      >
-                        {confirmingReturn
-                          ? 'Đang xử lý hoàn tiền...'
-                          : '✅ Xác nhận đã nhận lại hàng trả & Hoàn tiền cho Người mua'}
-                      </button>
+                      {dispute.returnShipmentStatus === 'RETURN_SHIPPING' && isSimulationAllowed && (
+                        <button
+                          type="button"
+                          disabled={simulatingReturnDelivery}
+                          onClick={async () => {
+                            if (!window.confirm(`[TEST DEMO] Mô phỏng GHN đã giao kiện hàng hoàn trả (${dispute.returnTrackingCode}) tới kho của bạn? (Chỉ chuyển sang RETURN_DELIVERED, chưa tự hoàn tiền)`)) {
+                              return;
+                            }
+                            setSimulatingReturnDelivery(true);
+                            try {
+                              const updated = await disputeApi.simulateReturnDelivered(order.orderId);
+                              setDispute(updated);
+                            } catch (err) {
+                              alert(err instanceof Error ? err.message : 'Không thể mô phỏng giao hàng hoàn trả.');
+                            } finally {
+                              setSimulatingReturnDelivery(false);
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '10px 16px',
+                            background: '#fef3c7',
+                            border: '1px dashed #d97706',
+                            color: '#92400e',
+                            borderRadius: 8,
+                            fontWeight: 700,
+                            cursor: simulatingReturnDelivery ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          {simulatingReturnDelivery
+                            ? 'Đang mô phỏng giao trả...'
+                            : '[Test] Mô phỏng GHN giao hàng hoàn trả thành công (RETURN_DELIVERED)'}
+                        </button>
+                      )}
+
+                      {dispute.returnShipmentStatus === 'RETURN_DELIVERED' && (
+                        <button
+                          type="button"
+                          disabled={confirmingReturn}
+                          onClick={async () => {
+                            if (!window.confirm(`Xác nhận đã kiểm tra hàng hoàn trả của đơn #${order.orderId} và đồng ý hoàn tiền cho Người mua?`)) {
+                              return;
+                            }
+                            setConfirmingReturn(true);
+                            try {
+                              await disputeApi.confirmReturnReceived(order.orderId);
+                              loadOrder();
+                            } catch (err) {
+                              alert(err instanceof Error ? err.message : 'Không thể xác nhận hoàn tiền.');
+                            } finally {
+                              setConfirmingReturn(false);
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '10px 16px',
+                            background: '#16a34a',
+                            border: 'none',
+                            color: '#fff',
+                            borderRadius: 8,
+                            fontWeight: 700,
+                            cursor: confirmingReturn ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          {confirmingReturn
+                            ? 'Đang xử lý hoàn tiền...'
+                            : '✅ Kiểm tra hàng trả & Xác nhận hoàn tiền cho Người mua'}
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <>

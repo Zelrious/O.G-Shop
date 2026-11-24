@@ -79,6 +79,18 @@ export const disputeApi = {
     });
   },
 
+  confirmReturnHandover: (orderId: number) => {
+    return request<DisputeDetail>(`/commerce/orders/${orderId}/dispute/return-handover`, {
+      method: 'POST',
+    });
+  },
+
+  simulateReturnDelivered: (orderId: number) => {
+    return request<DisputeDetail>(`/commerce/orders/${orderId}/dispute/return-delivered-simulate`, {
+      method: 'POST',
+    });
+  },
+
   confirmReturnReceived: (orderId: number) => {
     return request<DisputeDetail>(`/commerce/orders/${orderId}/dispute/confirm-return-received`, {
       method: 'POST',

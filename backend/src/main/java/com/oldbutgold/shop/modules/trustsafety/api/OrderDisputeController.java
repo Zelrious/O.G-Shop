@@ -1,8 +1,10 @@
 package com.oldbutgold.shop.modules.trustsafety.api;
 
+import com.oldbutgold.shop.modules.commerce.application.FulfillmentSimulationGuard;
 import com.oldbutgold.shop.modules.trustsafety.api.DisputeDtos.*;
 import com.oldbutgold.shop.modules.trustsafety.application.BuyerDisputeService;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -14,9 +16,19 @@ import org.springframework.web.bind.annotation.*;
 public class OrderDisputeController {
 
     private final BuyerDisputeService buyerDisputeService;
+    private final FulfillmentSimulationGuard simulationGuard;
 
     public OrderDisputeController(BuyerDisputeService buyerDisputeService) {
+        this(buyerDisputeService, null);
+    }
+
+    @Autowired
+    public OrderDisputeController(
+            BuyerDisputeService buyerDisputeService,
+            @Autowired(required = false) FulfillmentSimulationGuard simulationGuard
+    ) {
         this.buyerDisputeService = buyerDisputeService;
+        this.simulationGuard = simulationGuard;
     }
 
     @PostMapping("/{orderId}/dispute")
@@ -56,13 +68,38 @@ public class OrderDisputeController {
         return ResponseEntity.ok(buyerDisputeService.submitReturnShipment(buyerId, orderId, request));
     }
 
+    @PostMapping("/{orderId}/dispute/return-handover")
+    public ResponseEntity<DisputeDetailDto> confirmReturnHandover(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long orderId
+    ) {
+        long buyerId = extractUserId(jwt);
+        return ResponseEntity.ok(buyerDisputeService.confirmReturnHandover(buyerId, orderId));
+    }
+
+    /**
+     * DEV/TEST-ONLY simulation endpoint to mark return shipment as RETURN_DELIVERED.
+     * Strictly does NOT complete refund settlement or mark the order REFUNDED.
+     */
+    @PostMapping("/{orderId}/dispute/return-delivered-simulate")
+    public ResponseEntity<DisputeDetailDto> simulateReturnDelivered(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long orderId
+    ) {
+        if (simulationGuard != null) {
+            simulationGuard.ensureSimulationAllowed();
+        }
+        long actorId = extractUserId(jwt);
+        return ResponseEntity.ok(buyerDisputeService.confirmReturnDelivered(actorId, orderId));
+    }
+
     @PostMapping("/{orderId}/dispute/confirm-return-received")
     public ResponseEntity<DisputeDetailDto> confirmReturnReceived(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long orderId
     ) {
-        long actorId = extractUserId(jwt);
-        return ResponseEntity.ok(buyerDisputeService.confirmReturnReceivedAndRefund(actorId, orderId));
+        long sellerId = extractUserId(jwt);
+        return ResponseEntity.ok(buyerDisputeService.confirmReturnReceivedAndRefund(sellerId, orderId));
     }
 
     @GetMapping("/{orderId}/dispute")
