@@ -6,3 +6,4 @@ export * from './AdminSystemFeesPage';
 export * from './AdminVouchersPage';
 export * from './AdminBroadcastsPage';
 export * from './AdminFulfillmentIncidentsPage';
+export * from './AdminEscalatedCasesPage';

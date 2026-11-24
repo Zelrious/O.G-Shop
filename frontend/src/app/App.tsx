@@ -53,6 +53,7 @@ import {
   AdminVouchersPage,
   AdminBroadcastsPage,
   AdminFulfillmentIncidentsPage,
+  AdminEscalatedCasesPage,
 } from '../pages';
 import { SellerDashboardPage } from '../pages/seller/SellerDashboardPage';
 import { SellerSettingsPage } from '../pages/seller/SellerSettingsPage';
@@ -245,6 +246,7 @@ export function App() {
                   <Route path="/admin/vouchers" element={<AdminVouchersPage />} />
                   <Route path="/admin/broadcasts" element={<AdminBroadcastsPage />} />
                   <Route path="/admin/fulfillment-incidents" element={<AdminFulfillmentIncidentsPage />} />
+                  <Route path="/admin/escalated-cases" element={<AdminEscalatedCasesPage />} />
                 </Route>
 
                 {/* 404 Fallback */}

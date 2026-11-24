@@ -47,6 +47,27 @@ export interface SettlementConfirmResult {
   message: string;
 }
 
+export interface AdminEscalatedCaseSummary {
+  caseId: number;
+  orderId: number;
+  caseType?: string;
+  state: string;
+  reasonCode?: string | null;
+  assignedKtvId?: number | null;
+  roundNumber?: number;
+  escalatedAt?: string | null;
+  slaDeadline?: string | null;
+  createdAt?: string | null;
+}
+
+export interface AdminEscalatedCasePage {
+  content: AdminEscalatedCaseSummary[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
 export interface KtvEvidenceRequestResponse {
   requestId: string;
   caseId: number;
@@ -232,5 +253,33 @@ export const returnCaseApi = {
       method: 'POST',
     });
     return parseJsonOrThrow<SettlementConfirmResult>(res);
+  },
+
+  async getAdminEscalatedCases(params?: { page?: number; size?: number; ktvId?: number }): Promise<AdminEscalatedCasePage> {
+    const qs = new URLSearchParams();
+    qs.set('page', String(params?.page ?? 0));
+    qs.set('size', String(params?.size ?? 20));
+    if (params?.ktvId != null) {
+      qs.set('ktvId', String(params.ktvId));
+    }
+    const res = await authApi.authorizedFetch(`/admin/cases/escalated?${qs.toString()}`);
+    return parseJsonOrThrow<AdminEscalatedCasePage>(res);
+  },
+
+  async adminDecideRound2(
+    caseId: number,
+    payload: {
+      outcome: 'FULL_GOODS_REFUND' | 'EXEMPT_GOODS_REFUND';
+      reason: string;
+      commandKey?: string;
+    },
+  ): Promise<ReturnCaseDetail> {
+    const commandKey = payload.commandKey || createUc83CommandKey('ADMIN-R2', caseId);
+    const res = await authApi.authorizedFetch(`/admin/cases/${caseId}/decide-round2`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, commandKey }),
+    });
+    return parseJsonOrThrow<ReturnCaseDetail>(res);
   },
 };
