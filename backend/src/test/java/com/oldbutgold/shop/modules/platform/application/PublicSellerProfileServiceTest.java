@@ -154,7 +154,7 @@ class PublicSellerProfileServiceTest {
                 .thenReturn(List.of(activeSellerRow(10L, false, null)));
         when(jdbc.queryForObject(startsWith("SELECT COUNT(*)"), eq(Long.class), eq(10L), eq(10L)))
                 .thenReturn(1L);
-        when(jdbc.query(contains("oi.product_id"), any(org.springframework.jdbc.core.RowMapper.class), eq(10L), eq(10L), eq(10), eq(0)))
+        when(jdbc.query(contains("oi.product_id"), any(org.springframework.jdbc.core.RowMapper.class), eq(10L), eq(10L), eq(10), eq(0L)))
                 .thenReturn(List.of(new PublicSellerReviewItem(
                         501L,
                         "Người mua đã xác thực",
@@ -173,6 +173,35 @@ class PublicSellerProfileServiceTest {
         assertThat(rev.productId()).isEqualTo(101L);
         assertThat(rev.productTitle()).isEqualTo("Máy ảnh Film Olympus OM-1");
         assertThat(rev.productThumbnailUrl()).isEqualTo("/api/v1/media/101.jpg");
+        verify(jdbc).query(contains("r.record_type = 'reviews'"), any(org.springframework.jdbc.core.RowMapper.class), eq(10L), eq(10L), eq(10), eq(0L));
+    }
+
+    @Test
+    @DisplayName("Huge page offset (?page=200000000&size=24) không tràn int và trả về 200 rỗng")
+    void testHugePageOffsetDoesNotOverflowAndReturnsEmptyPage200() throws Exception {
+        when(jdbc.queryForList(contains("FROM public.users u"), eq(10L)))
+                .thenReturn(List.of(activeSellerRow(10L, false, null)));
+        when(jdbc.queryForObject(contains("FROM public.products p"), eq(Long.class), eq(10L)))
+                .thenReturn(15L);
+        when(jdbc.queryForObject(contains("FROM public.reviews r"), eq(Long.class), eq(10L), eq(10L)))
+                .thenReturn(8L);
+
+        var http = org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(controller).build();
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/v1/public/sellers/10/products")
+                        .param("page", "200000000")
+                        .param("size", "24"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.content").isEmpty())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.totalElements").value(15));
+
+        http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/v1/public/sellers/10/reviews")
+                        .param("page", "200000000")
+                        .param("size", "20"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.content").isEmpty())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.totalElements").value(8));
     }
 }
 

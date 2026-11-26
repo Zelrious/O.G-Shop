@@ -1,6 +1,8 @@
 package com.oldbutgold.shop.modules.platform.application;
 
 import com.oldbutgold.shop.modules.platform.api.PublicSellerDtos.*;
+import com.oldbutgold.shop.modules.platform.infrastructure.persistence.PublicSellerProfileRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,7 +18,7 @@ import java.util.regex.Pattern;
 /**
  * Read-only aggregator for Public Seller Profile (/api/v1/public/sellers/**).
  * Enforces strict account eligibility, opt-in avatar consent, buyer anonymization,
- * PII masking in free-text comments, deterministic pagination, and zero N+1 queries.
+ * PII masking in free-text comments, overflow-safe pagination, and zero N+1 queries.
  */
 @Service
 @Transactional(readOnly = true)
@@ -30,12 +32,17 @@ public class PublicSellerProfileService {
     private static final Pattern PHONE_PATTERN =
             Pattern.compile("(?<!\\d)(?:\\+?84|0)[\\s.-]?\\d{2,3}[\\s.-]?\\d{3}[\\s.-]?\\d{3,4}(?!\\d)");
 
-    private final JdbcTemplate jdbc;
+    private final PublicSellerProfileRepository repository;
     private final Clock clock;
 
-    public PublicSellerProfileService(JdbcTemplate jdbc, Clock clock) {
-        this.jdbc = jdbc;
+    @Autowired
+    public PublicSellerProfileService(PublicSellerProfileRepository repository, Clock clock) {
+        this.repository = repository;
         this.clock = clock;
+    }
+
+    public PublicSellerProfileService(JdbcTemplate jdbc, Clock clock) {
+        this(new PublicSellerProfileRepository(jdbc), clock);
     }
 
     public Optional<PublicSellerProfileResponse> getPublicProfile(long sellerId) {
@@ -74,17 +81,9 @@ public class PublicSellerProfileService {
 
         int safePage = Math.max(0, page);
         int safeSize = Math.min(MAX_PRODUCTS_PAGE_SIZE, Math.max(1, size));
-        int offset = safePage * safeSize;
+        long offset = (long) safePage * safeSize;
 
-        Long totalObj = jdbc.queryForObject("""
-                SELECT COUNT(*)
-                FROM public.products p
-                WHERE p.seller_id = ?
-                  AND p.status = 'ACTIVE'
-                  AND p.deleted_at IS NULL
-                  AND COALESCE(p.quantity_available, p.quantity_total - p.quantity_held - p.quantity_sold - p.quantity_unavailable) > 0
-                """, Long.class, sellerId);
-        long total = totalObj != null ? totalObj : 0L;
+        long total = repository.countActiveProducts(sellerId);
         int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / safeSize);
 
         if (total == 0 || offset >= total) {
@@ -97,50 +96,7 @@ public class PublicSellerProfileService {
             default -> "p.created_at DESC, p.product_id DESC";
         };
 
-        String sql = """
-                SELECT p.product_id,
-                       p.title,
-                       p.listed_price,
-                       p.currency,
-                       p.condition,
-                       p.location,
-                       COALESCE(c.category_name, 'Khác') AS category_name,
-                       COALESCE(p.quantity_available, p.quantity_total - p.quantity_held - p.quantity_sold - p.quantity_unavailable) AS qty_avail,
-                       p.requires_buyer_ekyc,
-                       p.created_at,
-                       (
-                           SELECT pm.media_url
-                           FROM public.product_media pm
-                           WHERE pm.product_id = p.product_id
-                             AND pm.media_type = 'IMAGE'
-                           ORDER BY pm.display_order ASC, pm.media_id ASC
-                           LIMIT 1
-                       ) AS thumbnail_url
-                FROM public.products p
-                LEFT JOIN public.categories c ON c.category_id = p.category_id
-                WHERE p.seller_id = ?
-                  AND p.status = 'ACTIVE'
-                  AND p.deleted_at IS NULL
-                  AND COALESCE(p.quantity_available, p.quantity_total - p.quantity_held - p.quantity_sold - p.quantity_unavailable) > 0
-                ORDER BY\s""" + orderBy + """
-                
-                LIMIT ? OFFSET ?
-                """;
-
-        List<PublicSellerProductSummary> items = jdbc.query(sql, (rs, rowNum) -> new PublicSellerProductSummary(
-                rs.getLong("product_id"),
-                rs.getString("title"),
-                rs.getBigDecimal("listed_price"),
-                rs.getString("currency") != null ? rs.getString("currency").trim() : "VND",
-                rs.getString("condition"),
-                rs.getString("location"),
-                rs.getString("thumbnail_url"),
-                rs.getString("category_name"),
-                rs.getInt("qty_avail"),
-                rs.getBoolean("requires_buyer_ekyc"),
-                toInstant(rs.getTimestamp("created_at"))
-        ), sellerId, safeSize, offset);
-
+        List<PublicSellerProductSummary> items = repository.findActiveProductsPage(sellerId, orderBy, safeSize, offset);
         return Optional.of(new PublicPageResponse<>(items, safePage, safeSize, total, totalPages));
     }
 
@@ -156,63 +112,17 @@ public class PublicSellerProfileService {
 
         int safePage = Math.max(0, page);
         int safeSize = Math.min(MAX_REVIEWS_PAGE_SIZE, Math.max(1, size));
-        int offset = safePage * safeSize;
-        boolean hasRatingFilter = ratingFilter != null && ratingFilter >= 1 && ratingFilter <= 5;
+        long offset = (long) safePage * safeSize;
 
-        String fromJoin = """
-                FROM public.reviews r
-                INNER JOIN public.orders o ON o.order_id = r.order_id
-                """;
-        String whereClause = """
-                WHERE r.reviewee_id = ?
-                  AND r.deleted_at IS NULL
-                  AND r.rating BETWEEN 1 AND 5
-                  AND o.seller_id = ?
-                  AND r.reviewer_id = o.buyer_id
-                """ + (hasRatingFilter ? " AND r.rating = ? " : "");
-
-        Long totalObj = hasRatingFilter
-                ? jdbc.queryForObject("SELECT COUNT(*) " + fromJoin + whereClause, Long.class, sellerId, sellerId, ratingFilter)
-                : jdbc.queryForObject("SELECT COUNT(*) " + fromJoin + whereClause, Long.class, sellerId, sellerId);
-        long total = totalObj != null ? totalObj : 0L;
+        long total = repository.countPublicReviews(sellerId, ratingFilter);
         int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / safeSize);
 
         if (total == 0 || offset >= total) {
             return Optional.of(new PublicPageResponse<>(List.of(), safePage, safeSize, total, totalPages));
         }
 
-        String selectSql = """
-                SELECT r.review_id,
-                       r.rating,
-                       r.comment,
-                       r.created_at,
-                       oi.product_id,
-                       COALESCE(oi.product_title, p.title) AS product_title,
-                       (
-                           SELECT pm.media_url
-                           FROM public.product_media pm
-                           WHERE pm.product_id = oi.product_id
-                             AND pm.media_type = 'IMAGE'
-                           ORDER BY pm.display_order ASC, pm.media_id ASC
-                           LIMIT 1
-                       ) AS product_thumbnail_url
-                """ + fromJoin + """
-                LEFT JOIN LATERAL (
-                    SELECT oi2.product_id, oi2.product_title
-                    FROM public.order_items oi2
-                    WHERE oi2.order_id = o.order_id
-                    ORDER BY oi2.order_item_id ASC
-                    LIMIT 1
-                ) oi ON TRUE
-                LEFT JOIN public.products p ON p.product_id = oi.product_id
-                """ + whereClause + """
-                ORDER BY r.created_at DESC, r.review_id DESC
-                LIMIT ? OFFSET ?
-                """;
-
-        List<PublicSellerReviewItem> items = hasRatingFilter
-                ? jdbc.query(selectSql, this::mapPublicReview, sellerId, sellerId, ratingFilter, safeSize, offset)
-                : jdbc.query(selectSql, this::mapPublicReview, sellerId, sellerId, safeSize, offset);
+        List<PublicSellerReviewItem> items = repository.findPublicReviewsPage(
+                sellerId, ratingFilter, safeSize, offset, this::mapPublicReview);
 
         return Optional.of(new PublicPageResponse<>(items, safePage, safeSize, total, totalPages));
     }
@@ -226,17 +136,7 @@ public class PublicSellerProfileService {
             dist.put(star, 0L);
         }
 
-        List<Map<String, Object>> ratingRows = jdbc.queryForList("""
-                SELECT r.rating, COUNT(*) AS cnt
-                FROM public.reviews r
-                INNER JOIN public.orders o ON o.order_id = r.order_id
-                WHERE r.reviewee_id = ?
-                  AND r.deleted_at IS NULL
-                  AND r.rating BETWEEN 1 AND 5
-                  AND o.seller_id = ?
-                  AND r.reviewer_id = o.buyer_id
-                GROUP BY r.rating
-                """, sellerId, sellerId);
+        List<Map<String, Object>> ratingRows = repository.findRatingDistributionRows(sellerId);
 
         long totalReviews = 0L;
         long ratingSum = 0L;
@@ -256,24 +156,9 @@ public class PublicSellerProfileService {
                         .setScale(1, RoundingMode.HALF_UP)
                         .doubleValue();
 
-        Long activeProductsObj = jdbc.queryForObject("""
-                SELECT COUNT(*)
-                FROM public.products p
-                WHERE p.seller_id = ?
-                  AND p.status = 'ACTIVE'
-                  AND p.deleted_at IS NULL
-                  AND COALESCE(p.quantity_available, p.quantity_total - p.quantity_held - p.quantity_sold - p.quantity_unavailable) > 0
-                """, Long.class, sellerId);
-        long activeProductsCount = activeProductsObj != null ? activeProductsObj : 0L;
-
+        long activeProductsCount = repository.countActiveProducts(sellerId);
         // PO-01 (Option A): 1 COMPLETED order = 1 completed transaction
-        Long completedOrdersObj = jdbc.queryForObject("""
-                SELECT COUNT(*)
-                FROM public.orders o
-                WHERE o.seller_id = ?
-                  AND o.status = 'COMPLETED'
-                """, Long.class, sellerId);
-        long completedTransactionsCount = completedOrdersObj != null ? completedOrdersObj : 0L;
+        long completedTransactionsCount = repository.countCompletedOrders(sellerId);
 
         return new PublicSellerStats(
                 averageRating,
@@ -292,54 +177,7 @@ public class PublicSellerProfileService {
      * - governance_state = 'ACTIVE' (or expired temporary LOCKED where governance_until <= now)
      */
     private Optional<EligibleSellerRow> findEligibleSeller(long sellerId) {
-        List<Map<String, Object>> rows = jdbc.queryForList("""
-                SELECT u.user_id,
-                       u.full_name,
-                       u.avatar_url,
-                       u.status,
-                       u.governance_state,
-                       u.governance_until,
-                       u.deleted_at,
-                       u.created_at,
-                       (
-                           EXISTS (
-                               SELECT 1
-                               FROM og_compat.user_roles ur
-                               INNER JOIN og_compat.roles r ON r.role_id = ur.role_id
-                               WHERE ur.user_id = u.user_id
-                                 AND UPPER(r.role_name) = 'SELLER'
-                           ) OR EXISTS (
-                               SELECT 1
-                               FROM public.seller_profiles sp
-                               WHERE sp.user_id = u.user_id
-                                 AND sp.record_type = 'seller_profiles'
-                           )
-                       ) AS has_seller_role,
-                       EXISTS (
-                           SELECT 1
-                           FROM public.ekyc_profiles ep
-                           WHERE ep.user_id = u.user_id
-                             AND ep.state = 'VERIFIED'
-                       ) AS ekyc_verified,
-                       (
-                           SELECT sp.store_name
-                           FROM public.seller_profiles sp
-                           WHERE sp.user_id = u.user_id
-                             AND sp.record_type = 'seller_profiles'
-                           ORDER BY sp.seller_profile_id DESC
-                           LIMIT 1
-                       ) AS store_name,
-                       COALESCE((
-                           SELECT sp.allow_public_avatar
-                           FROM public.seller_profiles sp
-                           WHERE sp.user_id = u.user_id
-                             AND sp.record_type = 'seller_profiles'
-                           ORDER BY sp.seller_profile_id DESC
-                           LIMIT 1
-                       ), FALSE) AS allow_public_avatar
-                FROM public.users u
-                WHERE u.user_id = ?
-                """, sellerId);
+        List<Map<String, Object>> rows = repository.findSellerSummaryRows(sellerId);
 
         if (rows.isEmpty()) {
             return Optional.empty();
@@ -438,4 +276,3 @@ public class PublicSellerProfileService {
             Instant joinedAt
     ) {}
 }
-

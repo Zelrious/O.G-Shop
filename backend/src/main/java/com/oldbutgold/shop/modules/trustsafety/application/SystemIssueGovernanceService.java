@@ -1,7 +1,7 @@
 package com.oldbutgold.shop.modules.trustsafety.application;
 
 import com.oldbutgold.shop.modules.commerce.api.VoucherDtos;
-import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.VoucherWalletRepository;
+import com.oldbutgold.shop.modules.commerce.application.VoucherCompensationFacade;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.*;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
@@ -37,7 +37,7 @@ public class SystemIssueGovernanceService {
     private final CaseEventRepository caseEventRepository;
     private final CaseEvidenceRepository caseEvidenceRepository;
     private final AccountTrustRepository accountTrustRepository;
-    private final VoucherWalletRepository voucherWalletRepository;
+    private final VoucherCompensationFacade voucherCompensationFacade;
     private final JdbcTemplate jdbc;
     private final EntityManager entityManager;
     private EvidenceStorageService evidenceStorageService;
@@ -51,7 +51,7 @@ public class SystemIssueGovernanceService {
             CaseEventRepository caseEventRepository,
             CaseEvidenceRepository caseEvidenceRepository,
             AccountTrustRepository accountTrustRepository,
-            VoucherWalletRepository voucherWalletRepository,
+            VoucherCompensationFacade voucherCompensationFacade,
             JdbcTemplate jdbc,
             EntityManager entityManager
     ) {
@@ -61,7 +61,7 @@ public class SystemIssueGovernanceService {
         this.caseEventRepository = caseEventRepository;
         this.caseEvidenceRepository = caseEvidenceRepository;
         this.accountTrustRepository = accountTrustRepository;
-        this.voucherWalletRepository = voucherWalletRepository;
+        this.voucherCompensationFacade = voucherCompensationFacade;
         this.jdbc = jdbc;
         this.entityManager = entityManager;
     }
@@ -587,15 +587,15 @@ public class SystemIssueGovernanceService {
             if (request.voucherId() == null) {
                 throw new TrustSafetyBusinessException(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "voucherId bắt buộc khi bồi thường VOUCHER.");
             }
-            VoucherDtos.Campaign campaign = voucherWalletRepository.campaign(request.voucherId(), true)
+            VoucherDtos.Campaign campaign = voucherCompensationFacade.campaign(request.voucherId(), true)
                     .orElseThrow(() -> new TrustSafetyBusinessException(HttpStatus.NOT_FOUND, "VOUCHER_NOT_FOUND", "Không tìm thấy voucher #" + request.voucherId()));
-            if (!campaign.active() || voucherWalletRepository.revisionRevoked(campaign.revisionId())) {
+            if (!campaign.active() || voucherCompensationFacade.isRevisionRevoked(campaign.revisionId())) {
                 throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "VOUCHER_UNAVAILABLE", "Voucher đã ngừng phát hành hoặc bị thu hồi.");
             }
 
             UUID grantId;
             try {
-                grantId = voucherWalletRepository.grant(
+                grantId = voucherCompensationFacade.grantCompensationVoucher(
                         actorId, request.recipientId(), campaign, "COMPENSATION", request.reason().trim(),
                         "COMP_GRANT:" + caseId + ":" + request.recipientId() + ":" + campaign.revisionId(), now
                 );
