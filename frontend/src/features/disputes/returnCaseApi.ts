@@ -129,19 +129,10 @@ export const returnCaseApi = {
     mediaType: 'IMAGE' | 'VIDEO' = 'IMAGE',
     durationSeconds?: number,
   ): Promise<ReturnEvidenceItemInput> {
-    if (mediaType === 'VIDEO' && durationSeconds == null) {
-      const url = URL.createObjectURL(file);
-      try {
-        durationSeconds = await new Promise<number>((resolve, reject) => {
-          const video = document.createElement('video');
-          video.preload = 'metadata';
-          video.onloadedmetadata = () => Number.isFinite(video.duration)
-            ? resolve(Math.ceil(video.duration)) : reject(new Error('Không đọc được thời lượng video.'));
-          video.onerror = () => reject(new Error('Không đọc được video đã chọn.'));
-          video.src = url;
-        });
-      } finally {
-        URL.revokeObjectURL(url);
+    if (mediaType === 'VIDEO') {
+      const normalizedMime = file.type?.toLowerCase() ?? '';
+      if (normalizedMime && normalizedMime !== 'video/mp4' && normalizedMime !== 'video/webm') {
+        throw new Error('Định dạng video bằng chứng không hợp lệ. Chỉ chấp nhận MP4, WEBM.');
       }
     }
     const formData = new FormData();

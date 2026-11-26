@@ -1267,10 +1267,6 @@ public class ReturnCaseService {
             if (size > MAX_VIDEO_SIZE_BYTES) {
                 throw new IllegalArgumentException("Dung lượng video bằng chứng vượt quá giới hạn 50 MB");
             }
-            if (durationSeconds != null && (durationSeconds <= 0 || durationSeconds > MAX_VIDEO_DURATION_SECONDS)) {
-                throw new IllegalArgumentException("Thời lượng video bằng chứng phải nằm trong khoảng 1 đến " + MAX_VIDEO_DURATION_SECONDS + " giây");
-            }
-            resolvedDuration = durationSeconds != null ? durationSeconds : 30;
         } else {
             throw new IllegalArgumentException("Loại bằng chứng không hợp lệ: " + mediaType + " (chỉ hỗ trợ IMAGE hoặc VIDEO)");
         }
@@ -1297,6 +1293,20 @@ public class ReturnCaseService {
             Files.copy(in, targetPath);
         } catch (IOException e) {
             throw new IllegalStateException("Lưu tệp bằng chứng thất bại: " + e.getMessage(), e);
+        }
+
+        if ("VIDEO".equals(normalizedType)) {
+            java.util.OptionalInt inspectedDuration = VideoMetadataInspector.extractDurationSeconds(targetPath, contentType);
+            if (inspectedDuration.isEmpty()) {
+                try { Files.deleteIfExists(targetPath); } catch (IOException ignored) {}
+                throw new IllegalArgumentException("Không thể xác định thời lượng từ metadata của video bằng chứng.");
+            }
+            int actualDuration = inspectedDuration.getAsInt();
+            if (actualDuration <= 0 || actualDuration > MAX_VIDEO_DURATION_SECONDS) {
+                try { Files.deleteIfExists(targetPath); } catch (IOException ignored) {}
+                throw new IllegalArgumentException("Thời lượng video bằng chứng phải nằm trong khoảng 1 đến " + MAX_VIDEO_DURATION_SECONDS + " giây (thực tế: " + actualDuration + " giây)");
+            }
+            resolvedDuration = actualDuration;
         }
 
         String sha256 = computeSha256(targetPath);
