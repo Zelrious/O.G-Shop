@@ -608,6 +608,77 @@ export const PublicSellerProfilePage: React.FC = () => {
                   <p style={{ margin: 0, fontSize: '0.92rem', color: 'var(--og-color-text-primary)', lineHeight: 1.5 }}>
                     {rev.comment || 'Người mua không để lại nhận xét chi tiết.'}
                   </p>
+                  {(rev.productId || rev.productTitle) && (
+                    <div
+                      data-testid={`review-product-${rev.reviewId}`}
+                      style={{
+                        marginTop: 12,
+                        paddingTop: 10,
+                        borderTop: '1px solid var(--og-color-border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                        {rev.productThumbnailUrl ? (
+                          <img
+                            src={resolveReturnMediaUrl(rev.productThumbnailUrl)}
+                            alt={rev.productTitle || `Sản phẩm #${rev.productId}`}
+                            style={{
+                              width: 40,
+                              height: 40,
+                              borderRadius: 8,
+                              objectFit: 'cover',
+                              border: '1px solid var(--og-color-border)',
+                              flexShrink: 0,
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: 40,
+                              height: 40,
+                              borderRadius: 8,
+                              background: 'var(--og-color-surface-subtle, #f1f5f9)',
+                              border: '1px solid var(--og-color-border)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '1.1rem',
+                              flexShrink: 0,
+                            }}
+                          >
+                            📦
+                          </div>
+                        )}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--og-color-text-secondary)' }}>
+                            Sản phẩm đã mua
+                          </div>
+                          <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--og-color-text-primary)' }}>
+                            {rev.productTitle || `Sản phẩm #${rev.productId}`}
+                          </div>
+                        </div>
+                      </div>
+                      {rev.productId && (
+                        <Link
+                          to={`/products/${rev.productId}`}
+                          style={{
+                            fontSize: '0.84rem',
+                            fontWeight: 600,
+                            color: 'var(--og-color-primary)',
+                            textDecoration: 'none',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          Xem sản phẩm &rarr;
+                        </Link>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
 

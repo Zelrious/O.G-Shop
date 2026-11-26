@@ -37,6 +37,9 @@ export interface PublicSellerReviewItem {
   rating: number;
   comment: string;
   createdAt: string;
+  productId?: number | null;
+  productTitle?: string | null;
+  productThumbnailUrl?: string | null;
 }
 
 export interface PublicPageResponse<T> {

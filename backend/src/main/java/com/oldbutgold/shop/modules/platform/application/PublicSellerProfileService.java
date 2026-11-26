@@ -159,9 +159,11 @@ public class PublicSellerProfileService {
         int offset = safePage * safeSize;
         boolean hasRatingFilter = ratingFilter != null && ratingFilter >= 1 && ratingFilter <= 5;
 
-        String whereClause = """
+        String fromJoin = """
                 FROM public.reviews r
                 INNER JOIN public.orders o ON o.order_id = r.order_id
+                """;
+        String whereClause = """
                 WHERE r.reviewee_id = ?
                   AND r.deleted_at IS NULL
                   AND r.rating BETWEEN 1 AND 5
@@ -170,8 +172,8 @@ public class PublicSellerProfileService {
                 """ + (hasRatingFilter ? " AND r.rating = ? " : "");
 
         Long totalObj = hasRatingFilter
-                ? jdbc.queryForObject("SELECT COUNT(*) " + whereClause, Long.class, sellerId, sellerId, ratingFilter)
-                : jdbc.queryForObject("SELECT COUNT(*) " + whereClause, Long.class, sellerId, sellerId);
+                ? jdbc.queryForObject("SELECT COUNT(*) " + fromJoin + whereClause, Long.class, sellerId, sellerId, ratingFilter)
+                : jdbc.queryForObject("SELECT COUNT(*) " + fromJoin + whereClause, Long.class, sellerId, sellerId);
         long total = totalObj != null ? totalObj : 0L;
         int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / safeSize);
 
@@ -183,7 +185,26 @@ public class PublicSellerProfileService {
                 SELECT r.review_id,
                        r.rating,
                        r.comment,
-                       r.created_at
+                       r.created_at,
+                       oi.product_id,
+                       COALESCE(oi.product_title, p.title) AS product_title,
+                       (
+                           SELECT pm.media_url
+                           FROM public.product_media pm
+                           WHERE pm.product_id = oi.product_id
+                             AND pm.media_type = 'IMAGE'
+                           ORDER BY pm.display_order ASC, pm.media_id ASC
+                           LIMIT 1
+                       ) AS product_thumbnail_url
+                """ + fromJoin + """
+                LEFT JOIN LATERAL (
+                    SELECT oi2.product_id, oi2.product_title
+                    FROM public.order_items oi2
+                    WHERE oi2.order_id = o.order_id
+                    ORDER BY oi2.order_item_id ASC
+                    LIMIT 1
+                ) oi ON TRUE
+                LEFT JOIN public.products p ON p.product_id = oi.product_id
                 """ + whereClause + """
                 ORDER BY r.created_at DESC, r.review_id DESC
                 LIMIT ? OFFSET ?
@@ -280,12 +301,19 @@ public class PublicSellerProfileService {
                        u.governance_until,
                        u.deleted_at,
                        u.created_at,
-                       EXISTS (
-                           SELECT 1
-                           FROM og_compat.user_roles ur
-                           INNER JOIN og_compat.roles r ON r.role_id = ur.role_id
-                           WHERE ur.user_id = u.user_id
-                             AND UPPER(r.role_name) = 'SELLER'
+                       (
+                           EXISTS (
+                               SELECT 1
+                               FROM og_compat.user_roles ur
+                               INNER JOIN og_compat.roles r ON r.role_id = ur.role_id
+                               WHERE ur.user_id = u.user_id
+                                 AND UPPER(r.role_name) = 'SELLER'
+                           ) OR EXISTS (
+                               SELECT 1
+                               FROM public.seller_profiles sp
+                               WHERE sp.user_id = u.user_id
+                                 AND sp.record_type = 'seller_profiles'
+                           )
                        ) AS has_seller_role,
                        EXISTS (
                            SELECT 1
@@ -371,7 +399,10 @@ public class PublicSellerProfileService {
                 "Người mua đã xác thực",
                 rs.getInt("rating"),
                 maskCommentPii(rs.getString("comment")),
-                toInstant(rs.getTimestamp("created_at"))
+                toInstant(rs.getTimestamp("created_at")),
+                rs.getObject("product_id", Long.class),
+                rs.getString("product_title"),
+                rs.getString("product_thumbnail_url")
         );
     }
 

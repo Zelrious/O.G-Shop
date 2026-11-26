@@ -49,8 +49,21 @@ public final class PublicSellerDtos {
             String reviewerDisplayName,
             int rating,
             String comment,
-            Instant createdAt
-    ) {}
+            Instant createdAt,
+            Long productId,
+            String productTitle,
+            String productThumbnailUrl
+    ) {
+        public PublicSellerReviewItem(
+                long reviewId,
+                String reviewerDisplayName,
+                int rating,
+                String comment,
+                Instant createdAt
+        ) {
+            this(reviewId, reviewerDisplayName, rating, comment, createdAt, null, null, null);
+        }
+    }
 
     public record PublicPageResponse<T>(
             List<T> content,

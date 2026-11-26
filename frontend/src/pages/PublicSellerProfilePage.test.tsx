@@ -67,6 +67,9 @@ describe('PublicSellerProfilePage', () => {
           rating: 5,
           comment: 'Hàng rất đẹp và đúng mô tả.',
           createdAt: '2026-11-21T10:00:00Z',
+          productId: 101,
+          productTitle: 'Máy ảnh Film Olympus OM-1',
+          productThumbnailUrl: null,
         },
       ],
       page: 0,
@@ -104,7 +107,9 @@ describe('PublicSellerProfilePage', () => {
     await waitFor(() => {
       expect(screen.getByText('Người mua đã xác thực')).toBeInTheDocument();
       expect(screen.getByText('Hàng rất đẹp và đúng mô tả.')).toBeInTheDocument();
+      expect(screen.getByTestId('review-product-501')).toHaveTextContent('Máy ảnh Film Olympus OM-1');
     });
+    expect(screen.getByRole('link', { name: /Xem sản phẩm/i })).toHaveAttribute('href', '/products/101');
   });
 
   it('renders avatar image when allowPublicAvatar is ON (avatarUrl non-null)', async () => {

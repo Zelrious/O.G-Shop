@@ -146,5 +146,33 @@ class PublicSellerProfileServiceTest {
         assertThat(masked).contains("[SĐT đã ẩn]");
         assertThat(masked).contains("[email đã ẩn]");
     }
+
+    @Test
+    @DisplayName("getPublicReviews trả kèm productId, productTitle, productThumbnailUrl của sản phẩm được đánh giá")
+    void testGetPublicReviewsIncludesReviewedProduct() {
+        when(jdbc.queryForList(contains("FROM public.users u"), eq(10L)))
+                .thenReturn(List.of(activeSellerRow(10L, false, null)));
+        when(jdbc.queryForObject(startsWith("SELECT COUNT(*)"), eq(Long.class), eq(10L), eq(10L)))
+                .thenReturn(1L);
+        when(jdbc.query(contains("oi.product_id"), any(org.springframework.jdbc.core.RowMapper.class), eq(10L), eq(10L), eq(10), eq(0)))
+                .thenReturn(List.of(new PublicSellerReviewItem(
+                        501L,
+                        "Người mua đã xác thực",
+                        5,
+                        "Máy đẹp lắm",
+                        NOW,
+                        101L,
+                        "Máy ảnh Film Olympus OM-1",
+                        "/api/v1/media/101.jpg"
+                )));
+
+        Optional<PublicPageResponse<PublicSellerReviewItem>> res = service.getPublicReviews(10L, 0, 10, null);
+        assertThat(res).isPresent();
+        assertThat(res.get().content()).hasSize(1);
+        PublicSellerReviewItem rev = res.get().content().get(0);
+        assertThat(rev.productId()).isEqualTo(101L);
+        assertThat(rev.productTitle()).isEqualTo("Máy ảnh Film Olympus OM-1");
+        assertThat(rev.productThumbnailUrl()).isEqualTo("/api/v1/media/101.jpg");
+    }
 }
 

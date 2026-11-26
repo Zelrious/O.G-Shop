@@ -2,7 +2,7 @@ import { authApi } from '../auth';
 
 export interface NotificationItem {
   id: number; type: string; title: string; content: string; read: boolean; createdAt: string;
-  destination: 'SELLER_LISTING' | 'KTV_MODERATION' | 'ACCOUNT_SELF' | 'KTV_ACCOUNT' | 'CONVERSATION' | 'VOUCHER_WALLET' | 'ADMIN_VOUCHERS' | 'KTV_VOUCHERS' | null; productId: number | null; userId?: number | null; conversationId?: number | null;
+  destination: 'SELLER_LISTING' | 'KTV_MODERATION' | 'ACCOUNT_SELF' | 'KTV_ACCOUNT' | 'CONVERSATION' | 'VOUCHER_WALLET' | 'ADMIN_VOUCHERS' | 'KTV_VOUCHERS' | 'ORDER_DETAIL' | 'KTV_DISPUTES' | 'KTV_COMPLAINTS' | 'ADMIN_ESCALATED_CASES' | null; orderId?: number | null; orderRole?: 'BUYER' | 'SELLER' | null; productId: number | null; userId?: number | null; conversationId?: number | null;
 }
 export interface NotificationPage { items: NotificationItem[]; page: number; size: number; totalElements: number; unreadCount: number }
 async function response<T>(value: Response): Promise<T> {
@@ -15,6 +15,19 @@ export const notificationApi = {
   async readAll() { const value = await authApi.authorizedFetch('/notifications/read-all', { method: 'POST' }); if (!value.ok) throw new Error('Chưa cập nhật được trạng thái đã đọc toàn bộ.'); },
 };
 export function notificationTarget(item: NotificationItem, roles: string[]): string | null {
+  if (item.destination === 'ORDER_DETAIL' && item.orderId && item.orderRole) {
+    const canOpenSeller = item.orderRole === 'SELLER' && roles.includes('SELLER');
+    const canOpenBuyer = item.orderRole === 'BUYER' && roles.some(role => ['BUYER', 'SELLER'].includes(role));
+    if (canOpenSeller || canOpenBuyer) {
+      const basePath = (item.orderRole === 'SELLER' ? '/seller/orders/' : '/orders/') + item.orderId;
+      const isReviewNotice = item.type === 'ORDER_REVIEW_RECEIVED' || item.type === 'ORDER_REVIEW_UPDATED';
+      return isReviewNotice ? `${basePath}#order-reviews` : basePath;
+    }
+  }
+  if (item.destination === 'KTV_DISPUTES' && roles.includes('KTV')) return '/ktv/disputes';
+  if (item.destination === 'ADMIN_ESCALATED_CASES' && roles.includes('ADMIN')) return '/admin/escalated-cases';
+  if (item.destination === 'KTV_COMPLAINTS' && roles.includes('KTV')) return '/ktv/complaints';
+  if (item.type === 'UC49_SYSTEM_ISSUE') return '/system-complaints';
   if (item.type === 'DISPUTE_BUYER') return '/orders';
   if (item.type === 'DISPUTE_SELLER' && roles.includes('SELLER')) return '/seller/orders';
   if (item.type === 'EKYC_PENDING_KTV' && roles.includes('KTV')) return '/ktv/kyc';

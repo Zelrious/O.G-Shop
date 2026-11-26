@@ -1,6 +1,6 @@
 import { ChatLink } from '../../chat-offer/ChatLink';
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ordersApi } from '../ordersApi';
 import { OrderDetail } from '../types';
 import { TrackingResponse, resolveOutboundGhnDisplayStatus } from '../../fulfillment/fulfillmentApi';
@@ -18,6 +18,7 @@ interface SellerOrderDetailViewProps {
 }
 
 export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ orderId }) => {
+  const location = useLocation();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -90,6 +91,13 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
   useEffect(() => {
     loadOrder();
   }, [loadOrder]);
+
+  useEffect(() => {
+    if (location.hash === '#order-reviews' && !loading && order) {
+      const targetEl = document.getElementById('order-reviews');
+      targetEl?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    }
+  }, [location.hash, loading, order, reviews]);
 
   const handleConfirmOrder = async () => {
     if (!window.confirm(`Xác nhận tiếp nhận và chuẩn bị đơn hàng #${orderId}? Sản phẩm sẽ được chuyển sang trạng thái ĐÃ BÁN.`)) {
@@ -751,18 +759,34 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
               )}
 
               {order.status === 'COMPLETED' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{
-                    background: '#dcfce7',
-                    border: '1px solid #86efac',
-                    borderRadius: 8,
-                    padding: 12,
-                    fontSize: '0.85rem',
-                    color: '#166534',
-                    lineHeight: 1.5,
-                  }}>
-                    <strong>Đơn hàng đã hoàn tất!</strong> Tiền bán hàng đã được giải ngân thành công.
-                  </div>
+                <div style={{
+                  background: '#dcfce7',
+                  border: '1px solid #86efac',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: '0.85rem',
+                  color: '#166534',
+                  lineHeight: 1.5,
+                  marginBottom: 10,
+                }}>
+                  <strong>Đơn hàng đã hoàn tất!</strong> Tiền bán hàng đã được giải ngân thành công.
+                </div>
+              )}
+
+              {Boolean(reviews?.buyerReview || reviews?.sellerReview || order.deliveredAt != null || tracking?.status === 'DELIVERED' || ['DELIVERED', 'COMPLETED'].includes(order.status)) && (
+                <div
+                  id="order-reviews"
+                  data-testid="order-reviews-section"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                    marginTop: 8,
+                    padding: location.hash === '#order-reviews' ? 8 : 0,
+                    borderRadius: 10,
+                    border: location.hash === '#order-reviews' ? '2px solid var(--og-color-primary)' : undefined,
+                  }}
+                >
                   {reviews?.sellerReview ? (
                     <div style={{
                       background: '#f8fafc',
@@ -772,7 +796,24 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
                       fontSize: '0.84rem',
                       color: '#334155',
                     }}>
-                      <div><strong>Đánh giá của bạn:</strong> {'★'.repeat(reviews.sellerReview.rating)}{'☆'.repeat(5 - reviews.sellerReview.rating)} ({reviews.sellerReview.rating}/5 sao)</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <div><strong>Đánh giá của bạn cho Người mua:</strong> {'★'.repeat(reviews.sellerReview.rating)}{'☆'.repeat(5 - reviews.sellerReview.rating)} ({reviews.sellerReview.rating}/5 sao)</div>
+                        <button
+                          type="button"
+                          onClick={() => setShowReviewModal(true)}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 6,
+                            border: '1px solid #cbd5e1',
+                            background: '#fff',
+                            fontSize: '0.78rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Sửa đánh giá
+                        </button>
+                      </div>
                       {reviews.sellerReview.comment && (
                         <div style={{ marginTop: 4, color: '#64748b', fontStyle: 'italic' }}>
                           "{reviews.sellerReview.comment}"
@@ -793,6 +834,23 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
                     >
                       ⭐ Đánh giá Người mua (+500 xu thưởng)
                     </button>
+                  )}
+                  {reviews?.buyerReview && (
+                    <div style={{
+                      background: '#fffbeb',
+                      border: '1px solid #fde68a',
+                      borderRadius: 8,
+                      padding: '10px 12px',
+                      fontSize: '0.84rem',
+                      color: '#92400e',
+                    }}>
+                      <div><strong>Đánh giá của Người mua dành cho bạn:</strong> {'★'.repeat(reviews.buyerReview.rating)}{'☆'.repeat(5 - reviews.buyerReview.rating)} ({reviews.buyerReview.rating}/5 sao)</div>
+                      {reviews.buyerReview.comment && (
+                        <div style={{ marginTop: 4, fontStyle: 'italic' }}>
+                          "{reviews.buyerReview.comment}"
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -997,6 +1055,7 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
           orderId={order.orderId}
           partnerName={order.buyerName}
           isBuyer={false}
+          existingReview={reviews?.sellerReview}
           onClose={() => setShowReviewModal(false)}
           onSuccess={() => loadOrder()}
         />
