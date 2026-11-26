@@ -411,5 +411,90 @@ class SystemIssueAndUc81PostgresIntegrationTest {
                 """, Integer.class, admin1Id, Timestamp.from(cutoffT1));
         assertThat(exportAuditCount).isEqualTo(1);
     }
+
+    @Test
+    @DisplayName("Commit 5: Unescalated compensation only allowed for assigned KTV (even on commandKey replay), savepoint isolates notif errors, and PRIVATE_SECRET blocks tokens/secrets")
+    void testUnescalatedKtvAssignmentReplaySavepointAndPrivateSecrets() {
+        Long otherKtvId = createUser("sys_ktv2", "KTV");
+        var created = governanceService.createSystemIssue(buyerId, new ReturnCaseDtos.CreateSystemIssueRequest(
+                null, null, null, null,
+                "Lỗi hệ thống thanh toán đơn hàng cần KTV xác nhận",
+                List.of(), "CMD_C5_NEW_" + UUID.randomUUID()
+        ));
+        governanceService.decideSystemIssue(ktvId, false, created.caseId(),
+                new ReturnCaseDtos.SystemIssueDecisionRequest(
+                        "CONFIRM_ISSUE", "KTV1 xác nhận lỗi hệ thống",
+                        null, null, "CMD_C5_DEC_" + UUID.randomUUID()
+                ));
+
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        long voucherId = voucherWalletRepository.save(admin1Id, null, new VoucherDtos.Save(
+                UUID.randomUUID(), 0L,
+                "CMP5" + UUID.randomUUID().toString().replace("-", "").substring(0, 7).toUpperCase(),
+                "Voucher bồi thường C5", "Bồi thường C5",
+                "ORDER_DISCOUNT", "FIXED_AMOUNT",
+                new BigDecimal("20000"), new BigDecimal("20000"), BigDecimal.ZERO,
+                "CHECKOUT", List.of(), 100,
+                now.minus(1, ChronoUnit.DAYS), now.plus(7, ChronoUnit.DAYS), true, false
+        ));
+
+        String sharedCmdKey = "CMD_C5_REPLAY_" + UUID.randomUUID();
+        var compReq = new ReturnCaseDtos.CaseCompensationRequest(
+                "VOUCHER", buyerId, voucherId, null, null, null,
+                "Cấp voucher bồi thường hợp lệ", sharedCmdKey
+        );
+
+        // Non-assigned KTV & Admin cannot grant on unescalated confirmed issue
+        assertThatThrownBy(() -> governanceService.executeCompensation(otherKtvId, false, created.caseId(), compReq))
+                .isInstanceOf(TrustSafetyBusinessException.class)
+                .hasMessageContaining("KTV");
+        assertThatThrownBy(() -> governanceService.executeCompensation(admin1Id, true, created.caseId(), compReq))
+                .isInstanceOf(TrustSafetyBusinessException.class);
+
+        // Savepoint isolates Postgres notification error so compensation + voucher grant commit cleanly
+        jdbc.execute("""
+                CREATE OR REPLACE FUNCTION public.og_test_fail_comp_notif() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF NEW.type = 'UC55_COMPENSATION_VOUCHER' THEN
+                        RAISE EXCEPTION 'Simulated voucher notification failure';
+                    END IF;
+                    RETURN NEW;
+                END $$;
+                CREATE TRIGGER trg_test_fail_comp_notif
+                BEFORE INSERT ON public.notifications
+                FOR EACH ROW EXECUTE FUNCTION public.og_test_fail_comp_notif();
+                """);
+        try {
+            var granted = governanceService.executeCompensation(ktvId, false, created.caseId(), compReq);
+            assertThat(granted.grantId()).isNotNull();
+            assertThat(voucherWalletRepository.owned(buyerId)).hasSize(1);
+        } finally {
+            jdbc.execute("DROP TRIGGER IF EXISTS trg_test_fail_comp_notif ON public.notifications");
+            jdbc.execute("DROP FUNCTION IF EXISTS public.og_test_fail_comp_notif()");
+        }
+
+        // Authorization is checked BEFORE idempotent commandKey replay: other KTV & Admin still 403 replaying sharedCmdKey
+        assertThatThrownBy(() -> governanceService.executeCompensation(otherKtvId, false, created.caseId(), compReq))
+                .isInstanceOf(TrustSafetyBusinessException.class);
+        assertThatThrownBy(() -> governanceService.executeCompensation(admin1Id, true, created.caseId(), compReq))
+                .isInstanceOf(TrustSafetyBusinessException.class);
+
+        // Assigned KTV replaying same commandKey gets idempotent success
+        var replay = governanceService.executeCompensation(ktvId, false, created.caseId(), compReq);
+        assertThat(replay.message()).contains("idempotent");
+
+        // PRIVATE_SECRET blocks token, secret, api_key, Bearer
+        for (String leaky : List.of(
+                "Lỗi với token: abc123secretvalue",
+                "Gửi secret=myTopSecret999 trong payload",
+                "Lộ api_key=sk_live_1234567890",
+                "Authorization Header Bearer eyJhbGciOiJIUzI1NiJ9"
+        )) {
+            assertThatThrownBy(() -> governanceService.createSystemIssue(buyerId,
+                    new ReturnCaseDtos.CreateSystemIssueRequest(null, null, null, null, leaky, List.of(), UUID.randomUUID().toString())))
+                    .isInstanceOf(TrustSafetyBusinessException.class)
+                    .satisfies(ex -> assertThat(((TrustSafetyBusinessException) ex).getCode()).isEqualTo("PRIVATE_SECRET"));
+        }
+    }
 }
 

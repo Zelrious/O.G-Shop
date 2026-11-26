@@ -256,6 +256,18 @@ public class BuyerDisputeService {
                 .orElseThrow(() -> new IllegalStateException("Không thể tải hồ sơ tranh chấp sau khi ghi nhận giao trả."));
     }
 
+    public static java.math.BigDecimal calculateRefundableGoodsAmount(OrderEntity order) {
+        if (order == null) {
+            return java.math.BigDecimal.ZERO;
+        }
+        java.math.BigDecimal subtotal = order.getSubtotal() != null ? order.getSubtotal() : java.math.BigDecimal.ZERO;
+        java.math.BigDecimal voucherDiscount = order.getVoucherDiscountAmount() != null
+                ? order.getVoucherDiscountAmount()
+                : java.math.BigDecimal.ZERO;
+        java.math.BigDecimal pointsDiscount = order.getPointsDiscountAmount();
+        return subtotal.subtract(voucherDiscount).subtract(pointsDiscount).max(java.math.BigDecimal.ZERO);
+    }
+
     public DisputeDetailDto confirmReturnReceivedAndRefund(long sellerId, long orderId) {
         OrderEntity order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
@@ -277,9 +289,10 @@ public class BuyerDisputeService {
             throw new IllegalStateException("Chỉ có thể xác nhận hoàn tiền sau khi vận đơn hoàn trả đã giao trả thành công (RETURN_DELIVERED). Trạng thái hiện tại: " + dispute.returnShipmentStatus());
         }
 
-        java.math.BigDecimal refundAmount = dispute.refundAmount() != null && dispute.refundAmount().compareTo(java.math.BigDecimal.ZERO) > 0
-                ? dispute.refundAmount()
-                : order.getTotalAmount();
+        java.math.BigDecimal maxRefundableGoods = calculateRefundableGoodsAmount(order);
+        java.math.BigDecimal refundAmount = dispute.refundAmount() != null
+                ? dispute.refundAmount().max(java.math.BigDecimal.ZERO).min(maxRefundableGoods)
+                : maxRefundableGoods;
 
         commerceDisputeFacade.resolveDisputeRefund(
                 orderId,

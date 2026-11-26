@@ -286,5 +286,33 @@ class OrderReviewWalletPostgresIntegrationTest {
                     assertThat(e.pointsDelta()).isEqualTo(5);
                 });
     }
+
+    @Test
+    @DisplayName("Savepoint isolation: DB failure inserting review notification does NOT abort review or coin transaction in Postgres")
+    void testNotificationFailureRolledBackViaSavepointWhileReviewCommits() {
+        Long orderId = createDeliveredOrder(buyerId, sellerId, "UC83", "DELIVERED");
+        jdbc.execute("""
+                CREATE OR REPLACE FUNCTION public.og_test_fail_notif_once() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF NEW.type = 'ORDER_REVIEW_RECEIVED' THEN
+                        RAISE EXCEPTION 'Simulated notification trigger failure';
+                    END IF;
+                    RETURN NEW;
+                END $$;
+                CREATE TRIGGER trg_test_fail_notif_once
+                BEFORE INSERT ON public.notifications
+                FOR EACH ROW EXECUTE FUNCTION public.og_test_fail_notif_once();
+                """);
+        try {
+            var response = orderReviewService.submitReview(buyerId,
+                    new ReviewDtos.CreateReviewRequest(orderId, 5, "Sản phẩm rất tốt dù thông báo lỗi."));
+            assertThat(response.rating()).isEqualTo(5);
+            assertThat(walletBalance(buyerId)).isEqualTo(500L);
+            assertThat(walletBalance(sellerId)).isEqualTo(500L);
+        } finally {
+            jdbc.execute("DROP TRIGGER IF EXISTS trg_test_fail_notif_once ON public.notifications");
+            jdbc.execute("DROP FUNCTION IF EXISTS public.og_test_fail_notif_once()");
+        }
+    }
 }
 

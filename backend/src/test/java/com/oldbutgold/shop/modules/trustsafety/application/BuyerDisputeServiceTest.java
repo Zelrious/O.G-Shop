@@ -372,7 +372,7 @@ class BuyerDisputeServiceTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("RETURN_DELIVERED");
 
-        // Seller succeeds once RETURN_DELIVERED
+        // Seller succeeds once RETURN_DELIVERED (legacy row stored 225000 incl. shipping -> capped to refundable goods 200000)
         DisputeDetailDto delivered = createReturnDispute(1L, orderId, "RETURN_APPROVED", "GHN-RET-100-XYZ", "RETURN_DELIVERED", NOW, NOW);
         when(disputeRepository.findDisputeByOrderId(orderId)).thenReturn(Optional.of(delivered));
         DisputeDetailDto refunded = createReturnDispute(1L, orderId, "RESOLVED_REFUND", "GHN-RET-100-XYZ", "RETURN_DELIVERED", NOW, NOW);
@@ -381,7 +381,82 @@ class BuyerDisputeServiceTest {
         DisputeDetailDto result = service.confirmReturnReceivedAndRefund(301L, orderId);
 
         assertThat(result.status()).isEqualTo("RESOLVED_REFUND");
-        verify(commerceDisputeFacade).resolveDisputeRefund(eq(orderId), eq(new BigDecimal("225000")), contains("GHN-RET-100-XYZ"));
-        verify(disputeRepository).markReturnDeliveredAndRefunded(1L, 301L, new BigDecimal("225000"));
+        verify(commerceDisputeFacade).resolveDisputeRefund(eq(orderId), eq(new BigDecimal("200000")), contains("GHN-RET-100-XYZ"));
+        verify(disputeRepository).markReturnDeliveredAndRefunded(1L, 301L, new BigDecimal("200000"));
+    }
+
+    @Test
+    @DisplayName("confirmReturnReceivedAndRefund: Khấu trừ voucher + xu trên tiền hàng, bỏ phí ship và cho phép hoàn 0 đồng hợp lệ")
+    void testRefundCalculationExcludesShippingAppliesDiscountsAndAllowsZero() throws Exception {
+        // Case A: subtotal 200k, shipping 30k, voucher 50k, points 30k -> refundable goods = 120k (legacy stored 230k capped to 120k)
+        long orderA = 101L;
+        OrderEntity discounted = new OrderEntity(
+                UUID.randomUUID(), 201L, 301L, 1L,
+                "Nguyễn Văn A", "0901234567",
+                "Hồ Chí Minh", "Quận 1", "Bến Nghé", "12 Lê Duẩn",
+                202, 1444, "20311",
+                new BigDecimal("200000"), new BigDecimal("30000"),
+                BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("120000"),
+                new BigDecimal("50000"), BigDecimal.ZERO, "PLATFORM", new BigDecimal("150000"),
+                NOW.plusSeconds(3600), NOW
+        );
+        var idField = OrderEntity.class.getDeclaredField("id");
+        idField.setAccessible(true);
+        idField.set(discounted, orderA);
+        var ptsField = OrderEntity.class.getDeclaredField("pointsDiscountAmount");
+        ptsField.setAccessible(true);
+        ptsField.set(discounted, new BigDecimal("30000"));
+
+        when(orderRepository.findById(orderA)).thenReturn(Optional.of(discounted));
+        DisputeDetailDto deliveredA = new DisputeDetailDto(
+                10L, orderA, "ORDER-" + orderA, 201L, "B", "b@x.com", 301L, "S", "s@x.com",
+                "Item", new BigDecimal("120000"), "R", "D", List.of(), null, null, List.of(),
+                NOW, "RETURN_APPROVED", "RETURN_REFUND", "OK", new BigDecimal("230000"), 0,
+                1L, NOW, NOW, NOW, "GHN-A", "GHN", "RETURN_DELIVERED", NOW, NOW, "S", "090", "Addr"
+        );
+        when(disputeRepository.findDisputeByOrderId(orderA)).thenReturn(Optional.of(deliveredA));
+        when(disputeRepository.findDisputeById(10L)).thenReturn(Optional.of(deliveredA));
+
+        service.confirmReturnReceivedAndRefund(301L, orderA);
+        verify(commerceDisputeFacade).resolveDisputeRefund(eq(orderA), eq(new BigDecimal("120000")), contains("GHN-A"));
+        verify(disputeRepository).markReturnDeliveredAndRefunded(10L, 301L, new BigDecimal("120000"));
+
+        // Case B: subtotal 100k, shipping 25k, voucher 60k, points 40k -> valid 0 VND refund (must NOT fall back to 25k shipping!)
+        long orderB = 102L;
+        OrderEntity zeroGoods = new OrderEntity(
+                UUID.randomUUID(), 201L, 301L, 1L,
+                "Nguyễn Văn A", "0901234567",
+                "Hồ Chí Minh", "Quận 1", "Bến Nghé", "12 Lê Duẩn",
+                202, 1444, "20311",
+                new BigDecimal("100000"), new BigDecimal("25000"),
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("60000"), BigDecimal.ZERO, "PLATFORM", new BigDecimal("25000"),
+                NOW.plusSeconds(3600), NOW
+        );
+        idField.set(zeroGoods, orderB);
+        ptsField.set(zeroGoods, new BigDecimal("40000"));
+
+        when(orderRepository.findById(orderB)).thenReturn(Optional.of(zeroGoods));
+        DisputeDetailDto deliveredB = createReturnDispute(11L, orderB, "RETURN_APPROVED", "GHN-B", "RETURN_DELIVERED", NOW, NOW);
+        // Simulate refundAmount == 0 stored by KTV decision
+        DisputeDetailDto zeroStored = new DisputeDetailDto(
+                deliveredB.disputeId(), deliveredB.orderId(), deliveredB.orderCode(),
+                deliveredB.buyerId(), deliveredB.buyerName(), deliveredB.buyerEmail(),
+                deliveredB.sellerId(), deliveredB.sellerName(), deliveredB.sellerEmail(),
+                deliveredB.productTitle(), BigDecimal.ZERO, deliveredB.reason(), deliveredB.description(),
+                deliveredB.buyerEvidenceUrls(), deliveredB.videoUnboxingUrl(), deliveredB.sellerResponse(),
+                deliveredB.sellerEvidenceUrls(), deliveredB.sellerResponseDueAt(), deliveredB.status(),
+                deliveredB.verdictAction(), deliveredB.verdictNotes(), BigDecimal.ZERO, deliveredB.penaltyPoints(),
+                deliveredB.resolvedBy(), deliveredB.resolvedAt(), deliveredB.createdAt(), deliveredB.updatedAt(),
+                deliveredB.returnTrackingCode(), deliveredB.returnCarrier(), deliveredB.returnShipmentStatus(),
+                deliveredB.returnHandedOverAt(), deliveredB.returnDeliveredAt(),
+                deliveredB.returnRecipientName(), deliveredB.returnRecipientPhone(), deliveredB.returnRecipientAddress()
+        );
+        when(disputeRepository.findDisputeByOrderId(orderB)).thenReturn(Optional.of(zeroStored));
+        when(disputeRepository.findDisputeById(11L)).thenReturn(Optional.of(zeroStored));
+
+        service.confirmReturnReceivedAndRefund(301L, orderB);
+        verify(commerceDisputeFacade).resolveDisputeRefund(eq(orderB), eq(BigDecimal.ZERO), contains("GHN-B"));
+        verify(disputeRepository).markReturnDeliveredAndRefunded(11L, 301L, BigDecimal.ZERO);
     }
 }

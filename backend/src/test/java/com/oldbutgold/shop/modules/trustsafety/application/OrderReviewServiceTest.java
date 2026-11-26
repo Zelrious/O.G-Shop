@@ -144,4 +144,20 @@ class OrderReviewServiceTest {
         assertThat(summary.totalReviews()).isEqualTo(3L);
         assertThat(summary.averageRating()).isEqualTo(4.0);
     }
+
+    @Test
+    @DisplayName("submitReview: Ném DataAccessException khi đọc FOR UPDATE hoặc lưu trạng thái xu để rollback transaction")
+    void testRethrowsDataAccessExceptionOnReviewLockOrCoinStatePersist() {
+        long orderId = 100L;
+        long buyerId = 200L;
+        OrderEntity order = createDeliveredOrder(orderId, buyerId, 300L);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        // 1. Failure reading existing review FOR UPDATE must propagate
+        when(jdbc.query(contains("FROM public.reviews"), any(org.springframework.jdbc.core.RowMapper.class), eq(orderId), eq(buyerId)))
+                .thenThrow(new org.springframework.dao.QueryTimeoutException("Simulated lock failure"));
+
+        assertThatThrownBy(() -> service.submitReview(buyerId, new CreateReviewRequest(orderId, 5, "Tốt")))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+    }
 }

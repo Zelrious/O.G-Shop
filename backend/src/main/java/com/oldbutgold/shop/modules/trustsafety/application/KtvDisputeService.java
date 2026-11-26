@@ -1,8 +1,10 @@
 package com.oldbutgold.shop.modules.trustsafety.application;
 
 import com.oldbutgold.shop.modules.commerce.application.CommerceDisputeFacade;
+import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderRepository;
 import com.oldbutgold.shop.modules.trustsafety.api.DisputeDtos.*;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.DisputeRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +24,7 @@ public class KtvDisputeService {
 
     private final DisputeRepository disputeRepository;
     private final CommerceDisputeFacade commerceDisputeFacade;
+    private OrderRepository orderRepository;
 
     public KtvDisputeService(
             DisputeRepository disputeRepository,
@@ -29,6 +32,11 @@ public class KtvDisputeService {
     ) {
         this.disputeRepository = disputeRepository;
         this.commerceDisputeFacade = commerceDisputeFacade;
+    }
+
+    @Autowired(required = false)
+    public void setOrderRepository(OrderRepository orderRepository) {
+        this.orderRepository = orderRepository;
     }
 
     @Transactional(readOnly = true)
@@ -62,9 +70,10 @@ public class KtvDisputeService {
         int penaltyPoints = request.penaltyPoints() != null ? Math.max(0, Math.min(20, request.penaltyPoints())) : 0;
         String notes = request.verdictNotes() != null ? request.verdictNotes().trim() : "";
 
+        BigDecimal refundableGoodsAmount = resolveRefundableGoodsAmount(dispute);
         switch (verdict) {
             case "RETURN_APPROVED" -> {
-                refundAmount = dispute.disputeAmount();
+                refundAmount = refundableGoodsAmount;
                 commerceDisputeFacade.resolveDisputeReturnApproved(dispute.orderId(), notes);
                 message = "Đã chấp thuận cho Người mua trả hàng theo UC62. Đơn hàng chuyển sang chờ Người mua giao trả về Người bán.";
                 if (penaltyPoints > 0) {
@@ -85,7 +94,7 @@ public class KtvDisputeService {
                 );
             }
             case "RESOLVED_REFUND" -> {
-                refundAmount = dispute.disputeAmount();
+                refundAmount = refundableGoodsAmount;
                 commerceDisputeFacade.resolveDisputeRefund(dispute.orderId(), refundAmount, notes);
                 message = "Đã phán quyết hoàn tiền 100% cho Người mua theo UC83 và giải phóng khoản ký quỹ.";
                 if (penaltyPoints > 0) {
@@ -132,5 +141,15 @@ public class KtvDisputeService {
         disputeRepository.applyDecision(disputeId, ktvId, verdict, refundAmount, notes, penaltyPoints);
 
         return new DisputeDecisionResponse(disputeId, verdict, verdict, message);
+    }
+
+    private BigDecimal resolveRefundableGoodsAmount(DisputeDetailDto dispute) {
+        if (orderRepository != null && dispute.orderId() != null) {
+            var orderOpt = orderRepository.findById(dispute.orderId());
+            if (orderOpt.isPresent()) {
+                return BuyerDisputeService.calculateRefundableGoodsAmount(orderOpt.get());
+            }
+        }
+        return dispute.disputeAmount() != null ? dispute.disputeAmount().max(BigDecimal.ZERO) : BigDecimal.ZERO;
     }
 }

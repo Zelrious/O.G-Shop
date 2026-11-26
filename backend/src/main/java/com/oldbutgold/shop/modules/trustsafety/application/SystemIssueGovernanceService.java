@@ -4,13 +4,19 @@ import com.oldbutgold.shop.modules.commerce.api.VoucherDtos;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.VoucherWalletRepository;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.*;
 import jakarta.persistence.EntityManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Savepoint;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
@@ -22,6 +28,8 @@ import java.util.*;
  */
 @Service
 public class SystemIssueGovernanceService {
+
+    private static final Logger log = LoggerFactory.getLogger(SystemIssueGovernanceService.class);
 
     private final CaseRepository caseRepository;
     private final CaseRoundRepository caseRoundRepository;
@@ -531,14 +539,24 @@ public class SystemIssueGovernanceService {
         }
 
         CaseRoundEntity round1 = caseRoundRepository.findLatestRoundByCaseId(caseId).orElse(null);
-        if (round1 != null && caseEventRepository.existsByCaseIdAndRoundIdAndEventType(caseId, round1.getId(), CaseEventEntity.TYPE_ESCALATED)) {
-            if (!hasRole(actorId, "ADMIN")) {
+        boolean escalated = round1 != null && caseEventRepository.existsByCaseIdAndRoundIdAndEventType(caseId, round1.getId(), CaseEventEntity.TYPE_ESCALATED);
+        if (escalated) {
+            if (!actorIsAdmin || !hasRole(actorId, "ADMIN")) {
                 throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "CASE_ESCALATED", "Hồ sơ đã chuyển Admin; KTV không được tự cấp bồi thường.");
             }
             Long designated = resolveDesignatedAdminId(caseId, round1.getId());
             if (designated != null && !designated.equals(actorId)) {
                 throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "NOT_DESIGNATED_ADMIN",
                         "Chỉ Admin được chỉ định (#" + designated + ") mới có quyền cấp bồi thường cho hồ sơ này.");
+            }
+        } else {
+            if (actorIsAdmin || !hasRole(actorId, "KTV")) {
+                throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "CASE_NOT_ESCALATED",
+                        "Hồ sơ chưa chuyển cấp; chỉ KTV phụ trách được cấp bồi thường.");
+            }
+            if (c.getAssignedTo() == null || !c.getAssignedTo().equals(actorId)) {
+                throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "NOT_ASSIGNED_KTV",
+                        "Chỉ KTV đang phụ trách hồ sơ (#" + c.getAssignedTo() + ") mới có quyền cấp bồi thường.");
             }
         }
 
@@ -783,7 +801,7 @@ public class SystemIssueGovernanceService {
     }
 
     private static final java.util.regex.Pattern PRIVATE_SECRET = java.util.regex.Pattern.compile(
-            "(?iu)(?:\\b(?:otp|mã xác thực)\\s*(?:là\\s*|[:=]\\s*)?[0-9]{4,8}\\b|(?:mật khẩu|password)\\s*(?:là\\s+|[:=]\\s*)\\S+)");
+            "(?iu)(?:\\b(?:otp|mã xác thực)\\s*(?:là\\s*|[:=]\\s*)?[0-9]{4,8}\\b|\\b(?:mật khẩu|password|token|secret|api[_\\-\\s]?key)\\s*(?:là\\s+|[:=]\\s*)\\S+|\\bbearer\\s+[A-Za-z0-9\\-._~+/]+=*)");
     private static void validatePrivateText(String value) {
         if (value != null && PRIVATE_SECRET.matcher(value).find()) {
             throw new TrustSafetyBusinessException(HttpStatus.BAD_REQUEST, "PRIVATE_SECRET", "Hãy xóa mật khẩu hoặc mã OTP trước khi gửi.");
@@ -814,13 +832,46 @@ public class SystemIssueGovernanceService {
     }
 
     private void insertNotificationSafely(long userId, String type, String title, String content, String refType, Long refId, String targetData) {
-        try {
-            jdbc.update("""
-                    INSERT INTO og_compat.notifications(user_id, type, title, content, reference_type, reference_id, is_read, created_at, target_data)
-                    VALUES (?, ?, ?, ?, ?, ?, false, ?, ?::jsonb)
-                    """, userId, type, title, content, refType, refId, Timestamp.from(clock.instant()), targetData);
-        } catch (Exception ignored) {
+        if (jdbc == null) {
+            return;
         }
+        String sql = """
+                INSERT INTO og_compat.notifications(user_id, type, title, content, reference_type, reference_id, is_read, created_at, target_data)
+                VALUES (?, ?, ?, ?, ?, ?, false, ?, ?::jsonb)
+                """;
+        Timestamp createdAt = Timestamp.from(clock.instant());
+        jdbc.execute((ConnectionCallback<Void>) conn -> {
+            Savepoint sp = null;
+            boolean useSavepoint = !conn.getAutoCommit() && conn.getMetaData().supportsSavepoints();
+            if (useSavepoint) {
+                sp = conn.setSavepoint("sp_sys_notif");
+            }
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setLong(1, userId);
+                ps.setString(2, type);
+                ps.setString(3, title);
+                ps.setString(4, content);
+                ps.setString(5, refType);
+                if (refId != null) {
+                    ps.setLong(6, refId);
+                } else {
+                    ps.setNull(6, java.sql.Types.BIGINT);
+                }
+                ps.setTimestamp(7, createdAt);
+                ps.setString(8, targetData);
+                ps.executeUpdate();
+                if (sp != null) {
+                    conn.releaseSavepoint(sp);
+                }
+            } catch (SQLException ex) {
+                if (sp != null) {
+                    conn.rollback(sp);
+                    conn.releaseSavepoint(sp);
+                }
+                log.warn("Notification insert failed safely within savepoint (refType={}, refId={}): {}", refType, refId, ex.getMessage());
+            }
+            return null;
+        });
     }
 
     private ReturnCaseDtos.ReturnCaseDetailResponse mapSystemCaseDetail(CaseEntity c) {

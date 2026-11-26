@@ -162,7 +162,8 @@ public class DisputeRepository {
         String selectSql = """
             SELECT d.dispute_id, d.order_id, d.buyer_id, COALESCE(b.full_name, 'Người mua #' || d.buyer_id) AS buyer_name,
                    d.seller_id, COALESCE(s.full_name, 'Người bán #' || d.seller_id) AS seller_name,
-                   o.total_amount, d.reason, d.description, d.status, d.verdict_action, d.created_at, d.updated_at,
+                   GREATEST(0, COALESCE(o.subtotal, 0) - COALESCE(o.voucher_discount_amount, 0) - COALESCE(o.points_discount_amount, 0)) AS refundable_goods_amount,
+                   d.reason, d.description, d.status, d.verdict_action, d.created_at, d.updated_at,
                    COALESCE((SELECT oi.product_title FROM public.order_items oi WHERE oi.order_id = d.order_id ORDER BY oi.order_item_id ASC LIMIT 1), 'Đơn hàng #' || d.order_id) AS product_title
             FROM public.dispute_cases d
             LEFT JOIN public.orders o ON d.order_id = o.order_id
@@ -178,7 +179,7 @@ public class DisputeRepository {
             long sellerId = rs.getLong("seller_id");
             String sellerName = rs.getString("seller_name");
             String productTitle = rs.getString("product_title");
-            BigDecimal disputeAmount = rs.getBigDecimal("total_amount");
+            BigDecimal disputeAmount = rs.getBigDecimal("refundable_goods_amount");
             if (disputeAmount == null) disputeAmount = BigDecimal.ZERO;
             String reason = rs.getString("reason");
             String description = rs.getString("description");
@@ -213,7 +214,9 @@ public class DisputeRepository {
         String sql = """
             SELECT d.dispute_id, d.order_id, d.buyer_id, COALESCE(b.full_name, 'Người mua #' || d.buyer_id) AS buyer_name,
                    b.email AS buyer_email, d.seller_id, COALESCE(s.full_name, 'Người bán #' || d.seller_id) AS seller_name,
-                   s.email AS seller_email, o.total_amount, d.reason, d.description, d.buyer_evidence_urls,
+                   s.email AS seller_email,
+                   GREATEST(0, COALESCE(o.subtotal, 0) - COALESCE(o.voucher_discount_amount, 0) - COALESCE(o.points_discount_amount, 0)) AS refundable_goods_amount,
+                   d.reason, d.description, d.buyer_evidence_urls,
                    d.video_unboxing_url, d.seller_response, d.seller_evidence_urls, d.seller_response_due_at,
                    d.status, d.verdict_action, d.verdict_notes, d.refund_amount, d.penalty_points,
                    d.resolved_by, d.resolved_at, d.created_at, d.updated_at,
@@ -240,7 +243,9 @@ public class DisputeRepository {
         String sql = """
             SELECT d.dispute_id, d.order_id, d.buyer_id, COALESCE(b.full_name, 'Người mua #' || d.buyer_id) AS buyer_name,
                    b.email AS buyer_email, d.seller_id, COALESCE(s.full_name, 'Người bán #' || d.seller_id) AS seller_name,
-                   s.email AS seller_email, o.total_amount, d.reason, d.description, d.buyer_evidence_urls,
+                   s.email AS seller_email,
+                   GREATEST(0, COALESCE(o.subtotal, 0) - COALESCE(o.voucher_discount_amount, 0) - COALESCE(o.points_discount_amount, 0)) AS refundable_goods_amount,
+                   d.reason, d.description, d.buyer_evidence_urls,
                    d.video_unboxing_url, d.seller_response, d.seller_evidence_urls, d.seller_response_due_at,
                    d.status, d.verdict_action, d.verdict_notes, d.refund_amount, d.penalty_points,
                    d.resolved_by, d.resolved_at, d.created_at, d.updated_at,
@@ -512,7 +517,7 @@ public class DisputeRepository {
         long sellerId = rs.getLong("seller_id");
         String sellerName = rs.getString("seller_name");
         String sellerEmail = rs.getString("seller_email");
-        BigDecimal disputeAmount = rs.getBigDecimal("total_amount");
+        BigDecimal disputeAmount = rs.getBigDecimal("refundable_goods_amount");
         if (disputeAmount == null) disputeAmount = BigDecimal.ZERO;
         String reason = rs.getString("reason");
         String description = rs.getString("description");

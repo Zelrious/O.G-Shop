@@ -1,6 +1,8 @@
 package com.oldbutgold.shop.modules.trustsafety.application;
 
 import com.oldbutgold.shop.modules.commerce.application.CommerceDisputeFacade;
+import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderEntity;
+import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderRepository;
 import com.oldbutgold.shop.modules.trustsafety.api.DisputeDtos.*;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.DisputeRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +14,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -159,5 +162,43 @@ class KtvDisputeServiceTest {
         assertThatThrownBy(() -> service.submitDecision(disputeId, 99L, request))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("đã có phán quyết kết thúc trước đó");
+    }
+
+    @Test
+    @DisplayName("submitDecision: Đường đi chính tính tiền hoàn từ Order (bỏ phí ship, trừ voucher & xu, cho phép 0 đồng)")
+    void testPrimaryDecisionUsesAuthoritativeOrderRefundableGoodsRule() throws Exception {
+        OrderRepository orderRepo = mock(OrderRepository.class);
+        service.setOrderRepository(orderRepo);
+
+        OrderEntity order = new OrderEntity(
+                UUID.randomUUID(), 201L, 301L, 1L,
+                "Nguyễn Văn A", "0901234567",
+                "Hồ Chí Minh", "Quận 1", "Bến Nghé", "12 Lê Duẩn",
+                202, 1444, "20311",
+                new BigDecimal("500000"), new BigDecimal("35000"),
+                BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("400000"),
+                new BigDecimal("100000"), BigDecimal.ZERO, "PLATFORM", new BigDecimal("410000"),
+                NOW.plusSeconds(3600), NOW
+        );
+        var ptsField = OrderEntity.class.getDeclaredField("pointsDiscountAmount");
+        ptsField.setAccessible(true);
+        ptsField.set(order, new BigDecimal("25000"));
+        when(orderRepo.findById(1001L)).thenReturn(Optional.of(order));
+
+        DisputeDetailDto dispute = createSampleDispute(10L, "WAITING_KTV_REVIEW");
+        when(disputeRepository.findDisputeById(10L)).thenReturn(Optional.of(dispute));
+
+        service.submitDecision(10L, 99L, new DisputeDecisionRequest("RESOLVED_REFUND", "Đồng ý hoàn tiền hàng", 5));
+
+        // 500000 - 100000 voucher - 25000 points = 375000 (shipping 35000 excluded)
+        verify(commerceDisputeFacade).resolveDisputeRefund(1001L, new BigDecimal("375000"), "Đồng ý hoàn tiền hàng");
+        verify(disputeRepository).applyDecision(10L, 99L, "RESOLVED_REFUND", new BigDecimal("375000"), "Đồng ý hoàn tiền hàng", 5);
+
+        // Zero-VND valid refund when voucher + points >= subtotal
+        ptsField.set(order, new BigDecimal("450000"));
+        DisputeDetailDto dispute2 = createSampleDispute(11L, "WAITING_KTV_REVIEW");
+        when(disputeRepository.findDisputeById(11L)).thenReturn(Optional.of(dispute2));
+        service.submitDecision(11L, 99L, new DisputeDecisionRequest("RETURN_APPROVED", "Duyệt trả 0đ", 0));
+        verify(disputeRepository).applyDecision(11L, 99L, "RETURN_APPROVED", BigDecimal.ZERO, "Duyệt trả 0đ", 0);
     }
 }

@@ -8,11 +8,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.AccountTrustRepository;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Savepoint;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.*;
@@ -248,48 +252,25 @@ public class OrderReviewService {
         if (jdbc == null) {
             return null;
         }
-        try {
-            List<ExistingReviewRow> rows = jdbc.query("""
-                    SELECT review_id, rating, comment, created_at, updated_at,
-                           COALESCE(recipient_unwaived_coins, 0) AS u_coins,
-                           COALESCE(recipient_waived_coins, 0) AS w_coins
-                    FROM public.reviews
-                    WHERE record_type = 'reviews' AND order_id = ? AND reviewer_id = ? AND deleted_at IS NULL
-                    FOR UPDATE
-                    """,
-                    (rs, idx) -> new ExistingReviewRow(
-                            rs.getLong("review_id"),
-                            rs.getInt("rating"),
-                            rs.getString("comment"),
-                            rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toInstant() : Instant.now(),
-                            rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toInstant() : Instant.now(),
-                            rs.getLong("u_coins"),
-                            rs.getLong("w_coins")
-                    ),
-                    orderId, reviewerId);
-            return rows.isEmpty() ? null : rows.getFirst();
-        } catch (DataAccessException ex) {
-            try {
-                List<ExistingReviewRow> compat = jdbc.query("""
-                        SELECT review_id, rating, comment, created_at, updated_at
-                        FROM og_compat.reviews
-                        WHERE order_id = ? AND reviewer_id = ? AND deleted_at IS NULL
-                        """,
-                        (rs, idx) -> new ExistingReviewRow(
-                                rs.getLong("review_id"),
-                                rs.getInt("rating"),
-                                rs.getString("comment"),
-                                rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toInstant() : Instant.now(),
-                                rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toInstant() : Instant.now(),
-                                0L,
-                                0L
-                        ),
-                        orderId, reviewerId);
-                return compat.isEmpty() ? null : compat.getFirst();
-            } catch (DataAccessException ignored) {
-                return null;
-            }
-        }
+        List<ExistingReviewRow> rows = jdbc.query("""
+                SELECT review_id, rating, comment, created_at, updated_at,
+                       COALESCE(recipient_unwaived_coins, 0) AS u_coins,
+                       COALESCE(recipient_waived_coins, 0) AS w_coins
+                FROM public.reviews
+                WHERE record_type = 'reviews' AND order_id = ? AND reviewer_id = ? AND deleted_at IS NULL
+                FOR UPDATE
+                """,
+                (rs, idx) -> new ExistingReviewRow(
+                        rs.getLong("review_id"),
+                        rs.getInt("rating"),
+                        rs.getString("comment"),
+                        rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toInstant() : Instant.now(),
+                        rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toInstant() : Instant.now(),
+                        rs.getLong("u_coins"),
+                        rs.getLong("w_coins")
+                ),
+                orderId, reviewerId);
+        return rows.isEmpty() ? null : rows.getFirst();
     }
 
     private void ensureRewardAccount(long userId) {
@@ -344,15 +325,11 @@ public class OrderReviewService {
         if (jdbc == null || reviewId <= 0) {
             return;
         }
-        try {
-            jdbc.update("""
-                    UPDATE public.reviews
-                    SET recipient_unwaived_coins = ?, recipient_waived_coins = ?
-                    WHERE review_id = ? AND record_type = 'reviews'
-                    """, Math.max(0L, unwaivedCoins), Math.max(0L, waivedCoins), reviewId);
-        } catch (DataAccessException ignored) {
-            // Fallback for H2 / mocked tests lacking public.reviews V61 columns
-        }
+        jdbc.update("""
+                UPDATE public.reviews
+                SET recipient_unwaived_coins = ?, recipient_waived_coins = ?
+                WHERE review_id = ? AND record_type = 'reviews'
+                """, Math.max(0L, unwaivedCoins), Math.max(0L, waivedCoins), reviewId);
     }
 
     private long awardSubmitterOnce(long reviewerId, long orderId) {
@@ -402,43 +379,60 @@ public class OrderReviewService {
         if (jdbc == null) {
             return;
         }
-        try {
-            String snippet = ReviewPrivacyGuard.sanitizeSnippetForNotification(comment);
-            String title = isEdit
-                    ? String.format("Đối tác đã cập nhật đánh giá đơn #%d (%d sao -> %d sao)", orderId, oldStar, newStar)
-                    : String.format("Bạn nhận được đánh giá %d sao cho đơn #%d", newStar, orderId);
-            StringBuilder content = new StringBuilder();
-            content.append(String.format("Đơn #%d vừa được đánh giá %d sao.", orderId, newStar));
-            if (repDelta != 0) {
-                content.append(String.format(" Uy tín: %s%d điểm.", repDelta > 0 ? "+" : "", repDelta));
-            }
-            if (coinDelta != 0) {
-                content.append(String.format(" Xu thưởng: %s%d xu.", coinDelta > 0 ? "+" : "", coinDelta));
-            }
-            if (!snippet.isEmpty()) {
-                content.append(" Nhận xét: \"").append(snippet).append("\"");
-            }
-            String targetDataJson = String.format(
-                    "{\"destination\":\"ORDER_DETAIL\",\"orderId\":%d,\"reviewId\":%d,\"reviewerId\":%d,\"rating\":%d,\"reputationDelta\":%d,\"coinDelta\":%d}",
-                    orderId, reviewId, reviewerId, newStar, repDelta, coinDelta
-            );
-            jdbc.update("""
-                    INSERT INTO og_compat.notifications(
-                        user_id, type, title, content, reference_type, reference_id, is_read, created_at, target_data
-                    ) VALUES (?, ?, ?, ?, 'ORDER', ?, false, ?, ?::jsonb)
-                    """,
-                    recipientId,
-                    isEdit ? "ORDER_REVIEW_UPDATED" : "ORDER_REVIEW_RECEIVED",
-                    title,
-                    content.toString(),
-                    orderId,
-                    Timestamp.from(Instant.now()),
-                    targetDataJson
-            );
-        } catch (Exception ex) {
-            // BR-UC46 Exception: failure to deliver notification must NOT block saving the review
-            log.warn("Could not insert UC46 review notification for orderId={}, recipientId={}: {}", orderId, recipientId, ex.getMessage());
+        String snippet = ReviewPrivacyGuard.sanitizeSnippetForNotification(comment);
+        String title = isEdit
+                ? String.format("Đối tác đã cập nhật đánh giá đơn #%d (%d sao -> %d sao)", orderId, oldStar, newStar)
+                : String.format("Bạn nhận được đánh giá %d sao cho đơn #%d", newStar, orderId);
+        StringBuilder content = new StringBuilder();
+        content.append(String.format("Đơn #%d vừa được đánh giá %d sao.", orderId, newStar));
+        if (repDelta != 0) {
+            content.append(String.format(" Uy tín: %s%d điểm.", repDelta > 0 ? "+" : "", repDelta));
         }
+        if (coinDelta != 0) {
+            content.append(String.format(" Xu thưởng: %s%d xu.", coinDelta > 0 ? "+" : "", coinDelta));
+        }
+        if (!snippet.isEmpty()) {
+            content.append(" Nhận xét: \"").append(snippet).append("\"");
+        }
+        String targetDataJson = String.format(
+                "{\"destination\":\"ORDER_DETAIL\",\"orderId\":%d,\"reviewId\":%d,\"reviewerId\":%d,\"rating\":%d,\"reputationDelta\":%d,\"coinDelta\":%d}",
+                orderId, reviewId, reviewerId, newStar, repDelta, coinDelta
+        );
+        String sql = """
+                INSERT INTO og_compat.notifications(
+                    user_id, type, title, content, reference_type, reference_id, is_read, created_at, target_data
+                ) VALUES (?, ?, ?, ?, 'ORDER', ?, false, ?, ?::jsonb)
+                """;
+        String notifType = isEdit ? "ORDER_REVIEW_UPDATED" : "ORDER_REVIEW_RECEIVED";
+        Timestamp createdAt = Timestamp.from(Instant.now());
+        jdbc.execute((ConnectionCallback<Void>) conn -> {
+            Savepoint sp = null;
+            boolean useSavepoint = !conn.getAutoCommit() && conn.getMetaData().supportsSavepoints();
+            if (useSavepoint) {
+                sp = conn.setSavepoint("sp_rev_notif");
+            }
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setLong(1, recipientId);
+                ps.setString(2, notifType);
+                ps.setString(3, title);
+                ps.setString(4, content.toString());
+                ps.setLong(5, orderId);
+                ps.setTimestamp(6, createdAt);
+                ps.setString(7, targetDataJson);
+                ps.executeUpdate();
+                if (sp != null) {
+                    conn.releaseSavepoint(sp);
+                }
+            } catch (SQLException ex) {
+                if (sp != null) {
+                    conn.rollback(sp);
+                    conn.releaseSavepoint(sp);
+                }
+                // BR-UC46 Exception: failure to deliver notification must NOT block saving the review
+                log.warn("Could not insert UC46 review notification for orderId={}, recipientId={}: {}", orderId, recipientId, ex.getMessage());
+            }
+            return null;
+        });
     }
 
     private static long targetCoinsForStar(int rating) {
