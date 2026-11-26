@@ -57,6 +57,9 @@ class Uc48ReminderConcurrencyPostgresIntegrationTest {
     @Autowired
     private Uc48ReminderService uc48ReminderService;
 
+    @Autowired(required = false)
+    private Uc48ReminderScheduler uc48ReminderScheduler;
+
     @Autowired
     private OrderManagementService orderManagementService;
 
@@ -69,6 +72,7 @@ class Uc48ReminderConcurrencyPostgresIntegrationTest {
     @AfterEach
     void resetClock() {
         uc48ReminderService.setClock(Clock.systemUTC());
+        uc48ReminderService.setOnDutyKtvId(0L);
     }
 
     @Autowired private ReturnCaseService returns;
@@ -365,6 +369,34 @@ class Uc48ReminderConcurrencyPostgresIntegrationTest {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    @Test
+    @DisplayName("Option 1 + PO-03 A: Scheduler disabled in test, assigned KTV reminded, unassigned skips with 0 or notifies configured on-duty KTV")
+    void testSchedulerDisabledAndOnDutyKtvOption1() {
+        assertThat(uc48ReminderScheduler).isNull();
+
+        var fx = createCommittedDeliveredUc83OrderInLast24Hours();
+        var created = returns.createReturnRequest(fx.buyerId(), fx.orderId(), new ReturnCaseDtos.CreateReturnRequest(
+                ReturnReasonCode.DAMAGED_OR_DEFECTIVE, "Hàng lỗi kiểm thử Option 1", List.of(), UUID.randomUUID().toString()));
+        // Case round 1 has ktv_due_at; leave assigned_to = NULL and move clock within 6h of ktv_due_at
+        Instant ktvDueAt = created.currentRound().ktvDueAt();
+        uc48ReminderService.setClock(Clock.fixed(ktvDueAt.minus(2, ChronoUnit.HOURS), ZoneOffset.UTC));
+
+        // 1. on-duty-ktv-id = 0 -> skips unassigned case cleanly
+        uc48ReminderService.setOnDutyKtvId(0L);
+        int sentWhenZero = uc48ReminderService.reconcileOpenCaseStageReminders();
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM og_compat.notifications WHERE reference_id = ? AND type = 'UC48_KTV_SLA_DEADLINE'",
+                Integer.class, created.caseId())).isZero();
+
+        // 2. Configure active on-duty KTV -> unassigned case reminds that KTV
+        Long onDutyKtv = createUser("uc48_onduty_ktv", "KTV");
+        uc48ReminderService.setOnDutyKtvId(onDutyKtv);
+        uc48ReminderService.reconcileOpenCaseStageReminders();
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM og_compat.notifications WHERE user_id = ? AND reference_id = ? AND type = 'UC48_KTV_SLA_DEADLINE'",
+                Integer.class, onDutyKtv, created.caseId())).isEqualTo(1);
     }
 }
 

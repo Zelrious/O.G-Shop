@@ -72,6 +72,9 @@ app:
       enabled: false
     ktv-sla-escalation:
       enabled: false
+    uc48-reminders:
+      enabled: false
+      on-duty-ktv-id: 0
   ghn:
     base-url: ${GHN_BASE_URL:https://dev-online-gateway.ghn.vn/shiip/public-api/}
     api-token: ${GHN_API_TOKEN:test-token-dummy}

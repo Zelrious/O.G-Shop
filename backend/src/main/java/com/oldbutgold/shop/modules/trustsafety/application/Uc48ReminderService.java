@@ -3,10 +3,8 @@ package com.oldbutgold.shop.modules.trustsafety.application;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -54,19 +52,6 @@ public class Uc48ReminderService {
     public void setClock(Clock clock) {
         if (clock != null) {
             this.clock = clock;
-        }
-    }
-
-    @Scheduled(fixedDelayString = "${app.scheduling.uc48-reminders.fixed-delay-ms:60000}")
-    public void scheduledRun() {
-        try {
-            Uc48RunSummary summary = reconcileAllReminders();
-            if (summary.newReturnRemindersSent() > 0 || summary.stageRemindersSent() > 0) {
-                log.info("UC48 reminder run finished: newReturnSent={}, stageSent={}, skipped={}",
-                        summary.newReturnRemindersSent(), summary.stageRemindersSent(), summary.skipped());
-            }
-        } catch (Exception ex) {
-            log.warn("UC48 reminder scheduled run failed: {}", ex.getMessage());
         }
     }
 
@@ -225,6 +210,26 @@ public class Uc48ReminderService {
                 """, Long.class, Timestamp.from(now), Timestamp.from(now));
         for (Long caseId : shippingCases) {
             if (Boolean.TRUE.equals(requiresNewTx.execute(tx -> remindBuyerToShip(caseId)))) sent++;
+        }
+
+        if (onDutyKtvId <= 0) {
+            Integer unassignedDue = jdbc.queryForObject("""
+                    SELECT COUNT(*)
+                    FROM og_compat.cases c
+                    JOIN og_compat.case_rounds r USING(case_id)
+                    WHERE c.case_type = 'RETURN'
+                      AND c.state NOT IN ('CLOSED', 'REJECTED')
+                      AND c.assigned_to IS NULL
+                      AND r.state = 'OPEN'
+                      AND r.ktv_due_at IS NOT NULL
+                      AND ? >= r.ktv_due_at - INTERVAL '6 hours'
+                      AND ? < r.ktv_due_at
+                      AND NOT EXISTS (SELECT 1 FROM og_compat.case_events e WHERE e.round_id = r.round_id AND e.event_type = 'ESCALATED')
+                    """, Integer.class, Timestamp.from(now), Timestamp.from(now));
+            if (unassignedDue != null && unassignedDue > 0) {
+                log.warn("UC48 KTV SLA reminder skipped {} unassigned due case(s) because app.scheduling.uc48-reminders.on-duty-ktv-id={} (must be > 0 to notify on-duty KTV)",
+                        unassignedDue, onDutyKtvId);
+            }
         }
 
         var candidates = eligibleStages(null, now).stream().map(StageReminder::caseId).distinct().toList();

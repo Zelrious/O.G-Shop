@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { returnCaseApi, type ReturnCaseDetail } from '../features/disputes/returnCaseApi';
+import { parseCaseEventAction } from '../features/disputes/caseEventMeta';
+import { Button } from '../shared/components';
 
 const labels: Record<string, string> = { OPEN: 'Đã gửi', REVIEWING: 'Đang xem xét', CLOSED: 'Đã chấp nhận', REJECTED: 'Đã từ chối' };
 
@@ -8,8 +10,8 @@ function Complaint({ issue, onChange }: { issue: ReturnCaseDetail; onChange: (ro
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const progress = issue.events?.filter(e => e.eventType === 'SUPPLEMENTED').at(-1);
-  const requested = progress?.metadata && JSON.parse(progress.metadata).action === 'INFORMATION_REQUEST';
-  return <article className="og-account-detail"><h2>Hồ sơ #{issue.caseId} · {labels[issue.state]}</h2>
+  const requested = parseCaseEventAction(progress?.metadata) === 'INFORMATION_REQUEST';
+  return <article className="og-account-detail" aria-label={'Hồ sơ #' + issue.caseId}><h2>Hồ sơ #{issue.caseId} · {labels[issue.state] || issue.state}</h2>
     <p>{issue.fullDescription}</p>
     {issue.evidence?.map(e => <p key={e.evidenceId}>{e.textContent}</p>)}
     {issue.events?.filter(e => e.eventType === 'SUPPLEMENTED').map(e => <p key={e.eventId}>{e.reason}</p>)}
@@ -21,7 +23,7 @@ function Complaint({ issue, onChange }: { issue: ReturnCaseDetail; onChange: (ro
         setNote('');
       } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
     }}><label>Nội dung bổ sung<textarea required maxLength={2000} value={note} onChange={e => setNote(e.target.value)} /></label>
-      <button disabled={busy}>Gửi bổ sung</button></form>}
+      <Button type="submit" disabled={busy}>Gửi bổ sung</Button></form>}
     {error && <p role="alert">{error}</p>}
   </article>;
 }
@@ -60,10 +62,10 @@ export function SystemComplaintsPage() {
         pattern={numeric ? undefined : '[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}'}
         value={reference} onChange={e => setReference(e.target.value)} /></label>}
       <label>Bằng chứng bằng văn bản<textarea maxLength={2000} value={evidence} onChange={e => setEvidence(e.target.value)} /></label>
-      <button disabled={busy}>Gửi khiếu nại</button>
+      <Button type="submit" disabled={busy}>Gửi khiếu nại</Button>
     </form>
     {error && <p role="alert">{error}</p>}
-    <h2>Hồ sơ của bạn</h2><button disabled={busy} onClick={() => void refresh()}>Cập nhật hồ sơ</button>
+    <h2>Hồ sơ của bạn</h2><Button disabled={busy} onClick={() => void refresh()}>Cập nhật hồ sơ</Button>
     {rows.map(issue => <Complaint key={issue.caseId} issue={issue} onChange={update} />)}
   </main>;
 }

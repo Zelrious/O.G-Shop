@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { returnCaseApi, type AdminAssigneeOption, type ReturnCaseDetail } from '../../features/disputes/returnCaseApi';
+import { parseCaseEventAction } from '../../features/disputes/caseEventMeta';
 import { Button } from '../../shared/components';
+
+const labels: Record<string, string> = {
+  OPEN: 'Đã gửi',
+  REVIEWING: 'Đang xem xét',
+  CLOSED: 'Đã chấp nhận',
+  REJECTED: 'Đã từ chối',
+};
 
 function CaseReview({ issue, admins, reload }: { issue: ReturnCaseDetail; admins: AdminAssigneeOption[]; reload: () => Promise<void> }) {
   const [reason, setReason] = useState('');
@@ -8,7 +16,7 @@ function CaseReview({ issue, admins, reload }: { issue: ReturnCaseDetail; admins
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const latest = issue.events?.filter(e => e.eventType === 'SUPPLEMENTED').at(-1);
-  const pending = latest?.metadata && JSON.parse(latest.metadata).action === 'INFORMATION_REQUEST';
+  const pending = parseCaseEventAction(latest?.metadata) === 'INFORMATION_REQUEST';
   async function act(action: string) {
     setBusy(true); setError('');
     try {
@@ -23,7 +31,7 @@ function CaseReview({ issue, admins, reload }: { issue: ReturnCaseDetail; admins
     } catch (ex) { setError((ex as Error).message); } finally { setBusy(false); }
   }
   return <article className="og-account-detail" aria-label={'Hồ sơ #' + issue.caseId}>
-    <h2>Hồ sơ #{issue.caseId}</h2><p>{issue.fullDescription}</p>
+    <h2>Hồ sơ #{issue.caseId} · {labels[issue.state] || issue.state}</h2><p>{issue.fullDescription}</p>
     {issue.evidence?.map(e => <p key={e.evidenceId}>{e.textContent}</p>)}
     {issue.events?.filter(e => e.eventType === 'SUPPLEMENTED').map(e => <p key={e.eventId}>{e.reason}</p>)}
     {issue.decisions?.map((d, i) => <p key={i}>{issue.state === 'REJECTED' ? 'Đã từ chối' : 'Đã chấp nhận'} · {d.reason}</p>)}
