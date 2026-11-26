@@ -26,3 +26,4 @@ class Uc48ReminderSchedulerConditionTest {
                 .run(ctx -> assertThat(ctx).hasSingleBean(Uc48ReminderScheduler.class));
     }
 }
+

@@ -343,7 +343,9 @@ public class PaymentService {
             );
         }
 
-        BigDecimal shippingCash = order.getShippingFee().subtract(order.getShippingDiscountAmount());
+        BigDecimal shippingCash = order.getShippingFee()
+                .subtract(order.getShippingDiscountAmount())
+                .subtract(order.getPointsShippingDiscountAmount());
         if (shippingCash.compareTo(BigDecimal.ZERO) > 0) {
             jdbcTemplate.update("""
                     INSERT INTO og_compat.order_fund_components (
@@ -361,28 +363,125 @@ public class PaymentService {
                     INSERT INTO og_compat.order_fund_components (
                         component_id, order_id, allocation_id, late_confirmation_id,
                         component_type, confirmed_amount, funding_reference, confirmed_at
-                    ) VALUES (?, ?, ?, NULL, 'PLATFORM_GOODS_SUBSIDY', ?, 'PLATFORM_PROMOTION', ?)
+                    ) VALUES (?, ?, NULL, NULL, 'PLATFORM_GOODS_SUBSIDY', ?, 'PLATFORM_PROMOTION', ?)
                     """,
                     UUID.randomUUID(), order.getId(), goodsSubsidy, confirmedTs
             );
         }
 
-        BigDecimal shipSubsidy = order.getShippingDiscountAmount();
+        BigDecimal shipSubsidy = order.getShippingDiscountAmount().add(order.getPointsShippingDiscountAmount());
         if (shipSubsidy.compareTo(BigDecimal.ZERO) > 0) {
             jdbcTemplate.update("""
                     INSERT INTO og_compat.order_fund_components (
                         component_id, order_id, allocation_id, late_confirmation_id,
                         component_type, confirmed_amount, funding_reference, confirmed_at
-                    ) VALUES (?, ?, ?, NULL, 'PLATFORM_SHIPPING_SUBSIDY', ?, 'PLATFORM_SHIPPING', ?)
+                    ) VALUES (?, ?, NULL, NULL, 'PLATFORM_SHIPPING_SUBSIDY', ?, 'PLATFORM_SHIPPING', ?)
                     """,
                     UUID.randomUUID(), order.getId(), shipSubsidy, confirmedTs
             );
         }
 
-        // 6. Mark checkout group PAID
+        // 6. Mark checkout group PAID and record T2 coin debit + discount_allocations (V58)
         jdbcTemplate.update("UPDATE og_compat.checkout_groups SET state = 'PAID' WHERE group_id = ?", groupId);
+        recordGroupPointDebitAndAllocationsIfNeeded(order, groupId, confirmedTs);
 
         return confirmedAt;
+    }
+
+    private void recordGroupPointDebitAndAllocationsIfNeeded(OrderEntity triggerOrder, UUID groupId, java.sql.Timestamp confirmedTs) {
+        BigDecimal groupPointsTotal = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(points_discount_amount + COALESCE(points_shipping_discount_amount, 0)), 0) FROM og_compat.orders WHERE group_id = ?",
+                BigDecimal.class,
+                groupId
+        );
+        if (groupPointsTotal == null || groupPointsTotal.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        Long rewardPolicyId = jdbcTemplate.queryForObject(
+                "SELECT reward_policy_id FROM og_compat.checkout_groups WHERE group_id = ?",
+                Long.class,
+                groupId
+        );
+        Integer existingDebits = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM og_compat.reward_ledger WHERE group_id = ? AND entry_type = 'DEBIT_CHECKOUT'",
+                Integer.class,
+                groupId
+        );
+        if (rewardPolicyId == null || (existingDebits != null && existingDebits > 0)) {
+            return;
+        }
+
+        BigDecimal pointValue = jdbcTemplate.queryForObject(
+                "SELECT point_value FROM og_compat.reward_policies WHERE policy_id = ?",
+                BigDecimal.class,
+                rewardPolicyId
+        );
+        BigDecimal effectivePointValue = (pointValue != null && pointValue.compareTo(BigDecimal.ZERO) > 0)
+                ? pointValue
+                : BigDecimal.ONE;
+        long coinsToDebit = groupPointsTotal
+                .divide(effectivePointValue, 0, java.math.RoundingMode.HALF_UP)
+                .longValue();
+        if (coinsToDebit <= 0) {
+            return;
+        }
+
+        UUID rewardEntryId = UUID.randomUUID();
+        jdbcTemplate.update("""
+                INSERT INTO og_compat.reward_ledger(
+                    entry_id, user_id, policy_id, entry_type, points_delta, group_id, actor_id, reason, command_key, created_at
+                ) VALUES (?, ?, ?, 'DEBIT_CHECKOUT', ?, ?, NULL, ?, ?, ?)
+                """,
+                rewardEntryId,
+                triggerOrder.getBuyerId(),
+                rewardPolicyId,
+                -coinsToDebit,
+                groupId,
+                "Khấu trừ xu đặt hàng nhóm " + groupId,
+                "REWARD_DEBIT:" + groupId,
+                confirmedTs
+        );
+
+        List<Map<String, Object>> groupOrders = jdbcTemplate.queryForList(
+                "SELECT order_id, COALESCE(points_shipping_discount_amount, 0) AS points_shipping_discount_amount FROM og_compat.orders WHERE group_id = ? ORDER BY order_id",
+                groupId
+        );
+        for (Map<String, Object> orderRow : groupOrders) {
+            Long rowOrderId = ((Number) orderRow.get("order_id")).longValue();
+            BigDecimal pointsShippingDiscount = (BigDecimal) orderRow.get("points_shipping_discount_amount");
+            List<Map<String, Object>> items = jdbcTemplate.queryForList(
+                    "SELECT order_item_id, COALESCE(points_allocation, 0) AS points_allocation FROM og_compat.order_items WHERE order_id = ? ORDER BY order_item_id",
+                    rowOrderId
+            );
+            for (Map<String, Object> itemRow : items) {
+                BigDecimal pointsAllocation = (BigDecimal) itemRow.get("points_allocation");
+                if (pointsAllocation != null && pointsAllocation.compareTo(BigDecimal.ZERO) > 0) {
+                    jdbcTemplate.update("""
+                            INSERT INTO og_compat.discount_allocations(
+                                allocation_id, order_item_id, reward_entry_id, component, amount
+                            ) VALUES (?, ?, ?, 'GOODS', ?)
+                            """,
+                            UUID.randomUUID(),
+                            ((Number) itemRow.get("order_item_id")).longValue(),
+                            rewardEntryId,
+                            pointsAllocation
+                    );
+                }
+            }
+            if (pointsShippingDiscount != null && pointsShippingDiscount.compareTo(BigDecimal.ZERO) > 0 && !items.isEmpty()) {
+                jdbcTemplate.update("""
+                        INSERT INTO og_compat.discount_allocations(
+                            allocation_id, order_item_id, reward_entry_id, component, amount
+                        ) VALUES (?, ?, ?, 'SHIPPING', ?)
+                        """,
+                        UUID.randomUUID(),
+                        ((Number) items.getFirst().get("order_item_id")).longValue(),
+                        rewardEntryId,
+                        pointsShippingDiscount
+                );
+            }
+        }
     }
 
     @Transactional

@@ -1,5 +1,10 @@
 # Payment Module
 
+## Khắc phục review PR #24: Đồng bộ hạch toán V58 & T2 xu trong `PaymentService.recordUc83MockPaymentProof` — 2026-11-27
+
+- `PaymentService.recordUc83MockPaymentProof`: tính `SHIPPING_CASH = shippingFee - shippingDiscountAmount - pointsShippingDiscountAmount` và `PLATFORM_SHIPPING_SUBSIDY = shippingDiscountAmount + pointsShippingDiscountAmount` theo chuẩn `V58`; sửa `allocation_id = NULL` cho hai bút toán `PLATFORM_GOODS_SUBSIDY` và `PLATFORM_SHIPPING_SUBSIDY`; ghi đầy đủ T2 `DEBIT_CHECKOUT` vào `reward_ledger` và `discount_allocations` (`GOODS` + `SHIPPING`) khi nhóm đơn mock payment có sử dụng xu.
+- Kiểm chứng: `PaymentServiceTest` (15/15) + `PaymentShippingLedgerPostgresIntegrationTest` (2/2) PASS trên PostgreSQL 17.
+
 ## V58: Hạch toán xu trừ phí vận chuyển & hoàn đủ tổng xu thực chi — TASK-0122 / 2026-11-23
 
 - `GroupPaymentService`: tính `SHIPPING_CASH = shipping_fee - shipping_discount_amount - points_shipping_discount_amount`, `PLATFORM_SHIPPING_SUBSIDY = shipping_discount_amount + points_shipping_discount_amount`, và ghi `discount_allocations` (`component = 'SHIPPING'`) cho xu tại T2 `DEBIT_CHECKOUT`.

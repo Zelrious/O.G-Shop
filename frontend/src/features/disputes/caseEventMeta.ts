@@ -7,3 +7,4 @@ export function parseCaseEventAction(metadata?: string | null): string | null {
     return null;
   }
 }
+

@@ -1,5 +1,25 @@
 # Project Status
 
+## Khắc Phục Review PR #24 — Bảo Mật Bằng Chứng Riêng Tư, Quyền Mô Phỏng, PO-01/PO-02/PO-03 & Parity V58 — 2026-11-27
+
+- **CI Blockers & CodeQL Alert #20**:
+  - Tách helper thuần `frontend/src/features/disputes/returnShipmentMeta.ts` khỏi `ReturnShipmentCard.tsx` để vượt qua `react-refresh/only-export-components`.
+  - Gỡ bỏ `URL.createObjectURL` + `video.src` ở DOM trong `frontend/src/features/disputes/returnCaseApi.ts` để xử lý triệt để CodeQL Alert #20 (`js/xss-through-dom`), chuyển kiểm định định dạng/thời lượng video `<= 60s` sang backend (`VideoMetadataInspector.java`, fail-closed khi thiếu metadata hoặc vượt quá 60 giây).
+- **Kho bằng chứng riêng tư & V63 (`PublicMediaAccessGuard`, `EvidenceStorageService`, `V63__private_evidence_storage_map.sql`)**:
+  - Di chuyển upload/đọc bằng chứng tranh chấp, trả hàng, khiếu nại và Seller Vòng 2 sang kho riêng tư xác thực với `Cache-Control: private, no-store`; bảo toàn `og_compat.case_evidence` append-only (`V22`) bằng bảng ánh xạ `og_compat.evidence_storage_map` + danh sách chặn public URL `og_compat.evidence_blocked_public_keys`.
+  - Quy trình rollout: khóa truy cập public trước khi migrate file, hỗ trợ chạy lại idempotent (dọn bản public còn sót), và xóa cache proxy/CDN dùng chung (nếu có) cho `/api/v1/media/**` trước khi bật lưu lượng thật.
+  - Kiểm tra quyền sở hữu tệp upload theo actor khi gắn bằng chứng cho UC83, khiếu nại legacy và Seller Vòng 2.
+- **Mô phỏng giao nhận trả & Quyền / Giao dịch / Schema (`V64`)**:
+  - Siết `POST /api/v1/commerce/orders/{orderId}/dispute/return-delivered-simulate` về `@PreAuthorize("hasRole('ADMIN')")` với guard fail-closed (từ chối khi cờ tắt, guard vắng mặt hoặc `PROD`), gỡ nút mô phỏng khỏi `SellerOrderDetailView.tsx`.
+  - **PO-01 A**: giữ sàn ví xu 0đ không âm, không truy thu xu đã miễn; ném `DataAccessException` khi khóa đánh giá / ghi xu thất bại để rollback giao dịch, cô lập lỗi ghi thông báo bằng JDBC `Savepoint`.
+  - **PO-02 A**: giữ quy tắc Admin được chỉ định + lịch sử bàn giao; kiểm tra quyền KTV phụ trách (`assigned_to`) trước khi trả replay `commandKey`; đảm bảo tối đa 1 bồi thường/sự việc và cô lập thông báo qua JDBC `Savepoint`.
+  - `V64__dispute_cases_and_review_index.sql`: chuyển DDL runtime `og_compat.dispute_cases` sang Flyway, gỡ bỏ `DisputeRepository.ensureTablesExist()`, tách `PublicSellerProfileRepository` (`long offset`, `record_type = 'reviews'`) và `VoucherCompensationFacade`.
+- **Scheduler UC48 (PO-03 A Phương án 1) & Đồng bộ V58 / CSV**:
+  - Tách `Uc48ReminderScheduler` với `@ConditionalOnProperty(name = "app.scheduling.uc48-reminders.enabled", havingValue = "true", matchIfMissing = false)` (mặc định tắt); hồ sơ chưa phân công nhắc KTV trực theo `app.scheduling.uc48-reminders.on-duty-ktv-id` (mặc định `0` — bỏ qua hồ sơ chưa phân công và ghi `WARN`). Staging/Production phải bật `UC48_REMINDERS_ENABLED=true` và cấu hình `UC48_ON_DUTY_KTV_ID` > `0`.
+  - Bọc `JSON.parse` trong `frontend/src/features/disputes/caseEventMeta.ts` bằng `try/catch`.
+  - `PaymentService.recordUc83MockPaymentProof`: tính `SHIPPING_CASH` & `PLATFORM_SHIPPING_SUBSIDY` theo V58 (trừ/cộng `pointsShippingDiscountAmount`), truyền `allocation_id = NULL` cho các bút toán trợ giá `PLATFORM_*` và thực hiện T2 `DEBIT_CHECKOUT` + `discount_allocations` cho nhóm đơn thanh toán mô phỏng có dùng xu.
+  - `AdminDashboardService.escapeCsv`: chống CSV Formula Injection (`=`, `+`, `-`, `@`, `\t`, `\r`, kể cả sau khoảng trắng đầu chuỗi) và quote `\r`.
+
 ## Mở Rộng UC10 — Chặn Người Mua Theo Mức (Tin Nhắn / Mua Hàng / Cả Hai) & Tối Ưu Giao Diện Tin Nhắn — TASK-0127 / 2026-11-24
 
 - **Mục tiêu**:

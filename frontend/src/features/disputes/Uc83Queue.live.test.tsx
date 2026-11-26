@@ -15,6 +15,10 @@ it.skipIf(!process.env.OG_UI_R1)('claims and decides both rounds and registers t
   const fetchHttp = globalThis.fetch.bind(globalThis);
   let token = env.OG_UI_KTV;
   const claimStatuses: number[] = [];
+  vi.stubGlobal('URL', class extends URL {
+    static createObjectURL() { return 'blob:evidence-preview'; }
+    static revokeObjectURL() {}
+  });
   vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
     if (base.hostname !== '127.0.0.1' || new URL(url).origin !== base.origin) throw new Error('Unexpected origin');
     const headers = new Headers(init?.headers);

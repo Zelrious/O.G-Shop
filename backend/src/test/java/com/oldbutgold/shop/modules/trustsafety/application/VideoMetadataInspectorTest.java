@@ -139,14 +139,21 @@ class VideoMetadataInspectorTest {
                     .hasMessageContaining("60");
 
             // Video lacking duration metadata MUST be rejected rather than defaulting to 30s
-            MockMultipartFile missingMetadata = new MockMultipartFile("file", "nometa.mp4", "video/mp4", "not-real-mp4".getBytes(StandardCharsets.UTF_8));
+            byte[] ftypOnlyMp4 = new byte[16];
+            ByteBuffer.wrap(ftypOnlyMp4).putInt(16)
+                    .put("ftyp".getBytes(StandardCharsets.US_ASCII))
+                    .put("isom".getBytes(StandardCharsets.US_ASCII))
+                    .putInt(512);
+            MockMultipartFile missingMetadata = new MockMultipartFile("file", "nometa.mp4", "video/mp4", ftypOnlyMp4);
             assertThatThrownBy(() -> service.uploadReturnEvidence(10L, missingMetadata, "VIDEO", 15))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("metadata");
         } finally {
             for (String key : new String[]{mp4Key, webmKey}) {
                 if (key != null && key.contains("/")) {
-                    Files.deleteIfExists(java.nio.file.Paths.get("uploads/media", key.substring(key.lastIndexOf('/') + 1)));
+                    String filename = key.substring(key.lastIndexOf('/') + 1);
+                    Files.deleteIfExists(java.nio.file.Paths.get("uploads/media", filename));
+                    Files.deleteIfExists(java.nio.file.Paths.get("uploads/private-evidence", filename));
                 }
             }
         }

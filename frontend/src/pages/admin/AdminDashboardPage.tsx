@@ -94,12 +94,15 @@ export const AdminDashboardPage: React.FC = () => {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
 
   // UC81 Returns & Complaints report filters + snapshot state
+  const formatDateInHoChiMinh = (date: Date): string =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(date);
+
   const [reportFromDate, setReportFromDate] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
-    return d.toISOString().slice(0, 10);
+    return formatDateInHoChiMinh(d);
   });
-  const [reportToDate, setReportToDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [reportToDate, setReportToDate] = useState<string>(() => formatDateInHoChiMinh(new Date()));
   const [reportCaseType, setReportCaseType] = useState<'ALL' | 'RETURN' | 'SYSTEM_ISSUE'>('ALL');
   const [returnsReport, setReturnsReport] = useState<ReturnsReportResponse | null>(null);
   const [returnsReportLoading, setReturnsReportLoading] = useState<boolean>(false);

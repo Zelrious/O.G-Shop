@@ -231,11 +231,25 @@ public class AdminDashboardService {
         return result;
     }
 
-    private static String escapeCsv(String str) {
+    static String escapeCsv(String str) {
         if (str == null) return "";
-        if (str.contains(",") || str.contains("\"") || str.contains("\n")) {
-            return "\"" + str.replace("\"", "\"\"") + "\"";
+        String sanitized = str;
+        String trimmedStart = str.stripLeading();
+        if (!trimmedStart.isEmpty()) {
+            char firstChar = str.charAt(0);
+            char firstNonWhitespace = trimmedStart.charAt(0);
+            if (firstChar == '=' || firstChar == '+' || firstChar == '-' || firstChar == '@'
+                    || firstChar == '\t' || firstChar == '\r'
+                    || firstNonWhitespace == '=' || firstNonWhitespace == '+'
+                    || firstNonWhitespace == '-' || firstNonWhitespace == '@') {
+                sanitized = "'" + str;
+            }
+        } else if (!str.isEmpty() && (str.charAt(0) == '\t' || str.charAt(0) == '\r')) {
+            sanitized = "'" + str;
         }
-        return str;
+        if (sanitized.contains(",") || sanitized.contains("\"") || sanitized.contains("\n") || sanitized.contains("\r")) {
+            return "\"" + sanitized.replace("\"", "\"\"") + "\"";
+        }
+        return sanitized;
     }
 }

@@ -33,8 +33,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -315,99 +317,120 @@ class PrivateEvidenceStoragePostgresIntegrationTest {
     @Test
     @DisplayName("2. Lock-first legacy migration: keeps case_evidence append-only, handles shared files, cleans interrupted leftovers, blocks public URLs while keeping product media 200")
     void lockFirstLegacyMigrationPreservesAppendOnlyAndSharedAccess() throws Exception {
-        byte[] sharedBytes = minimalPngBytes();
-        byte[] interruptedBytes = minimalPngBytes();
-        byte[] productBytes = minimalPngBytes();
+        Set<String> preBlockedKeys = new HashSet<>(jdbcTemplate.queryForList(
+                "SELECT legacy_key FROM public.evidence_blocked_public_keys", String.class));
+        Set<String> preMappedKeys = new HashSet<>(jdbcTemplate.queryForList(
+                "SELECT legacy_key FROM public.evidence_storage_map", String.class));
+        try {
+            byte[] sharedBytes = minimalPngBytes();
+            byte[] interruptedBytes = minimalPngBytes();
+            byte[] productBytes = minimalPngBytes();
 
-        Path publicMediaDir = tempRoot.resolve("public-media");
-        Path privateEvidenceDir = tempRoot.resolve("storage-root").resolve("evidence");
-        Files.createDirectories(publicMediaDir);
-        Files.createDirectories(privateEvidenceDir);
+            Path publicMediaDir = tempRoot.resolve("public-media");
+            Path privateEvidenceDir = tempRoot.resolve("storage-root").resolve("evidence");
+            Files.createDirectories(publicMediaDir);
+            Files.createDirectories(privateEvidenceDir);
 
-        String sharedLegacyName = "legacy-shared-" + UUID.randomUUID() + ".png";
-        String sharedLegacyKey = "/api/v1/media/" + sharedLegacyName;
-        Files.write(publicMediaDir.resolve(sharedLegacyName), sharedBytes);
+            String sharedLegacyName = "legacy-shared-" + UUID.randomUUID() + ".png";
+            String sharedLegacyKey = "/api/v1/media/" + sharedLegacyName;
+            Files.write(publicMediaDir.resolve(sharedLegacyName), sharedBytes);
 
-        String interruptedLegacyName = "legacy-interrupted-" + UUID.randomUUID() + ".png";
-        String interruptedLegacyKey = "/api/v1/media/" + interruptedLegacyName;
-        String interruptedPrivateName = UUID.randomUUID() + ".png";
-        // Simulate interrupted run: private copy & mapping already exist, AND leftover public file is still on disk
-        Files.write(publicMediaDir.resolve(interruptedLegacyName), interruptedBytes);
-        Files.write(privateEvidenceDir.resolve(interruptedPrivateName), interruptedBytes);
-        jdbcTemplate.update(
-                "INSERT INTO public.evidence_blocked_public_keys(legacy_key) VALUES (?) ON CONFLICT (legacy_key) DO NOTHING",
-                interruptedLegacyKey);
-        jdbcTemplate.update(
-                "INSERT INTO public.evidence_storage_map(legacy_key, private_filename, sha256, size_bytes) VALUES (?, ?, ?, ?) ON CONFLICT (legacy_key) DO NOTHING",
-                interruptedLegacyKey, interruptedPrivateName, sha256Hex(interruptedBytes), interruptedBytes.length);
+            String interruptedLegacyName = "legacy-interrupted-" + UUID.randomUUID() + ".png";
+            String interruptedLegacyKey = "/api/v1/media/" + interruptedLegacyName;
+            String interruptedPrivateName = UUID.randomUUID() + ".png";
+            // Simulate interrupted run: private copy & mapping already exist, AND leftover public file is still on disk
+            Files.write(publicMediaDir.resolve(interruptedLegacyName), interruptedBytes);
+            Files.write(privateEvidenceDir.resolve(interruptedPrivateName), interruptedBytes);
+            jdbcTemplate.update(
+                    "INSERT INTO public.evidence_blocked_public_keys(legacy_key) VALUES (?) ON CONFLICT (legacy_key) DO NOTHING",
+                    interruptedLegacyKey);
+            jdbcTemplate.update(
+                    "INSERT INTO public.evidence_storage_map(legacy_key, private_filename, sha256, size_bytes) VALUES (?, ?, ?, ?) ON CONFLICT (legacy_key) DO NOTHING",
+                    interruptedLegacyKey, interruptedPrivateName, sha256Hex(interruptedBytes), interruptedBytes.length);
 
-        String productPublicName = UUID.randomUUID() + ".png";
-        Files.write(publicMediaDir.resolve(productPublicName), productBytes);
+            String productPublicName = UUID.randomUUID() + ".png";
+            Files.write(publicMediaDir.resolve(productPublicName), productBytes);
 
-        // Two distinct cases (A & B) referencing the SAME shared legacy evidence key
-        Long buyerA = createUserInNewTx("buyerA");
-        Long sellerA = createUserInNewTx("sellerA");
-        Long buyerB = createUserInNewTx("buyerB");
-        Long sellerB = createUserInNewTx("sellerB");
+            // Two distinct cases (A & B) referencing the SAME shared legacy evidence key
+            Long buyerA = createUserInNewTx("buyerA");
+            Long sellerA = createUserInNewTx("sellerA");
+            Long buyerB = createUserInNewTx("buyerB");
+            Long sellerB = createUserInNewTx("sellerB");
 
-        Long caseA = createCaseWithDirectLegacyEvidence(buyerA, sellerA, List.of(sharedLegacyKey, interruptedLegacyKey));
-        Long caseB = createCaseWithDirectLegacyEvidence(buyerB, sellerB, List.of(sharedLegacyKey));
+            Long caseA = createCaseWithDirectLegacyEvidence(buyerA, sellerA, List.of(sharedLegacyKey, interruptedLegacyKey));
+            Long caseB = createCaseWithDirectLegacyEvidence(buyerB, sellerB, List.of(sharedLegacyKey));
 
-        // Lock-first test: even BEFORE migrate moves sharedLegacyName, blocking its key makes /api/v1/media/<name> return 404 while copy is still on disk
-        jdbcTemplate.update(
-                "INSERT INTO public.evidence_blocked_public_keys(legacy_key) VALUES (?) ON CONFLICT (legacy_key) DO NOTHING",
-                sharedLegacyKey);
-        assertThat(Files.exists(publicMediaDir.resolve(sharedLegacyName))).isTrue();
-        mockMvc.perform(get(sharedLegacyKey))
-                .andExpect(status().isNotFound());
+            // Lock-first test: even BEFORE migrate moves sharedLegacyName, blocking its key makes /api/v1/media/<name> return 404 while copy is still on disk
+            jdbcTemplate.update(
+                    "INSERT INTO public.evidence_blocked_public_keys(legacy_key) VALUES (?) ON CONFLICT (legacy_key) DO NOTHING",
+                    sharedLegacyKey);
+            assertThat(Files.exists(publicMediaDir.resolve(sharedLegacyName))).isTrue();
+            mockMvc.perform(get(sharedLegacyKey))
+                    .andExpect(status().isNotFound());
 
-        // Execute migration (handles sharedLegacyName move + cleans leftover interruptedLegacyName)
-        EvidenceStorageService.LegacyMigrationReport report = evidenceStorageService.migrateLegacyEvidenceFiles();
-        assertThat(report.migratedCount()).isGreaterThanOrEqualTo(1);
-        assertThat(report.cleanedDuplicateCount()).isGreaterThanOrEqualTo(1);
+            // Execute migration (handles sharedLegacyName move + cleans leftover interruptedLegacyName)
+            EvidenceStorageService.LegacyMigrationReport report = evidenceStorageService.migrateLegacyEvidenceFiles();
+            assertThat(report.migratedCount()).isGreaterThanOrEqualTo(1);
+            assertThat(report.cleanedDuplicateCount()).isGreaterThanOrEqualTo(1);
 
-        // Leftover and migrated public files removed
-        assertThat(Files.exists(publicMediaDir.resolve(sharedLegacyName))).isFalse();
-        assertThat(Files.exists(publicMediaDir.resolve(interruptedLegacyName))).isFalse();
+            // Leftover and migrated public files removed
+            assertThat(Files.exists(publicMediaDir.resolve(sharedLegacyName))).isFalse();
+            assertThat(Files.exists(publicMediaDir.resolve(interruptedLegacyName))).isFalse();
 
-        // Public product image STILL 200 OK
-        mockMvc.perform(get("/api/v1/media/" + productPublicName))
-                .andExpect(status().isOk());
+            // Public product image STILL 200 OK
+            mockMvc.perform(get("/api/v1/media/" + productPublicName))
+                    .andExpect(status().isOk());
 
-        // Even if a stale copy is restored to publicMediaDir (or exists in CDN/disk), public /api/v1/media/** remains 404
-        Files.write(publicMediaDir.resolve(sharedLegacyName), sharedBytes);
-        mockMvc.perform(get(sharedLegacyKey))
-                .andExpect(status().isNotFound());
+            // Even if a stale copy is restored to publicMediaDir (or exists in CDN/disk), public /api/v1/media/** remains 404
+            Files.write(publicMediaDir.resolve(sharedLegacyName), sharedBytes);
+            mockMvc.perform(get(sharedLegacyKey))
+                    .andExpect(status().isNotFound());
 
-        // og_compat.case_evidence was NEVER mutated (V22 append-only preserved)
-        Integer legacyCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM og_compat.case_evidence WHERE object_key = ?",
-                Integer.class, sharedLegacyKey);
-        assertThat(legacyCount).isEqualTo(2);
+            // og_compat.case_evidence was NEVER mutated (V22 append-only preserved)
+            Integer legacyCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM og_compat.case_evidence WHERE object_key = ?",
+                    Integer.class, sharedLegacyKey);
+            assertThat(legacyCount).isEqualTo(2);
 
-        // Read-time translation in case detail returns private /api/v1/trustsafety/returns/evidence/... URL
-        ReturnCaseDtos.ReturnCaseDetailResponse detailA = returnCaseService.getReturnCaseById(buyerA, caseA);
-        String translatedSharedUrl = detailA.evidence().stream()
-                .map(ReturnCaseDtos.CaseEvidenceDto::objectKey)
-                .filter(k -> k != null && k.startsWith(EvidenceStorageService.PRIVATE_EVIDENCE_PREFIX) && !k.endsWith(interruptedPrivateName))
-                .findFirst()
-                .orElseThrow();
+            // Read-time translation in case detail returns private /api/v1/trustsafety/returns/evidence/... URL
+            ReturnCaseDtos.ReturnCaseDetailResponse detailA = returnCaseService.getReturnCaseById(buyerA, caseA);
+            String translatedSharedUrl = detailA.evidence().stream()
+                    .map(ReturnCaseDtos.CaseEvidenceDto::objectKey)
+                    .filter(k -> k != null && k.startsWith(EvidenceStorageService.PRIVATE_EVIDENCE_PREFIX) && !k.endsWith(interruptedPrivateName))
+                    .findFirst()
+                    .orElseThrow();
 
-        ReturnCaseDtos.ReturnCaseDetailResponse detailB = returnCaseService.getReturnCaseById(buyerB, caseB);
-        assertThat(detailB.evidence()).anyMatch(e -> translatedSharedUrl.equals(e.objectKey()));
+            ReturnCaseDtos.ReturnCaseDetailResponse detailB = returnCaseService.getReturnCaseById(buyerB, caseB);
+            assertThat(detailB.evidence()).anyMatch(e -> translatedSharedUrl.equals(e.objectKey()));
 
-        // All authorized parties from BOTH case A and case B can fetch the shared private evidence; unrelated user is 403
-        mockMvc.perform(get(translatedSharedUrl).with(userJwt(buyerA, "ROLE_BUYER")))
-                .andExpect(status().isOk())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "private, no-store"));
-        mockMvc.perform(get(translatedSharedUrl).with(userJwt(sellerA, "ROLE_SELLER")))
-                .andExpect(status().isOk());
-        mockMvc.perform(get(translatedSharedUrl).with(userJwt(buyerB, "ROLE_BUYER")))
-                .andExpect(status().isOk());
-        mockMvc.perform(get(translatedSharedUrl).with(userJwt(sellerB, "ROLE_SELLER")))
-                .andExpect(status().isOk());
-        mockMvc.perform(get(translatedSharedUrl).with(userJwt(unrelatedUserId, "ROLE_BUYER")))
-                .andExpect(status().isForbidden());
+            // All authorized parties from BOTH case A and case B can fetch the shared private evidence; unrelated user is 403
+            mockMvc.perform(get(translatedSharedUrl).with(userJwt(buyerA, "ROLE_BUYER")))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "private, no-store"));
+            mockMvc.perform(get(translatedSharedUrl).with(userJwt(sellerA, "ROLE_SELLER")))
+                    .andExpect(status().isOk());
+            mockMvc.perform(get(translatedSharedUrl).with(userJwt(buyerB, "ROLE_BUYER")))
+                    .andExpect(status().isOk());
+            mockMvc.perform(get(translatedSharedUrl).with(userJwt(sellerB, "ROLE_SELLER")))
+                    .andExpect(status().isOk());
+            mockMvc.perform(get(translatedSharedUrl).with(userJwt(unrelatedUserId, "ROLE_BUYER")))
+                    .andExpect(status().isForbidden());
+        } finally {
+            List<String> afterBlockedKeys = jdbcTemplate.queryForList(
+                    "SELECT legacy_key FROM public.evidence_blocked_public_keys", String.class);
+            for (String key : afterBlockedKeys) {
+                if (!preBlockedKeys.contains(key)) {
+                    jdbcTemplate.update("DELETE FROM public.evidence_blocked_public_keys WHERE legacy_key = ?", key);
+                }
+            }
+            List<String> afterMappedKeys = jdbcTemplate.queryForList(
+                    "SELECT legacy_key FROM public.evidence_storage_map", String.class);
+            for (String key : afterMappedKeys) {
+                if (!preMappedKeys.contains(key)) {
+                    jdbcTemplate.update("DELETE FROM public.evidence_storage_map WHERE legacy_key = ?", key);
+                }
+            }
+        }
     }
 
     private org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor userJwt(
