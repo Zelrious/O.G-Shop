@@ -1,13 +1,17 @@
 package com.oldbutgold.shop.modules.trustsafety.application;
 
 import com.oldbutgold.shop.modules.commerce.application.CommerceDisputeFacade;
+import com.oldbutgold.shop.modules.commerce.application.FulfillmentSimulationGuard;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderEntity;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderRepository;
 import com.oldbutgold.shop.modules.trustsafety.api.DisputeDtos.*;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.DisputeRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.NoSuchElementException;
 
@@ -19,6 +23,7 @@ public class BuyerDisputeService {
     private final OrderRepository orderRepository;
     private final CommerceDisputeFacade commerceDisputeFacade;
     private EvidenceStorageService evidenceStorageService;
+    private FulfillmentSimulationGuard simulationGuard;
 
     public BuyerDisputeService(
             DisputeRepository disputeRepository,
@@ -30,9 +35,14 @@ public class BuyerDisputeService {
         this.commerceDisputeFacade = commerceDisputeFacade;
     }
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @Autowired(required = false)
     public void setEvidenceStorageService(EvidenceStorageService evidenceStorageService) {
         this.evidenceStorageService = evidenceStorageService;
+    }
+
+    @Autowired(required = false)
+    public void setSimulationGuard(FulfillmentSimulationGuard simulationGuard) {
+        this.simulationGuard = simulationGuard;
     }
 
     public DisputeDetailDto createDispute(long buyerId, CreateDisputeRequest request) {
@@ -197,12 +207,20 @@ public class BuyerDisputeService {
     }
 
     public DisputeDetailDto confirmReturnDelivered(long actorId, long orderId) {
+        return confirmReturnDelivered(actorId, orderId, false);
+    }
+
+    public DisputeDetailDto confirmReturnDelivered(long actorId, long orderId, boolean isAdmin) {
+        if (!isAdmin) {
+            throw new AccessDeniedException("Chỉ Quản trị viên (ADMIN) trong môi trường kiểm thử mới có quyền mô phỏng giao hàng hoàn trả.");
+        }
+        if (simulationGuard == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "FORBIDDEN_SIMULATION_IN_PRODUCTION");
+        }
+        simulationGuard.ensureSimulationAllowed();
+
         OrderEntity order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
-
-        if (!order.getSellerId().equals(actorId) && !order.getBuyerId().equals(actorId)) {
-            throw new AccessDeniedException("Bạn không có quyền xác nhận giao hàng hoàn trả cho đơn hàng này.");
-        }
 
         DisputeDetailDto dispute = disputeRepository.findDisputeByOrderId(orderId)
                 .orElseThrow(() -> new NoSuchElementException("Đơn hàng #" + orderId + " chưa có hồ sơ tranh chấp."));

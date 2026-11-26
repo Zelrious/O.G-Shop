@@ -5,11 +5,15 @@ import com.oldbutgold.shop.modules.trustsafety.api.DisputeDtos.*;
 import com.oldbutgold.shop.modules.trustsafety.application.BuyerDisputeService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/v1/commerce/orders")
@@ -78,19 +82,25 @@ public class OrderDisputeController {
     }
 
     /**
-     * DEV/TEST-ONLY simulation endpoint to mark return shipment as RETURN_DELIVERED.
-     * Strictly does NOT complete refund settlement or mark the order REFUNDED.
+     * DEV/TEST-ONLY ADMIN simulation endpoint to mark return shipment as RETURN_DELIVERED.
+     * Strictly fails closed when simulationGuard is missing, simulation is disabled, or environment is PROD.
+     * Does NOT complete refund settlement or mark the order REFUNDED.
      */
     @PostMapping("/{orderId}/dispute/return-delivered-simulate")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<DisputeDetailDto> simulateReturnDelivered(
             @AuthenticationPrincipal Jwt jwt,
+            Authentication authentication,
             @PathVariable Long orderId
     ) {
-        if (simulationGuard != null) {
-            simulationGuard.ensureSimulationAllowed();
+        if (simulationGuard == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "FORBIDDEN_SIMULATION_IN_PRODUCTION");
         }
+        simulationGuard.ensureSimulationAllowed();
         long actorId = extractUserId(jwt);
-        return ResponseEntity.ok(buyerDisputeService.confirmReturnDelivered(actorId, orderId));
+        boolean isAdmin = authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+        return ResponseEntity.ok(buyerDisputeService.confirmReturnDelivered(actorId, orderId, isAdmin));
     }
 
     @PostMapping("/{orderId}/dispute/confirm-return-received")

@@ -42,7 +42,6 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviews, setReviews] = useState<OrderReviewsResponse | null>(null);
   const [dispute, setDispute] = useState<DisputeDetail | null>(null);
-  const [simulatingReturnDelivery, setSimulatingReturnDelivery] = useState(false);
   const [confirmingReturn, setConfirmingReturn] = useState(false);
   const [shipmentNote, setShipmentNote] = useState('Cho xem hàng không cho thử');
   const [creatingShipment, setCreatingShipment] = useState(false);
@@ -635,41 +634,6 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
                           </div>
                         )}
                       </div>
-
-                      {dispute.returnShipmentStatus === 'RETURN_SHIPPING' && isSimulationAllowed && (
-                        <button
-                          type="button"
-                          disabled={simulatingReturnDelivery}
-                          onClick={async () => {
-                            if (!window.confirm(`[TEST DEMO] Mô phỏng GHN đã giao kiện hàng hoàn trả (${dispute.returnTrackingCode}) tới kho của bạn? (Chỉ chuyển sang RETURN_DELIVERED, chưa tự hoàn tiền)`)) {
-                              return;
-                            }
-                            setSimulatingReturnDelivery(true);
-                            try {
-                              const updated = await disputeApi.simulateReturnDelivered(order.orderId);
-                              setDispute(updated);
-                            } catch (err) {
-                              alert(err instanceof Error ? err.message : 'Không thể mô phỏng giao hàng hoàn trả.');
-                            } finally {
-                              setSimulatingReturnDelivery(false);
-                            }
-                          }}
-                          style={{
-                            width: '100%',
-                            padding: '10px 16px',
-                            background: '#fef3c7',
-                            border: '1px dashed #d97706',
-                            color: '#92400e',
-                            borderRadius: 8,
-                            fontWeight: 700,
-                            cursor: simulatingReturnDelivery ? 'not-allowed' : 'pointer',
-                          }}
-                        >
-                          {simulatingReturnDelivery
-                            ? 'Đang mô phỏng giao trả...'
-                            : '[Test] Mô phỏng GHN giao hàng hoàn trả thành công (RETURN_DELIVERED)'}
-                        </button>
-                      )}
 
                       {dispute.returnShipmentStatus === 'RETURN_DELIVERED' && (
                         <button

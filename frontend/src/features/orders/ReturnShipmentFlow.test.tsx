@@ -4,10 +4,20 @@ import { MemoryRouter } from 'react-router-dom';
 import { resolveOutboundGhnDisplayStatus, type TrackingResponse } from '../fulfillment/fulfillmentApi';
 import { buildOrderTimelineSteps } from './orderTimeline';
 import { ReturnShipmentCard } from '../disputes/ReturnShipmentCard';
+import { SellerOrderDetailView } from './components/SellerOrderDetailView';
 import { SellerOrdersView } from './components/SellerOrdersView';
+import { disputeApi } from '../disputes/disputeApi';
 import { ordersApi } from './ordersApi';
 import type { OrderDetail } from './types';
 import type { DisputeDetail } from '../disputes/types';
+
+vi.mock('../disputes/disputeApi', () => ({
+  disputeApi: {
+    getDisputeByOrder: vi.fn(),
+    confirmReturnReceived: vi.fn(),
+    simulateReturnDelivered: vi.fn(),
+  },
+}));
 
 vi.mock('./ordersApi', () => ({
   ordersApi: {
@@ -299,5 +309,27 @@ describe('Scope E: SellerOrdersView DISPUTED and REFUNDED tabs', () => {
     await waitFor(() => {
       expect(ordersApi.getSellerOrders).toHaveBeenCalledWith('REFUNDED', 0, 10);
     });
+  });
+
+  it('does not render return-delivered simulation button on SellerOrderDetailView even in RETURN_SHIPPING', async () => {
+    vi.mocked(ordersApi.getSellerOrderDetail).mockResolvedValue(baseOrder);
+    vi.mocked(ordersApi.getTracking).mockResolvedValue(baseTracking);
+    vi.mocked(disputeApi.getDisputeByOrder).mockResolvedValue({
+      ...baseDispute,
+      returnShipmentStatus: 'RETURN_SHIPPING',
+      returnHandedOverAt: '2026-11-24T11:00:00Z',
+    });
+
+    render(
+      <MemoryRouter>
+        <SellerOrderDetailView orderId={baseOrder.orderId} />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('GHN-RET-501-TEST01').length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByRole('button', { name: /Mô phỏng GHN giao hàng hoàn trả/i })).toBeNull();
+    expect(disputeApi.simulateReturnDelivered).not.toHaveBeenCalled();
   });
 });

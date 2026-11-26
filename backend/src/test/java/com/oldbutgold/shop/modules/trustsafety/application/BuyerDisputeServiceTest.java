@@ -1,6 +1,7 @@
 package com.oldbutgold.shop.modules.trustsafety.application;
 
 import com.oldbutgold.shop.modules.commerce.application.CommerceDisputeFacade;
+import com.oldbutgold.shop.modules.commerce.application.FulfillmentSimulationGuard;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderEntity;
 import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderRepository;
 import com.oldbutgold.shop.modules.trustsafety.api.DisputeDtos.*;
@@ -313,7 +314,7 @@ class BuyerDisputeServiceTest {
     }
 
     @Test
-    @DisplayName("confirmReturnDelivered: Chuyển RETURN_SHIPPING -> RETURN_DELIVERED và KHÔNG tự động hoàn tiền")
+    @DisplayName("confirmReturnDelivered: Chặn Buyer/Seller tự mô phỏng và fail-closed khi thiếu guard; Admin hợp lệ chuyển RETURN_SHIPPING -> RETURN_DELIVERED và KHÔNG tự hoàn tiền")
     void testConfirmReturnDeliveredDoesNotAutoRefund() {
         long orderId = 100L;
         OrderEntity order = createSampleOrder(orderId, 201L, 301L, OrderEntity.STATUS_DISPUTED);
@@ -326,7 +327,24 @@ class BuyerDisputeServiceTest {
         DisputeDetailDto delivered = createReturnDispute(1L, orderId, "RETURN_APPROVED", "GHN-RET-100-XYZ", "RETURN_DELIVERED", NOW, NOW);
         when(disputeRepository.findDisputeById(1L)).thenReturn(Optional.of(delivered));
 
-        DisputeDetailDto result = service.confirmReturnDelivered(301L, orderId);
+        // 1. Fail-closed when simulationGuard is absent
+        assertThatThrownBy(() -> service.confirmReturnDelivered(999L, orderId, true))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+
+        // 2. Fail-closed when flag is disabled or PROD
+        service.setSimulationGuard(new FulfillmentSimulationGuard("PROD", true));
+        assertThatThrownBy(() -> service.confirmReturnDelivered(999L, orderId, true))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+
+        // 3. Buyer & Seller cannot self-simulate even when flag is enabled
+        service.setSimulationGuard(new FulfillmentSimulationGuard("DEV", true));
+        assertThatThrownBy(() -> service.confirmReturnDelivered(201L, orderId, false))
+                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> service.confirmReturnDelivered(301L, orderId, false))
+                .isInstanceOf(AccessDeniedException.class);
+
+        // 4. Admin succeeds when DEV + simulationEnabled = true
+        DisputeDetailDto result = service.confirmReturnDelivered(999L, orderId, true);
 
         assertThat(result.returnShipmentStatus()).isEqualTo("RETURN_DELIVERED");
         assertThat(result.status()).isEqualTo("RETURN_APPROVED");
