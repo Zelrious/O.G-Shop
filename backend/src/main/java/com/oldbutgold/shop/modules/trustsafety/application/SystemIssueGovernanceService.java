@@ -32,6 +32,7 @@ public class SystemIssueGovernanceService {
     private final VoucherWalletRepository voucherWalletRepository;
     private final JdbcTemplate jdbc;
     private final EntityManager entityManager;
+    private EvidenceStorageService evidenceStorageService;
     private Clock clock = Clock.systemUTC();
 
     @Autowired
@@ -59,6 +60,11 @@ public class SystemIssueGovernanceService {
 
     public void setClock(Clock clock) {
         this.clock = clock;
+    }
+
+    @Autowired(required = false)
+    public void setEvidenceStorageService(EvidenceStorageService evidenceStorageService) {
+        this.evidenceStorageService = evidenceStorageService;
     }
 
     @Transactional(readOnly = true)
@@ -192,13 +198,16 @@ public class SystemIssueGovernanceService {
         if (request.evidenceList() != null && !request.evidenceList().isEmpty()) {
             for (ReturnCaseDtos.EvidenceItemDto item : request.evidenceList()) {
                 if (item == null || item.mediaType() == null) continue;
+                String resolvedKey = evidenceStorageService != null
+                        ? evidenceStorageService.verifyAttachmentOwnershipAndResolve(actorId, item.objectKey())
+                        : item.objectKey();
                 CaseEvidenceEntity ev = new CaseEvidenceEntity(
                         UUID.randomUUID(),
                         savedRound.getId(),
                         actorId,
                         1,
                         item.mediaType().trim().toUpperCase(),
-                        item.objectKey(),
+                        resolvedKey,
                         item.textContent(),
                         item.contentDigest(),
                         item.fileSizeBytes(),
@@ -825,7 +834,9 @@ public class SystemIssueGovernanceService {
                 caseEvidenceRepository.findByRoundIdAndDeletedAtIsNullOrderBySubmittedAtAsc(latestRound.getId()).stream()
                         .map(e -> new ReturnCaseDtos.CaseEvidenceDto(
                                 e.getId(), e.getRoundId(), e.getSubmittedBy(), e.getSubmissionNo(),
-                                e.getMediaType(), e.getObjectKey(), e.getTextContent(),
+                                e.getMediaType(),
+                                evidenceStorageService != null ? evidenceStorageService.toPrivateEvidenceUrl(e.getObjectKey()) : e.getObjectKey(),
+                                e.getTextContent(),
                                 e.getFileSizeBytes(), e.getDurationSeconds(), e.getSubmittedAt()
                         )).toList();
         List<ReturnCaseDtos.CaseDecisionPublicDto> decList = latestRound == null ? List.of() :

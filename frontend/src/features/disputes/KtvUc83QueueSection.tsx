@@ -1,4 +1,5 @@
-import { resolveReturnMediaUrl } from './mediaUrl';
+import { PrivateEvidenceLink } from './PrivateEvidenceMedia';
+import { isPrivateEvidenceKey } from './privateEvidenceUrl';
 import React, { useCallback, useEffect, useState } from 'react';
 import { AdminAssigneeOption, ReturnCaseDetail, returnCaseApi } from './returnCaseApi';
 
@@ -187,7 +188,7 @@ export const KtvUc83QueueSection: React.FC = () => {
           </div>
           <p>{selectedCase.fullDescription || selectedCase.cleanDescription}</p>
           {selectedCase.returnShipment && <p>Vận đơn trả · {selectedCase.returnShipment.deliveryMethod} · {selectedCase.returnShipment.trackingNumber || 'Giao nhận trực tiếp'}</p>}
-          {selectedCase.evidence?.map(item => <p key={item.evidenceId}>{item.objectKey?.startsWith('/api/v1/media/') ? <a href={resolveReturnMediaUrl(item.objectKey)} target="_blank" rel="noreferrer">Xem {item.mediaType === 'VIDEO' ? 'video' : 'ảnh'} bằng chứng</a> : item.textContent || item.mediaType}</p>)}
+          {selectedCase.evidence?.map(item => <p key={item.evidenceId}>{(isPrivateEvidenceKey(item.objectKey) || item.objectKey?.startsWith('/api/v1/media/')) ? <PrivateEvidenceLink objectKey={item.objectKey!} label={`Xem ${item.mediaType === 'VIDEO' ? 'video' : 'ảnh'} bằng chứng`} /> : item.textContent || item.mediaType}</p>)}
           <textarea
             rows={2}
             placeholder="Nhập lý do / nội dung yêu cầu (tối thiểu 10 ký tự khi yêu cầu bổ sung bằng chứng)..."

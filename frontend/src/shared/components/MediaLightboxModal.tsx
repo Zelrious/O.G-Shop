@@ -1,5 +1,8 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { authApi } from '../../features/auth';
+import { resolveReturnMediaUrl } from '../../features/disputes/mediaUrl';
+import { extractAuthorizedFetchPath, isPrivateEvidenceKey } from '../../features/disputes/privateEvidenceUrl';
 
 export interface MediaLightboxModalProps {
   isOpen: boolean;
@@ -21,8 +24,11 @@ export const MediaLightboxModal: React.FC<MediaLightboxModalProps> = ({
   const [zoom, setZoom] = useState<number>(1);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [privateBlobUrl, setPrivateBlobUrl] = useState<string | null>(null);
+  const [privateLoadError, setPrivateLoadError] = useState<boolean>(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const hasMovedRef = useRef<boolean>(false);
+  const isPrivateSrc = isPrivateEvidenceKey(src);
 
   // Reset zoom and pan when modal opens or src changes
   useEffect(() => {
@@ -32,6 +38,33 @@ export const MediaLightboxModal: React.FC<MediaLightboxModalProps> = ({
       setIsDragging(false);
     }
   }, [isOpen, src]);
+
+  useEffect(() => {
+    if (!isOpen || !src || !isPrivateSrc) {
+      setPrivateBlobUrl(null);
+      setPrivateLoadError(false);
+      return;
+    }
+    let active = true;
+    let created: string | null = null;
+    setPrivateLoadError(false);
+    authApi.authorizedFetch(extractAuthorizedFetchPath(src))
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        if (active) {
+          created = URL.createObjectURL(blob);
+          setPrivateBlobUrl(created);
+        }
+      })
+      .catch(() => {
+        if (active) setPrivateLoadError(true);
+      });
+    return () => {
+      active = false;
+      if (created) URL.revokeObjectURL(created);
+    };
+  }, [isOpen, src, isPrivateSrc]);
 
   // Handle ESC key to close modal & +, -, 0 keys to zoom
   useEffect(() => {
@@ -113,7 +146,8 @@ export const MediaLightboxModal: React.FC<MediaLightboxModalProps> = ({
 
   if (!isOpen || !src) return null;
 
-  const isVideo = type === 'VIDEO' || src.endsWith('.mp4');
+  const isVideo = type === 'VIDEO' || src.endsWith('.mp4') || src.endsWith('.webm');
+  const resolvedSrc = isPrivateSrc ? privateBlobUrl : resolveReturnMediaUrl(src);
 
   return createPortal(
     <div
@@ -314,7 +348,11 @@ export const MediaLightboxModal: React.FC<MediaLightboxModalProps> = ({
           }
         }}
       >
-        {isVideo ? (
+        {privateLoadError || !resolvedSrc ? (
+          <div style={{ color: '#e2e8f0', fontSize: '0.95rem', padding: 24 }}>
+            {privateLoadError ? 'Không tải được tệp bằng chứng được bảo vệ.' : 'Đang tải tệp bằng chứng...'}
+          </div>
+        ) : isVideo ? (
           <div
             style={{
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
@@ -328,7 +366,7 @@ export const MediaLightboxModal: React.FC<MediaLightboxModalProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             <video
-              src={src}
+              src={resolvedSrc}
               controls
               autoPlay
               playsInline
@@ -344,7 +382,7 @@ export const MediaLightboxModal: React.FC<MediaLightboxModalProps> = ({
           </div>
         ) : (
           <img
-            src={src}
+            src={resolvedSrc}
             alt={alt}
             draggable={false}
             onClick={(e) => {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { disputeApi } from './disputeApi';
-import { resolveReturnMediaUrl } from './mediaUrl';
+import { PrivateEvidenceImage } from './PrivateEvidenceMedia';
 import { returnCaseApi } from './returnCaseApi';
 
 interface SellerDisputeResponseModalProps {
@@ -33,8 +33,8 @@ export const SellerDisputeResponseModal: React.FC<SellerDisputeResponseModalProp
     try {
       for (const file of Array.from(files)) {
         const dto = await returnCaseApi.uploadEvidence(file, 'IMAGE');
-        const resolvedUrl = resolveReturnMediaUrl(dto.objectKey || '');
-        setEvidenceInput((prev) => (prev.trim() ? `${prev.trim()}\n${resolvedUrl}` : resolvedUrl));
+        const key = dto.objectKey || '';
+        setEvidenceInput((prev) => (prev.trim() ? `${prev.trim()}\n${key}` : key));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tải ảnh bằng chứng lên.');
@@ -202,9 +202,9 @@ export const SellerDisputeResponseModal: React.FC<SellerDisputeResponseModalProp
                   .map((s) => s.trim())
                   .filter(Boolean)
                   .map((url, idx) => (
-                    <img
+                    <PrivateEvidenceImage
                       key={`${url}-${idx}`}
-                      src={resolveReturnMediaUrl(url)}
+                      objectKey={url}
                       alt={`Bằng chứng đóng gói #${idx + 1}`}
                       style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid #cbd5e1' }}
                     />

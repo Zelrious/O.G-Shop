@@ -13,6 +13,7 @@ import {
 import { formatVnd } from '../../shared/utils/currency';
 import { useManagementStore } from '../../features/management/useManagementStore';
 import { disputeApi } from '../../features/disputes/disputeApi';
+import { PrivateEvidenceImage, PrivateEvidenceVideo } from '../../features/disputes/PrivateEvidenceMedia';
 import type { DisputeDetail, DisputeVerdictAction } from '../../features/disputes/types';
 
 interface UnifiedDisputeItem {
@@ -930,9 +931,8 @@ export const KtvDisputesPage: React.FC = () => {
                   </div>
                   {selectedDispute.videoUnboxingUrl ? (
                     <div style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--og-color-border)', background: '#000' }}>
-                      <video
-                        src={selectedDispute.videoUnboxingUrl}
-                        controls
+                      <PrivateEvidenceVideo
+                        objectKey={selectedDispute.videoUnboxingUrl}
                         style={{ width: '100%', maxHeight: '180px', display: 'block' }}
                       />
                       <button
@@ -991,8 +991,8 @@ export const KtvDisputesPage: React.FC = () => {
                             background: '#000',
                           }}
                         >
-                          <img
-                            src={url}
+                          <PrivateEvidenceImage
+                            objectKey={url}
                             alt={`Bằng chứng người mua ${idx + 1}`}
                             style={{ width: '56px', height: '56px', objectFit: 'cover', display: 'block' }}
                           />
@@ -1043,8 +1043,8 @@ export const KtvDisputesPage: React.FC = () => {
                             background: '#000',
                           }}
                         >
-                          <img
-                            src={url}
+                          <PrivateEvidenceImage
+                            objectKey={url}
                             alt={`Ảnh đóng gói ${idx + 1}`}
                             style={{ width: '64px', height: '64px', objectFit: 'cover', display: 'block' }}
                           />

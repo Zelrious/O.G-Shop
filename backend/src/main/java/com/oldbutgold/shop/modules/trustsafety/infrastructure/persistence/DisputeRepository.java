@@ -20,10 +20,16 @@ public class DisputeRepository {
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json = new ObjectMapper();
+    private com.oldbutgold.shop.modules.trustsafety.application.EvidenceStorageService evidenceStorageService;
 
     public DisputeRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
         ensureTablesExist();
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setEvidenceStorageService(com.oldbutgold.shop.modules.trustsafety.application.EvidenceStorageService evidenceStorageService) {
+        this.evidenceStorageService = evidenceStorageService;
     }
 
     private void ensureTablesExist() {
@@ -514,6 +520,11 @@ public class DisputeRepository {
         String videoUnboxingUrl = rs.getString("video_unboxing_url");
         String sellerResponse = rs.getString("seller_response");
         List<String> sellerEvidenceUrls = deserializeList(rs.getString("seller_evidence_urls"));
+        if (evidenceStorageService != null) {
+            buyerEvidenceUrls = evidenceStorageService.toPrivateEvidenceUrls(buyerEvidenceUrls);
+            videoUnboxingUrl = evidenceStorageService.toPrivateEvidenceUrl(videoUnboxingUrl);
+            sellerEvidenceUrls = evidenceStorageService.toPrivateEvidenceUrls(sellerEvidenceUrls);
+        }
         Instant sellerResponseDueAt = getInstant(rs, "seller_response_due_at");
         String status = rs.getString("status");
         String verdictAction = rs.getString("verdict_action");

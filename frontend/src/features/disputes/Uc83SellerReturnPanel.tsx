@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { resolveReturnMediaUrl } from './mediaUrl';
+import { PrivateEvidenceLink } from './PrivateEvidenceMedia';
 import { returnCaseApi, type ReturnEvidenceItemInput, ReturnCaseDetail } from './returnCaseApi';
 
 interface Uc83SellerReturnPanelProps {
@@ -239,7 +239,7 @@ export const Uc83SellerReturnPanel: React.FC<Uc83SellerReturnPanelProps> = ({
                 </label>
               </div>
               {exemptEvidence?.objectKey && (
-                <a href={resolveReturnMediaUrl(exemptEvidence.objectKey)} target="_blank" rel="noreferrer">Xem trước bằng chứng miễn hoàn</a>
+                <PrivateEvidenceLink objectKey={exemptEvidence.objectKey} label="Xem trước bằng chứng miễn hoàn" />
               )}
               <button
                 type="button"

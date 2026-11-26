@@ -1,6 +1,8 @@
 package com.oldbutgold.shop.modules.catalog.api;
 
 import com.oldbutgold.shop.modules.catalog.application.MediaStorageService;
+import com.oldbutgold.shop.shared.storage.PublicMediaAccessGuard;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
@@ -21,14 +23,27 @@ import java.nio.file.Path;
 @RequestMapping("/api/v1/media")
 public class MediaController {
     private final MediaStorageService mediaStorageService;
+    private final PublicMediaAccessGuard publicMediaAccessGuard;
 
     public MediaController(MediaStorageService mediaStorageService) {
+        this(mediaStorageService, null);
+    }
+
+    @Autowired
+    public MediaController(
+            MediaStorageService mediaStorageService,
+            @Autowired(required = false) PublicMediaAccessGuard publicMediaAccessGuard
+    ) {
         this.mediaStorageService = mediaStorageService;
+        this.publicMediaAccessGuard = publicMediaAccessGuard;
     }
 
     @GetMapping("/{filename:.+}")
     public ResponseEntity<Resource> getMedia(@PathVariable String filename) {
         try {
+            if (publicMediaAccessGuard != null && publicMediaAccessGuard.isBlockedPublicMedia(filename)) {
+                return ResponseEntity.notFound().build();
+            }
             Path filePath = mediaStorageService.load(filename);
             if (!Files.isRegularFile(filePath, LinkOption.NOFOLLOW_LINKS) || !Files.isReadable(filePath)) {
                 return ResponseEntity.notFound().build();

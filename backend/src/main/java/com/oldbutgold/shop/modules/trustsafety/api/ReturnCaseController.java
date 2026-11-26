@@ -1,21 +1,31 @@
 package com.oldbutgold.shop.modules.trustsafety.api;
 
 import com.oldbutgold.shop.modules.trustsafety.application.CaseEvidenceRequestService;
+import com.oldbutgold.shop.modules.trustsafety.application.EvidenceStorageService;
 import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseDtos;
 import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.MediaTypeFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Locale;
+import java.util.NoSuchElementException;
 
 @RestController
 @RequestMapping("/api/v1/trustsafety/returns")
@@ -25,23 +35,33 @@ public class ReturnCaseController {
     private final CaseEvidenceRequestService caseEvidenceRequestService;
     private final String environment;
     private final boolean simulationEnabled;
+    private final EvidenceStorageService evidenceStorageService;
 
     public ReturnCaseController(ReturnCaseService returnCaseService,
                                 CaseEvidenceRequestService caseEvidenceRequestService) {
-        this(returnCaseService, caseEvidenceRequestService, "PROD", false);
+        this(returnCaseService, caseEvidenceRequestService, "PROD", false, null);
+    }
+
+    public ReturnCaseController(ReturnCaseService returnCaseService,
+                                CaseEvidenceRequestService caseEvidenceRequestService,
+                                String environment,
+                                boolean simulationEnabled) {
+        this(returnCaseService, caseEvidenceRequestService, environment, simulationEnabled, null);
     }
 
     @Autowired
     public ReturnCaseController(ReturnCaseService returnCaseService,
                                 CaseEvidenceRequestService caseEvidenceRequestService,
                                 @Value("${app.environment:PROD}") String environment,
-                                @Value("${app.ghn.simulation-enabled:false}") boolean simulationEnabled) {
+                                @Value("${app.ghn.simulation-enabled:false}") boolean simulationEnabled,
+                                @Autowired(required = false) EvidenceStorageService evidenceStorageService) {
         this.returnCaseService = returnCaseService;
         this.caseEvidenceRequestService = caseEvidenceRequestService;
         this.environment = (environment != null && !environment.isBlank())
                 ? environment.trim().toUpperCase(Locale.ROOT)
                 : "PROD";
         this.simulationEnabled = simulationEnabled;
+        this.evidenceStorageService = evidenceStorageService;
     }
 
     private static long extractUserId(Jwt jwt) {
@@ -67,6 +87,38 @@ public class ReturnCaseController {
         long actorId = extractUserId(jwt);
         ReturnCaseDtos.EvidenceItemDto response = returnCaseService.uploadReturnEvidence(actorId, file, mediaType, durationSeconds);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Tải xuống tệp bằng chứng riêng tư có kiểm tra quyền (Buyer/Seller thuộc hồ sơ, chủ upload, KTV hoặc Admin)
+     * GET /api/v1/trustsafety/returns/evidence/{filename}
+     */
+    @GetMapping("/evidence/{filename:.+}")
+    public ResponseEntity<Resource> getPrivateEvidence(
+            @AuthenticationPrincipal Jwt jwt,
+            Authentication authentication,
+            @PathVariable String filename
+    ) {
+        long actorId = extractUserId(jwt);
+        if (evidenceStorageService == null) {
+            return ResponseEntity.notFound().build();
+        }
+        boolean isStaff = authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_KTV".equals(a.getAuthority()) || "ROLE_ADMIN".equals(a.getAuthority()));
+        try {
+            Path filePath = evidenceStorageService.loadAuthorizedEvidence(actorId, isStaff, filename);
+            Resource resource = new UrlResource(filePath.toUri());
+            MediaType contentType = MediaTypeFactory.getMediaType(filename).orElse(MediaType.APPLICATION_OCTET_STREAM);
+            return ResponseEntity.ok()
+                    .contentType(contentType)
+                    .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                    .header(HttpHeaders.PRAGMA, "no-cache")
+                    .body(resource);
+        } catch (NoSuchElementException | IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        } catch (IOException e) {
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     /**

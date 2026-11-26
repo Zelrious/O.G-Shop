@@ -87,6 +87,8 @@ public class ReturnCaseService {
     private final org.springframework.transaction.support.TransactionTemplate requiresNewTxTemplate;
     private EvidenceStorageVerifier evidenceStorageVerifier;
     @Autowired(required = false)
+    private EvidenceStorageService evidenceStorageService;
+    @Autowired(required = false)
     private SellerResubmissionService sellerResubmissionService;
     private CaseEvidenceRequestRepository caseEvidenceRequestRepository;
 
@@ -159,6 +161,25 @@ public class ReturnCaseService {
 
     public void setEvidenceStorageVerifier(EvidenceStorageVerifier evidenceStorageVerifier) {
         this.evidenceStorageVerifier = evidenceStorageVerifier;
+    }
+
+    @Autowired(required = false)
+    public void setEvidenceStorageService(EvidenceStorageService evidenceStorageService) {
+        this.evidenceStorageService = evidenceStorageService;
+    }
+
+    private String verifyAndResolveObjectKey(Long actorId, String objectKey) {
+        if (evidenceStorageService == null) {
+            return objectKey;
+        }
+        return evidenceStorageService.verifyAttachmentOwnershipAndResolve(actorId, objectKey);
+    }
+
+    private String mapObjectKeyToPrivateUrl(String objectKey) {
+        if (evidenceStorageService == null) {
+            return objectKey;
+        }
+        return evidenceStorageService.toPrivateEvidenceUrl(objectKey);
     }
 
     public void setSellerResubmissionService(SellerResubmissionService sellerResubmissionService) {
@@ -312,7 +333,8 @@ public class ReturnCaseService {
 
         // 8. Lưu bằng chứng (nếu có)
         for (ReturnCaseDtos.EvidenceItemDto item : evidenceList) {
-            String digest = resolveContentDigest(item.contentDigest(), item.objectKey());
+            String resolvedKey = verifyAndResolveObjectKey(buyerId, item.objectKey());
+            String digest = resolveContentDigest(item.contentDigest(), resolvedKey);
             Long size = (item.fileSizeBytes() != null && item.fileSizeBytes() > 0) ? item.fileSizeBytes() : 1024L;
             Integer duration = null;
             if (CaseEvidenceEntity.MEDIA_VIDEO.equalsIgnoreCase(item.mediaType())) {
@@ -325,7 +347,7 @@ public class ReturnCaseService {
                     buyerId,
                     1,
                     item.mediaType().toUpperCase(),
-                    item.objectKey(),
+                    resolvedKey,
                     item.textContent(),
                     digest,
                     size,
@@ -697,6 +719,8 @@ public class ReturnCaseService {
 
         // 4. Append new CaseEvidenceEntity batch (append-only)
         for (ReturnCaseDtos.EvidenceItemDto item : request.evidenceList()) {
+            String resolvedKey = verifyAndResolveObjectKey(buyerId, item.objectKey());
+            String digest = resolveContentDigest(item.contentDigest(), resolvedKey);
             String mediaType = item.mediaType() != null ? item.mediaType().trim().toUpperCase(Locale.ROOT) : CaseEvidenceEntity.MEDIA_IMAGE;
             CaseEvidenceEntity ev = new CaseEvidenceEntity(
                     UUID.randomUUID(),
@@ -704,9 +728,9 @@ public class ReturnCaseService {
                     buyerId,
                     nextSubmissionNo,
                     mediaType,
-                    item.objectKey(),
+                    resolvedKey,
                     item.textContent(),
-                    item.contentDigest(),
+                    digest,
                     item.fileSizeBytes(),
                     item.durationSeconds()
             );
@@ -1234,7 +1258,7 @@ public class ReturnCaseService {
     }
 
     /**
-     * Tải lên tệp bằng chứng trả hàng / khiếu nại lên đĩa cục bộ và tính mã băm SHA-256 (BG-1).
+     * Tải lên tệp bằng chứng trả hàng / khiếu nại vào kho riêng tư và tính mã băm SHA-256 (BG-1).
      */
     public ReturnCaseDtos.EvidenceItemDto uploadReturnEvidence(
             Long actorId,
@@ -1242,83 +1266,10 @@ public class ReturnCaseService {
             String mediaType,
             Integer durationSeconds
     ) {
-        if (actorId == null) {
-            throw new SecurityException("Chưa xác thực danh tính");
-        }
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("Tệp bằng chứng tải lên không được rỗng");
-        }
-        String normalizedType = mediaType != null ? mediaType.trim().toUpperCase(Locale.ROOT) : "IMAGE";
-        String contentType = file.getContentType() != null ? file.getContentType().toLowerCase(Locale.ROOT) : "";
-        long size = file.getSize();
-        Integer resolvedDuration = null;
-
-        if ("IMAGE".equals(normalizedType)) {
-            if (!Set.of("image/jpeg", "image/png", "image/webp").contains(contentType)) {
-                throw new IllegalArgumentException("Định dạng ảnh bằng chứng không hợp lệ. Chỉ chấp nhận JPG, PNG, WEBP");
-            }
-            if (size > MAX_IMAGE_SIZE_BYTES) {
-                throw new IllegalArgumentException("Dung lượng ảnh bằng chứng vượt quá giới hạn 5 MB");
-            }
-        } else if ("VIDEO".equals(normalizedType)) {
-            if (!Set.of("video/mp4", "video/webm").contains(contentType)) {
-                throw new IllegalArgumentException("Định dạng video bằng chứng không hợp lệ. Chỉ chấp nhận MP4, WEBM");
-            }
-            if (size > MAX_VIDEO_SIZE_BYTES) {
-                throw new IllegalArgumentException("Dung lượng video bằng chứng vượt quá giới hạn 50 MB");
-            }
-        } else {
-            throw new IllegalArgumentException("Loại bằng chứng không hợp lệ: " + mediaType + " (chỉ hỗ trợ IMAGE hoặc VIDEO)");
-        }
-
-        String extension = switch (contentType) {
-            case "image/jpeg" -> "jpg";
-            case "image/png" -> "png";
-            case "image/webp" -> "webp";
-            case "video/mp4" -> "mp4";
-            case "video/webm" -> "webm";
-            default -> throw new IllegalArgumentException("Định dạng tệp không được hỗ trợ");
-        };
-
-        Path uploadDir = Paths.get("uploads/media").toAbsolutePath().normalize();
-        try {
-            Files.createDirectories(uploadDir);
-        } catch (IOException e) {
-            throw new IllegalStateException("Không thể khởi tạo thư mục lưu trữ bằng chứng: " + e.getMessage(), e);
-        }
-
-        String uniqueFilename = UUID.randomUUID() + "." + extension;
-        Path targetPath = uploadDir.resolve(uniqueFilename);
-        try (InputStream in = file.getInputStream()) {
-            Files.copy(in, targetPath);
-        } catch (IOException e) {
-            throw new IllegalStateException("Lưu tệp bằng chứng thất bại: " + e.getMessage(), e);
-        }
-
-        if ("VIDEO".equals(normalizedType)) {
-            java.util.OptionalInt inspectedDuration = VideoMetadataInspector.extractDurationSeconds(targetPath, contentType);
-            if (inspectedDuration.isEmpty()) {
-                try { Files.deleteIfExists(targetPath); } catch (IOException ignored) {}
-                throw new IllegalArgumentException("Không thể xác định thời lượng từ metadata của video bằng chứng.");
-            }
-            int actualDuration = inspectedDuration.getAsInt();
-            if (actualDuration <= 0 || actualDuration > MAX_VIDEO_DURATION_SECONDS) {
-                try { Files.deleteIfExists(targetPath); } catch (IOException ignored) {}
-                throw new IllegalArgumentException("Thời lượng video bằng chứng phải nằm trong khoảng 1 đến " + MAX_VIDEO_DURATION_SECONDS + " giây (thực tế: " + actualDuration + " giây)");
-            }
-            resolvedDuration = actualDuration;
-        }
-
-        String sha256 = computeSha256(targetPath);
-        String objectKey = "/api/v1/media/" + uniqueFilename;
-        return new ReturnCaseDtos.EvidenceItemDto(
-                normalizedType,
-                objectKey,
-                null,
-                sha256,
-                size,
-                resolvedDuration
-        );
+        EvidenceStorageService storage = this.evidenceStorageService != null
+                ? this.evidenceStorageService
+                : new EvidenceStorageService(null, "uploads", "uploads/media");
+        return storage.storePrivateEvidence(actorId, file, mediaType);
     }
 
     private String resolveDamageEvidenceDigest(String clientDigest, String objectKey) {
@@ -1366,6 +1317,12 @@ public class ReturnCaseService {
     private Path resolveLocalFilePath(String objectKey) {
         if (objectKey == null || objectKey.isBlank()) {
             return null;
+        }
+        if (evidenceStorageService != null) {
+            Path privatePath = evidenceStorageService.resolvePrivateFilePath(objectKey);
+            if (privatePath != null) {
+                return privatePath;
+            }
         }
         String key = objectKey.trim();
         try {
@@ -1497,7 +1454,7 @@ public class ReturnCaseService {
                             e.getSubmittedBy(),
                             e.getSubmissionNo(),
                             e.getMediaType(),
-                            e.getObjectKey(),
+                            mapObjectKeyToPrivateUrl(e.getObjectKey()),
                             e.getTextContent(),
                             e.getFileSizeBytes(),
                             e.getDurationSeconds(),
@@ -2305,7 +2262,8 @@ public class ReturnCaseService {
         // 6. Lưu bằng chứng (CaseEvidenceEntity) - BẮT BUỘC submission_no = 1 cho First-time
         Integer submissionNo = 1;
         for (ReturnCaseDtos.EvidenceItemDto item : request.evidenceList()) {
-            String digest = resolveDamageEvidenceDigest(item.contentDigest(), item.objectKey());
+            String resolvedKey = verifyAndResolveObjectKey(sellerId, item.objectKey());
+            String digest = resolveDamageEvidenceDigest(item.contentDigest(), resolvedKey);
             Long size = (item.fileSizeBytes() != null && item.fileSizeBytes() > 0) ? item.fileSizeBytes() : 1024L;
             Integer duration = null;
             if (CaseEvidenceEntity.MEDIA_VIDEO.equalsIgnoreCase(item.mediaType())) {
@@ -2318,7 +2276,7 @@ public class ReturnCaseService {
                     sellerId,
                     submissionNo,
                     item.mediaType().toUpperCase(),
-                    item.objectKey(),
+                    resolvedKey,
                     item.textContent(),
                     digest,
                     size,

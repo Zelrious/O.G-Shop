@@ -49,6 +49,7 @@ public class SellerResubmissionService {
     private final CaseRepository caseRepository;
     private final EvidenceStorageVerifier evidenceStorageVerifier;
     private final ObjectMapper objectMapper;
+    private EvidenceStorageService evidenceStorageService;
     private Clock clock = Clock.systemUTC();
 
     @Autowired
@@ -70,6 +71,11 @@ public class SellerResubmissionService {
         this.caseRepository = caseRepository;
         this.evidenceStorageVerifier = evidenceStorageVerifier;
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+    }
+
+    @Autowired(required = false)
+    public void setEvidenceStorageService(EvidenceStorageService evidenceStorageService) {
+        this.evidenceStorageService = evidenceStorageService;
     }
 
     public void setClock(Clock clock) {
@@ -221,7 +227,10 @@ public class SellerResubmissionService {
         // 13. Persist Evidence Items linked to request_id and nextSubmissionNo
         try {
             for (ReturnCaseDtos.EvidenceItemDto item : evidenceList) {
-                String digest = resolveDamageEvidenceDigest(item.contentDigest(), item.objectKey());
+                String resolvedKey = evidenceStorageService != null
+                        ? evidenceStorageService.verifyAttachmentOwnershipAndResolve(sellerId, item.objectKey())
+                        : item.objectKey().trim();
+                String digest = resolveDamageEvidenceDigest(item.contentDigest(), resolvedKey);
                 Long size = (item.fileSizeBytes() != null && item.fileSizeBytes() > 0) ? item.fileSizeBytes() : 1024L;
                 Integer duration = null;
                 if (CaseEvidenceEntity.MEDIA_VIDEO.equalsIgnoreCase(item.mediaType())) {
@@ -234,7 +243,7 @@ public class SellerResubmissionService {
                         sellerId,
                         nextSubmissionNo,
                         item.mediaType().toUpperCase(),
-                        item.objectKey().trim(),
+                        resolvedKey,
                         item.textContent() != null ? item.textContent().trim() : null,
                         digest,
                         size,
@@ -451,6 +460,12 @@ public class SellerResubmissionService {
 
     private Path resolveLocalFilePath(String objectKey) {
         if (objectKey == null || objectKey.isBlank()) return null;
+        if (evidenceStorageService != null) {
+            Path privatePath = evidenceStorageService.resolvePrivateFilePath(objectKey);
+            if (privatePath != null) {
+                return privatePath;
+            }
+        }
         try {
             Path path = Paths.get(objectKey);
             if (path.isAbsolute()) return path;

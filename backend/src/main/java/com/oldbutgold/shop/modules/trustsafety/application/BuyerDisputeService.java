@@ -18,6 +18,7 @@ public class BuyerDisputeService {
     private final DisputeRepository disputeRepository;
     private final OrderRepository orderRepository;
     private final CommerceDisputeFacade commerceDisputeFacade;
+    private EvidenceStorageService evidenceStorageService;
 
     public BuyerDisputeService(
             DisputeRepository disputeRepository,
@@ -27,6 +28,11 @@ public class BuyerDisputeService {
         this.disputeRepository = disputeRepository;
         this.orderRepository = orderRepository;
         this.commerceDisputeFacade = commerceDisputeFacade;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setEvidenceStorageService(EvidenceStorageService evidenceStorageService) {
+        this.evidenceStorageService = evidenceStorageService;
     }
 
     public DisputeDetailDto createDispute(long buyerId, CreateDisputeRequest request) {
@@ -46,14 +52,17 @@ public class BuyerDisputeService {
             return existing.get();
         }
 
+        java.util.List<String> resolvedEvidence = resolveAttachmentUrls(buyerId, request.buyerEvidenceUrls());
+        String resolvedVideo = verifyAttachmentUrl(buyerId, request.videoUnboxingUrl());
+
         long disputeId = disputeRepository.createDispute(
                 order.getId(),
                 buyerId,
                 order.getSellerId(),
                 request.reason(),
                 request.description(),
-                request.buyerEvidenceUrls(),
-                request.videoUnboxingUrl()
+                resolvedEvidence,
+                resolvedVideo
         );
 
         commerceDisputeFacade.markOrderDisputed(order.getId());
@@ -73,10 +82,25 @@ public class BuyerDisputeService {
         DisputeDetailDto dispute = disputeRepository.findDisputeByOrderId(orderId)
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy hồ sơ khiếu nại cho đơn #" + orderId));
 
-        disputeRepository.saveSellerResponse(dispute.disputeId(), request.sellerResponse(), request.sellerEvidenceUrls());
+        java.util.List<String> resolvedSellerEvidence = resolveAttachmentUrls(sellerId, request.sellerEvidenceUrls());
+        disputeRepository.saveSellerResponse(dispute.disputeId(), request.sellerResponse(), resolvedSellerEvidence);
 
         return disputeRepository.findDisputeById(dispute.disputeId())
                 .orElseThrow(() -> new IllegalStateException("Không thể tải hồ sơ tranh chấp cập nhật."));
+    }
+
+    private java.util.List<String> resolveAttachmentUrls(long actorId, java.util.List<String> urls) {
+        if (urls == null || urls.isEmpty() || evidenceStorageService == null) {
+            return urls;
+        }
+        return urls.stream().map(u -> evidenceStorageService.verifyAttachmentOwnershipAndResolve(actorId, u)).toList();
+    }
+
+    private String verifyAttachmentUrl(long actorId, String url) {
+        if (url == null || url.isBlank() || evidenceStorageService == null) {
+            return url;
+        }
+        return evidenceStorageService.verifyAttachmentOwnershipAndResolve(actorId, url);
     }
 
     @Transactional(readOnly = true)

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ordersApi } from '../orders/ordersApi';
-import { resolveReturnMediaUrl } from './mediaUrl';
+import { PrivateEvidenceLink } from './PrivateEvidenceMedia';
 import { returnCaseApi, type ReturnEvidenceItemInput, ReturnCaseDetail, ReturnReasonCode } from './returnCaseApi';
 
 interface Uc83BuyerOrderPanelProps {
@@ -361,7 +361,7 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
                 </label>
               </div>
               {createEvidence?.objectKey && (
-                <a href={resolveReturnMediaUrl(createEvidence.objectKey)} target="_blank" rel="noreferrer">Xem trước bằng chứng trả hàng</a>
+                <PrivateEvidenceLink objectKey={createEvidence.objectKey} label="Xem trước bằng chứng trả hàng" />
               )}
               <button
                 type="button"
@@ -435,7 +435,7 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
                     </label>
                   </div>
                   {supplement?.objectKey && (
-                    <a href={resolveReturnMediaUrl(supplement.objectKey)} target="_blank" rel="noreferrer">Xem trước bằng chứng bổ sung</a>
+                    <PrivateEvidenceLink objectKey={supplement.objectKey} label="Xem trước bằng chứng bổ sung" />
                   )}
                   <input
                     type="text"

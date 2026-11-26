@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { disputeApi } from './disputeApi';
-import { resolveReturnMediaUrl } from './mediaUrl';
+import { PrivateEvidenceImage } from './PrivateEvidenceMedia';
 import { returnCaseApi } from './returnCaseApi';
 
 interface BuyerDisputeModalProps {
@@ -34,12 +34,12 @@ export const BuyerDisputeModal: React.FC<BuyerDisputeModalProps> = ({
     setUploadingMedia(true);
     try {
       for (const file of Array.from(files)) {
-        const dto = await returnCaseApi.uploadEvidence(file, target, target === 'VIDEO' ? 15 : undefined);
-        const resolvedUrl = resolveReturnMediaUrl(dto.objectKey || '');
+        const dto = await returnCaseApi.uploadEvidence(file, target);
+        const key = dto.objectKey || '';
         if (target === 'VIDEO') {
-          setVideoUnboxingUrl(resolvedUrl);
+          setVideoUnboxingUrl(key);
         } else {
-          setEvidenceInput((prev) => (prev.trim() ? `${prev.trim()}\n${resolvedUrl}` : resolvedUrl));
+          setEvidenceInput((prev) => (prev.trim() ? `${prev.trim()}\n${key}` : key));
         }
       }
     } catch (err) {
@@ -278,9 +278,9 @@ export const BuyerDisputeModal: React.FC<BuyerDisputeModalProps> = ({
                   .map((s) => s.trim())
                   .filter(Boolean)
                   .map((url, idx) => (
-                    <img
+                    <PrivateEvidenceImage
                       key={`${url}-${idx}`}
-                      src={resolveReturnMediaUrl(url)}
+                      objectKey={url}
                       alt={`Bằng chứng #${idx + 1}`}
                       style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid #cbd5e1' }}
                     />
