@@ -6,6 +6,7 @@ import { reviewApi } from './reviewApi';
 vi.mock('./reviewApi', () => ({
   reviewApi: {
     createReview: vi.fn(),
+    updateReview: vi.fn(),
   },
 }));
 
@@ -79,6 +80,53 @@ describe('OrderReviewModal Component', () => {
       );
       expect(screen.getByText(/Gửi đánh giá thành công!/)).toBeInTheDocument();
       expect(screen.getByText(/\+500 xu thưởng/)).toBeInTheDocument();
+    });
+  });
+
+  it('supports editing an existing seller->buyer counterparty review via updateReview', async () => {
+    const onSuccess = vi.fn();
+    vi.mocked(reviewApi.updateReview).mockResolvedValue({
+      reviewId: 55,
+      orderId: 1002,
+      reviewerId: 301,
+      reviewerName: 'Seller',
+      revieweeId: 201,
+      revieweeName: 'Buyer',
+      rating: 4,
+      comment: 'Người mua nhận hàng đúng hẹn, đã chỉnh sửa nhận xét.',
+      createdAt: '2026-10-20T10:00:00Z',
+      updatedAt: '2026-10-20T11:00:00Z',
+    });
+
+    render(
+      <OrderReviewModal
+        isOpen={true}
+        orderId={1002}
+        partnerName="Nguyễn Văn Mua"
+        isBuyer={false}
+        existingReview={{
+          reviewId: 55,
+          orderId: 1002,
+          reviewerId: 301,
+          reviewerName: 'Seller',
+          revieweeId: 201,
+          revieweeName: 'Buyer',
+          rating: 5,
+          comment: 'Ban đầu 5 sao.',
+          createdAt: '2026-10-20T10:00:00Z',
+          updatedAt: '2026-10-20T10:00:00Z',
+        }}
+        onClose={vi.fn()}
+        onSuccess={onSuccess}
+      />
+    );
+
+    expect(screen.getByText(/Sửa đánh giá Người mua/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Cập nhật đánh giá/ }));
+
+    await waitFor(() => {
+      expect(reviewApi.updateReview).toHaveBeenCalledWith(1002, 5, 'Ban đầu 5 sao.');
+      expect(screen.getByText(/Cập nhật đánh giá thành công!/)).toBeInTheDocument();
     });
   });
 });

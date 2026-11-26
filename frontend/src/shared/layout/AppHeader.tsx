@@ -759,6 +759,7 @@ export const AppHeader: React.FC = () => {
                         </span>
                         <span>Hồ sơ & Sổ địa chỉ</span>
                       </Link>
+                      <Link to="/system-complaints" className="og-header__dropdown-item" role="menuitem" onClick={() => setIsUserMenuOpen(false)}>Khiếu nại hệ thống</Link>
                       <Link to="/account/status" className="og-header__dropdown-item" role="menuitem" onClick={() => setIsUserMenuOpen(false)}>
                         <span className="og-header__dropdown-icon"><OutlineIcons.User /></span><span>Tình trạng & Điểm uy tín</span>
                       </Link>

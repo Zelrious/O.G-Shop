@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { AuthProvider } from '../features/auth';
 import { NotificationsPage } from '../pages/NotificationsPage';
+import { SystemComplaintsPage } from '../pages/SystemComplaintsPage';
 import { AccountStatusPage } from '../pages/AccountStatusPage';
 import { VouchersPage } from '../pages/VouchersPage';
 import { MessagesPage } from '../pages/MessagesPage';
@@ -98,6 +99,7 @@ export function App() {
                   {/* 2. Main Public & Buyer Marketplace Layout Shell */}
                   <Route element={<AppLayout />}>
                     <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+                    <Route path="/system-complaints" element={<ProtectedRoute allowedRoles={['BUYER', 'SELLER']}><SystemComplaintsPage /></ProtectedRoute>} />
                     <Route path="/account/status" element={<ProtectedRoute allowedRoles={['BUYER', 'SELLER']}><AccountStatusPage /></ProtectedRoute>} />
                     <Route path="/messages" element={<ProtectedRoute allowedRoles={['BUYER', 'SELLER']}><MessagesPage /></ProtectedRoute>} />
                     <Route path="/" element={<HomePage />} />

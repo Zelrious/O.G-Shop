@@ -3,13 +3,21 @@ package com.oldbutgold.shop.modules.platform.infrastructure.persistence;
 import com.oldbutgold.shop.modules.platform.api.AdminDashboardDtos.CategoryReturnStat;
 import com.oldbutgold.shop.modules.platform.api.AdminDashboardDtos.MonthlyRevenuePoint;
 import com.oldbutgold.shop.modules.platform.api.AdminDashboardDtos.MonthlyUserGrowthPoint;
+import com.oldbutgold.shop.modules.platform.api.AdminDashboardDtos.ReturnReportRow;
+import com.oldbutgold.shop.modules.platform.api.AdminDashboardDtos.ReturnsReportResponse;
 import com.oldbutgold.shop.modules.platform.api.AdminDashboardDtos.SearchTrendItem;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Repository
 public class AdminDashboardRepository {
@@ -180,5 +188,187 @@ public class AdminDashboardRepository {
         list.add(new CategoryReturnStat("Đồng hồ & Phụ kiện", 180, 3, 1, "1.6%", "Sai số chạy chậm mỗi ngày"));
         list.add(new CategoryReturnStat("Thời trang & Túi vintage", 250, 5, 1, "2.0%", "Vết ố lót vải bên trong"));
         return list;
+    }
+
+    /**
+     * UC81 authoritative aggregation over closed/rejected cases up to cutoffAt.
+     * Propagates query exceptions instead of masking failures with 0 (BR / Exception 4a).
+     */
+    public ReturnsReportResponse queryResolvedCasesReport(
+            Instant fromInstant,
+            Instant toExclusiveInstant,
+            Instant cutoffAt,
+            String timezone,
+            LocalDate fromDate,
+            LocalDate toDate,
+            String caseTypeFilter,
+            List<String> selectedCategories
+    ) {
+        if (jdbc == null) {
+            throw new IllegalStateException("JdbcTemplate chưa được cấu hình để truy vấn báo cáo UC81.");
+        }
+
+        StringBuilder sql = new StringBuilder("""
+                WITH cases_for_report AS (
+                    SELECT c.case_id,c.order_id,c.case_type,c.state,c.created_at,c.closed_at,'CASE' AS source,
+                        CASE
+                          WHEN c.case_type='SYSTEM_ISSUE' AND c.state='CLOSED' THEN 'SYSTEM_ISSUE_CONFIRMED'
+                          WHEN c.case_type='SYSTEM_ISSUE' AND c.state='REJECTED' THEN 'SYSTEM_ISSUE_REJECTED'
+                          WHEN EXISTS (SELECT 1 FROM og_compat.case_events e WHERE e.case_id=c.case_id
+                              AND (e.event_type='BUYER_WITHDRAWN' OR (e.event_type='CLEANUP' AND e.metadata->>'action' IN ('BUYER_WITHDRAW','WITHDRAW'))))
+                              THEN 'RETURN_WITHDRAWN'
+                          WHEN decision.outcome='FULL_GOODS_REFUND' THEN 'RETURN_REFUNDED'
+                          WHEN decision.outcome='EXEMPT_GOODS_REFUND' THEN 'RETURN_EXEMPT_NO_REFUND'
+                          WHEN decision.outcome='REJECT_RETURN' OR c.state='REJECTED' THEN 'RETURN_REJECTED'
+                          ELSE 'OTHER' END AS outcome_bucket
+                    FROM og_compat.cases c
+                    LEFT JOIN LATERAL (SELECT d.outcome FROM og_compat.case_rounds r
+                        JOIN og_compat.case_decisions d USING(round_id) WHERE r.case_id=c.case_id AND d.is_final
+                        ORDER BY r.round_no DESC,d.decided_at DESC,d.decision_id DESC LIMIT 1) decision ON true
+                    WHERE c.case_type IN ('RETURN','SYSTEM_ISSUE')
+                    UNION ALL
+                    SELECT d.dispute_id,d.order_id,'RETURN',d.status,d.created_at,
+                        CASE WHEN d.status IN ('RESOLVED_REFUND','RESOLVED_RELEASE') THEN coalesce(d.resolved_at,d.updated_at) END,
+                        'LEGACY_DISPUTE',CASE d.status WHEN 'RESOLVED_REFUND' THEN 'RETURN_REFUNDED'
+                            WHEN 'RESOLVED_RELEASE' THEN 'RETURN_REJECTED' ELSE 'OTHER' END
+                    FROM public.dispute_cases d WHERE NOT EXISTS (
+                        SELECT 1 FROM og_compat.cases c WHERE c.case_type='RETURN' AND c.order_id=d.order_id)
+                    UNION ALL
+                    SELECT l.complaint_id,l.order_id,'RETURN',l.status,l.created_at,l.resolved_at,'LEGACY_COMPLAINT',
+                        CASE WHEN l.resolution='REFUND_BUYER' THEN 'RETURN_REFUNDED'
+                             WHEN l.resolution IN ('RELEASE_TO_SELLER','REJECT_COMPLAINT') THEN 'RETURN_REJECTED'
+                             ELSE 'OTHER' END
+                    FROM og_compat.complaints l WHERE NOT EXISTS (
+                        SELECT 1 FROM og_compat.cases c WHERE c.case_type='RETURN' AND c.order_id=l.order_id)
+                        AND NOT EXISTS(SELECT 1 FROM public.dispute_cases d WHERE d.order_id=l.order_id)
+                )
+                SELECT c.case_id,c.case_type,c.state AS final_state,c.order_id,c.closed_at,c.source,c.outcome_bucket,
+                    COALESCE((
+                        SELECT cat.category_name
+                        FROM public.order_items oi
+                        JOIN public.products p ON oi.product_id = p.product_id
+                        LEFT JOIN og_compat.categories cat ON p.category_id = cat.category_id
+                        WHERE oi.order_id = c.order_id
+                        ORDER BY oi.order_item_id ASC LIMIT 1
+                    ), 'Hệ thống / Chung') AS category_name
+                FROM cases_for_report c
+                WHERE ((c.closed_at >= ? AND c.closed_at < ? AND c.closed_at <= ?)
+                    OR (c.created_at < ? AND c.created_at <= ? AND (c.closed_at IS NULL OR c.closed_at > ?)))
+                """);
+
+        List<Object> params = new ArrayList<>();
+        params.add(Timestamp.from(fromInstant));
+        params.add(Timestamp.from(toExclusiveInstant));
+        params.add(Timestamp.from(cutoffAt));
+
+        params.add(Timestamp.from(toExclusiveInstant));
+        params.add(Timestamp.from(cutoffAt));
+        Instant pendingAt = cutoffAt.isBefore(toExclusiveInstant) ? cutoffAt : toExclusiveInstant.minusNanos(1000);
+        params.add(Timestamp.from(pendingAt));
+
+        if (!"ALL".equals(caseTypeFilter)) {
+            sql.append(" AND c.case_type = ? ");
+            params.add(caseTypeFilter);
+        }
+        sql.append(" ORDER BY c.closed_at DESC, c.case_id DESC ");
+
+        List<ReturnReportRow> allRows = jdbc.query(
+                sql.toString(),
+                (rs, rowNum) -> new ReturnReportRow(
+                        rs.getLong("case_id"),
+                        rs.getString("case_type"),
+                        rs.getString("outcome_bucket"),
+                        rs.getString("final_state"),
+                        rs.getObject("order_id", Long.class),
+                        rs.getString("category_name"),
+                        rs.getTimestamp("closed_at")==null ? null : rs.getTimestamp("closed_at").toInstant(), rs.getString("source")
+                ),
+                params.toArray()
+        );
+
+        List<ReturnReportRow> filtered = (selectedCategories == null || selectedCategories.isEmpty())
+                ? allRows
+                : allRows.stream().filter(r -> selectedCategories.contains(r.category())).toList();
+
+        long pending = filtered.stream().filter(r -> r.closedAt()==null || r.closedAt().isAfter(pendingAt)).count();
+        filtered = filtered.stream().filter(r -> r.closedAt()!=null && !r.closedAt().isAfter(pendingAt)).toList();
+
+        long returnRefunded = 0;
+        long returnExempt = 0;
+        long returnRejected = 0;
+        long returnWithdrawn = 0;
+        long sysConfirmed = 0;
+        long sysRejected = 0;
+
+        Map<String, long[]> byCategory = new LinkedHashMap<>();
+        for (ReturnReportRow row : filtered) {
+            switch (row.outcomeBucket()) {
+                case "RETURN_REFUNDED" -> returnRefunded++;
+                case "RETURN_EXEMPT_NO_REFUND" -> returnExempt++;
+                case "RETURN_REJECTED" -> returnRejected++;
+                case "RETURN_WITHDRAWN" -> returnWithdrawn++;
+                case "SYSTEM_ISSUE_CONFIRMED" -> sysConfirmed++;
+                case "SYSTEM_ISSUE_REJECTED" -> sysRejected++;
+                default -> { }
+            }
+            long[] counters = byCategory.computeIfAbsent(row.category(), k -> new long[2]);
+            if ("RETURN".equals(row.caseType())) {
+                counters[0]++;
+            } else {
+                counters[1]++;
+            }
+        }
+
+        List<CategoryReturnStat> breakdown = new ArrayList<>();
+        for (Map.Entry<String, long[]> entry : byCategory.entrySet()) {
+            long returns = entry.getValue()[0];
+            long sysIssues = entry.getValue()[1];
+            long totalCasesInCat = returns + sysIssues;
+            String rate = totalCasesInCat > 0 ? String.format("%.1f%%", (returns * 100.0) / totalCasesInCat) : "0.0%";
+            breakdown.add(new CategoryReturnStat(
+                    entry.getKey(),
+                    (int) totalCasesInCat,
+                    (int) returns,
+                    (int) sysIssues,
+                    rate,
+                    "Tổng hợp hồ sơ đã đóng tới " + cutoffAt
+            ));
+        }
+
+        return new ReturnsReportResponse(
+                cutoffAt,
+                timezone,
+                fromDate,
+                toDate,
+                caseTypeFilter,
+                filtered.size(),
+                returnRefunded,
+                returnExempt,
+                returnRejected,
+                returnWithdrawn,
+                sysConfirmed,
+                sysRejected,
+                pending,
+                breakdown,
+                filtered
+        );
+    }
+
+    public void recordExportRun(Long requestedBy, String metric, String filtersJson, String timezone, Instant cutoffAt) {
+        if (jdbc == null || requestedBy == null) {
+            return;
+        }
+        jdbc.update("""
+                INSERT INTO og_compat.report_export_runs(export_id, requested_by, metric, filters, timezone, cutoff_at, created_at)
+                VALUES (?, ?, ?, ?::jsonb, ?, ?, ?)
+                """,
+                UUID.randomUUID(),
+                requestedBy,
+                metric,
+                filtersJson != null ? filtersJson : "{}",
+                timezone != null ? timezone : "Asia/Ho_Chi_Minh",
+                Timestamp.from(cutoffAt),
+                Timestamp.from(Instant.now())
+        );
     }
 }

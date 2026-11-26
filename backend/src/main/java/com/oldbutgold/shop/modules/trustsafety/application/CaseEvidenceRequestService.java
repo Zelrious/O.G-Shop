@@ -133,6 +133,16 @@ public class CaseEvidenceRequestService {
         CaseEntity c = locked.returnCase();
         CaseRoundEntity round2 = locked.activeRound();
 
+        // 4. Xác thực thẩm quyền KTV (P0-1)
+        if (!isKtv(ktvId)) {
+            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
+                    "Người dùng không có vai trò KTV để thực hiện yêu cầu này");
+        }
+        if (c.getAssignedTo() == null || !c.getAssignedTo().equals(ktvId)) {
+            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "NOT_ASSIGNED_KTV",
+                    "KTV không được phân công phụ trách Case này (Case #" + caseId + " được phân công cho KTV #" + c.getAssignedTo() + ")");
+        }
+
         // 3. Kiểm tra Idempotency TRƯỚC các ràng buộc trạng thái nghiệp vụ (State Guard Precedence)
         Optional<CaseEvidenceRequestEntity> existingOpt = caseEvidenceRequestRepository.findByCommandKey(cmdKey);
         if (existingOpt.isPresent()) {
@@ -150,16 +160,6 @@ public class CaseEvidenceRequestService {
                 throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "COMMAND_KEY_CONFLICT",
                         "Trùng commandKey nhưng nội dung yêu cầu khác nhau");
             }
-        }
-
-        // 4. Xác thực thẩm quyền KTV (P0-1)
-        if (!isKtv(ktvId)) {
-            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
-                    "Người dùng không có vai trò KTV để thực hiện yêu cầu này");
-        }
-        if (c.getAssignedTo() == null || !c.getAssignedTo().equals(ktvId)) {
-            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "NOT_ASSIGNED_KTV",
-                    "KTV không được phân công phụ trách Case này (Case #" + caseId + " được phân công cho KTV #" + c.getAssignedTo() + ")");
         }
 
         // 5. Kiểm tra toàn bộ 7 điều kiện nghiệp vụ phát hành Request Evidence (D-03, D-10, D-11)
@@ -292,6 +292,15 @@ public class CaseEvidenceRequestService {
         CaseEntity c = locked.returnCase();
         CaseRoundEntity round1 = locked.activeRound();
 
+        if (!isKtv(ktvId)) {
+            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
+                    "Người dùng không có vai trò KTV để thực hiện yêu cầu này");
+        }
+        if (c.getAssignedTo() == null || !c.getAssignedTo().equals(ktvId)) {
+            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "NOT_ASSIGNED_KTV",
+                    "KTV không được phân công phụ trách Case này (Case #" + caseId + ")");
+        }
+
         Optional<CaseEvidenceRequestEntity> existingOpt = caseEvidenceRequestRepository.findByCommandKey(cmdKey);
         if (existingOpt.isPresent()) {
             CaseEvidenceRequestEntity existing = existingOpt.get();
@@ -306,15 +315,6 @@ public class CaseEvidenceRequestService {
                     "Trùng commandKey nhưng nội dung yêu cầu khác nhau");
         }
 
-        if (!isKtv(ktvId)) {
-            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
-                    "Người dùng không có vai trò KTV để thực hiện yêu cầu này");
-        }
-        if (c.getAssignedTo() == null || !c.getAssignedTo().equals(ktvId)) {
-            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "NOT_ASSIGNED_KTV",
-                    "KTV không được phân công phụ trách Case này (Case #" + caseId + ")");
-        }
-
         if (!CaseEntity.STATE_OPEN.equals(c.getState()) && !CaseEntity.STATE_REVIEWING.equals(c.getState())) {
             throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "CASE_NOT_ELIGIBLE",
                     "Hồ sơ không ở trạng thái Vòng 1 OPEN/REVIEWING (Trạng thái hiện tại: " + c.getState() + ")");
@@ -324,7 +324,8 @@ public class CaseEvidenceRequestService {
             throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "CASE_NOT_ELIGIBLE",
                     "Vòng 1 không ở trạng thái OPEN để yêu cầu bổ sung bằng chứng");
         }
-        if (!caseDecisionRepository.findByRoundIdOrderByDecidedAtAsc(round1.getId()).isEmpty()) {
+        if (caseDecisionRepository.findByRoundIdOrderByDecidedAtAsc(round1.getId()).stream()
+                    .anyMatch(decision -> Boolean.TRUE.equals(decision.getIsFinal()))) {
             throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "CASE_NOT_ELIGIBLE",
                     "Vòng 1 đã có phán quyết, không thể yêu cầu bổ sung bằng chứng");
         }

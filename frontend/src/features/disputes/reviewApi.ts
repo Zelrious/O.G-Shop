@@ -30,11 +30,19 @@ export const reviewApi = {
     });
   },
 
+  updateReview: (orderId: number, rating: number, comment?: string) => {
+    return request<OrderReview>(`/commerce/orders/${orderId}/review`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, rating, comment: comment || '' }),
+    });
+  },
+
   getOrderReviews: (orderId: number) => {
-    return request<OrderReviewsResponse>(`/commerce/orders/${orderId}/review`);
+    return request<OrderReviewsResponse>(`/commerce/orders/${orderId}/reviews`);
   },
 
   getUserReviews: (userId: number, limit = 10) => {
-    return request<UserReviewsSummary>(`/commerce/users/${userId}/reviews?limit=${limit}`);
+    return request<UserReviewsSummary>(`/commerce/orders/users/${userId}/reviews?limit=${limit}`);
   },
 };

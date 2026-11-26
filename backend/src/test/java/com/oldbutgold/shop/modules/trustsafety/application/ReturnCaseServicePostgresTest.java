@@ -16,6 +16,7 @@ import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseRo
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.CaseRoundRepository;
 import com.oldbutgold.shop.modules.trustsafety.infrastructure.persistence.ReturnReasonCode;
 import com.oldbutgold.shop.shared.PostgresTestSafetyGuard;
+import com.oldbutgold.shop.modules.trustsafety.api.ReviewDtos;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -30,6 +31,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -56,7 +58,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 5. withdrawReturnRequest closes case, closes money_holds, and unblocks order.
  * 6. Precondition guards on real PostgreSQL.
  */
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Transactional
 @EnabledIfEnvironmentVariable(named = "OGSHOP_TEST_DB_URL", matches = ".+")
@@ -1728,6 +1730,203 @@ class ReturnCaseServicePostgresTest {
     // =========================================================================
     // FEATURE 3.2: TASK 3.2.1 - SELLER AGREE REFUND POSTGRES TESTS (PHASE 1)
     // =========================================================================
+
+    @Autowired private Uc48ReminderService reminders;
+    @Autowired private CaseEvidenceRequestService evidenceRequests;
+    @Autowired private SystemIssueGovernanceService governance;
+    @Autowired private com.oldbutgold.shop.modules.platform.application.AdminDashboardService reports;
+
+    private PostReturnFixture postReturn() {
+        return createPostReturnFixture(new org.springframework.transaction.support.TransactionTemplate(transactionManager));
+    }
+
+    private void damageRequest(PostReturnFixture f) {
+        returnCaseService.submitDamageExemptionRequest(f.sellerId(), f.caseId(),new ReturnCaseDtos.SellerDamageExemptionRequest(
+                "Hàng trả bị hư hỏng nặng, cần xét miễn hoàn",List.of(createPostgresEvidence("IMAGE","evidence/damage1.jpg"),
+                createPostgresEvidence("VIDEO","evidence/damage_video.mp4")),UUID.randomUUID().toString()));
+    }
+
+    @Test
+    void reportFourCasesAndLegacyUsesFinalDecisionsAndOneCutoff() {
+        var zone=java.time.ZoneId.of("Asia/Ho_Chi_Minh");
+        var day=java.time.LocalDate.now(zone);
+        var cutoff=java.time.Instant.now().plusSeconds(3600);
+        var baseline=reports.getReturnsReport(day,day,zone.getId(),"ALL",null,cutoff);
+        var refunded=postReturn();
+        var exempt=postReturn();
+        var pending=postReturn();
+        returnCaseService.sellerAgreeRefundRound2(refunded.sellerId(),refunded.caseId(),new ReturnCaseDtos.SellerAgreeRefundRequest(
+                "Đã nhận hàng trả",UUID.randomUUID().toString()));
+        damageRequest(exempt);
+        returnCaseService.assignCaseToKtv(ktvId,exempt.caseId());
+        returnCaseService.ktvDecideRound2(ktvId,exempt.caseId(),new ReturnCaseDtos.KtvRound2DecisionRequest(
+                "EXEMPT_GOODS_REFUND","Bằng chứng xác nhận hư hỏng",UUID.randomUUID().toString()));
+        var issue=governance.createSystemIssue(buyerId,new ReturnCaseDtos.CreateSystemIssueRequest(null,null,null,null,
+                "Giao dịch thu phí bị lặp",List.of(),UUID.randomUUID().toString()));
+        governance.decideSystemIssue(ktvId,false,issue.caseId(),new ReturnCaseDtos.SystemIssueDecisionRequest(
+                "CONFIRM_ISSUE","Xác minh thu phí trùng",null,null,UUID.randomUUID().toString()));
+        var result=reports.getReturnsReport(day,day,zone.getId(),"ALL",null,cutoff);
+        assertThat(result.totalResolvedCases()-baseline.totalResolvedCases()).isEqualTo(3);
+        assertThat(result.returnRefundedCount()-baseline.returnRefundedCount()).isEqualTo(1);
+        assertThat(result.returnExemptNoRefundCount()-baseline.returnExemptNoRefundCount()).isEqualTo(1);
+        assertThat(result.systemIssueConfirmedCount()-baseline.systemIssueConfirmedCount()).isEqualTo(1);
+        assertThat(result.openPendingCount()-baseline.openPendingCount()).isEqualTo(1);
+        grantRole(ktvId,"ADMIN");
+        String csv=new String(reports.exportReturnsReportCsv(ktvId,day,day,zone.getId(),"ALL",null,cutoff),java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(csv).contains(refunded.caseId()+",RETURN,RETURN_REFUNDED",exempt.caseId()+",RETURN,RETURN_EXEMPT_NO_REFUND",
+                issue.caseId()+",SYSTEM_ISSUE,SYSTEM_ISSUE_CONFIRMED",cutoff.toString()).doesNotContain("\n"+pending.caseId()+",RETURN,");
+        var legacy=createDeliveredUc83Order(buyerId,sellerId,1,true,false);
+        for(long order : List.of(legacy.orderId(),refunded.orderId())) {
+            jdbcTemplate.update("""
+                    INSERT INTO public.dispute_cases(order_id,buyer_id,seller_id,reason,description,status,resolved_at)
+                    VALUES(?,?,?,'DAMAGED','Legacy dispute','RESOLVED_REFUND',CURRENT_TIMESTAMP)
+                    """,order,buyerId,sellerId);
+        }
+        var withLegacy=reports.getReturnsReport(day,day,zone.getId(),"ALL",null,cutoff);
+        assertThat(withLegacy.totalResolvedCases()).isEqualTo(result.totalResolvedCases()+1);
+        assertThat(withLegacy.resolvedCases()).anyMatch(row -> row.orderId()!=null && row.orderId().equals(legacy.orderId()) &&
+                row.source().equals("LEGACY_DISPUTE") && row.outcomeBucket().equals("RETURN_REFUNDED"));
+        assertThat(reports.getReturnsReport(day.minusYears(30),day.minusYears(30),zone.getId(),"ALL",null,cutoff).totalResolvedCases()).isZero();
+    }
+
+    @Autowired private OrderReviewService orderReviewService;
+    @Autowired private com.oldbutgold.shop.modules.platform.infrastructure.persistence.NotificationRepository notices;
+
+    @Test
+    @Transactional(propagation=org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void concurrentEditsAndReplayLeaveOneConsistentLedgerAndHistory() throws Exception {
+        Long order = new org.springframework.transaction.support.TransactionTemplate(transactionManager).execute(status -> createCommittedUc83Order(buyerId,sellerId).orderId());
+        orderReviewService.submitReview(buyerId,new ReviewDtos.CreateReviewRequest(order,4,"Đánh giá ban đầu"));
+        var barrier = new java.util.concurrent.CyclicBarrier(2);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var edits = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+            for (int star : java.util.List.of(3,5)) {
+                edits.add(pool.submit(() -> {
+                    barrier.await(10,java.util.concurrent.TimeUnit.SECONDS);
+                    return orderReviewService.submitReview(buyerId,new ReviewDtos.CreateReviewRequest(order,star,"Chỉnh sửa "+star));
+                }));
+            }
+            for (var f : edits) f.get(30,java.util.concurrent.TimeUnit.SECONDS);
+        }
+        int star = jdbcTemplate.queryForObject("SELECT rating FROM og_compat.reviews WHERE order_id=?",Integer.class,order);
+        orderReviewService.submitReview(buyerId,new ReviewDtos.CreateReviewRequest(order,star,"Chỉnh sửa "+star));
+        assertThat(jdbcTemplate.queryForObject("SELECT balance FROM og_compat.reward_accounts WHERE user_id=?",Long.class,buyerId)).isEqualTo(500);
+        assertThat(jdbcTemplate.queryForObject("SELECT balance FROM og_compat.reward_accounts WHERE user_id=?",Long.class,sellerId)).isEqualTo(star==5 ? 500 : 0);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM og_compat.review_revisions h JOIN og_compat.reviews r USING(review_id) WHERE r.order_id=?",Integer.class,order)).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM og_compat.reward_ledger WHERE order_id=? AND user_id=?",Integer.class,order,sellerId)).isEqualTo(3);
+        assertThat(notices.list(sellerId,0,10)).hasSize(3).allSatisfy(n -> {
+            assertThat(n.orderId()).isEqualTo(order);
+            assertThat(n.orderRole()).isEqualTo("SELLER");
+        });
+        assertThat(jdbcTemplate.queryForList("SELECT (target_data->>'reputationDelta')::int FROM og_compat.notifications WHERE reference_type='ORDER' AND reference_id=?",Integer.class,order)).containsOnly(0);
+    }
+
+    @org.springframework.boot.test.web.server.LocalServerPort private int port;
+    @Autowired private com.oldbutgold.shop.modules.identity.application.TokenService tokens;
+    @Autowired private com.oldbutgold.shop.modules.identity.infrastructure.persistence.UserRepository users;
+
+    @Test
+    @EnabledIfEnvironmentVariable(named="OGSHOP_TEST_UI",matches="true")
+    @Transactional(propagation=org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void renderedUc83DecisionsAndShipmentOverHttp() throws Exception {
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        long order=tx.execute(status -> createCommittedUc83Order(buyerId,sellerId).orderId());
+        long round1=returnCaseService.createReturnRequest(buyerId,order,new ReturnCaseDtos.CreateReturnRequest(
+                ReturnReasonCode.DAMAGED_OR_DEFECTIVE,"Hàng bị hỏng khi giao",List.of(),UUID.randomUUID().toString())).caseId();
+        returnCaseService.sellerRespondRound1(sellerId,round1,new ReturnCaseDtos.SellerRound1ResponseRequest(
+                "SELLER_DECLINED","Đề nghị KTV xét duyệt",UUID.randomUUID().toString()));
+        var round2=postReturn();
+        damageRequest(round2);
+        var process=new ProcessBuilder("node","node_modules/vitest/vitest.mjs","run","Uc83Queue.live.test.tsx")
+                .directory(java.nio.file.Path.of("..","frontend").toFile()).redirectErrorStream(true);
+        process.environment().put("VITE_API_BASE_URL","http://127.0.0.1:"+port+"/api/v1");
+        process.environment().put("OG_UI_BUYER",tokens.issueAccessToken(users.findById(buyerId).orElseThrow()));
+        process.environment().put("OG_UI_KTV",tokens.issueAccessToken(users.findById(ktvId).orElseThrow()));
+        Long other=createTestUser("second_ktv");
+        grantRole(other,"KTV");
+        process.environment().put("OG_UI_OTHER_KTV",tokens.issueAccessToken(users.findById(other).orElseThrow()));
+        process.environment().put("OG_UI_SELLER",tokens.issueAccessToken(users.findById(round2.sellerId()).orElseThrow()));
+        Long admin=createTestUser("report_admin");
+        grantRole(admin,"ADMIN");
+        var refund=postReturn();
+        returnCaseService.sellerAgreeRefundRound2(refund.sellerId(),refund.caseId(),new ReturnCaseDtos.SellerAgreeRefundRequest(
+                "Đã nhận hàng trả",UUID.randomUUID().toString()));
+        var issue=governance.createSystemIssue(buyerId,new ReturnCaseDtos.CreateSystemIssueRequest(null,null,null,null,
+                "Giao dịch thu phí bị lặp",List.of(),UUID.randomUUID().toString()));
+        governance.decideSystemIssue(ktvId,false,issue.caseId(),new ReturnCaseDtos.SystemIssueDecisionRequest(
+                "CONFIRM_ISSUE","Xác minh giao dịch bị lặp",null,null,UUID.randomUUID().toString()));
+        process.environment().put("OG_UI_ADMIN",tokens.issueAccessToken(users.findById(admin).orElseThrow()));
+        process.environment().put("OG_UI_REFUND",Long.toString(refund.caseId()));
+        process.environment().put("OG_UI_ISSUE",Long.toString(issue.caseId()));
+        process.environment().put("OG_UI_ORDER2",Long.toString(round2.orderId()));
+        process.environment().put("OG_UI_R1",Long.toString(round1));
+        process.environment().put("OG_UI_R2",Long.toString(round2.caseId()));
+        process.environment().put("OG_UI_ORDER",Long.toString(order));
+        LiveUiTestRunner.run(process);
+        assertThat(jdbcTemplate.queryForObject("SELECT state FROM og_compat.cases WHERE case_id=?",String.class,round1)).isEqualTo("RETURNING");
+        assertThat(jdbcTemplate.queryForObject("SELECT state FROM og_compat.cases WHERE case_id=?",String.class,round2.caseId())).isEqualTo("CLOSED");
+    }
+
+    private void checkStage(long caseId,long recipient,String kind,Instant due,int hours) {
+        String query="SELECT count(*) FROM og_compat.notification_reminders WHERE user_id=? AND reminder_type=? AND source_snapshot->>'caseId'=?";
+        for (Instant tick : List.of(due.minusSeconds(hours*3600L+1),due.minusSeconds(hours*3600L),due.minusSeconds(1),due)) {
+            reminders.setClock(java.time.Clock.fixed(tick,java.time.ZoneOffset.UTC));
+            reminders.sendDueCaseReminders(caseId);
+            assertThat(jdbcTemplate.queryForObject(query,Integer.class,recipient,kind,Long.toString(caseId)))
+                    .isEqualTo(tick.isBefore(due.minusSeconds(hours*3600L)) ? 0 : 1);
+        }
+    }
+
+    @Test
+    void stageRecipientsRespectLeadTimesAndCompletedRequests() {
+        try {
+            var f=postReturn();
+            Instant sellerDue=jdbcTemplate.queryForObject("SELECT seller_response_due_at FROM og_compat.cases WHERE case_id=?",java.sql.Timestamp.class,f.caseId()).toInstant();
+            checkStage(f.caseId(),f.sellerId(),"SELLER_R2_DEADLINE",sellerDue,12);
+            damageRequest(f);
+            returnCaseService.assignCaseToKtv(ktvId,f.caseId());
+            evidenceRequests.requestEvidence(ktvId,f.caseId(),new ReturnCaseDtos.KtvRequestEvidenceRequest(
+                    "Bổ sung ảnh chi tiết thiệt hại",List.of("Ảnh"),UUID.randomUUID().toString()));
+            checkEvidenceStage(f.caseId(),f.sellerId(),"SELLER_EVIDENCE_DUE");
+            var staffCase=postReturn();
+            damageRequest(staffCase);
+            returnCaseService.assignCaseToKtv(ktvId,staffCase.caseId());
+            Instant ktvDue=jdbcTemplate.queryForObject("SELECT ktv_due_at FROM og_compat.case_rounds WHERE round_id=?",java.sql.Timestamp.class,staffCase.round2Id()).toInstant();
+            checkStage(staffCase.caseId(),ktvId,"KTV_SLA_DEADLINE",ktvDue,6);
+            var unassigned=postReturn();
+            damageRequest(unassigned);
+            reminders.setOnDutyKtvId(ktvId);
+            Instant dutyDue=jdbcTemplate.queryForObject("SELECT ktv_due_at FROM og_compat.case_rounds WHERE round_id=?",java.sql.Timestamp.class,unassigned.round2Id()).toInstant();
+            checkStage(unassigned.caseId(),ktvId,"KTV_SLA_DEADLINE",dutyDue,6);
+            var order=createDeliveredUc83Order(buyerId,sellerId,1,true,false);
+            var r=returnCaseService.createReturnRequest(buyerId,order.orderId(),new ReturnCaseDtos.CreateReturnRequest(
+                    ReturnReasonCode.DAMAGED_OR_DEFECTIVE,"Hàng nhận bị vỡ",List.of(),UUID.randomUUID().toString()));
+            returnCaseService.sellerRespondRound1(sellerId,r.caseId(),new ReturnCaseDtos.SellerRound1ResponseRequest(
+                    "SELLER_DECLINED","Đề nghị KTV xét duyệt",UUID.randomUUID().toString()));
+            returnCaseService.assignCaseToKtv(ktvId,r.caseId());
+            evidenceRequests.requestRound1Evidence(ktvId,r.caseId(),new ReturnCaseDtos.KtvRequestEvidenceRequest(
+                    "Bổ sung ảnh sản phẩm đã nhận",List.of("Ảnh"),UUID.randomUUID().toString()));
+            checkEvidenceStage(r.caseId(),buyerId,"BUYER_EVIDENCE_DUE");
+            returnCaseService.supplementBuyerEvidenceRound1(buyerId,r.caseId(),new ReturnCaseDtos.BuyerSupplementEvidenceRequest(
+                    "Biên nhận bổ sung",List.of(createPostgresEvidence("IMAGE","evidence/receipt.jpg")),UUID.randomUUID().toString()));
+            var next=evidenceRequests.requestRound1Evidence(ktvId,r.caseId(),new ReturnCaseDtos.KtvRequestEvidenceRequest(
+                    "Bổ sung ảnh kiện hàng sau khi mở",List.of("Ảnh"),UUID.randomUUID().toString()));
+            returnCaseService.supplementBuyerEvidenceRound1(buyerId,r.caseId(),new ReturnCaseDtos.BuyerSupplementEvidenceRequest(
+                    "Ảnh bổ sung lần hai",List.of(createPostgresEvidence("IMAGE","evidence/parcel.jpg")),UUID.randomUUID().toString()));
+            entityManager.flush();
+            reminders.setClock(java.time.Clock.fixed(next.response().deadlineAt().minusSeconds(3600),java.time.ZoneOffset.UTC));
+            reminders.sendDueCaseReminders(r.caseId());
+            assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM og_compat.notification_reminders WHERE source_key=?",
+                    Integer.class,"UC48:BUYER_EVIDENCE_DUE:REQ:"+next.response().requestId())).isZero();
+        } finally { reminders.setOnDutyKtvId(0); reminders.setClock(java.time.Clock.systemUTC()); }
+    }
+
+    private void checkEvidenceStage(long id,long recipient,String kind) {
+        entityManager.flush();
+        Instant due=jdbcTemplate.queryForObject("SELECT deadline_at FROM og_compat.case_evidence_requests WHERE case_id=? AND status='PENDING'",
+                java.sql.Timestamp.class,id).toInstant();
+        checkStage(id,recipient,kind,due,12);
+    }
 
     private record PostReturnFixture(Long caseId, Long round2Id, Long orderId, Long buyerId, Long sellerId, Uc83OrderFixture orderFixture) {}
 

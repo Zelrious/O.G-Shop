@@ -3,6 +3,7 @@ import { PageHeader } from '../../shared/components';
 import { Select } from '../../shared/components/Select/Select';
 import { MediaLightboxModal } from '../../shared/components/MediaLightboxModal';
 import { Uc83SettlementConfirmPanel } from '../../features/disputes/Uc83SettlementConfirmPanel';
+import { KtvUc83QueueSection } from '../../features/disputes/KtvUc83QueueSection';
 import { ConsoleIcons } from '../../shared/layout/ConsoleIcons';
 import {
   TableActionDropdown,
@@ -466,6 +467,8 @@ export const KtvDisputesPage: React.FC = () => {
         title="Phân xử tranh chấp & Khiếu nại giao dịch"
         description="Kiểm tra đối soát 2 chiều (Video mở kiện của Người mua vs Ảnh đóng gói của Người bán), phân xử giải ngân Escrow hoặc hoàn tiền theo UC62, UC71, UC75, UC83."
       />
+
+      <KtvUc83QueueSection />
 
       {actionError && (
         <div

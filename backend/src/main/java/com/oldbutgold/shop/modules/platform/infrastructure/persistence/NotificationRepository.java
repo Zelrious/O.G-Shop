@@ -57,17 +57,28 @@ public class NotificationRepository {
 
     public List<NotificationDtos.Item> list(long userId,int page,int size) {
         return jdbc.query("""
-            SELECT notification_id AS id,type,title,content,is_read AS read,created_at AS "createdAt",
-                read_at AS "readAt",target_data->>'destination' AS destination,
+            SELECT notification_id AS id,type,title,content,is_read AS read,n.created_at AS "createdAt",
+                read_at AS "readAt",
+                COALESCE(target_data->>'destination', CASE WHEN n.type IN ('ORDER_REVIEW_RECEIVED','ORDER_REVIEW_UPDATED') THEN 'ORDER_DETAIL' END) AS destination,
                 CASE WHEN reference_type='PRODUCT' THEN reference_id END AS "productId",
                 CASE WHEN reference_type='USER' THEN reference_id END AS "targetUserId",
-                CASE WHEN reference_type='CONVERSATION' THEN reference_id END AS "conversationId"
-            FROM public.notifications WHERE record_type='notifications' AND user_id=?
-            ORDER BY created_at DESC,notification_id DESC LIMIT ? OFFSET ?
+                CASE WHEN reference_type='CONVERSATION' THEN reference_id END AS "conversationId",
+                o.order_id AS "orderId", CASE WHEN o.buyer_id=n.user_id THEN 'BUYER' WHEN o.seller_id=n.user_id THEN 'SELLER' END AS "orderRole"
+            FROM public.notifications n
+            LEFT JOIN og_compat.cases c ON n.reference_type='CASE' AND n.target_data->>'destination'='ORDER_DETAIL' AND c.case_id=n.reference_id
+            LEFT JOIN og_compat.orders o ON (n.target_data->>'destination'='ORDER_DETAIL' OR n.type IN ('ORDER_REVIEW_RECEIVED','ORDER_REVIEW_UPDATED'))
+                AND o.order_id=COALESCE(
+                    CASE WHEN n.reference_type='ORDER' THEN n.reference_id END,
+                    CASE WHEN (n.target_data->>'orderId') ~ '^[0-9]+$' THEN (n.target_data->>'orderId')::bigint END,
+                    c.order_id
+                )
+                AND n.user_id IN (o.buyer_id,o.seller_id)
+            WHERE n.record_type='notifications' AND n.user_id=?
+            ORDER BY n.created_at DESC,notification_id DESC LIMIT ? OFFSET ?
             """,(rs,row)->new NotificationDtos.Item(rs.getLong("id"),rs.getString("type"),rs.getString("title"),
                 rs.getString("content"),rs.getBoolean("read"),rs.getTimestamp("createdAt").toInstant(),
                 rs.getTimestamp("readAt")==null?null:rs.getTimestamp("readAt").toInstant(),rs.getString("destination"),
-                rs.getObject("productId",Long.class),rs.getObject("targetUserId",Long.class),rs.getObject("conversationId",Long.class)),userId,size,(long)page*size);
+                rs.getObject("productId",Long.class),rs.getObject("targetUserId",Long.class),rs.getObject("conversationId",Long.class),rs.getObject("orderId",Long.class),rs.getString("orderRole")),userId,size,(long)page*size);
     }
     public long count(long userId,boolean unread) {
         return jdbc.queryForObject("SELECT count(*) FROM public.notifications WHERE record_type='notifications' AND user_id=?"+(unread?" AND NOT is_read":""),Long.class,userId);

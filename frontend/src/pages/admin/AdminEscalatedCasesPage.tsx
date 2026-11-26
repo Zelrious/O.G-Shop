@@ -1,13 +1,25 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { PageHeader } from '../../shared/components';
 import {
+  AdminAssigneeOption,
   AdminEscalatedCaseSummary,
+  ReturnCaseDetail,
   returnCaseApi,
 } from '../../features/disputes/returnCaseApi';
 import { Uc83SettlementConfirmPanel } from '../../features/disputes/Uc83SettlementConfirmPanel';
 
 export const AdminEscalatedCasesPage: React.FC = () => {
   const [items, setItems] = useState<AdminEscalatedCaseSummary[]>([]);
+  const [adminOptions, setAdminOptions] = useState<AdminAssigneeOption[]>([]);
+  const [systemIssues, setSystemIssues] = useState<ReturnCaseDetail[]>([]);
+  const [handoverAdminId, setHandoverAdminId] = useState('');
+  const [handoverReason, setHandoverReason] = useState('');
+  const [selectedSysIssue, setSelectedSysIssue] = useState<ReturnCaseDetail | null>(null);
+  const [sysResolution, setSysResolution] = useState<'CONFIRM_ISSUE' | 'REJECT_ISSUE'>('CONFIRM_ISSUE');
+  const [sysDecisionReason, setSysDecisionReason] = useState('');
+  const [compVoucherId, setCompVoucherId] = useState('');
+  const [compRecipientId, setCompRecipientId] = useState('');
+  const [compReason, setCompReason] = useState('');
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
@@ -46,6 +58,12 @@ export const AdminEscalatedCasesPage: React.FC = () => {
 
   useEffect(() => {
     void loadEscalated(0);
+    if (typeof returnCaseApi.getAdminAssignees === 'function') {
+      returnCaseApi.getAdminAssignees().then((rows) => setAdminOptions(rows || [])).catch(() => setAdminOptions([]));
+    }
+    if (typeof returnCaseApi.getAdminSystemIssues === 'function') {
+      returnCaseApi.getAdminSystemIssues().then((rows) => setSystemIssues(rows || [])).catch(() => setSystemIssues([]));
+    }
   }, [loadEscalated]);
 
   const handleOpenDrawer = (item: AdminEscalatedCaseSummary) => {
@@ -74,6 +92,64 @@ export const AdminEscalatedCasesPage: React.FC = () => {
       await loadEscalated(page);
     } catch (err) {
       setDrawerError(err instanceof Error ? err.message : 'Không thể gửi quyết định Vòng 2.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleHandover = async () => {
+    if (!selected || !handoverAdminId || handoverReason.trim().length < 5) {
+      setDrawerError('Vui lòng chọn Admin mới và nhập lý do bàn giao tối thiểu 5 ký tự.');
+      return;
+    }
+    setSubmitting(true);
+    setDrawerError(null);
+    try {
+      await returnCaseApi.adminHandoverCase(selected.caseId, Number(handoverAdminId), handoverReason.trim());
+      setBannerSuccess(`Đã bàn giao hồ sơ #${selected.caseId} sang Admin #${handoverAdminId}.`);
+      setHandoverReason('');
+      setSelected(null);
+      await loadEscalated(page);
+    } catch (err) {
+      setDrawerError(err instanceof Error ? err.message : 'Không thể bàn giao hồ sơ.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDecideSysIssue = async () => {
+    if (!selectedSysIssue || sysDecisionReason.trim().length < 5) return;
+    setSubmitting(true);
+    setErrorMsg(null);
+    try {
+      await returnCaseApi.adminDecideSystemIssue(selectedSysIssue.caseId, sysResolution, sysDecisionReason.trim());
+      setBannerSuccess(`Đã xử lý SYSTEM_ISSUE #${selectedSysIssue.caseId} (${sysResolution}).`);
+      setSelectedSysIssue(null);
+      setSysDecisionReason('');
+      const refreshed = await returnCaseApi.getAdminSystemIssues();
+      setSystemIssues(refreshed || []);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Không thể quyết định SYSTEM_ISSUE.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleGrantVoucherComp = async () => {
+    if (!selectedSysIssue || !compVoucherId || !compRecipientId || compReason.trim().length < 5) return;
+    setSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const res = await returnCaseApi.grantAdminCompensation(selectedSysIssue.caseId, {
+        compensationType: 'VOUCHER',
+        recipientId: Number(compRecipientId),
+        voucherId: Number(compVoucherId),
+        reason: compReason.trim(),
+      });
+      setBannerSuccess(res.message);
+      setCompReason('');
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Không thể cấp voucher bồi thường.');
     } finally {
       setSubmitting(false);
     }
@@ -318,7 +394,84 @@ export const AdminEscalatedCasesPage: React.FC = () => {
             <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
               <Uc83SettlementConfirmPanel orderId={selected.orderId} />
             </div>
+
+            {adminOptions.length > 0 && (
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <strong style={{ fontSize: '0.86rem' }}>Bàn giao Admin khác (PO-02 Option A)</strong>
+                <select value={handoverAdminId} onChange={(e) => setHandoverAdminId(e.target.value)} style={{ padding: '7px 10px', borderRadius: 6, border: '1px solid #cbd5e1' }}>
+                  <option value="">-- Chọn Admin nhận bàn giao --</option>
+                  {adminOptions.map((a) => (
+                    <option key={a.userId} value={a.userId}>{a.fullName} (#{a.userId})</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  placeholder="Lý do bàn giao (bắt buộc)..."
+                  value={handoverReason}
+                  onChange={(e) => setHandoverReason(e.target.value)}
+                  style={{ padding: '7px 10px', borderRadius: 6, border: '1px solid #cbd5e1' }}
+                />
+                <button type="button" onClick={() => void handleHandover()} disabled={submitting} className="og-button og-button--secondary">
+                  Bàn giao kèm lịch sử
+                </button>
+              </div>
+            )}
           </div>
+        </div>
+      )}
+
+      {systemIssues.length > 0 && (
+        <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', padding: 16 }}>
+          <h3 style={{ margin: '0 0 10px', fontSize: '1rem' }}>Khiếu nại lỗi hệ thống chuyển Admin (UC64/UC65/UC76)</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {systemIssues.map((s) => (
+              <div key={s.caseId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 10, border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                <div>
+                  <strong>SYS #{s.caseId}</strong> · Trạng thái: {s.state}
+                  <div style={{ fontSize: '0.82rem', color: '#64748b' }}>{s.description}</div>
+                </div>
+                <button type="button" className="og-button og-button--primary" onClick={() => {
+                  setSelectedSysIssue(s);
+                  setCompRecipientId(String(s.createdBy || ''));
+                }}>
+                  Xét duyệt / Bồi thường
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {selectedSysIssue && (
+        <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #cbd5e1', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <strong>Xét duyệt SYSTEM_ISSUE #{selectedSysIssue.caseId} ({selectedSysIssue.state})</strong>
+          {selectedSysIssue.state === 'OPEN' || selectedSysIssue.state === 'REVIEWING' ? (
+            <>
+              <select value={sysResolution} onChange={(e) => setSysResolution(e.target.value as 'CONFIRM_ISSUE' | 'REJECT_ISSUE')} style={{ padding: 8, borderRadius: 6, border: '1px solid #cbd5e1' }}>
+                <option value="CONFIRM_ISSUE">Chấp nhận lỗi hệ thống (CLOSED)</option>
+                <option value="REJECT_ISSUE">Bác khiếu nại (REJECTED — không tính sự cố)</option>
+              </select>
+              <textarea rows={2} placeholder="Lý do quyết định..." value={sysDecisionReason} onChange={(e) => setSysDecisionReason(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #cbd5e1' }} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="og-button og-button--primary" disabled={submitting} onClick={() => void handleDecideSysIssue()}>Lưu quyết định</button>
+                <button type="button" className="og-button og-button--secondary" onClick={() => setSelectedSysIssue(null)}>Đóng</button>
+              </div>
+            </>
+          ) : selectedSysIssue.state === 'CLOSED' ? (
+            <>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input type="number" placeholder="Voucher ID" value={compVoucherId} onChange={(e) => setCompVoucherId(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #cbd5e1' }} />
+                <input type="number" placeholder="Recipient ID" value={compRecipientId} onChange={(e) => setCompRecipientId(e.target.value)} style={{ padding: 8, borderRadius: 6, border: '1px solid #cbd5e1' }} />
+                <input type="text" placeholder="Lý do cấp voucher bồi thường..." value={compReason} onChange={(e) => setCompReason(e.target.value)} style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #cbd5e1' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="og-button og-button--primary" disabled={submitting} onClick={() => void handleGrantVoucherComp()}>Cấp Voucher bồi thường (UC70)</button>
+                <button type="button" className="og-button og-button--secondary" onClick={() => setSelectedSysIssue(null)}>Đóng</button>
+              </div>
+            </>
+          ) : (
+            <div>Hồ sơ đã bị bác ({selectedSysIssue.state}) — không được phép bồi thường. <button type="button" onClick={() => setSelectedSysIssue(null)}>Đóng</button></div>
+          )}
         </div>
       )}
     </div>

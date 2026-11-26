@@ -594,6 +594,17 @@ public class OrderManagementService {
             }
         }
 
+        if (jdbcTemplate != null) {
+            try {
+                jdbcTemplate.update("""
+                        UPDATE og_compat.notification_reminders
+                        SET state = 'CANCELLED'
+                        WHERE user_id = ? AND source_key = ? AND state = 'PENDING'
+                        """, buyerId, "UC48:RETURN_WINDOW_24H:ORDER:" + orderId);
+            } catch (DataAccessException ignored) {
+            }
+        }
+
         if (entityManager != null) {
             entityManager.flush();
             entityManager.refresh(order);

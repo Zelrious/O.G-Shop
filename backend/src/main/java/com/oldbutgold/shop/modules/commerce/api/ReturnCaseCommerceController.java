@@ -56,17 +56,19 @@ public class ReturnCaseCommerceController {
     }
 
     /**
-     * 2. Tra cứu chi tiết hồ sơ trả hàng (Buyer / Seller - chỉ active case per R2)
+     * 2. Tra cứu chi tiết hồ sơ trả hàng (Buyer / Seller - active case hoặc cả closed khi includeClosed=true)
      * GET /api/v1/commerce/orders/{orderId}/return-case
      */
     @GetMapping("/return-case")
     public ResponseEntity<ReturnCaseDtos.ReturnCaseDetailResponse> getReturnCase(
             @AuthenticationPrincipal Jwt jwt,
-            @PathVariable Long orderId
+            @PathVariable Long orderId,
+            @org.springframework.web.bind.annotation.RequestParam(name = "includeClosed", required = false, defaultValue = "false") boolean includeClosed
     ) {
         long actorId = extractUserId(jwt);
-        ReturnCaseDtos.ReturnCaseDetailResponse response =
-                returnCaseService.getActiveReturnCaseForOrder(actorId, orderId);
+        ReturnCaseDtos.ReturnCaseDetailResponse response = includeClosed
+                ? returnCaseService.getActiveReturnCaseForOrder(actorId, orderId, true)
+                : returnCaseService.getActiveReturnCaseForOrder(actorId, orderId);
         return ResponseEntity.ok(response);
     }
 

@@ -16,6 +16,7 @@ export function AccountStatusPage() {
     return () => { ignore = true; };
   }, [user?.userId, refresh]);
   return <section className="og-account-self"><header className="og-accounts-heading"><div><span className="og-eyebrow">TÀI KHOẢN CỦA BẠN</span><h1>Tình trạng và điểm uy tín</h1><p>Xem lý do, thời hạn và các nghĩa vụ đang có. Liên hệ hỗ trợ nếu bạn không đồng ý với quyết định.</p></div><button className="og-button og-button--outline" disabled={loading} onClick={() => setRefresh(n => n + 1)}>Làm mới hồ sơ</button></header>
+    <Link to="/system-complaints">Khiếu nại hệ thống</Link>
     {loading && <p role="status">Đang tải tình trạng tài khoản...</p>}{error && <div role="alert"><Alert type="danger">{error}</Alert></div>}
     {!loading && !error && data && <><article className="og-account-detail"><AccountDetailView detail={data} /><AccountHistoryView key={`${data.user.userId}:${data.user.version}`} userId={null} /></article>
       <div className="og-account-toolbar"><Link className="og-button og-button--outline" to="/orders">Xem toàn bộ đơn mua cũ</Link>{data.user.roles.includes('SELLER') && <Link className="og-button og-button--outline" to="/seller/orders">Xem đơn bán cũ</Link>}</div>
