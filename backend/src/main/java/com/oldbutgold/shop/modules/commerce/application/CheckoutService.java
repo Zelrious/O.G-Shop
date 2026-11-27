@@ -365,18 +365,25 @@ public class CheckoutService {
         Long sourceAddressId = sellerAddress.id();
 
         // 3. Fee Policy
-        SystemFeePolicyEntity feePolicy = systemFeePolicyRepository.findFirstByStatusOrderByEffectiveFromDesc("ACTIVE")
-                .orElseThrow(() -> new IllegalStateException("Hệ thống chưa thiết lập chính sách phí hợp lệ."));
+        boolean isUc83Product = "UC83".equals(product.workflowModel())
+                && product.publicRevisionId() != null
+                && jdbcTemplate != null;
+
+        SystemFeePolicyEntity feePolicy = null;
+        if (!isUc83Product) {
+            feePolicy = systemFeePolicyRepository.findFirstByStatusOrderByEffectiveFromDesc("ACTIVE")
+                    .orElseThrow(() -> new IllegalStateException("Hệ thống chưa thiết lập chính sách phí hợp lệ."));
+        }
 
         BigDecimal subtotal = agreement==null?product.listedPrice():agreement.price();
         BigDecimal shippingFee = STANDARD_SHIPPING_FEE;
         if (shippingFacade != null && sellerAddress.hasValidGhnCodes() && address.hasValidGhnCodes()) {
             shippingFee = shippingFacade.calculateShippingFee(sellerAddress.ghnDistrictId(), sellerAddress.ghnWardCode(), address.ghnDistrictId(), address.ghnWardCode(), 500);
         }
-        BigDecimal buyerFee = agreement==null?BigDecimal.ZERO:agreement.buyerFee(); // Accepted offers preserve the fee snapshot.
-        BigDecimal sellerFee = agreement==null?feePolicy.getSellerFixedFee().add(
+        BigDecimal buyerFee = isUc83Product ? BigDecimal.ZERO : (agreement==null?BigDecimal.ZERO:agreement.buyerFee()); // Accepted offers preserve the fee snapshot.
+        BigDecimal sellerFee = isUc83Product ? BigDecimal.ZERO : (agreement==null?feePolicy.getSellerFixedFee().add(
                 subtotal.multiply(feePolicy.getSellerFeeRate()).setScale(0, RoundingMode.HALF_UP)
-        ):agreement.sellerFee();
+        ):agreement.sellerFee());
 
         // 4. Voucher Resolution
         BigDecimal voucherDiscount = BigDecimal.ZERO;
@@ -454,54 +461,149 @@ public class CheckoutService {
         // DP-02 & User input: 1 hour payment countdown window
         Instant paymentDueAt = now.plus(Duration.ofHours(1));
 
-        // 6. Save Order
-        OrderEntity order = new OrderEntity(
-                checkoutGroupId,
-                buyerId,
-                product.sellerId(),
-                sourceAddressId,
-                address.recipientName(),
-                address.phoneNumber(),
-                address.province(),
-                address.district(),
-                address.ward(),
-                address.detailAddress(),
-                address.ghnProvinceId(),
-                address.ghnDistrictId(),
-                address.ghnWardCode(),
-                subtotal,
-                shippingFee,
-                buyerFee,
-                sellerFee,
-                sellerProceeds,
-                voucherDiscount,
-                shippingDiscount,
-                coinDiscount,
-                sponsorType,
-                totalAmount,
-                paymentDueAt,
-                now
-        );
+        // 6. Save Order (UC83 checkout_group + order when product is UC83; LEGACY_V14 otherwise)
+        OrderEntity order;
+        if (isUc83Product) {
+            boolean returnAllowed = Boolean.TRUE.equals(product.returnAllowed());
+            java.time.LocalDate handoverDay = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).plusDays(2);
+            String addressSnapshotJson;
+            try {
+                addressSnapshotJson = json.writeValueAsString(Map.of(
+                        "recipient_name", address.recipientName(),
+                        "phone_number", address.phoneNumber(),
+                        "province", address.province(),
+                        "district", address.district(),
+                        "ward", address.ward(),
+                        "detail_address", address.detailAddress()
+                ));
+            } catch (Exception e) {
+                addressSnapshotJson = "{}";
+            }
+            Long existingGroupCount = jdbcTemplate.queryForObject(
+                    "SELECT count(*) FROM og_compat.checkout_groups WHERE group_id = ?",
+                    Long.class,
+                    checkoutGroupId
+            );
+            if (existingGroupCount == null || existingGroupCount == 0L) {
+                jdbcTemplate.update("""
+                        INSERT INTO og_compat.checkout_groups (
+                            group_id, buyer_id, command_key, request_digest, address_snapshot,
+                            delivery_method, carrier, payment_method, expected_total, state, created_at, payment_due_at
+                        ) VALUES (?, ?, ?, ?, CAST(? AS jsonb), 'CARRIER', 'GHN', 'BANK_TRANSFER_MOCK', ?, 'READY', ?, ?)
+                        """,
+                        checkoutGroupId,
+                        buyerId,
+                        normalizedKey,
+                        requestHash,
+                        addressSnapshotJson,
+                        totalAmount,
+                        Timestamp.from(now),
+                        Timestamp.from(paymentDueAt)
+                );
+            }
+            order = new OrderEntity(
+                    checkoutGroupId,
+                    buyerId,
+                    product.sellerId(),
+                    sourceAddressId,
+                    address.recipientName(),
+                    address.phoneNumber(),
+                    address.province(),
+                    address.district(),
+                    address.ward(),
+                    address.detailAddress(),
+                    address.ghnProvinceId(),
+                    address.ghnDistrictId(),
+                    address.ghnWardCode(),
+                    subtotal,
+                    shippingFee,
+                    buyerFee,
+                    sellerFee,
+                    sellerProceeds,
+                    voucherDiscount,
+                    shippingDiscount,
+                    coinDiscount,
+                    sponsorType,
+                    totalAmount,
+                    paymentDueAt,
+                    now,
+                    "UC83",
+                    checkoutGroupId,
+                    returnAllowed,
+                    "CARRIER",
+                    handoverDay
+            );
+            order.setCarrierSnapshot("GHN");
+        } else {
+            order = new OrderEntity(
+                    checkoutGroupId,
+                    buyerId,
+                    product.sellerId(),
+                    sourceAddressId,
+                    address.recipientName(),
+                    address.phoneNumber(),
+                    address.province(),
+                    address.district(),
+                    address.ward(),
+                    address.detailAddress(),
+                    address.ghnProvinceId(),
+                    address.ghnDistrictId(),
+                    address.ghnWardCode(),
+                    subtotal,
+                    shippingFee,
+                    buyerFee,
+                    sellerFee,
+                    sellerProceeds,
+                    voucherDiscount,
+                    shippingDiscount,
+                    coinDiscount,
+                    sponsorType,
+                    totalAmount,
+                    paymentDueAt,
+                    now
+            );
+        }
         OrderEntity savedOrder = orderRepository.save(order);
 
         // 7. Save OrderItem with PO-DEC-04B item allocation
-        OrderItemEntity orderItem = new OrderItemEntity(
-                savedOrder.getId(),
-                product.productId(),
-                product.title(),
-                (short) 1,
-                product.listedPrice(),
-                subtotal,
-                buyerFee,
-                sellerFee,
-                subtotal.add(buyerFee).subtract(coinDiscount),
-                sellerProceeds,
-                agreement == null ? feePolicy.getId() : agreement.feePolicyId(),
-                request.offerId(),
-                agreement == null ? "LIST_PRICE" : "OFFER",
-                voucherDiscount,
-                coinDiscount
-        );
+        OrderItemEntity orderItem = isUc83Product
+                ? new OrderItemEntity(
+                        savedOrder.getId(),
+                        product.productId(),
+                        product.title(),
+                        (short) 1,
+                        product.listedPrice(),
+                        subtotal,
+                        buyerFee,
+                        sellerFee,
+                        subtotal.add(buyerFee).subtract(coinDiscount),
+                        sellerProceeds,
+                        null,
+                        request.offerId(),
+                        agreement == null ? "LIST_PRICE" : "OFFER",
+                        voucherDiscount,
+                        coinDiscount,
+                        "UC83",
+                        product.publicRevisionId(),
+                        Boolean.TRUE.equals(product.returnAllowed())
+                )
+                : new OrderItemEntity(
+                        savedOrder.getId(),
+                        product.productId(),
+                        product.title(),
+                        (short) 1,
+                        product.listedPrice(),
+                        subtotal,
+                        buyerFee,
+                        sellerFee,
+                        subtotal.add(buyerFee).subtract(coinDiscount),
+                        sellerProceeds,
+                        agreement == null ? feePolicy.getId() : agreement.feePolicyId(),
+                        request.offerId(),
+                        agreement == null ? "LIST_PRICE" : "OFFER",
+                        voucherDiscount,
+                        coinDiscount
+                );
         orderItemRepository.saveAndFlush(orderItem);
         if (request.offerId() != null) negotiated.linkOrder(buyerId, request.offerId(), savedOrder.getId());
 
@@ -557,8 +659,26 @@ public class CheckoutService {
             wallet.bindOrder(savedOrder.getId(),ownedGrant);
         }
 
-        // 9. Reserve Product
-        catalogCommerceFacade.reserveProduct(product.productId(), savedOrder.getId(), paymentDueAt, now);
+        // 9. Reserve Product (UC83 uses inventory_reservations trigger; LEGACY_V14 uses facade reserveProduct)
+        if (isUc83Product) {
+            jdbcTemplate.update("""
+                    INSERT INTO og_compat.inventory_reservations (
+                        reservation_id, product_id, order_item_id, quantity, state,
+                        created_at, expires_at, changed_at, command_key
+                    ) VALUES (?, ?, ?, ?, 'HELD', ?, ?, ?, ?)
+                    """,
+                    UUID.randomUUID(),
+                    product.productId(),
+                    orderItem.getId(),
+                    orderItem.getQuantity(),
+                    Timestamp.from(now),
+                    Timestamp.from(paymentDueAt),
+                    Timestamp.from(now),
+                    "RES:" + normalizedKey + ":" + orderItem.getId()
+            );
+        } else {
+            catalogCommerceFacade.reserveProduct(product.productId(), savedOrder.getId(), paymentDueAt, now);
+        }
 
         String fullAddress = String.format("%s, %s, %s, %s",
                 address.detailAddress(), address.ward(), address.district(), address.province());

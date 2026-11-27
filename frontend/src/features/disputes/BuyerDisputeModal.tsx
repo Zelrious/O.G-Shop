@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { disputeApi } from './disputeApi';
+import { PrivateEvidenceImage } from './PrivateEvidenceMedia';
+import { returnCaseApi } from './returnCaseApi';
 
 interface BuyerDisputeModalProps {
   isOpen: boolean;
@@ -20,10 +22,32 @@ export const BuyerDisputeModal: React.FC<BuyerDisputeModalProps> = ({
   const [description, setDescription] = useState('');
   const [videoUnboxingUrl, setVideoUnboxingUrl] = useState('');
   const [evidenceInput, setEvidenceInput] = useState('');
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const handleUploadFiles = async (files: FileList | null, target: 'VIDEO' | 'IMAGE') => {
+    if (!files || files.length === 0) return;
+    setError(null);
+    setUploadingMedia(true);
+    try {
+      for (const file of Array.from(files)) {
+        const dto = await returnCaseApi.uploadEvidence(file, target);
+        const key = dto.objectKey || '';
+        if (target === 'VIDEO') {
+          setVideoUnboxingUrl(key);
+        } else {
+          setEvidenceInput((prev) => (prev.trim() ? `${prev.trim()}\n${key}` : key));
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không thể tải tệp bằng chứng lên.');
+    } finally {
+      setUploadingMedia(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,12 +185,34 @@ export const BuyerDisputeModal: React.FC<BuyerDisputeModalProps> = ({
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, marginBottom: '4px', color: '#334155' }}>
-              Link Video mở kiện hàng (Unboxing Video)
-            </label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155' }}>
+                Link Video mở kiện hàng (Unboxing Video)
+              </label>
+              <label
+                style={{
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: '#2563eb',
+                  cursor: uploadingMedia ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {uploadingMedia ? 'Đang tải lên...' : '+ Chọn video từ máy'}
+                <input
+                  type="file"
+                  accept="video/mp4,video/webm"
+                  disabled={uploadingMedia}
+                  onChange={(e) => {
+                    void handleUploadFiles(e.target.files, 'VIDEO');
+                    e.target.value = '';
+                  }}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
             <input
-              type="url"
-              placeholder="https://.../unboxing-video.mp4"
+              type="text"
+              placeholder="Chọn video từ máy hoặc dán link video (https://...)"
               value={videoUnboxingUrl}
               onChange={(e) => setVideoUnboxingUrl(e.target.value)}
               style={{
@@ -184,12 +230,35 @@ export const BuyerDisputeModal: React.FC<BuyerDisputeModalProps> = ({
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, marginBottom: '4px', color: '#334155' }}>
-              Link hình ảnh bằng chứng (Mỗi link một dòng)
-            </label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155' }}>
+                Link hình ảnh bằng chứng (Mỗi link một dòng)
+              </label>
+              <label
+                style={{
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: '#2563eb',
+                  cursor: uploadingMedia ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {uploadingMedia ? 'Đang tải lên...' : '+ Chọn ảnh từ máy'}
+                <input
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp"
+                  disabled={uploadingMedia}
+                  onChange={(e) => {
+                    void handleUploadFiles(e.target.files, 'IMAGE');
+                    e.target.value = '';
+                  }}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
             <textarea
               rows={2}
-              placeholder="https://.../anh1.jpg&#10;https://.../anh2.jpg"
+              placeholder="Chọn ảnh từ máy hoặc nhập mỗi link ảnh một dòng..."
               value={evidenceInput}
               onChange={(e) => setEvidenceInput(e.target.value)}
               style={{
@@ -202,6 +271,22 @@ export const BuyerDisputeModal: React.FC<BuyerDisputeModalProps> = ({
                 fontFamily: 'monospace',
               }}
             />
+            {evidenceInput.trim() && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                {evidenceInput
+                  .split('\n')
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+                  .map((url, idx) => (
+                    <PrivateEvidenceImage
+                      key={`${url}-${idx}`}
+                      objectKey={url}
+                      alt={`Bằng chứng #${idx + 1}`}
+                      style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid #cbd5e1' }}
+                    />
+                  ))}
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>

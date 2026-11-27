@@ -1,5 +1,10 @@
 # Platform Module
 
+## Khắc phục review PR #24: Chống CSV Formula Injection trong `AdminDashboardService` — 2026-11-27
+
+- `AdminDashboardService.escapeCsv`: chặn công thức CSV (`=`, `+`, `-`, `@`, `\t`, `\r`, kể cả sau khoảng trắng đầu chuỗi) bằng tiền tố `'`, đồng thời quote đúng chuỗi chứa `\r`, `\n`, `,`, `"`.
+- Kiểm chứng: `AdminDashboardServiceTest` (6/6 PASS).
+
 ## Console selects and eKYC — TASK-0096 / 2026-10-13
 
 KTV/Admin:18 native selects chuyển sang shared Select; upward popover neo sát trigger6px, theo dõi vị trí khi sidebar chuyển động; sidebar chờ320ms, transition360ms. Cột queue360–400px; eKYC list/detail và masked list; voucher tự chọn campaign đầu API, bỏ option rỗng. API/handler/rules giữ nguyên.204 tests/43 files, lint/TypeScript/build đạt;82 browser checks không overflow/JS error, menu lệch ngang0px/gap6px. [Ảnh và giới hạn](../../output/ui-0096/README.md).

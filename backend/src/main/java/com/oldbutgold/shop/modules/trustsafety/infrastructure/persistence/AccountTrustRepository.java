@@ -18,14 +18,17 @@ public class AccountTrustRepository {
             FROM og_compat.reviews r JOIN og_compat.orders o USING(order_id)
             WHERE r.reviewee_id=? AND r.rating>=3 AND r.deleted_at IS NULL
               AND ((r.reviewer_id=o.buyer_id AND r.reviewee_id=o.seller_id) OR (r.reviewer_id=o.seller_id AND r.reviewee_id=o.buyer_id))
-              AND (o.valid_delivered_at IS NOT NULL OR (o.workflow_model='LEGACY_V14' AND o.status='COMPLETED'))
+              AND (o.valid_delivered_at IS NOT NULL OR (o.workflow_model='LEGACY_V14' AND (
+                    o.status IN ('DELIVERED','COMPLETED')
+                    OR EXISTS(SELECT 1 FROM og_compat.shipments s WHERE s.order_id=o.order_id AND s.leg='OUTBOUND' AND (s.status='DELIVERED' OR s.delivered_at IS NOT NULL))
+              )))
             ORDER BY created_at,id
             """,(rs,n)->new ReputationEvent(rs.getString(1),rs.getString(2),rs.getInt(3),rs.getString(4),rs.getObject(5,Long.class),rs.getTimestamp(6).toInstant()),userId,userId);
         int score=100;
         for(var event:events) score=Math.max(0,Math.min(100,score+event.pointsDelta()));
         return new Reputation(score,events.reversed());
     }
-    private static final String PARTICIPANT="(c.created_by=? OR o.buyer_id=? OR o.seller_id=?)";
+    private static final String PARTICIPANT="(c.created_by=? OR (c.case_type<>'SYSTEM_ISSUE' AND (o.buyer_id=? OR o.seller_id=?)))";
     public List<CaseSummary> cases(long userId) {
         return jdbc.query("""
             SELECT c.case_id,c.order_id,c.case_type,c.state,c.description,c.created_at,public.og28_response_deadline(c.case_id) AS deadline,

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { AuthProvider } from '../features/auth';
 import { NotificationsPage } from '../pages/NotificationsPage';
+import { SystemComplaintsPage } from '../pages/SystemComplaintsPage';
 import { AccountStatusPage } from '../pages/AccountStatusPage';
 import { VouchersPage } from '../pages/VouchersPage';
 import { MessagesPage } from '../pages/MessagesPage';
@@ -53,9 +54,11 @@ import {
   AdminVouchersPage,
   AdminBroadcastsPage,
   AdminFulfillmentIncidentsPage,
+  AdminEscalatedCasesPage,
 } from '../pages';
 import { SellerDashboardPage } from '../pages/seller/SellerDashboardPage';
 import { SellerSettingsPage } from '../pages/seller/SellerSettingsPage';
+import { PublicSellerProfilePage } from '../pages/PublicSellerProfilePage';
 import './styles.css';
 import './ui-theme.css';
 import { ChatProvider } from '../features/chat-offer/ChatProvider';
@@ -96,12 +99,14 @@ export function App() {
                   {/* 2. Main Public & Buyer Marketplace Layout Shell */}
                   <Route element={<AppLayout />}>
                     <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+                    <Route path="/system-complaints" element={<ProtectedRoute allowedRoles={['BUYER', 'SELLER']}><SystemComplaintsPage /></ProtectedRoute>} />
                     <Route path="/account/status" element={<ProtectedRoute allowedRoles={['BUYER', 'SELLER']}><AccountStatusPage /></ProtectedRoute>} />
                     <Route path="/messages" element={<ProtectedRoute allowedRoles={['BUYER', 'SELLER']}><MessagesPage /></ProtectedRoute>} />
                     <Route path="/" element={<HomePage />} />
                     <Route path="/marketplace" element={<MarketplacePage />} />
                     <Route path="/vouchers" element={<ProtectedRoute allowedRoles={['BUYER', 'SELLER']}><VouchersPage /></ProtectedRoute>} />
                     <Route path="/products/:productId" element={<ProductDetailPage />} />
+                    <Route path="/sellers/:sellerId" element={<PublicSellerProfilePage />} />
                     <Route path="/cart" element={<CartPage />} />
                   <Route
                     path="/checkout"
@@ -245,6 +250,7 @@ export function App() {
                   <Route path="/admin/vouchers" element={<AdminVouchersPage />} />
                   <Route path="/admin/broadcasts" element={<AdminBroadcastsPage />} />
                   <Route path="/admin/fulfillment-incidents" element={<AdminFulfillmentIncidentsPage />} />
+                  <Route path="/admin/escalated-cases" element={<AdminEscalatedCasesPage />} />
                 </Route>
 
                 {/* 404 Fallback */}

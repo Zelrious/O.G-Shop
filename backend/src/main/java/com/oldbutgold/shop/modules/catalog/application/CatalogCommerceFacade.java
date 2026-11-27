@@ -35,6 +35,24 @@ public interface CatalogCommerceFacade {
             String status,
             String thumbnailUrl,
             boolean requiresBuyerEkyc,
-            long version
-    ) {}
+            long version,
+            String workflowModel,
+            Long publicRevisionId,
+            Boolean returnAllowed
+    ) {
+        public CommerceProductDetail(
+                long productId,
+                long sellerId,
+                String title,
+                BigDecimal listedPrice,
+                String condition,
+                String status,
+                String thumbnailUrl,
+                boolean requiresBuyerEkyc,
+                long version
+        ) {
+            this(productId, sellerId, title, listedPrice, condition, status, thumbnailUrl, requiresBuyerEkyc, version,
+                    "LEGACY_V14", null, null);
+        }
+    }
 }

@@ -1,36 +1,45 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { expect, it, vi } from 'vitest';
 import { KtvComplaintsPage } from './KtvComplaintsPage';
-import { managementStore } from '../../features/management/managementStore';
+import { SystemComplaintsPage } from '../SystemComplaintsPage';
+import { returnCaseApi } from '../../features/disputes/returnCaseApi';
 
-describe('KtvComplaintsPage Component', () => {
-  it('renders complaint list and allows KTV to escalate system errors to Admin', () => {
-    const escalateSpy = vi.spyOn(managementStore, 'escalateComplaintToAdmin');
+it('receives an unassigned issue and refreshes the queue', async () => {
+  const row = {caseId: 13, orderId: 2, state: 'OPEN'};
+  vi.spyOn(returnCaseApi,'getKtvAdmins').mockResolvedValue([]);
+  vi.spyOn(returnCaseApi,'getKtvSystemIssues').mockResolvedValueOnce([row]).mockResolvedValue([{...row,state:'REVIEWING'}]);
+  const receive = vi.spyOn(returnCaseApi,'issueProgress').mockResolvedValue(row);
+  render(<KtvComplaintsPage />);
+  fireEvent.click(await screen.findByRole('button',{name:'Tiếp nhận'}));
+  await waitFor(() => expect(receive).toHaveBeenCalledWith('/ktv/system-issues/13/receive',''));
+  expect(await screen.findByLabelText('Nội dung xử lý')).toBeInTheDocument();
+});
 
-    render(
-      <MemoryRouter>
-        <KtvComplaintsPage />
-      </MemoryRouter>
-    );
+it('handles malformed SUPPLEMENTED event metadata safely on both KtvComplaintsPage and SystemComplaintsPage', async () => {
+  const brokenIssue = {
+    caseId: 88,
+    orderId: 5,
+    caseType: 'SYSTEM_ISSUE',
+    state: 'REVIEWING',
+    fullDescription: 'Mô tả sự cố kiểm thử JSON lỗi',
+    events: [
+      {
+        eventId: 'ev-1',
+        caseId: 88,
+        eventType: 'SUPPLEMENTED',
+        reason: 'Sự kiện có metadata hỏng',
+        metadata: '{not-valid-json',
+        occurredAt: '2026-11-26T00:00:00Z',
+      },
+    ],
+  };
+  vi.spyOn(returnCaseApi, 'getKtvAdmins').mockResolvedValue([]);
+  vi.spyOn(returnCaseApi, 'getKtvSystemIssues').mockResolvedValue([brokenIssue]);
+  vi.spyOn(returnCaseApi, 'mySystemIssues').mockResolvedValue([brokenIssue]);
 
-    // Header
-    expect(screen.getByRole('heading', { level: 1, name: /Tiếp nhận & Xử lý khiếu nại/i })).toBeInTheDocument();
+  render(<KtvComplaintsPage />);
+  expect(await screen.findByRole('article', { name: 'Hồ sơ #88' })).toBeInTheDocument();
 
-    // Check at least one escalate button exists
-    const escalateButtons = screen.getAllByRole('button', { name: /Đẩy lên Admin \(Báo lỗi hệ thống\)/i });
-    expect(escalateButtons.length).toBeGreaterThanOrEqual(1);
-
-    // Click to open modal
-    fireEvent.click(escalateButtons[0]);
-
-    // Modal title
-    expect(screen.getByRole('heading', { level: 2, name: /Đẩy sự vụ lên Quản Trị Viên \(Admin\)/i })).toBeInTheDocument();
-
-    // Submit escalation
-    const sendBtn = screen.getByRole('button', { name: /Gửi báo cáo khẩn cho Admin/i });
-    fireEvent.click(sendBtn);
-
-    expect(escalateSpy).toHaveBeenCalled();
-  });
+  render(<SystemComplaintsPage />);
+  expect(await screen.findByText(/Hồ sơ #88 · Đang xem xét/)).toBeInTheDocument();
 });

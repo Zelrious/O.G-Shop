@@ -91,6 +91,43 @@ export function formatGhnStatus(rawStatus?: string | null): GhnStatusMeta {
   }
 }
 
+export interface OutboundGhnDisplayMeta extends GhnStatusMeta {
+  isDeliveredConfirmed: boolean;
+  rawDiagnosticStatus?: string | null;
+}
+
+/**
+ * Resolve outbound GHN display badge without letting stale Sandbox raw statuses
+ * (such as `ready_to_pick`) override an authoritatively confirmed delivery.
+ * Preserves `rawDiagnosticStatus` for troubleshooting.
+ */
+export function resolveOutboundGhnDisplayStatus(
+  order: { status: string; deliveredAt?: string | null },
+  tracking?: TrackingResponse | null,
+): OutboundGhnDisplayMeta {
+  const authoritativeDelivered =
+    tracking?.status === 'DELIVERED' ||
+    (Boolean(order.deliveredAt) &&
+      ['DELIVERED', 'COMPLETED', 'DISPUTED', 'REFUNDED'].includes(order.status));
+
+  if (authoritativeDelivered) {
+    return {
+      label: 'Đã giao hàng thành công',
+      color: '#16a34a',
+      bg: '#f0fdf4',
+      isDeliveredConfirmed: true,
+      rawDiagnosticStatus: tracking?.rawGhnStatus ?? null,
+    };
+  }
+
+  const base = formatGhnStatus(tracking?.rawGhnStatus);
+  return {
+    ...base,
+    isDeliveredConfirmed: false,
+    rawDiagnosticStatus: tracking?.rawGhnStatus ?? null,
+  };
+}
+
 export const fulfillmentApi = {
   createShipment: async (orderId: number, req?: CreateShipmentRequest): Promise<ShipmentResponse> => {
     const res = await authApi.authorizedFetch(`/fulfillment/orders/${orderId}/create-shipment`, {

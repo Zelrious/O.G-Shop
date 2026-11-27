@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ordersApi } from '../orders/ordersApi';
-import { returnCaseApi, ReturnCaseDetail } from './returnCaseApi';
+import { PrivateEvidenceLink } from './PrivateEvidenceMedia';
+import { returnCaseApi, type ReturnEvidenceItemInput, ReturnCaseDetail, ReturnReasonCode } from './returnCaseApi';
 
 interface Uc83BuyerOrderPanelProps {
   orderId: number;
@@ -29,30 +30,47 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [returnCase, setReturnCase] = useState<ReturnCaseDetail | null>(null);
+  const [method, setMethod] = useState('CARRIER');
+  const [carrier, setCarrier] = useState('GHN');
+  const [tracking, setTracking] = useState('');
+  const [shipmentKey, setShipmentKey] = useState(() => crypto.randomUUID());
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createReasonCode, setCreateReasonCode] = useState<ReturnReasonCode>('NOT_AS_DESCRIBED');
+  const [createDetail, setCreateDetail] = useState('');
+  const [createEvidence, setCreateEvidence] = useState<ReturnEvidenceItemInput | null>(null);
   const [showSupplementForm, setShowSupplementForm] = useState(false);
   const [supplementNote, setSupplementNote] = useState('');
-  const [supplementUrl, setSupplementUrl] = useState('');
+  const [supplement, setSupplement] = useState<ReturnEvidenceItemInput | null>(null);
 
   useEffect(() => {
     let active = true;
-    if (orderStatus !== 'DELIVERED') {
+    if (orderStatus === 'DELIVERED') {
+      returnCaseApi
+        .getActiveReturnCase(orderId)
+        .then((data) => {
+          if (active) setReturnCase(data);
+        })
+        .catch(() => {
+          // Silent fallback for LEGACY_V14 orders or mocked unit tests
+        });
+    } else if (['DISPUTED', 'REFUNDED', 'COMPLETED'].includes(orderStatus) && typeof returnCaseApi.getLatestReturnCase === 'function') {
+      returnCaseApi
+        .getLatestReturnCase(orderId)
+        .then((data) => {
+          if (active) setReturnCase(data);
+        })
+        .catch(() => {
+          if (active) setReturnCase(null);
+        });
+    } else {
       setReturnCase(null);
-      return;
     }
-    returnCaseApi
-      .getActiveReturnCase(orderId)
-      .then((data) => {
-        if (active) setReturnCase(data);
-      })
-      .catch(() => {
-        // Silent fallback for LEGACY_V14 orders or mocked unit tests
-      });
     return () => {
       active = false;
     };
   }, [orderId, orderStatus]);
 
-  if (orderStatus !== 'DELIVERED') {
+  if (orderStatus !== 'DELIVERED' && !returnCase) {
     return null;
   }
 
@@ -88,6 +106,50 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
     }
   };
 
+  const handleUploadEvidenceFile = async (
+    file: File | undefined,
+    setter: (item: ReturnEvidenceItemInput) => void,
+  ) => {
+    if (!file) return;
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const isVideo = file.type.startsWith('video/') || /\.(mp4|webm)$/i.test(file.name);
+      const dto = await returnCaseApi.uploadEvidence(file, isVideo ? 'VIDEO' : 'IMAGE');
+      setter(dto);
+    } catch (err) {
+      setFeedback({ type: 'error', text: err instanceof Error ? err.message : 'Không thể tải tệp bằng chứng lên.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCreateReturnRequest = async () => {
+    if (!createEvidence) {
+      setFeedback({ type: 'error', text: 'Vui lòng tải lên ảnh/video bằng chứng mở hộp (UC62).' });
+      return;
+    }
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const created = await returnCaseApi.createReturnRequest(orderId, {
+        reasonCode: createReasonCode,
+        detail: createDetail.trim() || undefined,
+        evidenceList: [createEvidence],
+      });
+      setReturnCase(created);
+      setShowCreateForm(false);
+      setCreateDetail('');
+      setCreateEvidence(null);
+      setFeedback({ type: 'success', text: `Đã gửi yêu cầu trả hàng UC62 (#${created.caseId}) thành công.` });
+      onUpdated();
+    } catch (err) {
+      setFeedback({ type: 'error', text: err instanceof Error ? err.message : 'Không thể gửi yêu cầu trả hàng.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleWithdraw = async () => {
     setBusy(true);
     setFeedback(null);
@@ -104,9 +166,8 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
   };
 
   const handleSupplementSubmit = async () => {
-    const trimmedUrl = supplementUrl.trim();
-    if (!trimmedUrl) {
-      setFeedback({ type: 'error', text: 'Vui lòng nhập đường dẫn ảnh/video bằng chứng bổ sung.' });
+    if (!supplement) {
+      setFeedback({ type: 'error', text: 'Vui lòng tải lên ảnh/video bằng chứng bổ sung.' });
       return;
     }
     setBusy(true);
@@ -114,19 +175,12 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
     try {
       const updated = await returnCaseApi.supplementBuyerEvidenceRound1(orderId, {
         note: supplementNote.trim() || undefined,
-        evidenceList: [
-          {
-            mediaType: 'IMAGE',
-            objectKey: trimmedUrl,
-            contentDigest: 'a'.repeat(64),
-            fileSizeBytes: 1024,
-          },
-        ],
+        evidenceList: [supplement],
       });
       setReturnCase(updated);
       setShowSupplementForm(false);
       setSupplementNote('');
-      setSupplementUrl('');
+      setSupplement(null);
       setFeedback({ type: 'success', text: 'Đã bổ sung bằng chứng Vòng 1 thành công.' });
       onUpdated();
     } catch (err) {
@@ -186,6 +240,7 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
       )}
 
       {/* UC27 Step 3: Confirm Received with Video Unboxing Option */}
+      {orderStatus === 'DELIVERED' && (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <label style={{ fontWeight: 600, fontSize: '0.8rem' }}>
           Lựa chọn video khui hàng khi xác nhận nhận hàng:
@@ -222,8 +277,10 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
           Xác nhận đã nhận bưu kiện (giữ quyền kiểm tra 3 ngày)
         </button>
       </div>
+      )}
 
       {/* UC27 Early Complete */}
+      {orderStatus === 'DELIVERED' && (
       <div style={{ borderTop: '1px solid var(--og-border, #e2e8f0)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 6, cursor: 'pointer', fontSize: '0.8rem' }}>
           <input
@@ -244,6 +301,81 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
           Hoàn tất sớm (UC27)
         </button>
       </div>
+      )}
+
+      {/* UC62 Return Request Form when no active return case */}
+      {orderStatus === 'DELIVERED' && !returnCase && (
+        <div style={{ borderTop: '1px solid var(--og-border, #e2e8f0)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setShowCreateForm((v) => !v)}
+            className="og-button og-button--secondary"
+            style={{ width: '100%', padding: '8px 12px', fontWeight: 600 }}
+          >
+            Yêu cầu trả hàng / hoàn tiền (UC62)
+          </button>
+
+          {showCreateForm && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #cbd5e1' }}>
+              <select
+                value={createReasonCode}
+                onChange={(e) => setCreateReasonCode(e.target.value as ReturnReasonCode)}
+                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
+              >
+                <option value="NOT_AS_DESCRIBED">Hàng không đúng mô tả</option>
+                <option value="DAMAGED_OR_DEFECTIVE">Hàng bị lỗi / hư hỏng</option>
+                <option value="CHANGE_MIND">Đổi ý (còn nguyên vẹn)</option>
+              </select>
+              <textarea
+                rows={2}
+                placeholder="Mô tả chi tiết tình trạng hàng nhận được..."
+                value={createDetail}
+                onChange={(e) => setCreateDetail(e.target.value)}
+                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
+              />
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <label
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    background: '#e0f2fe',
+                    color: '#0369a1',
+                    fontWeight: 600,
+                    fontSize: '0.78rem',
+                    cursor: busy ? 'not-allowed' : 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  + Chọn tệp
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+                    disabled={busy}
+                    onChange={(e) => {
+                      void handleUploadEvidenceFile(e.target.files?.[0], setCreateEvidence);
+                      e.target.value = '';
+                    }}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
+              {createEvidence?.objectKey && (
+                <PrivateEvidenceLink objectKey={createEvidence.objectKey} label="Xem trước bằng chứng trả hàng" />
+              )}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleCreateReturnRequest}
+                className="og-button og-button--primary"
+                style={{ padding: '6px 12px', fontWeight: 600 }}
+              >
+                Gửi yêu cầu trả hàng
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Active UC83 Return Case Actions */}
       {returnCase && (
@@ -261,6 +393,7 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
             Hồ sơ trả hàng #{returnCase.caseId}: {CASE_STATE_LABELS[returnCase.state] || returnCase.state}
           </div>
 
+          {returnCase.pendingEvidenceRequest && <p>Yêu cầu bổ sung từ KTV · {returnCase.pendingEvidenceRequest.reason}</p>}
           {(returnCase.state === 'OPEN' || returnCase.state === 'REVIEWING') && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <button
@@ -275,13 +408,35 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
 
               {showSupplementForm && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #cbd5e1' }}>
-                  <input
-                    type="text"
-                    placeholder="Đường dẫn ảnh/video bằng chứng bổ sung..."
-                    value={supplementUrl}
-                    onChange={(e) => setSupplementUrl(e.target.value)}
-                    style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
-                  />
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <label
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: 6,
+                        background: '#e0f2fe',
+                        color: '#0369a1',
+                        fontWeight: 600,
+                        fontSize: '0.78rem',
+                        cursor: busy ? 'not-allowed' : 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      + Chọn tệp
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+                        disabled={busy}
+                        onChange={(e) => {
+                          void handleUploadEvidenceFile(e.target.files?.[0], setSupplement);
+                          e.target.value = '';
+                        }}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+                  </div>
+                  {supplement?.objectKey && (
+                    <PrivateEvidenceLink objectKey={supplement.objectKey} label="Xem trước bằng chứng bổ sung" />
+                  )}
                   <input
                     type="text"
                     placeholder="Ghi chú mô tả thêm (tùy chọn)..."
@@ -320,7 +475,24 @@ export const Uc83BuyerOrderPanel: React.FC<Uc83BuyerOrderPanelProps> = ({
             </div>
           )}
 
-          {returnCase.state === 'RETURNING' && (
+          {returnCase.state === 'RETURN_APPROVED' && <form onChange={() => setShipmentKey(crypto.randomUUID())} onSubmit={async e => {
+            e.preventDefault();
+            setBusy(true); setFeedback(null);
+            try {
+              setReturnCase(await returnCaseApi.submitShipment(returnCase.caseId, method,
+                method === 'CARRIER' ? carrier.trim() : null, method === 'CARRIER' ? tracking.trim() : null, shipmentKey));
+              setFeedback({type:'success', text:'Đã đăng ký gửi hàng trả.'}); onUpdated();
+            } catch (err) { setFeedback({type:'error', text:err instanceof Error ? err.message : 'Chưa đăng ký được vận đơn.'}); }
+            finally { setBusy(false); }
+          }}>
+            <label>Phương thức trả hàng<select value={method} onChange={e => setMethod(e.target.value)}>
+              <option value="CARRIER">Qua đơn vị vận chuyển</option><option value="SELF_DELIVERY">Tự giao</option><option value="SELF_PICKUP">Đối tác đến nhận</option>
+            </select></label>
+            {method === 'CARRIER' && <><label>Đơn vị vận chuyển<input required value={carrier} onChange={e => setCarrier(e.target.value)} /></label>
+              <label>Mã vận đơn<input required value={tracking} onChange={e => setTracking(e.target.value)} /></label></>}
+            <button className="og-button og-button--primary" disabled={busy}>Đăng ký gửi hàng trả</button>
+          </form>}
+          {returnCase.state === 'RETURNING' && returnCase.returnShipment?.deliveryMethod !== 'CARRIER' && (
             <button
               type="button"
               disabled={busy}

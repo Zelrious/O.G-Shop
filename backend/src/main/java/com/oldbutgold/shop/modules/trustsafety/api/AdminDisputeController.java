@@ -2,8 +2,10 @@ package com.oldbutgold.shop.modules.trustsafety.api;
 
 import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseDtos;
 import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseService;
+import com.oldbutgold.shop.modules.trustsafety.application.SystemIssueGovernanceService;
 import com.oldbutgold.shop.modules.trustsafety.application.TrustSafetyBusinessException;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -19,6 +21,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
  * Controller dành riêng cho Quản trị viên (ADMIN) giám sát và xử lý tranh chấp khiếu nại (Task 5.3).
  */
@@ -28,9 +32,19 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminDisputeController {
 
     private final ReturnCaseService returnCaseService;
+    private final SystemIssueGovernanceService systemIssueGovernanceService;
 
     public AdminDisputeController(ReturnCaseService returnCaseService) {
+        this(returnCaseService, null);
+    }
+
+    @Autowired
+    public AdminDisputeController(
+            ReturnCaseService returnCaseService,
+            @Autowired(required = false) SystemIssueGovernanceService systemIssueGovernanceService
+    ) {
         this.returnCaseService = returnCaseService;
+        this.systemIssueGovernanceService = systemIssueGovernanceService;
     }
 
     private static long extractUserId(Jwt jwt) {
@@ -79,6 +93,61 @@ public class AdminDisputeController {
         long adminId = extractUserId(jwt);
         ReturnCaseDtos.ReturnCaseDetailResponse response = returnCaseService.adminDecideRound2(adminId, caseId, request);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/admins")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<ReturnCaseDtos.AdminAssigneeOption>> listAdmins() {
+        return ResponseEntity.ok(requireGovernanceService().listActiveAdmins());
+    }
+
+    @GetMapping("/system-issues")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<ReturnCaseDtos.ReturnCaseDetailResponse>> listEscalatedSystemIssues(
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        long adminId = extractUserId(jwt);
+        return ResponseEntity.ok(requireGovernanceService().listSystemIssuesForAdmin(adminId));
+    }
+
+    @PostMapping("/{caseId}/handover")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ReturnCaseDtos.ReturnCaseDetailResponse> handoverCase(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long caseId,
+            @Valid @RequestBody ReturnCaseDtos.AdminHandoverRequest request
+    ) {
+        long adminId = extractUserId(jwt);
+        return ResponseEntity.ok(requireGovernanceService().adminHandoverCase(adminId, caseId, request));
+    }
+
+    @PostMapping("/{caseId}/decide-system-issue")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ReturnCaseDtos.ReturnCaseDetailResponse> decideSystemIssue(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long caseId,
+            @Valid @RequestBody ReturnCaseDtos.SystemIssueDecisionRequest request
+    ) {
+        long adminId = extractUserId(jwt);
+        return ResponseEntity.ok(requireGovernanceService().decideSystemIssue(adminId, true, caseId, request));
+    }
+
+    @PostMapping("/{caseId}/compensations")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ReturnCaseDtos.CaseCompensationResponse> compensateSystemIssue(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long caseId,
+            @Valid @RequestBody ReturnCaseDtos.CaseCompensationRequest request
+    ) {
+        long adminId = extractUserId(jwt);
+        return ResponseEntity.ok(requireGovernanceService().executeCompensation(adminId, true, caseId, request));
+    }
+
+    private SystemIssueGovernanceService requireGovernanceService() {
+        if (systemIssueGovernanceService == null) {
+            throw new IllegalStateException("SystemIssueGovernanceService is not configured.");
+        }
+        return systemIssueGovernanceService;
     }
 }
 

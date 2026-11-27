@@ -15,7 +15,7 @@ public interface CaseRepository extends JpaRepository<CaseEntity, Long> {
 
     List<CaseEntity> findByOrderId(Long orderId);
 
-    @Query("SELECT c FROM CaseEntity c WHERE c.orderId = :orderId AND c.state NOT IN ('CLOSED', 'REJECTED')")
+    @Query("SELECT c FROM CaseEntity c WHERE c.orderId = :orderId AND c.caseType='RETURN' AND c.state NOT IN ('CLOSED', 'REJECTED')")
     Optional<CaseEntity> findActiveCaseByOrderId(@Param("orderId") Long orderId);
 
     Optional<CaseEntity> findByCommandKey(String commandKey);
@@ -51,7 +51,7 @@ public interface CaseRepository extends JpaRepository<CaseEntity, Long> {
     @Query("""
         SELECT c FROM CaseEntity c
         WHERE ((:scope = 'AVAILABLE' AND c.assignedTo IS NULL) OR (:scope = 'MY_CASES' AND c.assignedTo = :ktvId))
-          AND c.state IN ('OPEN', 'REVIEWING')
+          AND c.caseType = 'RETURN' AND c.state IN ('OPEN', 'REVIEWING')
           AND EXISTS (
               SELECT 1 FROM CaseRoundEntity r1
               WHERE r1.caseId = c.id

@@ -30,19 +30,35 @@ public interface FulfillmentCommerceFacade {
             String toWardName,
             String toAddress,
             Integer toDistrictId,
-            String toWardCode
+            String toWardCode,
+            String workflowModel,
+            java.math.BigDecimal shippingFee
     ) {
+        public OrderFulfillmentSnapshot(
+                long orderId, long buyerId, long sellerId, String status, Instant completedAt, Instant cancelledAt,
+                Long sourceAddressId, String fromName, String fromPhone, String fromAddress,
+                String fromProvinceName, String fromDistrictName, String fromWardName,
+                Integer fromDistrictId, String fromWardCode,
+                String toName, String toPhone, String toProvinceName, String toDistrictName,
+                String toWardName, String toAddress, Integer toDistrictId, String toWardCode
+        ) {
+            this(orderId, buyerId, sellerId, status, completedAt, cancelledAt, sourceAddressId,
+                    fromName, fromPhone, fromAddress, fromProvinceName, fromDistrictName, fromWardName,
+                    fromDistrictId, fromWardCode, toName, toPhone, toProvinceName, toDistrictName,
+                    toWardName, toAddress, toDistrictId, toWardCode, "LEGACY_V14", java.math.BigDecimal.ZERO);
+        }
+
         public OrderFulfillmentSnapshot(long orderId, long buyerId, long sellerId, String status, Instant completedAt, Instant cancelledAt) {
             this(orderId, buyerId, sellerId, status, completedAt, cancelledAt, null,
                     null, null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, "LEGACY_V14", java.math.BigDecimal.ZERO);
         }
 
         public OrderFulfillmentSnapshot(long orderId, long buyerId, long sellerId, String status, Instant completedAt, Instant cancelledAt,
                                         String recipientName, String phoneNumber, String province, String district, String ward, String detailAddress) {
             this(orderId, buyerId, sellerId, status, completedAt, cancelledAt, null,
                     null, null, null, null, null, null, null, null,
-                    recipientName, phoneNumber, province, district, ward, detailAddress, null, null);
+                    recipientName, phoneNumber, province, district, ward, detailAddress, null, null, "LEGACY_V14", java.math.BigDecimal.ZERO);
         }
 
         // Getter tương thích ngược cho các nơi truy cập recipientName/phoneNumber/province/district/ward/detailAddress

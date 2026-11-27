@@ -56,7 +56,100 @@ public class DisputeDtos {
             Long resolvedBy,
             Instant resolvedAt,
             Instant createdAt,
-            Instant updatedAt
+            Instant updatedAt,
+            String returnTrackingCode,
+            String returnCarrier,
+            String returnShipmentStatus,
+            Instant returnHandedOverAt,
+            Instant returnDeliveredAt,
+            String returnRecipientName,
+            String returnRecipientPhone,
+            String returnRecipientAddress
+    ) {
+        public DisputeDetailDto(
+                Long disputeId,
+                Long orderId,
+                String orderCode,
+                Long buyerId,
+                String buyerName,
+                String buyerEmail,
+                Long sellerId,
+                String sellerName,
+                String sellerEmail,
+                String productTitle,
+                BigDecimal disputeAmount,
+                String reason,
+                String description,
+                List<String> buyerEvidenceUrls,
+                String videoUnboxingUrl,
+                String sellerResponse,
+                List<String> sellerEvidenceUrls,
+                Instant sellerResponseDueAt,
+                String status,
+                String verdictAction,
+                String verdictNotes,
+                BigDecimal refundAmount,
+                Integer penaltyPoints,
+                Long resolvedBy,
+                Instant resolvedAt,
+                Instant createdAt,
+                Instant updatedAt
+        ) {
+            this(disputeId, orderId, orderCode, buyerId, buyerName, buyerEmail,
+                    sellerId, sellerName, sellerEmail, productTitle, disputeAmount,
+                    reason, description, buyerEvidenceUrls, videoUnboxingUrl,
+                    sellerResponse, sellerEvidenceUrls, sellerResponseDueAt,
+                    status, verdictAction, verdictNotes, refundAmount, penaltyPoints,
+                    resolvedBy, resolvedAt, createdAt, updatedAt,
+                    null, null, null, null, null, null, null, null);
+        }
+
+        public DisputeDetailDto(
+                Long disputeId,
+                Long orderId,
+                String orderCode,
+                Long buyerId,
+                String buyerName,
+                String buyerEmail,
+                Long sellerId,
+                String sellerName,
+                String sellerEmail,
+                String productTitle,
+                BigDecimal disputeAmount,
+                String reason,
+                String description,
+                List<String> buyerEvidenceUrls,
+                String videoUnboxingUrl,
+                String sellerResponse,
+                List<String> sellerEvidenceUrls,
+                Instant sellerResponseDueAt,
+                String status,
+                String verdictAction,
+                String verdictNotes,
+                BigDecimal refundAmount,
+                Integer penaltyPoints,
+                Long resolvedBy,
+                Instant resolvedAt,
+                Instant createdAt,
+                Instant updatedAt,
+                String returnTrackingCode,
+                String returnCarrier,
+                String returnShipmentStatus
+        ) {
+            this(disputeId, orderId, orderCode, buyerId, buyerName, buyerEmail,
+                    sellerId, sellerName, sellerEmail, productTitle, disputeAmount,
+                    reason, description, buyerEvidenceUrls, videoUnboxingUrl,
+                    sellerResponse, sellerEvidenceUrls, sellerResponseDueAt,
+                    status, verdictAction, verdictNotes, refundAmount, penaltyPoints,
+                    resolvedBy, resolvedAt, createdAt, updatedAt,
+                    returnTrackingCode, returnCarrier, returnShipmentStatus,
+                    null, null, null, null, null);
+        }
+    }
+
+    public record ReturnShipmentRequest(
+            String trackingCode,
+            String carrier
     ) {}
 
     public record DisputeDecisionRequest(

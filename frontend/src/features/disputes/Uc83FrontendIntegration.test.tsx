@@ -17,6 +17,8 @@ vi.mock('../orders/ordersApi', () => ({
 vi.mock('./returnCaseApi', () => ({
   returnCaseApi: {
     getActiveReturnCase: vi.fn(),
+    getLatestReturnCase: vi.fn(), submitShipment: vi.fn(),
+    uploadEvidence: vi.fn(),
     withdrawReturnRequest: vi.fn(),
     supplementBuyerEvidenceRound1: vi.fn(),
     confirmDirectHandover: vi.fn(),
@@ -33,6 +35,18 @@ describe('UC83 Frontend Integration (V58 Coins, UC27, UC62 7a, Seller R2, Admin 
     vi.clearAllMocks();
   });
 
+  it.each(['CARRIER','SELF_DELIVERY'])('đăng ký hàng trả từ đơn đang tranh chấp (%s)', async method => {
+    vi.mocked(returnCaseApi.getLatestReturnCase).mockResolvedValue({caseId:501,orderId:101,state:'RETURN_APPROVED'});
+    vi.mocked(returnCaseApi.submitShipment).mockResolvedValue({caseId:501,orderId:101,state:'RETURNING',returnShipment:{deliveryMethod:method}});
+    render(<Uc83BuyerOrderPanel orderId={101} orderStatus="DISPUTED" onUpdated={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText('Phương thức trả hàng'),{target:{value:method}});
+    if (method === 'CARRIER') fireEvent.change(screen.getByLabelText('Mã vận đơn'),{target:{value:'TRK-001'}});
+    fireEvent.click(screen.getByRole('button',{name:'Đăng ký gửi hàng trả'}));
+    await waitFor(() => expect(returnCaseApi.submitShipment).toHaveBeenCalledWith(501,method,method==='CARRIER'?'GHN':null,
+      method==='CARRIER'?'TRK-001':null,expect.any(String)));
+    await screen.findByText('Đã đăng ký gửi hàng trả.');
+    expect(screen.queryByText('Đăng ký gửi hàng trả')).toBeNull();
+  });
   it('V58 coins helper: directly offsets CARRIER shipping and auto-clamps excess coins when voucher is applied', () => {
     const directShip = calculateAdjustedCoinsAfterVoucher({
       subtotal: 100000,
@@ -95,9 +109,9 @@ describe('UC83 Frontend Integration (V58 Coins, UC27, UC62 7a, Seller R2, Admin 
       expect(screen.getByTestId('uc83-buyer-active-case')).toBeTruthy();
     });
     fireEvent.click(screen.getByRole('button', { name: /Bổ sung bằng chứng Vòng 1/i }));
-    fireEvent.change(screen.getByPlaceholderText(/Đường dẫn ảnh\/video/i), {
-      target: { value: 'evidence/extra-photo.jpg' },
-    });
+    vi.mocked(returnCaseApi.uploadEvidence).mockResolvedValue({ mediaType: 'IMAGE', objectKey: 'evidence/extra-photo.jpg', fileSizeBytes: 53, contentDigest: 'd'.repeat(64) });
+    fireEvent.change(screen.getByLabelText(/Chọn tệp/), { target: { files: [new File(['photo'], 'photo.jpg', { type: 'image/jpeg' })] } });
+    await screen.findByRole('link', { name: /Xem trước/ });
     fireEvent.click(screen.getByRole('button', { name: /Gửi bằng chứng bổ sung/i }));
 
     await waitFor(() => {

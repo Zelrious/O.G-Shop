@@ -20,6 +20,8 @@ export const SellerSettingsPage: React.FC = () => {
   const [storeName, setStoreName] = useState('');
   const [pickupAddressId, setPickupAddressId] = useState<number | ''>('');
   const [returnAddressId, setReturnAddressId] = useState<number | ''>('');
+  const [allowPublicAvatar, setAllowPublicAvatar] = useState(false);
+  const [isSavingPrivacy, setIsSavingPrivacy] = useState(false);
 
   // New warehouse address modal / form state
   const [showAddWarehouseModal, setShowAddWarehouseModal] = useState(false);
@@ -54,6 +56,7 @@ export const SellerSettingsPage: React.FC = () => {
       setStoreName(sett.storeName || '');
       setPickupAddressId(sett.pickupAddressId || (addrs.length > 0 ? addrs[0].id : ''));
       setReturnAddressId(sett.returnAddressId || (addrs.length > 0 ? addrs[0].id : ''));
+      setAllowPublicAvatar(Boolean(sett.allowPublicAvatar));
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Không thể tải thiết lập gian hàng.');
     } finally {
@@ -212,6 +215,26 @@ export const SellerSettingsPage: React.FC = () => {
       setErrorMsg(err instanceof Error ? err.message : 'Cập nhật địa chỉ kho vận thất bại.');
     } finally {
       setIsSavingAddresses(false);
+    }
+  };
+
+  const handleTogglePublicAvatar = async (nextValue: boolean) => {
+    setIsSavingPrivacy(true);
+    setErrorMsg(null);
+    try {
+      const updated = await sellerSettingsApi.updateSettings({ allowPublicAvatar: nextValue });
+      setSettings(updated);
+      setAllowPublicAvatar(Boolean(updated.allowPublicAvatar));
+      setSuccessMsg(
+        nextValue
+          ? 'Đã bật hiển thị ảnh đại diện trên Hồ sơ người bán công khai.'
+          : 'Đã tắt hiển thị ảnh đại diện công khai (áp dụng ngay lập tức).'
+      );
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Cập nhật quyền riêng tư thất bại.');
+    } finally {
+      setIsSavingPrivacy(false);
     }
   };
 
@@ -517,6 +540,58 @@ export const SellerSettingsPage: React.FC = () => {
               </Button>
             </Link>
           </div>
+        </div>
+      </Card>
+
+      {/* KHU VỰC 5: Quyền riêng tư Hồ sơ người bán công khai */}
+      <Card title="5. Quyền riêng tư Hồ sơ người bán công khai">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--og-color-text-secondary)', lineHeight: 1.5 }}>
+            Hồ sơ người bán công khai hiển thị: <strong>Tên gian hàng</strong>, <strong>trạng thái xác minh eKYC</strong>,{' '}
+            <strong>điểm đánh giá & nhận xét đã ẩn danh người mua</strong>, <strong>số giao dịch hoàn tất</strong> và{' '}
+            <strong>sản phẩm đang mở bán</strong>. Email, SĐT, địa chỉ kho, tài khoản ngân hàng, CCCD và lịch sử xử phạt{' '}
+            <strong>không bao giờ được công khai</strong>.
+          </p>
+
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+              padding: '12px 14px',
+              borderRadius: '10px',
+              border: '1px solid var(--og-color-border)',
+              background: 'var(--og-color-surface-subtle, #f8fafc)',
+              cursor: isSavingPrivacy ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              data-testid="toggle-allow-public-avatar"
+              checked={allowPublicAvatar}
+              disabled={isSavingPrivacy}
+              onChange={(e) => handleTogglePublicAvatar(e.target.checked)}
+              style={{ marginTop: 3, width: 18, height: 18 }}
+            />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--og-color-text-primary)' }}>
+                Cho phép hiển thị ảnh đại diện cá nhân trên Hồ sơ người bán công khai
+              </div>
+              <div style={{ fontSize: '0.82rem', color: 'var(--og-color-text-secondary)', marginTop: 2 }}>
+                Mặc định tắt. Khi tắt, hệ thống chỉ hiển thị chữ cái đầu tên gian hàng và không truyền đường dẫn ảnh xuống trang công khai. Thay đổi có hiệu lực ngay lập tức.
+              </div>
+            </div>
+          </label>
+
+          {user?.userId && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Link to={`/sellers/${user.userId}`} data-testid="preview-public-seller-profile-link">
+                <Button variant="outline" type="button">
+                  👁️ Xem trước Hồ sơ công khai của tôi
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
       </Card>
 

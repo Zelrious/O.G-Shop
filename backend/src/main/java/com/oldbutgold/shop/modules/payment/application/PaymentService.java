@@ -10,6 +10,7 @@ import com.oldbutgold.shop.modules.commerce.infrastructure.persistence.OrderRepo
 import com.oldbutgold.shop.modules.payment.api.PaymentDtos;
 import com.oldbutgold.shop.modules.payment.infrastructure.persistence.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +43,7 @@ public class PaymentService {
     private final VnPayService vnPayService;
     private final CatalogCommerceFacade catalogCommerceFacade;
     private final Clock clock;
+    private final JdbcTemplate jdbcTemplate;
 
     @Autowired
     public PaymentService(
@@ -57,7 +59,8 @@ public class PaymentService {
             PaymentIpnRawReceiptRepository rawReceiptRepository,
             VnPayService vnPayService,
             CatalogCommerceFacade catalogCommerceFacade,
-            Clock clock
+            Clock clock,
+            @Autowired(required = false) JdbcTemplate jdbcTemplate
     ) {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
@@ -72,6 +75,28 @@ public class PaymentService {
         this.vnPayService = vnPayService;
         this.catalogCommerceFacade = catalogCommerceFacade;
         this.clock = clock;
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    public PaymentService(
+            PaymentRepository paymentRepository,
+            OrderRepository orderRepository,
+            OrderItemRepository orderItemRepository,
+            ProductMediaRepository productMediaRepository,
+            PaymentAttemptRepository paymentAttemptRepository,
+            PaymentIpnEventRepository paymentIpnEventRepository,
+            PaymentReviewAuditRepository paymentReviewAuditRepository,
+            PaymentReconciliationCaseRepository paymentReconciliationCaseRepository,
+            PaymentAlertRequestRepository paymentAlertRequestRepository,
+            PaymentIpnRawReceiptRepository rawReceiptRepository,
+            VnPayService vnPayService,
+            CatalogCommerceFacade catalogCommerceFacade,
+            Clock clock
+    ) {
+        this(paymentRepository, orderRepository, orderItemRepository, productMediaRepository,
+                paymentAttemptRepository, paymentIpnEventRepository, paymentReviewAuditRepository,
+                paymentReconciliationCaseRepository, paymentAlertRequestRepository, rawReceiptRepository,
+                vnPayService, catalogCommerceFacade, clock, null);
     }
 
     public PaymentService(
@@ -82,7 +107,7 @@ public class PaymentService {
             Clock clock
     ) {
         this(paymentRepository, orderRepository, orderItemRepository, productMediaRepository,
-                null, null, null, null, null, null, null, null, clock);
+                null, null, null, null, null, null, null, null, clock, null);
     }
 
     @Transactional(readOnly = true)
@@ -190,11 +215,28 @@ public class PaymentService {
 
         if (request.simulateSuccess()) {
             String transactionCode = "TXN_MOCK_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-            payment.markHeld(transactionCode, now);
-            order.markPaidHeld(now);
+            Instant effectivePaidAt = now;
+
+            if ("UC83".equals(order.getWorkflowModel()) && jdbcTemplate != null && order.getGroupId() != null) {
+                effectivePaidAt = recordUc83MockPaymentProof(order, method, transactionCode, now);
+                order.setPaidConfirmedAt(effectivePaidAt);
+                order.setSellerAcceptDueAt(effectivePaidAt.plus(Duration.ofDays(2)));
+            }
+
+            payment.markHeld(transactionCode, effectivePaidAt);
+            order.markPaidHeld(effectivePaidAt);
 
             paymentRepository.save(payment);
-            orderRepository.save(order);
+            orderRepository.saveAndFlush(order);
+
+            if ("UC83".equals(order.getWorkflowModel()) && jdbcTemplate != null && order.getGroupId() != null) {
+                jdbcTemplate.update("""
+                        UPDATE og_compat.inventory_reservations
+                        SET state = 'FUNDED'
+                        WHERE order_item_id IN (SELECT order_item_id FROM og_compat.order_items WHERE order_id = ?)
+                          AND state = 'HELD'
+                        """, order.getId());
+            }
 
             return new com.oldbutgold.shop.modules.payment.application.PaymentDtos.PaymentProcessResultResponse(
                     payment.getId(),
@@ -216,6 +258,229 @@ public class PaymentService {
                     null,
                     "Giao dịch thanh toán thất bại (Mô phỏng). Bạn có thể thử lại trước hạn thanh toán của đơn."
             );
+        }
+    }
+
+    private Instant recordUc83MockPaymentProof(OrderEntity order, String method, String transactionCode, Instant now) {
+        UUID groupId = order.getGroupId();
+        UUID intentId = UUID.randomUUID();
+        UUID confirmationId = UUID.randomUUID();
+        UUID allocationId = UUID.randomUUID();
+        // Match checkout_groups.payment_method to satisfy og_guard_payment_intent when Buyer chooses any mock method on the payment page
+        String groupPaymentMethod = null;
+        try {
+            groupPaymentMethod = jdbcTemplate.queryForObject(
+                    "SELECT payment_method FROM og_compat.checkout_groups WHERE group_id = ?",
+                    String.class,
+                    groupId
+            );
+        } catch (Exception ignored) {}
+        String uc83Method = (groupPaymentMethod != null && !groupPaymentMethod.isBlank())
+                ? groupPaymentMethod
+                : switch (method) {
+                    case PaymentEntity.METHOD_E_WALLET -> "E_WALLET_MOCK";
+                    case PaymentEntity.METHOD_COD -> "COD_MOCK";
+                    default -> "BANK_TRANSFER_MOCK";
+                };
+        java.sql.Timestamp tsNow = java.sql.Timestamp.from(now);
+        java.sql.Timestamp tsDue = java.sql.Timestamp.from(order.getPaymentDueAt());
+
+        // 1. Payment Intent (PENDING so payment_confirmations trigger transitions it to CONFIRMED)
+        jdbcTemplate.update("""
+                INSERT INTO og_compat.payment_intents (
+                    intent_id, purpose, group_id, listing_charge_id, expected_amount, currency,
+                    payment_method, state, deadline, created_at, command_key
+                ) VALUES (?, 'CHECKOUT_GROUP', ?, NULL, ?, 'VND', ?, 'PENDING', ?, ?, ?)
+                """,
+                intentId, groupId, order.getTotalAmount(), uc83Method, tsDue, tsNow, "MOCK_INTENT:" + order.getId() + ":" + intentId
+        );
+
+        // 2. Payment Attempt (provider = uc83Method, linked to intent_id)
+        Long attemptId = jdbcTemplate.queryForObject("""
+                INSERT INTO og_compat.payment_attempts (
+                    intent_id, txn_ref, amount, currency, provider, status, created_at, updated_at
+                ) VALUES (?, ?, ?, 'VND', ?, 'SUCCESS', ?, ?)
+                RETURNING attempt_id
+                """,
+                Long.class,
+                intentId, transactionCode, order.getTotalAmount(), uc83Method, tsNow, tsNow
+        );
+
+        // 3. Payment Confirmation (trigger sets confirmed_at = clock_timestamp() and marks intent CONFIRMED)
+        java.sql.Timestamp confirmedTs = jdbcTemplate.queryForObject("""
+                INSERT INTO og_compat.payment_confirmations (
+                    confirmation_id, intent_id, attempt_id, ipn_event_id, provider,
+                    provider_transaction_id, amount, disposition, confirmed_at
+                ) VALUES (?, ?, ?, NULL, ?, ?, ?, 'ALLOCATABLE', ?)
+                RETURNING confirmed_at
+                """,
+                java.sql.Timestamp.class,
+                confirmationId, intentId, attemptId, uc83Method, transactionCode, order.getTotalAmount(), tsNow
+        );
+        Instant confirmedAt = confirmedTs != null ? confirmedTs.toInstant() : now;
+
+        // 4. Payment Allocation
+        jdbcTemplate.update("""
+                INSERT INTO og_compat.payment_allocations (
+                    allocation_id, intent_id, confirmation_id, order_id, amount
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                allocationId, intentId, confirmationId, order.getId(), order.getTotalAmount()
+        );
+
+        // 5. Order Fund Components (GOODS_CASH, SHIPPING_CASH, PLATFORM subsidies)
+        BigDecimal goodsCash = order.getSubtotal()
+                .subtract(order.getVoucherDiscountAmount())
+                .subtract(order.getPointsDiscountAmount());
+        if (goodsCash.compareTo(BigDecimal.ZERO) > 0) {
+            jdbcTemplate.update("""
+                    INSERT INTO og_compat.order_fund_components (
+                        component_id, order_id, allocation_id, late_confirmation_id,
+                        component_type, confirmed_amount, funding_reference, confirmed_at
+                    ) VALUES (?, ?, ?, NULL, 'GOODS_CASH', ?, NULL, ?)
+                    """,
+                    UUID.randomUUID(), order.getId(), allocationId, goodsCash, confirmedTs
+            );
+        }
+
+        BigDecimal shippingCash = order.getShippingFee()
+                .subtract(order.getShippingDiscountAmount())
+                .subtract(order.getPointsShippingDiscountAmount());
+        if (shippingCash.compareTo(BigDecimal.ZERO) > 0) {
+            jdbcTemplate.update("""
+                    INSERT INTO og_compat.order_fund_components (
+                        component_id, order_id, allocation_id, late_confirmation_id,
+                        component_type, confirmed_amount, funding_reference, confirmed_at
+                    ) VALUES (?, ?, ?, NULL, 'SHIPPING_CASH', ?, NULL, ?)
+                    """,
+                    UUID.randomUUID(), order.getId(), allocationId, shippingCash, confirmedTs
+            );
+        }
+
+        BigDecimal goodsSubsidy = order.getVoucherDiscountAmount().add(order.getPointsDiscountAmount());
+        if (goodsSubsidy.compareTo(BigDecimal.ZERO) > 0) {
+            jdbcTemplate.update("""
+                    INSERT INTO og_compat.order_fund_components (
+                        component_id, order_id, allocation_id, late_confirmation_id,
+                        component_type, confirmed_amount, funding_reference, confirmed_at
+                    ) VALUES (?, ?, NULL, NULL, 'PLATFORM_GOODS_SUBSIDY', ?, 'PLATFORM_PROMOTION', ?)
+                    """,
+                    UUID.randomUUID(), order.getId(), goodsSubsidy, confirmedTs
+            );
+        }
+
+        BigDecimal shipSubsidy = order.getShippingDiscountAmount().add(order.getPointsShippingDiscountAmount());
+        if (shipSubsidy.compareTo(BigDecimal.ZERO) > 0) {
+            jdbcTemplate.update("""
+                    INSERT INTO og_compat.order_fund_components (
+                        component_id, order_id, allocation_id, late_confirmation_id,
+                        component_type, confirmed_amount, funding_reference, confirmed_at
+                    ) VALUES (?, ?, NULL, NULL, 'PLATFORM_SHIPPING_SUBSIDY', ?, 'PLATFORM_SHIPPING', ?)
+                    """,
+                    UUID.randomUUID(), order.getId(), shipSubsidy, confirmedTs
+            );
+        }
+
+        // 6. Mark checkout group PAID and record T2 coin debit + discount_allocations (V58)
+        jdbcTemplate.update("UPDATE og_compat.checkout_groups SET state = 'PAID' WHERE group_id = ?", groupId);
+        recordGroupPointDebitAndAllocationsIfNeeded(order, groupId, confirmedTs);
+
+        return confirmedAt;
+    }
+
+    private void recordGroupPointDebitAndAllocationsIfNeeded(OrderEntity triggerOrder, UUID groupId, java.sql.Timestamp confirmedTs) {
+        BigDecimal groupPointsTotal = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(points_discount_amount + COALESCE(points_shipping_discount_amount, 0)), 0) FROM og_compat.orders WHERE group_id = ?",
+                BigDecimal.class,
+                groupId
+        );
+        if (groupPointsTotal == null || groupPointsTotal.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        Long rewardPolicyId = jdbcTemplate.queryForObject(
+                "SELECT reward_policy_id FROM og_compat.checkout_groups WHERE group_id = ?",
+                Long.class,
+                groupId
+        );
+        Integer existingDebits = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM og_compat.reward_ledger WHERE group_id = ? AND entry_type = 'DEBIT_CHECKOUT'",
+                Integer.class,
+                groupId
+        );
+        if (rewardPolicyId == null || (existingDebits != null && existingDebits > 0)) {
+            return;
+        }
+
+        BigDecimal pointValue = jdbcTemplate.queryForObject(
+                "SELECT point_value FROM og_compat.reward_policies WHERE policy_id = ?",
+                BigDecimal.class,
+                rewardPolicyId
+        );
+        BigDecimal effectivePointValue = (pointValue != null && pointValue.compareTo(BigDecimal.ZERO) > 0)
+                ? pointValue
+                : BigDecimal.ONE;
+        long coinsToDebit = groupPointsTotal
+                .divide(effectivePointValue, 0, java.math.RoundingMode.HALF_UP)
+                .longValue();
+        if (coinsToDebit <= 0) {
+            return;
+        }
+
+        UUID rewardEntryId = UUID.randomUUID();
+        jdbcTemplate.update("""
+                INSERT INTO og_compat.reward_ledger(
+                    entry_id, user_id, policy_id, entry_type, points_delta, group_id, actor_id, reason, command_key, created_at
+                ) VALUES (?, ?, ?, 'DEBIT_CHECKOUT', ?, ?, NULL, ?, ?, ?)
+                """,
+                rewardEntryId,
+                triggerOrder.getBuyerId(),
+                rewardPolicyId,
+                -coinsToDebit,
+                groupId,
+                "Khấu trừ xu đặt hàng nhóm " + groupId,
+                "REWARD_DEBIT:" + groupId,
+                confirmedTs
+        );
+
+        List<Map<String, Object>> groupOrders = jdbcTemplate.queryForList(
+                "SELECT order_id, COALESCE(points_shipping_discount_amount, 0) AS points_shipping_discount_amount FROM og_compat.orders WHERE group_id = ? ORDER BY order_id",
+                groupId
+        );
+        for (Map<String, Object> orderRow : groupOrders) {
+            Long rowOrderId = ((Number) orderRow.get("order_id")).longValue();
+            BigDecimal pointsShippingDiscount = (BigDecimal) orderRow.get("points_shipping_discount_amount");
+            List<Map<String, Object>> items = jdbcTemplate.queryForList(
+                    "SELECT order_item_id, COALESCE(points_allocation, 0) AS points_allocation FROM og_compat.order_items WHERE order_id = ? ORDER BY order_item_id",
+                    rowOrderId
+            );
+            for (Map<String, Object> itemRow : items) {
+                BigDecimal pointsAllocation = (BigDecimal) itemRow.get("points_allocation");
+                if (pointsAllocation != null && pointsAllocation.compareTo(BigDecimal.ZERO) > 0) {
+                    jdbcTemplate.update("""
+                            INSERT INTO og_compat.discount_allocations(
+                                allocation_id, order_item_id, reward_entry_id, component, amount
+                            ) VALUES (?, ?, ?, 'GOODS', ?)
+                            """,
+                            UUID.randomUUID(),
+                            ((Number) itemRow.get("order_item_id")).longValue(),
+                            rewardEntryId,
+                            pointsAllocation
+                    );
+                }
+            }
+            if (pointsShippingDiscount != null && pointsShippingDiscount.compareTo(BigDecimal.ZERO) > 0 && !items.isEmpty()) {
+                jdbcTemplate.update("""
+                        INSERT INTO og_compat.discount_allocations(
+                            allocation_id, order_item_id, reward_entry_id, component, amount
+                        ) VALUES (?, ?, ?, 'SHIPPING', ?)
+                        """,
+                        UUID.randomUUID(),
+                        ((Number) items.getFirst().get("order_item_id")).longValue(),
+                        rewardEntryId,
+                        pointsShippingDiscount
+                );
+            }
         }
     }
 

@@ -131,8 +131,12 @@ public class FulfillmentStateService {
         // 6. Cập nhật Shipment và Order trong cùng một transaction
         shipment.markDelivered(effectiveTime, effectiveTime, now);
         shipmentRepository.save(shipment);
+        if ("UC83".equals(shipment.getWorkflowModel())) {
+            shipmentRepository.flush();
+        }
 
-        commerceFacade.markDeliveredDirectFromCarrier(orderId, effectiveTime);
+        Instant syncedDeliveredAt = shipment.getDeliveredAt() != null ? shipment.getDeliveredAt() : effectiveTime;
+        commerceFacade.markDeliveredDirectFromCarrier(orderId, syncedDeliveredAt);
 
         log.info("Đã đồng bộ giao hàng thành công (DELIVERED) cho orderId={} từ nguồn {}", orderId, source);
         return DeliveryTransitionResult.ofSuccess();

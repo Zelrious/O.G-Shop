@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { reviewApi } from './reviewApi';
+import type { OrderReview } from './types';
 
 interface OrderReviewModalProps {
   isOpen: boolean;
   orderId: number;
   partnerName: string;
   isBuyer: boolean;
+  existingReview?: OrderReview | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -15,15 +17,27 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
   orderId,
   partnerName,
   isBuyer,
+  existingReview,
   onClose,
   onSuccess,
 }) => {
-  const [rating, setRating] = useState<number>(5);
-  const [comment, setComment] = useState('');
+  const isEditing = Boolean(existingReview);
+  const [rating, setRating] = useState<number>(existingReview?.rating ?? 5);
+  const [comment, setComment] = useState(existingReview?.comment ?? '');
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rewardClaimed, setRewardClaimed] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setRating(existingReview?.rating ?? 5);
+      setComment(existingReview?.comment ?? '');
+      setError(null);
+      setRewardClaimed(false);
+      setSubmitting(false);
+    }
+  }, [isOpen, existingReview]);
 
   if (!isOpen) return null;
 
@@ -32,12 +46,16 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
     setError(null);
     setSubmitting(true);
     try {
-      await reviewApi.createReview(orderId, rating, comment.trim());
+      if (isEditing && typeof reviewApi.updateReview === 'function') {
+        await reviewApi.updateReview(orderId, rating, comment.trim());
+      } else {
+        await reviewApi.createReview(orderId, rating, comment.trim());
+      }
       setRewardClaimed(true);
       setTimeout(() => {
         onSuccess();
         onClose();
-      }, 1500);
+      }, 1200);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể lưu đánh giá.');
       setSubmitting(false);
@@ -72,7 +90,7 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
           <div>
             <h3 style={{ margin: '0 0 4px', fontSize: '1.25rem', fontWeight: 700, color: 'var(--og-color-text-primary, #0f172a)' }}>
-              Đánh giá {isBuyer ? 'Người bán' : 'Người mua'} (UC61)
+              {isEditing ? 'Sửa đánh giá' : 'Đánh giá'} {isBuyer ? 'Người bán' : 'Người mua'} (UC61)
             </h3>
             <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--og-color-text-secondary, #64748b)' }}>
               Đơn hàng #{orderId} - Đối tác: <strong>{partnerName}</strong>
@@ -99,10 +117,14 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
           >
             <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>🎉</div>
             <h4 style={{ margin: '0 0 6px', color: '#166534', fontSize: '1.1rem', fontWeight: 700 }}>
-              Gửi đánh giá thành công!
+              {isEditing ? 'Cập nhật đánh giá thành công!' : 'Gửi đánh giá thành công!'}
             </h4>
             <p style={{ margin: 0, fontSize: '0.88rem', color: '#15803d' }}>
-              Bạn nhận được <strong>+500 xu thưởng</strong> vào tài khoản tích lũy!
+              {isEditing ? (
+                <>Số sao, điểm uy tín và xu thưởng đối tác đã được điều chỉnh theo chính sách (không cộng thêm lượt thưởng).</>
+              ) : (
+                <>Bạn nhận được <strong>+500 xu thưởng</strong> vào tài khoản tích lũy!</>
+              )}
             </p>
           </div>
         ) : (
@@ -134,7 +156,11 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
                 lineHeight: 1.5,
               }}
             >
-              <div>🎁 <strong>Thưởng đánh giá:</strong> Nhận ngay <strong>+500 xu</strong> khi hoàn tất đánh giá.</div>
+              {isEditing ? (
+                <div>ℹ️ <strong>Chính sách sửa đánh giá:</strong> Mỗi đơn chỉ thưởng người gửi một lần. Thay đổi số sao sẽ điều chỉnh điểm uy tín &amp; xu thưởng của đối tác.</div>
+              ) : (
+                <div>🎁 <strong>Thưởng đánh giá:</strong> Nhận ngay <strong>+500 xu</strong> khi hoàn tất đánh giá.</div>
+              )}
               <div style={{ marginTop: '4px', fontSize: '0.78rem' }}>
                 🌟 Đánh giá 3-5 sao giúp đối tác cải thiện điểm uy tín (+3, +4, +5 điểm theo quy tắc phục hồi uy tín).
               </div>
@@ -143,7 +169,7 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
             {/* Interactive Stars Selector */}
             <div style={{ textAlign: 'center', padding: '10px 0' }}>
               <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
-                Chất lượng giao dịch & Hài lòng:
+                Chất lượng giao dịch &amp; Hài lòng:
               </div>
               <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
                 {[1, 2, 3, 4, 5].map((star) => {
@@ -184,7 +210,7 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
             {/* Comment Area */}
             <div>
               <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, marginBottom: '6px', color: '#334155' }}>
-                Chia sẻ nhận xét của bạn
+                Chia sẻ nhận xét của bạn (không chứa địa chỉ riêng, STK ngân hàng, thông tin liên hệ riêng)
               </label>
               <textarea
                 rows={3}
@@ -236,7 +262,11 @@ export const OrderReviewModal: React.FC<OrderReviewModalProps> = ({
                   opacity: submitting ? 0.7 : 1,
                 }}
               >
-                {submitting ? 'Đang gửi...' : 'Gửi đánh giá & Nhận 500 xu'}
+                {submitting
+                  ? 'Đang gửi...'
+                  : isEditing
+                  ? 'Cập nhật đánh giá'
+                  : 'Gửi đánh giá & Nhận 500 xu'}
               </button>
             </div>
           </form>

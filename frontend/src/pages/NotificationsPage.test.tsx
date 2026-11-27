@@ -1,10 +1,10 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotificationsPage } from './NotificationsPage';
 import { notificationApi, notificationTarget, type NotificationItem } from '../features/notifications/notificationApi';
 
-vi.mock('../features/auth', () => ({ useAuth: () => ({ user: { userId: 1, roles: ['SELLER'] } }) }));
+vi.mock('../features/auth', () => ({ useAuth: () => ({ user: { userId: 1, roles: ['BUYER','SELLER'] } }) }));
 vi.mock('../features/notifications/notificationApi', async original => ({
   ...await original<typeof import('../features/notifications/notificationApi')>(),
   notificationApi: { list: vi.fn(), read: vi.fn(), readAll: vi.fn() },
@@ -34,6 +34,34 @@ describe('Private notifications', () => {
     expect(notificationTarget({ ...item, destination: 'KTV_MODERATION' }, ['KTV'])).toBe('/ktv/moderation?productId=10');
   });
 
+  it.each(['BUYER','SELLER'] as const)('opens the correct order for the %s role of a dual-role account', async role => {
+    vi.mocked(notificationApi.list).mockResolvedValueOnce({items:[{...item,destination:'ORDER_DETAIL',orderId:81,orderRole:role}],page:0,size:20,totalElements:1,unreadCount:1});
+    function OrderDestination() { return <output>{useLocation().pathname}</output>; }
+    render(<MemoryRouter initialEntries={['/notifications']}><Routes>
+      <Route path="/notifications" element={<NotificationsPage />} /><Route path="*" element={<OrderDestination />} />
+    </Routes></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button',{name:/Mở thông báo/}));
+    await screen.findByText(role === 'SELLER' ? '/seller/orders/81' : '/orders/81');
+  });
+
+  it.each(['BUYER','SELLER'] as const)('opens the order reviews anchor for %s when clicking a review notification', async role => {
+    vi.mocked(notificationApi.list).mockResolvedValueOnce({
+      items: [{ ...item, type: 'ORDER_REVIEW_RECEIVED', title: 'Bạn nhận được đánh giá 5 sao cho đơn #81', destination: 'ORDER_DETAIL', orderId: 81, orderRole: role }],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      unreadCount: 1,
+    });
+    function OrderDestination() {
+      const loc = useLocation();
+      return <output>{loc.pathname + loc.hash}</output>;
+    }
+    render(<MemoryRouter initialEntries={['/notifications']}><Routes>
+      <Route path="/notifications" element={<NotificationsPage />} /><Route path="*" element={<OrderDestination />} />
+    </Routes></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: /Mở thông báo/ }));
+    await screen.findByText(role === 'SELLER' ? '/seller/orders/81#order-reviews' : '/orders/81#order-reviews');
+  });
   it('marks notice as read when clicked directly', async () => {
     let finish!: () => void;
     vi.mocked(notificationApi.read).mockReturnValue(new Promise<void>(resolve => { finish = resolve; }));

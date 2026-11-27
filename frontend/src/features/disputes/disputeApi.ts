@@ -70,4 +70,30 @@ export const disputeApi = {
       body: JSON.stringify(data),
     });
   },
+
+  submitReturnShipment: (orderId: number, data?: { trackingCode?: string; carrier?: string }) => {
+    return request<DisputeDetail>(`/commerce/orders/${orderId}/dispute/return-shipment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data || {}),
+    });
+  },
+
+  confirmReturnHandover: (orderId: number) => {
+    return request<DisputeDetail>(`/commerce/orders/${orderId}/dispute/return-handover`, {
+      method: 'POST',
+    });
+  },
+
+  simulateReturnDelivered: (orderId: number) => {
+    return request<DisputeDetail>(`/commerce/orders/${orderId}/dispute/return-delivered-simulate`, {
+      method: 'POST',
+    });
+  },
+
+  confirmReturnReceived: (orderId: number) => {
+    return request<DisputeDetail>(`/commerce/orders/${orderId}/dispute/confirm-return-received`, {
+      method: 'POST',
+    });
+  },
 };

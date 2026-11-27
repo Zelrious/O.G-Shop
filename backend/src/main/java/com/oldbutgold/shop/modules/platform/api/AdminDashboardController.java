@@ -1,12 +1,17 @@
 package com.oldbutgold.shop.modules.platform.api;
 
 import com.oldbutgold.shop.modules.platform.api.AdminDashboardDtos.DashboardStatsResponse;
+import com.oldbutgold.shop.modules.platform.api.AdminDashboardDtos.ReturnsReportResponse;
 import com.oldbutgold.shop.modules.platform.application.AdminDashboardService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -22,6 +27,20 @@ public class AdminDashboardController {
     @GetMapping("/stats")
     public ResponseEntity<DashboardStatsResponse> getStats() {
         return ResponseEntity.ok(dashboardService.getDashboardStats());
+    }
+
+    @GetMapping("/returns-report")
+    public ResponseEntity<ReturnsReportResponse> getReturnsReport(
+            @RequestParam(name = "fromDate", required = false) LocalDate fromDate,
+            @RequestParam(name = "toDate", required = false) LocalDate toDate,
+            @RequestParam(name = "timezone", required = false, defaultValue = "Asia/Ho_Chi_Minh") String timezone,
+            @RequestParam(name = "caseType", required = false, defaultValue = "ALL") String caseType,
+            @RequestParam(name = "categories", required = false) List<String> categories,
+            @RequestParam(name = "cutoffAt", required = false) Instant cutoffAt
+    ) {
+        return ResponseEntity.ok(dashboardService.getReturnsReport(
+                fromDate, toDate, timezone, caseType, categories, cutoffAt
+        ));
     }
 
     @GetMapping("/export/revenue")
@@ -44,8 +63,21 @@ public class AdminDashboardController {
 
     @GetMapping("/export/returns")
     public ResponseEntity<byte[]> exportReturns(
-            @RequestParam(name = "categories", required = false) List<String> categories
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "fromDate", required = false) LocalDate fromDate,
+            @RequestParam(name = "toDate", required = false) LocalDate toDate,
+            @RequestParam(name = "timezone", required = false) String timezone,
+            @RequestParam(name = "caseType", required = false) String caseType,
+            @RequestParam(name = "categories", required = false) List<String> categories,
+            @RequestParam(name = "cutoffAt", required = false) Instant cutoffAt
     ) {
+        if (fromDate != null || toDate != null || timezone != null || caseType != null || cutoffAt != null) {
+            Long adminId = jwt != null && jwt.getSubject() != null ? Long.parseLong(jwt.getSubject()) : null;
+            byte[] csv = dashboardService.exportReturnsReportCsv(
+                    adminId, fromDate, toDate, timezone, caseType, categories, cutoffAt
+            );
+            return createCsvResponse("thong-ke-hang-bi-tra-va-khieu-nai.csv", csv);
+        }
         byte[] csv = dashboardService.exportCategoryReturnsCsv(categories);
         return createCsvResponse("thong-ke-hang-bi-tra-va-khieu-nai.csv", csv);
     }

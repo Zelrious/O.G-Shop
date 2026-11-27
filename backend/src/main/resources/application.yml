@@ -110,6 +110,10 @@ app:
       enabled: ${SETTLEMENT_AUTO_CONFIRM_ENABLED:false}
       fixed-delay-ms: ${SETTLEMENT_AUTO_CONFIRM_DELAY:60000}
       initial-delay-ms: ${SETTLEMENT_AUTO_CONFIRM_INITIAL_DELAY:60000}
+    uc48-reminders:
+      enabled: ${UC48_REMINDERS_ENABLED:false}
+      fixed-delay-ms: ${UC48_REMINDERS_DELAY:60000}
+      on-duty-ktv-id: ${UC48_ON_DUTY_KTV_ID:0}
   trustsafety:
     evidence-strict-verify: ${TRUSTSAFETY_EVIDENCE_STRICT_VERIFY:false}
     evidence-storage-root: ${TRUSTSAFETY_EVIDENCE_STORAGE_ROOT:uploads}

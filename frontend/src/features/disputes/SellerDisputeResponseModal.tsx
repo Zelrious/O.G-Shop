@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { disputeApi } from './disputeApi';
+import { PrivateEvidenceImage } from './PrivateEvidenceMedia';
+import { returnCaseApi } from './returnCaseApi';
 
 interface SellerDisputeResponseModalProps {
   isOpen: boolean;
@@ -18,10 +20,28 @@ export const SellerDisputeResponseModal: React.FC<SellerDisputeResponseModalProp
 }) => {
   const [sellerResponse, setSellerResponse] = useState('');
   const [evidenceInput, setEvidenceInput] = useState('');
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const handleUploadFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setError(null);
+    setUploadingMedia(true);
+    try {
+      for (const file of Array.from(files)) {
+        const dto = await returnCaseApi.uploadEvidence(file, 'IMAGE');
+        const key = dto.objectKey || '';
+        setEvidenceInput((prev) => (prev.trim() ? `${prev.trim()}\n${key}` : key));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không thể tải ảnh bằng chứng lên.');
+    } finally {
+      setUploadingMedia(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,12 +154,35 @@ export const SellerDisputeResponseModal: React.FC<SellerDisputeResponseModalProp
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, marginBottom: '4px', color: '#334155' }}>
-              Link hình ảnh kiện hàng trước khi gửi (Mỗi link một dòng)
-            </label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 600, color: '#334155' }}>
+                Link hình ảnh kiện hàng trước khi gửi (Mỗi link một dòng)
+              </label>
+              <label
+                style={{
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: '#2563eb',
+                  cursor: uploadingMedia ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {uploadingMedia ? 'Đang tải lên...' : '+ Chọn ảnh từ máy'}
+                <input
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp"
+                  disabled={uploadingMedia}
+                  onChange={(e) => {
+                    void handleUploadFiles(e.target.files);
+                    e.target.value = '';
+                  }}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
             <textarea
               rows={3}
-              placeholder="https://.../pack1.jpg&#10;https://.../pack2.jpg"
+              placeholder="Chọn ảnh từ máy hoặc nhập mỗi link ảnh một dòng..."
               value={evidenceInput}
               onChange={(e) => setEvidenceInput(e.target.value)}
               style={{
@@ -152,6 +195,22 @@ export const SellerDisputeResponseModal: React.FC<SellerDisputeResponseModalProp
                 fontFamily: 'monospace',
               }}
             />
+            {evidenceInput.trim() && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                {evidenceInput
+                  .split('\n')
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+                  .map((url, idx) => (
+                    <PrivateEvidenceImage
+                      key={`${url}-${idx}`}
+                      objectKey={url}
+                      alt={`Bằng chứng đóng gói #${idx + 1}`}
+                      style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid #cbd5e1' }}
+                    />
+                  ))}
+              </div>
+            )}
             <span style={{ fontSize: '0.76rem', color: '#64748b' }}>
               Ảnh gói hàng dán nhãn vận đơn là bằng chứng quan trọng để Kỹ thuật viên bác khiếu nại sai.
             </span>

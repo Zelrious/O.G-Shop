@@ -153,11 +153,20 @@ export const profileApi = {
     }
     const res = await authApi.authorizedFetch('/shipping/master-data/provinces');
     const raw = await parseResponse<RawProvince[]>(res);
-    return (raw || []).map((item) => ({
-      provinceId: Number(item.provinceId ?? item.ProvinceID),
-      provinceName: String(item.provinceName ?? item.ProvinceName ?? ''),
-      code: item.code ?? item.Code,
-    }));
+    return (raw || [])
+      .map((item) => ({
+        provinceId: Number(item.provinceId ?? item.ProvinceID),
+        provinceName: String(item.provinceName ?? item.ProvinceName ?? ''),
+        code: item.code ?? item.Code,
+      }))
+      .filter((p) => {
+        if (!p.provinceId || !p.provinceName) return false;
+        const name = p.provinceName.trim().toLowerCase();
+        // Lọc bỏ các tỉnh rác/test của GHN Sandbox (như "Hà Nội 02" id=2002 hoặc "Test - Alert - Tỉnh - 001" id=298)
+        if (p.provinceId >= 1000) return false;
+        if (name.includes('test') || name.includes('alert') || /\b0\d+$/.test(name)) return false;
+        return true;
+      });
   },
 
   async getDistricts(provinceId: number): Promise<GhnDistrict[]> {

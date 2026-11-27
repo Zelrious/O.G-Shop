@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { returnCaseApi, ReturnCaseDetail } from './returnCaseApi';
+import { PrivateEvidenceLink } from './PrivateEvidenceMedia';
+import { returnCaseApi, type ReturnEvidenceItemInput, ReturnCaseDetail } from './returnCaseApi';
 
 interface Uc83SellerReturnPanelProps {
   orderId: number;
@@ -17,22 +18,31 @@ export const Uc83SellerReturnPanel: React.FC<Uc83SellerReturnPanelProps> = ({
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showExemptForm, setShowExemptForm] = useState(false);
   const [exemptReason, setExemptReason] = useState('');
-  const [exemptEvidenceUrl, setExemptEvidenceUrl] = useState('');
+  const [exemptEvidence, setExemptEvidence] = useState<ReturnEvidenceItemInput | null>(null);
 
   useEffect(() => {
     let active = true;
-    if (!['DELIVERED', 'DISPUTED'].includes(orderStatus)) {
+    if (['DELIVERED', 'DISPUTED'].includes(orderStatus)) {
+      returnCaseApi
+        .getActiveReturnCase(orderId)
+        .then((data) => {
+          if (active) setReturnCase(data);
+        })
+        .catch(() => {
+          // Silent fallback when order has no UC83 return case
+        });
+    } else if (['REFUNDED', 'COMPLETED'].includes(orderStatus) && typeof returnCaseApi.getLatestReturnCase === 'function') {
+      returnCaseApi
+        .getLatestReturnCase(orderId)
+        .then((data) => {
+          if (active) setReturnCase(data);
+        })
+        .catch(() => {
+          if (active) setReturnCase(null);
+        });
+    } else {
       setReturnCase(null);
-      return;
     }
-    returnCaseApi
-      .getActiveReturnCase(orderId)
-      .then((data) => {
-        if (active) setReturnCase(data);
-      })
-      .catch(() => {
-        // Silent fallback when order has no UC83 return case
-      });
     return () => {
       active = false;
     };
@@ -77,26 +87,34 @@ export const Uc83SellerReturnPanel: React.FC<Uc83SellerReturnPanelProps> = ({
     }
   };
 
+  const handleUploadExemptionFile = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const isVideo = file.type.startsWith('video/') || /\.(mp4|webm)$/i.test(file.name);
+      const dto = await returnCaseApi.uploadEvidence(file, isVideo ? 'VIDEO' : 'IMAGE');
+      setExemptEvidence(dto);
+    } catch (err) {
+      setFeedback({ type: 'error', text: err instanceof Error ? err.message : 'Không thể tải tệp bằng chứng lên.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleSubmitExemption = async () => {
-    if (exemptReason.trim().length < 10 || !exemptEvidenceUrl.trim()) {
+    if (exemptReason.trim().length < 10 || !exemptEvidence) {
       setFeedback({ type: 'error', text: 'Cần nhập lý do tối thiểu 10 ký tự và ít nhất 1 ảnh/video bằng chứng.' });
       return;
     }
     setBusy(true);
     setFeedback(null);
     try {
-      const updated = await returnCaseApi.sellerSubmitDamageExemption(orderId, exemptReason.trim(), [
-        {
-          mediaType: 'IMAGE',
-          objectKey: exemptEvidenceUrl.trim(),
-          contentDigest: 'b'.repeat(64),
-          fileSizeBytes: 2048,
-        },
-      ]);
+      const updated = await returnCaseApi.sellerSubmitDamageExemption(orderId, exemptReason.trim(), [exemptEvidence], returnCase.pendingEvidenceRequest?.requestId);
       setReturnCase(updated);
       setShowExemptForm(false);
       setExemptReason('');
-      setExemptEvidenceUrl('');
+      setExemptEvidence(null);
       setFeedback({ type: 'success', text: 'Đã gửi đề nghị KTV miễn hoàn tiền kèm bằng chứng.' });
       onUpdated();
     } catch (err) {
@@ -125,6 +143,7 @@ export const Uc83SellerReturnPanel: React.FC<Uc83SellerReturnPanelProps> = ({
         Hồ sơ Trả hàng UC83 #{returnCase.caseId} — Trạng thái: {returnCase.state}
       </div>
 
+      {returnCase.pendingEvidenceRequest && <p>Yêu cầu bổ sung từ KTV · {returnCase.pendingEvidenceRequest.reason}</p>}
       {feedback && (
         <div
           role="status"
@@ -167,7 +186,7 @@ export const Uc83SellerReturnPanel: React.FC<Uc83SellerReturnPanelProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || !!returnCase.currentRound?.validDamageRequestAt}
             onClick={handleAgreeRefund}
             className="og-button og-button--primary"
             style={{ width: '100%', padding: '8px 12px', fontWeight: 600, background: '#16a34a', borderColor: '#16a34a' }}
@@ -176,12 +195,12 @@ export const Uc83SellerReturnPanel: React.FC<Uc83SellerReturnPanelProps> = ({
           </button>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || (!!returnCase.currentRound?.validDamageRequestAt && !returnCase.pendingEvidenceRequest)}
             onClick={() => setShowExemptForm((v) => !v)}
             className="og-button og-button--secondary"
             style={{ width: '100%', padding: '8px 12px', fontWeight: 600 }}
           >
-            Hàng hỏng / tráo hàng — Đề nghị KTV miễn hoàn
+            {returnCase.pendingEvidenceRequest ? 'Bổ sung bằng chứng theo yêu cầu KTV' : 'Hàng hỏng / tráo hàng — Đề nghị KTV miễn hoàn'}
           </button>
 
           {showExemptForm && (
@@ -193,13 +212,35 @@ export const Uc83SellerReturnPanel: React.FC<Uc83SellerReturnPanelProps> = ({
                 onChange={(e) => setExemptReason(e.target.value)}
                 style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
               />
-              <input
-                type="text"
-                placeholder="Đường dẫn ảnh/video bằng chứng..."
-                value={exemptEvidenceUrl}
-                onChange={(e) => setExemptEvidenceUrl(e.target.value)}
-                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1' }}
-              />
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <label
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    background: '#e0f2fe',
+                    color: '#0369a1',
+                    fontWeight: 600,
+                    fontSize: '0.78rem',
+                    cursor: busy ? 'not-allowed' : 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  + Chọn tệp
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+                    disabled={busy}
+                    onChange={(e) => {
+                      void handleUploadExemptionFile(e.target.files?.[0]);
+                      e.target.value = '';
+                    }}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
+              {exemptEvidence?.objectKey && (
+                <PrivateEvidenceLink objectKey={exemptEvidence.objectKey} label="Xem trước bằng chứng miễn hoàn" />
+              )}
               <button
                 type="button"
                 disabled={busy}
@@ -207,7 +248,7 @@ export const Uc83SellerReturnPanel: React.FC<Uc83SellerReturnPanelProps> = ({
                 className="og-button og-button--primary"
                 style={{ padding: '6px 12px', fontWeight: 600 }}
               >
-                Gửi đề nghị xét lại lên KTV
+                {returnCase.pendingEvidenceRequest ? 'Gửi bằng chứng bổ sung' : 'Gửi đề nghị xét lại lên KTV'}
               </button>
             </div>
           )}

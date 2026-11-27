@@ -2,9 +2,15 @@ package com.oldbutgold.shop.modules.platform.application;
 
 import com.oldbutgold.shop.modules.platform.api.AdminDashboardDtos.*;
 import com.oldbutgold.shop.modules.platform.infrastructure.persistence.AdminDashboardRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.zone.ZoneRulesException;
 import java.util.List;
 import java.util.Locale;
 
@@ -12,10 +18,18 @@ import java.util.Locale;
 public class AdminDashboardService {
 
     private final AdminDashboardRepository repository;
+    private Clock clock = Clock.systemUTC();
     private static final byte[] UTF8_BOM = new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
 
     public AdminDashboardService(AdminDashboardRepository repository) {
         this.repository = repository;
+    }
+
+    @Autowired(required = false)
+    public void setClock(Clock clock) {
+        if (clock != null) {
+            this.clock = clock;
+        }
     }
 
     public DashboardStatsResponse getDashboardStats() {
@@ -41,7 +55,7 @@ public class AdminDashboardService {
             if (previous.revenue() > 0) {
                 revenueChangePercent = (latest.revenue() - previous.revenue()) / previous.revenue() * 100.0;
                 double absChange = Math.abs(revenueChangePercent);
-                String formatted = String.format(Locale.GERMANY, "%.1f%%", absChange); // uses comma as decimal separator in vi/de
+                String formatted = String.format(Locale.GERMANY, "%.1f%%", absChange);
                 trendLabel = (revenueChangePercent < 0 ? "Giảm " : "Tăng ") + formatted;
             }
         }
@@ -62,6 +76,103 @@ public class AdminDashboardService {
                 leastSearched,
                 categoryReturns
         );
+    }
+
+    public ReturnsReportResponse getReturnsReport(
+            LocalDate fromDate,
+            LocalDate toDate,
+            String timezone,
+            String caseType,
+            List<String> categories,
+            Instant requestedCutoffAt
+    ) {
+        String effectiveTz = (timezone == null || timezone.isBlank()) ? "Asia/Ho_Chi_Minh" : timezone.trim();
+        ZoneId zoneId;
+        try {
+            zoneId = ZoneId.of(effectiveTz);
+        } catch (ZoneRulesException ex) {
+            throw new IllegalArgumentException("Múi giờ báo cáo không hợp lệ: " + effectiveTz);
+        }
+
+        LocalDate today = LocalDate.now(clock.withZone(zoneId));
+        LocalDate effectiveTo = toDate != null ? toDate : today;
+        LocalDate effectiveFrom = fromDate != null ? fromDate : effectiveTo.minusDays(30);
+        if (effectiveFrom.isAfter(effectiveTo)) {
+            throw new IllegalArgumentException("Khoảng thời gian báo cáo không hợp lệ: fromDate không được lớn hơn toDate.");
+        }
+
+        String effectiveType = (caseType == null || caseType.isBlank()) ? "ALL" : caseType.trim().toUpperCase(Locale.ROOT);
+        if (!"ALL".equals(effectiveType) && !"RETURN".equals(effectiveType) && !"SYSTEM_ISSUE".equals(effectiveType)) {
+            throw new IllegalArgumentException("Loại hồ sơ lọc không hợp lệ: " + effectiveType);
+        }
+
+        Instant fromInstant = effectiveFrom.atStartOfDay(zoneId).toInstant();
+        Instant toExclusiveInstant = effectiveTo.plusDays(1).atStartOfDay(zoneId).toInstant();
+        Instant effectiveCutoff = requestedCutoffAt != null ? requestedCutoffAt : clock.instant();
+
+        return repository.queryResolvedCasesReport(
+                fromInstant,
+                toExclusiveInstant,
+                effectiveCutoff,
+                effectiveTz,
+                effectiveFrom,
+                effectiveTo,
+                effectiveType,
+                categories
+        );
+    }
+
+    public byte[] exportReturnsReportCsv(
+            Long adminId,
+            LocalDate fromDate,
+            LocalDate toDate,
+            String timezone,
+            String caseType,
+            List<String> categories,
+            Instant cutoffAt
+    ) {
+        ReturnsReportResponse report = getReturnsReport(fromDate, toDate, timezone, caseType, categories, cutoffAt);
+        var filters = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+        filters.put("fromDate", report.fromDate().toString());
+        filters.put("toDate", report.toDate().toString());
+        filters.put("caseType", report.caseTypeFilter());
+        var categoryFilter = filters.putArray("categories");
+        if (categories != null) categories.forEach(categoryFilter::add);
+        repository.recordExportRun(adminId, "RETURN_CASES", filters.toString(), report.timezone(), report.cutoffAt());
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Thời điểm tổng hợp (cutoffAt),Múi giờ,Từ ngày,Đến ngày,Loại hồ sơ,Tổng hồ sơ đã xử lý,Trả hàng hoàn tiền,Trả hàng miễn hoàn,Trả hàng bị bác,Buyer rút yêu cầu,Lỗi hệ thống xác nhận,Lỗi hệ thống bị bác,Hồ sơ đang chờ cuối kỳ\n");
+        sb.append(String.format("%s,%s,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%d\n\n",
+                report.cutoffAt(),
+                escapeCsv(report.timezone()),
+                report.fromDate(),
+                report.toDate(),
+                report.caseTypeFilter(),
+                report.totalResolvedCases(),
+                report.returnRefundedCount(),
+                report.returnExemptNoRefundCount(),
+                report.returnRejectedCount(),
+                report.returnWithdrawnCount(),
+                report.systemIssueConfirmedCount(),
+                report.systemIssueRejectedCount(), report.openPendingCount()
+        ));
+        sb.append("Danh mục,Tổng hồ sơ đã đóng,Số hồ sơ trả hàng,Số hồ sơ lỗi hệ thống,Tỷ trọng hồ sơ trả hàng (%)\n");
+        for (CategoryReturnStat item : report.categoryBreakdown()) {
+            sb.append(String.format("%s,%d,%d,%d,%s\n",
+                    escapeCsv(item.category()), item.totalOrders(), item.returnCount(), item.complaintCount(), item.returnRate()));
+        }
+        sb.append("\nCase ID,Loại hồ sơ,Phân loại kết quả,Trạng thái cuối,Đơn hàng ID,Danh mục,Thời điểm đóng,Nguồn\n");
+        for (ReturnReportRow row : report.resolvedCases()) {
+            sb.append(String.format("%d,%s,%s,%s,%s,%s,%s,%s\n",
+                    row.caseId(),
+                    escapeCsv(row.caseType()),
+                    escapeCsv(row.outcomeBucket()),
+                    escapeCsv(row.finalState()),
+                    row.orderId() != null ? row.orderId().toString() : "",
+                    escapeCsv(row.category()),
+                    row.closedAt(), row.source()));
+        }
+        return prependBom(sb.toString());
     }
 
     public byte[] exportRevenueCsv() {
@@ -120,11 +231,25 @@ public class AdminDashboardService {
         return result;
     }
 
-    private static String escapeCsv(String str) {
+    static String escapeCsv(String str) {
         if (str == null) return "";
-        if (str.contains(",") || str.contains("\"") || str.contains("\n")) {
-            return "\"" + str.replace("\"", "\"\"") + "\"";
+        String sanitized = str;
+        String trimmedStart = str.stripLeading();
+        if (!trimmedStart.isEmpty()) {
+            char firstChar = str.charAt(0);
+            char firstNonWhitespace = trimmedStart.charAt(0);
+            if (firstChar == '=' || firstChar == '+' || firstChar == '-' || firstChar == '@'
+                    || firstChar == '\t' || firstChar == '\r'
+                    || firstNonWhitespace == '=' || firstNonWhitespace == '+'
+                    || firstNonWhitespace == '-' || firstNonWhitespace == '@') {
+                sanitized = "'" + str;
+            }
+        } else if (!str.isEmpty() && (str.charAt(0) == '\t' || str.charAt(0) == '\r')) {
+            sanitized = "'" + str;
         }
-        return str;
+        if (sanitized.contains(",") || sanitized.contains("\"") || sanitized.contains("\n") || sanitized.contains("\r")) {
+            return "\"" + sanitized.replace("\"", "\"\"") + "\"";
+        }
+        return sanitized;
     }
 }

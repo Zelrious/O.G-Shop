@@ -229,6 +229,8 @@ public final class ReturnCaseDtos {
             Instant validDeliveryAt
     ) {}
 
+    public record PendingEvidenceRequest(UUID requestId, String reason, Instant deadlineAt) {}
+
     public record ReturnCaseDetailResponse(
             Long caseId,
             Long orderId,
@@ -247,12 +249,63 @@ public final class ReturnCaseDtos {
             List<CaseEvidenceDto> evidence,
             List<CaseEventDto> events,
             ReturnShipmentDetailResponse returnShipment,
-            List<CaseDecisionPublicDto> decisions
+            List<CaseDecisionPublicDto> decisions,
+            Long assignedTo,
+            PendingEvidenceRequest pendingEvidenceRequest
     ) {
+    public ReturnCaseDetailResponse(
+            Long caseId,
+            Long orderId,
+            String caseType,
+            String state,
+            ReturnReasonCode reasonCode,
+            String cleanDescription,
+            String fullDescription,
+            Long createdBy,
+            Instant createdAt,
+            Instant approvedAt,
+            Instant validReturnedAt,
+            Instant sellerResponseDueAt,
+            Instant closedAt,
+            CaseRoundDto currentRound,
+            List<CaseEvidenceDto> evidence,
+            List<CaseEventDto> events,
+            ReturnShipmentDetailResponse returnShipment,
+            List<CaseDecisionPublicDto> decisions,
+            Long assignedTo
+    ) {
+            this(caseId, orderId, caseType, state, reasonCode, cleanDescription, fullDescription, createdBy, createdAt, approvedAt, validReturnedAt, sellerResponseDueAt, closedAt, currentRound, evidence, events, returnShipment, decisions, assignedTo, null);
+        }
+
         public ReturnCaseDetailResponse {
             evidence = evidence != null ? List.copyOf(evidence) : List.of();
             events = events != null ? List.copyOf(events) : List.of();
             decisions = decisions != null ? List.copyOf(decisions) : List.of();
+        }
+
+        public ReturnCaseDetailResponse(
+                Long caseId,
+                Long orderId,
+                String caseType,
+                String state,
+                ReturnReasonCode reasonCode,
+                String cleanDescription,
+                String fullDescription,
+                Long createdBy,
+                Instant createdAt,
+                Instant approvedAt,
+                Instant validReturnedAt,
+                Instant sellerResponseDueAt,
+                Instant closedAt,
+                CaseRoundDto currentRound,
+                List<CaseEvidenceDto> evidence,
+                List<CaseEventDto> events,
+                ReturnShipmentDetailResponse returnShipment,
+                List<CaseDecisionPublicDto> decisions
+        ) {
+            this(caseId, orderId, caseType, state, reasonCode, cleanDescription, fullDescription,
+                    createdBy, createdAt, approvedAt, validReturnedAt, sellerResponseDueAt, closedAt,
+                    currentRound, evidence, events, returnShipment, decisions, null);
         }
 
         public ReturnCaseDetailResponse(
@@ -454,5 +507,88 @@ public final class ReturnCaseDtos {
             content = content != null ? List.copyOf(content) : List.of();
         }
     }
+
+    public record AdminAssigneeOption(
+            Long userId,
+            String fullName,
+            String email
+    ) {}
+
+    public record KtvEscalateCaseRequest(
+            @NotNull(message = "recipientAdminId không được để trống")
+            Long recipientAdminId,
+
+            @jakarta.validation.constraints.NotBlank(message = "Lý do chuyển cấp không được để trống")
+            @Size(min = 5, max = 2000, message = "Lý do chuyển cấp phải từ 5 đến 2000 ký tự")
+            String reason,
+
+            String commandKey
+    ) {}
+
+    public record AdminHandoverRequest(
+            @NotNull(message = "newAdminId không được để trống")
+            Long newAdminId,
+
+            @jakarta.validation.constraints.NotBlank(message = "Lý do bàn giao không được để trống")
+            @Size(min = 5, max = 2000, message = "Lý do bàn giao phải từ 5 đến 2000 ký tự")
+            String reason,
+
+            String commandKey
+    ) {}
+
+    public record CreateSystemIssueRequest(
+            Long orderId,
+            Long productId,
+            UUID listingChargeId,
+            UUID paymentIntentId,
+
+            @jakarta.validation.constraints.NotBlank(message = "Mô tả sự cố hệ thống không được để trống")
+            @Size(min = 10, max = 2000, message = "Mô tả sự cố phải từ 10 đến 2000 ký tự")
+            String description,
+
+            List<EvidenceItemDto> evidenceList,
+            String commandKey
+    ) {}
+
+    public record SystemIssueDecisionRequest(
+            @jakarta.validation.constraints.NotBlank(message = "resolution bắt buộc là CONFIRM_ISSUE hoặc REJECT_ISSUE")
+            String resolution,
+
+            @jakarta.validation.constraints.NotBlank(message = "Lý do quyết định không được để trống")
+            @Size(min = 5, max = 2000, message = "Lý do quyết định phải từ 5 đến 2000 ký tự")
+            String reason,
+
+            Instant affectedFrom,
+            Instant affectedUntil,
+            String commandKey
+    ) {}
+
+    public record CaseCompensationRequest(
+            @jakarta.validation.constraints.NotBlank(message = "compensationType bắt buộc là VOUCHER hoặc DEADLINE_EXTENSION")
+            String compensationType,
+
+            @NotNull(message = "recipientId không được để trống")
+            Long recipientId,
+
+            Long voucherId,
+            Long targetReturnCaseId,
+            Instant affectedFrom,
+            Instant affectedUntil,
+
+            @jakarta.validation.constraints.NotBlank(message = "Lý do bồi thường không được để trống")
+            @Size(min = 5, max = 2000, message = "Lý do bồi thường phải từ 5 đến 2000 ký tự")
+            String reason,
+
+            String commandKey
+    ) {}
+
+    public record CaseCompensationResponse(
+            UUID eventId,
+            Long caseId,
+            String compensationType,
+            Long recipientId,
+            UUID grantId,
+            String message
+    ) {}
 }
 

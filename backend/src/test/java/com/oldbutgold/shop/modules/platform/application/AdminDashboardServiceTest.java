@@ -118,4 +118,18 @@ class AdminDashboardServiceTest {
         assertFalse(filteredContent.contains("Máy ảnh & Quang học"));
         assertFalse(filteredContent.contains("Thời trang & Túi vintage"));
     }
+
+    @Test
+    void testEscapeCsvNeutralizesFormulaInjectionAndQuotesSpecialChars() {
+        assertEquals("", AdminDashboardService.escapeCsv(null));
+        assertEquals("'=SUM(A1:A2)", AdminDashboardService.escapeCsv("=SUM(A1:A2)"));
+        assertEquals("'+1+1", AdminDashboardService.escapeCsv("+1+1"));
+        assertEquals("'-cmd|' /C calc'!A0", AdminDashboardService.escapeCsv("-cmd|' /C calc'!A0"));
+        assertEquals("'@SUM(1+1)*cmd", AdminDashboardService.escapeCsv("@SUM(1+1)*cmd"));
+        assertEquals("'  =1+1", AdminDashboardService.escapeCsv("  =1+1"));
+        assertEquals("'\t=cmd()", AdminDashboardService.escapeCsv("\t=cmd()"));
+        assertEquals("\"'\r=cmd()\"", AdminDashboardService.escapeCsv("\r=cmd()"));
+        assertEquals("\"a,b\"\"c\nd\"", AdminDashboardService.escapeCsv("a,b\"c\nd"));
+        assertEquals("\"line1\rline2\"", AdminDashboardService.escapeCsv("line1\rline2"));
+    }
 }

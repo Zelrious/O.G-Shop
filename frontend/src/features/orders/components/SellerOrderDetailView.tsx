@@ -1,20 +1,25 @@
 import { ChatLink } from '../../chat-offer/ChatLink';
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ordersApi } from '../ordersApi';
 import { OrderDetail } from '../types';
-import { TrackingResponse, formatGhnStatus } from '../../fulfillment/fulfillmentApi';
+import { TrackingResponse, resolveOutboundGhnDisplayStatus } from '../../fulfillment/fulfillmentApi';
 import { SellerDisputeResponseModal } from '../../disputes/SellerDisputeResponseModal';
+import { ReturnShipmentCard } from '../../disputes/ReturnShipmentCard';
+import { getReturnShipmentStatusMeta } from '../../disputes/returnShipmentMeta';
 import { Uc83SellerReturnPanel } from '../../disputes/Uc83SellerReturnPanel';
 import { OrderReviewModal } from '../../disputes/OrderReviewModal';
+import { disputeApi } from '../../disputes/disputeApi';
 import { reviewApi } from '../../disputes/reviewApi';
-import type { OrderReviewsResponse } from '../../disputes/types';
+import { buildOrderTimelineSteps } from '../orderTimeline';
+import type { DisputeDetail, OrderReviewsResponse } from '../../disputes/types';
 
 interface SellerOrderDetailViewProps {
   orderId: number;
 }
 
 export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ orderId }) => {
+  const location = useLocation();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -36,6 +41,8 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
   const [showDisputeResponseModal, setShowDisputeResponseModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviews, setReviews] = useState<OrderReviewsResponse | null>(null);
+  const [dispute, setDispute] = useState<DisputeDetail | null>(null);
+  const [confirmingReturn, setConfirmingReturn] = useState(false);
   const [shipmentNote, setShipmentNote] = useState('Cho xem hàng không cho thử');
   const [creatingShipment, setCreatingShipment] = useState(false);
   const [shipmentError, setShipmentError] = useState<string | null>(null);
@@ -65,6 +72,13 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
         reviewApi.getOrderReviews(orderId)
           .then((res) => setReviews(res))
           .catch(() => setReviews(null));
+        if (['DISPUTED', 'REFUNDED', 'COMPLETED'].includes(data.status)) {
+          disputeApi.getDisputeByOrder(orderId)
+            .then((res) => setDispute(res))
+            .catch(() => setDispute(null));
+        } else {
+          setDispute(null);
+        }
       })
       .catch((err) => {
         setErrorMsg(err.message || 'Không thể tải chi tiết đơn bán.');
@@ -77,6 +91,13 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
   useEffect(() => {
     loadOrder();
   }, [loadOrder]);
+
+  useEffect(() => {
+    if (location.hash === '#order-reviews' && !loading && order) {
+      const targetEl = document.getElementById('order-reviews');
+      targetEl?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    }
+  }, [location.hash, loading, order, reviews]);
 
   const handleConfirmOrder = async () => {
     if (!window.confirm(`Xác nhận tiếp nhận và chuẩn bị đơn hàng #${orderId}? Sản phẩm sẽ được chuyển sang trạng thái ĐÃ BÁN.`)) {
@@ -209,7 +230,8 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
   }
 
   const hasTracking = Boolean(tracking && tracking.trackingNumber);
-  const ghnStatusInfo = hasTracking ? formatGhnStatus(tracking?.rawGhnStatus) : null;
+  const ghnStatusInfo = hasTracking ? resolveOutboundGhnDisplayStatus(order, tracking) : null;
+  const timelineSteps = buildOrderTimelineSteps(order, tracking, dispute);
 
   return (
     <div style={{ maxWidth: 960, margin: '20px auto', padding: '0 16px 60px' }}>
@@ -254,6 +276,37 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
             </span>
           </div>
         </div>
+        {order.status !== 'CANCELLED' && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative', marginTop: 20 }}>
+            {timelineSteps.map((step, idx) => (
+              <div key={step.key} style={{ textAlign: 'center', flex: 1, position: 'relative' }}>
+                <div style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: '50%',
+                  background: step.done ? 'var(--og-color-primary)' : 'var(--og-color-border)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 6px',
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}>
+                  {step.done ? '✓' : idx + 1}
+                </div>
+                <div style={{ fontSize: '0.78rem', fontWeight: step.done ? 600 : 400, color: step.done ? 'var(--og-color-text-primary)' : 'var(--og-color-text-secondary)' }}>
+                  {step.label}
+                </div>
+                {step.time && (
+                  <div style={{ fontSize: '0.68rem', color: 'var(--og-color-text-tertiary)', marginTop: 2 }}>
+                    {formatDate(step.time)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20 }}>
@@ -319,14 +372,18 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
                     <strong style={{ fontSize: '1.05rem', color: 'var(--og-color-primary)' }}>{tracking?.trackingNumber}</strong>
                   </div>
                   {ghnStatusInfo && (
-                    <span style={{
-                      background: ghnStatusInfo.bg,
-                      color: ghnStatusInfo.color,
-                      padding: '4px 12px',
-                      borderRadius: 12,
-                      fontWeight: 600,
-                      fontSize: '0.82rem',
-                    }}>
+                    <span
+                      data-testid="outbound-ghn-status-badge"
+                      title={ghnStatusInfo.rawDiagnosticStatus ? `GHN raw: ${ghnStatusInfo.rawDiagnosticStatus}` : undefined}
+                      style={{
+                        background: ghnStatusInfo.bg,
+                        color: ghnStatusInfo.color,
+                        padding: '4px 12px',
+                        borderRadius: 12,
+                        fontWeight: 600,
+                        fontSize: '0.82rem',
+                      }}
+                    >
                       {ghnStatusInfo.label}
                     </span>
                   )}
@@ -390,6 +447,13 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
               </div>
             )}
           </div>
+
+          {/* Return Shipment Info Card (GHN - Return Leg) */}
+          <ReturnShipmentCard
+            dispute={dispute}
+            buyerSenderName={order.shippingRecipientName}
+            buyerSenderAddress={order.fullShippingAddress}
+          />
         </div>
 
         {/* Right Column: Seller Proceeds & Action */}
@@ -521,33 +585,127 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
 
               {order.status === 'DISPUTED' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{
-                    background: '#fef3c7',
-                    border: '1px solid #fde68a',
-                    borderRadius: 8,
-                    padding: 12,
-                    fontSize: '0.85rem',
-                    color: '#b45309',
-                    lineHeight: 1.5,
-                  }}>
-                    <strong>Đơn hàng đang có tranh chấp (UC62/UC63):</strong> Người mua đã gửi yêu cầu khiếu nại. Bạn cần gửi phản hồi giải trình và ảnh kiện hàng để bảo vệ quyền lợi.
-                  </div>
-                  <button
-                    type="button"
-                    style={{
-                      width: '100%',
-                      padding: '10px 16px',
-                      background: '#ea580c',
-                      border: 'none',
-                      color: '#fff',
+                  {dispute?.status === 'RETURN_APPROVED' ? (
+                    <div style={{
+                      background: '#eff6ff',
+                      border: '1px solid #93c5fd',
                       borderRadius: 8,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => setShowDisputeResponseModal(true)}
-                  >
-                    Gửi phản hồi giải trình & Bằng chứng (UC63)
-                  </button>
+                      padding: 14,
+                      fontSize: '0.85rem',
+                      color: '#1e3a8a',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 10,
+                      lineHeight: 1.5,
+                    }}>
+                      <div>
+                        <strong>⚖️ KTV đã chấp thuận cho Người mua trả hàng (RETURN_APPROVED):</strong>
+                        {dispute.verdictNotes && (
+                          <div style={{ marginTop: 4 }}>
+                            Ghi chú phán quyết của KTV: <em>"{dispute.verdictNotes}"</em>
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{
+                        background: '#fff',
+                        border: '1px solid #bfdbfe',
+                        borderRadius: 8,
+                        padding: 10,
+                        color: '#0f172a',
+                      }}>
+                        <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                          🔄 Vận đơn Hoàn trả (GHN — Chiều về)
+                        </div>
+                        {dispute.returnTrackingCode ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <div>Đơn vị vận chuyển: <strong>{dispute.returnCarrier || 'GHN'}</strong></div>
+                            <div>Mã vận đơn hoàn trả: <strong style={{ color: '#2563eb' }}>{dispute.returnTrackingCode}</strong></div>
+                            <div>
+                              Trạng thái:{' '}
+                              <strong style={{ color: getReturnShipmentStatusMeta(dispute.returnShipmentStatus).color }}>
+                                {getReturnShipmentStatusMeta(dispute.returnShipmentStatus).label}
+                              </strong>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ color: '#64748b' }}>
+                            Đang chờ Người mua khởi tạo mã vận đơn hoàn trả...
+                          </div>
+                        )}
+                      </div>
+
+                      {dispute.returnShipmentStatus === 'RETURN_DELIVERED' && (
+                        <button
+                          type="button"
+                          disabled={confirmingReturn}
+                          onClick={async () => {
+                            if (!window.confirm(`Xác nhận đã kiểm tra hàng hoàn trả của đơn #${order.orderId} và đồng ý hoàn tiền cho Người mua?`)) {
+                              return;
+                            }
+                            setConfirmingReturn(true);
+                            try {
+                              await disputeApi.confirmReturnReceived(order.orderId);
+                              loadOrder();
+                            } catch (err) {
+                              alert(err instanceof Error ? err.message : 'Không thể xác nhận hoàn tiền.');
+                            } finally {
+                              setConfirmingReturn(false);
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '10px 16px',
+                            background: '#16a34a',
+                            border: 'none',
+                            color: '#fff',
+                            borderRadius: 8,
+                            fontWeight: 700,
+                            cursor: confirmingReturn ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          {confirmingReturn
+                            ? 'Đang xử lý hoàn tiền...'
+                            : '✅ Kiểm tra hàng trả & Xác nhận hoàn tiền cho Người mua'}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{
+                        background: '#fef3c7',
+                        border: '1px solid #fde68a',
+                        borderRadius: 8,
+                        padding: 12,
+                        fontSize: '0.85rem',
+                        color: '#b45309',
+                        lineHeight: 1.5,
+                      }}>
+                        <strong>Đơn hàng đang có tranh chấp (UC62/UC63):</strong> Người mua đã gửi yêu cầu khiếu nại. Bạn cần gửi phản hồi giải trình và ảnh kiện hàng để bảo vệ quyền lợi.
+                        {dispute?.sellerResponse && (
+                          <div style={{ marginTop: 6, padding: 8, background: '#fff', borderRadius: 6, color: '#334155' }}>
+                            <strong>Giải trình đã gửi:</strong> "{dispute.sellerResponse}"
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        style={{
+                          width: '100%',
+                          padding: '10px 16px',
+                          background: '#ea580c',
+                          border: 'none',
+                          color: '#fff',
+                          borderRadius: 8,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setShowDisputeResponseModal(true)}
+                      >
+                        {dispute?.sellerResponse ? 'Cập nhật giải trình & Bằng chứng (UC63)' : 'Gửi phản hồi giải trình & Bằng chứng (UC63)'}
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -566,18 +724,34 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
               )}
 
               {order.status === 'COMPLETED' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{
-                    background: '#dcfce7',
-                    border: '1px solid #86efac',
-                    borderRadius: 8,
-                    padding: 12,
-                    fontSize: '0.85rem',
-                    color: '#166534',
-                    lineHeight: 1.5,
-                  }}>
-                    <strong>Đơn hàng đã hoàn tất!</strong> Tiền bán hàng đã được giải ngân thành công.
-                  </div>
+                <div style={{
+                  background: '#dcfce7',
+                  border: '1px solid #86efac',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: '0.85rem',
+                  color: '#166534',
+                  lineHeight: 1.5,
+                  marginBottom: 10,
+                }}>
+                  <strong>Đơn hàng đã hoàn tất!</strong> Tiền bán hàng đã được giải ngân thành công.
+                </div>
+              )}
+
+              {Boolean(reviews?.buyerReview || reviews?.sellerReview || order.deliveredAt != null || tracking?.status === 'DELIVERED' || ['DELIVERED', 'COMPLETED'].includes(order.status)) && (
+                <div
+                  id="order-reviews"
+                  data-testid="order-reviews-section"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                    marginTop: 8,
+                    padding: location.hash === '#order-reviews' ? 8 : 0,
+                    borderRadius: 10,
+                    border: location.hash === '#order-reviews' ? '2px solid var(--og-color-primary)' : undefined,
+                  }}
+                >
                   {reviews?.sellerReview ? (
                     <div style={{
                       background: '#f8fafc',
@@ -587,7 +761,24 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
                       fontSize: '0.84rem',
                       color: '#334155',
                     }}>
-                      <div><strong>Đánh giá của bạn:</strong> {'★'.repeat(reviews.sellerReview.rating)}{'☆'.repeat(5 - reviews.sellerReview.rating)} ({reviews.sellerReview.rating}/5 sao)</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <div><strong>Đánh giá của bạn cho Người mua:</strong> {'★'.repeat(reviews.sellerReview.rating)}{'☆'.repeat(5 - reviews.sellerReview.rating)} ({reviews.sellerReview.rating}/5 sao)</div>
+                        <button
+                          type="button"
+                          onClick={() => setShowReviewModal(true)}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 6,
+                            border: '1px solid #cbd5e1',
+                            background: '#fff',
+                            fontSize: '0.78rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Sửa đánh giá
+                        </button>
+                      </div>
                       {reviews.sellerReview.comment && (
                         <div style={{ marginTop: 4, color: '#64748b', fontStyle: 'italic' }}>
                           "{reviews.sellerReview.comment}"
@@ -608,6 +799,23 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
                     >
                       ⭐ Đánh giá Người mua (+500 xu thưởng)
                     </button>
+                  )}
+                  {reviews?.buyerReview && (
+                    <div style={{
+                      background: '#fffbeb',
+                      border: '1px solid #fde68a',
+                      borderRadius: 8,
+                      padding: '10px 12px',
+                      fontSize: '0.84rem',
+                      color: '#92400e',
+                    }}>
+                      <div><strong>Đánh giá của Người mua dành cho bạn:</strong> {'★'.repeat(reviews.buyerReview.rating)}{'☆'.repeat(5 - reviews.buyerReview.rating)} ({reviews.buyerReview.rating}/5 sao)</div>
+                      {reviews.buyerReview.comment && (
+                        <div style={{ marginTop: 4, fontStyle: 'italic' }}>
+                          "{reviews.buyerReview.comment}"
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -812,6 +1020,7 @@ export const SellerOrderDetailView: React.FC<SellerOrderDetailViewProps> = ({ or
           orderId={order.orderId}
           partnerName={order.buyerName}
           isBuyer={false}
+          existingReview={reviews?.sellerReview}
           onClose={() => setShowReviewModal(false)}
           onSuccess={() => loadOrder()}
         />

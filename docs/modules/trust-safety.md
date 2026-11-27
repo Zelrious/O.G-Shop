@@ -1,5 +1,12 @@
 # Trust & Safety Module
 
+## Khắc phục review PR #24: Kho bằng chứng riêng tư (V63), Schema V64, PO-01/PO-02/PO-03 & Video Inspector — 2026-11-27
+
+- `V63__private_evidence_storage_map.sql`, `EvidenceStorageService`, `PublicMediaAccessGuard`, `VideoMetadataInspector`: bảo toàn `og_compat.case_evidence` append-only, chuyển upload/đọc bằng chứng sang kho riêng tư có xác thực (`Cache-Control: private, no-store`), chặn public URL cũ và kiểm tra định dạng/thời lượng video `<= 60s` ở backend (từ chối khi thiếu metadata).
+- `OrderDisputeController` & `BuyerDisputeService`: `return-delivered-simulate` giới hạn `ADMIN` + fail-closed (`simulationGuard` null/disabled/`PROD` đều bị chặn); gỡ nút mô phỏng khỏi `SellerOrderDetailView.tsx`.
+- **PO-01 A / PO-02 A / PO-03 A**: `KtvDisputeService`, `SystemIssueGovernanceService`, `OrderReviewService` siết kiểm tra quyền trước `commandKey` replay, rollback khi lỗi DB khóa/xu, cô lập thông báo qua JDBC `Savepoint`. `Uc48ReminderScheduler` tắt mặc định (`app.scheduling.uc48-reminders.enabled=false`); Staging/Prod cần cấu hình `UC48_REMINDERS_ENABLED=true` và `UC48_ON_DUTY_KTV_ID` (`0` sẽ bỏ qua hồ sơ chưa phân công và log `WARN`).
+- `V64__dispute_cases_and_review_index.sql`, `PublicSellerProfileRepository`, `VoucherCompensationFacade`, `caseEventMeta.ts`, `returnShipmentMeta.ts`: hoàn tất dọn DDL runtime, sửa SQL offset/index, và xử lý CI/CodeQL blockers.
+
 ## Gói 3 UC83: Quá hạn gửi hàng trả 3 ngày (UC33 3d–3e) & Bổ sung bằng chứng Vòng 1 (UC62 7a) — TASK-0123 / 2026-11-23
 
 - `ReturnCaseService.reconcileOverdueReturnPickups()` + `ReturnReconciliationScheduler`: đối soát hồ sơ trả hàng quá hạn 3 ngày (đóng `CLOSED` + `CLEANUP` nếu lỗi Người mua; giữ tiền + `ESCALATED` nếu lỗi ĐVVC / có phản đối), mặc định tắt qua `app.scheduling.overdue-return-pickup.enabled: false`.

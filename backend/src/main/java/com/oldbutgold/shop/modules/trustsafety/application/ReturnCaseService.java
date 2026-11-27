@@ -87,6 +87,8 @@ public class ReturnCaseService {
     private final org.springframework.transaction.support.TransactionTemplate requiresNewTxTemplate;
     private EvidenceStorageVerifier evidenceStorageVerifier;
     @Autowired(required = false)
+    private EvidenceStorageService evidenceStorageService;
+    @Autowired(required = false)
     private SellerResubmissionService sellerResubmissionService;
     private CaseEvidenceRequestRepository caseEvidenceRequestRepository;
 
@@ -159,6 +161,25 @@ public class ReturnCaseService {
 
     public void setEvidenceStorageVerifier(EvidenceStorageVerifier evidenceStorageVerifier) {
         this.evidenceStorageVerifier = evidenceStorageVerifier;
+    }
+
+    @Autowired(required = false)
+    public void setEvidenceStorageService(EvidenceStorageService evidenceStorageService) {
+        this.evidenceStorageService = evidenceStorageService;
+    }
+
+    private String verifyAndResolveObjectKey(Long actorId, String objectKey) {
+        if (evidenceStorageService == null) {
+            return objectKey;
+        }
+        return evidenceStorageService.verifyAttachmentOwnershipAndResolve(actorId, objectKey);
+    }
+
+    private String mapObjectKeyToPrivateUrl(String objectKey) {
+        if (evidenceStorageService == null) {
+            return objectKey;
+        }
+        return evidenceStorageService.toPrivateEvidenceUrl(objectKey);
     }
 
     public void setSellerResubmissionService(SellerResubmissionService sellerResubmissionService) {
@@ -282,7 +303,12 @@ public class ReturnCaseService {
 
         Optional<CaseEntity> existingByCmd = caseRepository.findByCommandKey(cmdKey);
         if (existingByCmd.isPresent()) {
-            return mapToDetailResponse(existingByCmd.get());
+            CaseEntity prior = existingByCmd.get();
+            if (!CaseEntity.TYPE_RETURN.equals(prior.getCaseType()) || !buyerId.equals(prior.getCreatedBy())
+                    || !orderId.equals(prior.getOrderId())) {
+                throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "COMMAND_CONFLICT", "Mã yêu cầu đã được sử dụng.");
+            }
+            return mapToDetailResponse(prior);
         }
 
         // 6. Khởi tạo và lưu CaseEntity
@@ -307,7 +333,8 @@ public class ReturnCaseService {
 
         // 8. Lưu bằng chứng (nếu có)
         for (ReturnCaseDtos.EvidenceItemDto item : evidenceList) {
-            String digest = resolveContentDigest(item.contentDigest(), item.objectKey());
+            String resolvedKey = verifyAndResolveObjectKey(buyerId, item.objectKey());
+            String digest = resolveContentDigest(item.contentDigest(), resolvedKey);
             Long size = (item.fileSizeBytes() != null && item.fileSizeBytes() > 0) ? item.fileSizeBytes() : 1024L;
             Integer duration = null;
             if (CaseEvidenceEntity.MEDIA_VIDEO.equalsIgnoreCase(item.mediaType())) {
@@ -320,7 +347,7 @@ public class ReturnCaseService {
                     buyerId,
                     1,
                     item.mediaType().toUpperCase(),
-                    item.objectKey(),
+                    resolvedKey,
                     item.textContent(),
                     digest,
                     size,
@@ -495,9 +522,25 @@ public class ReturnCaseService {
 
     @Transactional(readOnly = true)
     public ReturnCaseDtos.ReturnCaseDetailResponse getActiveReturnCaseForOrder(Long actorId, Long orderId) {
+        return getActiveReturnCaseForOrder(actorId, orderId, false);
+    }
+
+    @Transactional(readOnly = true)
+    public ReturnCaseDtos.ReturnCaseDetailResponse getActiveReturnCaseForOrder(Long actorId, Long orderId, boolean includeClosed) {
         OrderEntity order = requireOrderOrThrow(orderId);
         if (!actorId.equals(order.getBuyerId()) && !actorId.equals(order.getSellerId())) {
             throw new org.springframework.security.access.AccessDeniedException("Người dùng không thuộc đơn hàng này");
+        }
+        Optional<CaseEntity> active = caseRepository.findActiveCaseByOrderId(orderId);
+        if (active.isPresent()) {
+            return getReturnCaseById(actorId, active.get().getId());
+        }
+        if (includeClosed) {
+            CaseEntity latest = caseRepository.findByOrderId(orderId).stream()
+                    .filter(c -> CaseEntity.TYPE_RETURN.equals(c.getCaseType()))
+                    .max(java.util.Comparator.comparing(CaseEntity::getCreatedAt).thenComparing(CaseEntity::getId))
+                    .orElseThrow(() -> new NoSuchElementException("Không tìm thấy hồ sơ trả hàng nào cho đơn hàng #" + orderId));
+            return getReturnCaseById(actorId, latest.getId());
         }
         CaseEntity activeCase = requireActiveCaseOrThrow(orderId);
         return getReturnCaseById(actorId, activeCase.getId());
@@ -610,18 +653,6 @@ public class ReturnCaseService {
             throw new IllegalArgumentException("Bắt buộc phải cung cấp ít nhất 1 bằng chứng (ảnh hoặc video)");
         }
 
-        // 1. Idempotency check before state mutation
-        Optional<CaseEventEntity> existingEvent = caseEventRepository.findByCommandKey(cmdKey);
-        if (existingEvent.isPresent()) {
-            if (!existingEvent.get().getCaseId().equals(caseId)) {
-                throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "COMMAND_KEY_CONFLICT",
-                        "Xung đột commandKey: khóa này đã được sử dụng cho hồ sơ khác");
-            }
-            CaseEntity existingCase = caseRepository.findById(caseId)
-                    .orElseThrow(() -> new NoSuchElementException("Không tìm thấy hồ sơ khiếu nại #" + caseId));
-            return mapToDetailResponse(existingCase);
-        }
-
         // 2. Lock Order -> Case -> Round 1
         CaseEntity c = caseRepository.findById(caseId)
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy hồ sơ khiếu nại #" + caseId));
@@ -633,6 +664,17 @@ public class ReturnCaseService {
         CaseEntity lockedCase = caseRepository.findByIdForUpdate(caseId)
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy hồ sơ khiếu nại #" + caseId));
 
+        // 1. Idempotency check before state mutation
+        Optional<CaseEventEntity> existingEvent = caseEventRepository.findByCommandKey(cmdKey);
+        if (existingEvent.isPresent()) {
+            if (!existingEvent.get().getCaseId().equals(caseId) || !buyerId.equals(existingEvent.get().getActorId())
+                    || !CaseEventEntity.TYPE_SUPPLEMENTED.equals(existingEvent.get().getEventType())) {
+                throw new TrustSafetyBusinessException(HttpStatus.CONFLICT, "COMMAND_KEY_CONFLICT",
+                        "Xung đột commandKey: khóa này đã được sử dụng cho hồ sơ khác");
+            }
+            return mapToDetailResponse(lockedCase);
+        }
+
         if (!CaseEntity.STATE_OPEN.equals(lockedCase.getState()) && !CaseEntity.STATE_REVIEWING.equals(lockedCase.getState())) {
             throw new IllegalStateException("Chỉ có thể bổ sung bằng chứng Vòng 1 khi hồ sơ ở trạng thái OPEN hoặc REVIEWING (hiện tại: " + lockedCase.getState() + ")");
         }
@@ -640,7 +682,8 @@ public class ReturnCaseService {
         CaseRoundEntity round1 = caseRoundRepository.findByCaseIdAndRoundNo(caseId, 1)
                 .orElseThrow(() -> new IllegalStateException("Không tìm thấy Vòng 1 của hồ sơ #" + caseId));
         if (!CaseRoundEntity.STATE_OPEN.equals(round1.getState())
-                || !caseDecisionRepository.findByRoundIdOrderByDecidedAtAsc(round1.getId()).isEmpty()) {
+                || caseDecisionRepository.findByRoundIdOrderByDecidedAtAsc(round1.getId()).stream()
+                    .anyMatch(decision -> Boolean.TRUE.equals(decision.getIsFinal()))) {
             throw new IllegalStateException("Vòng 1 đã đóng hoặc đã có phán quyết, không thể bổ sung bằng chứng");
         }
 
@@ -676,6 +719,8 @@ public class ReturnCaseService {
 
         // 4. Append new CaseEvidenceEntity batch (append-only)
         for (ReturnCaseDtos.EvidenceItemDto item : request.evidenceList()) {
+            String resolvedKey = verifyAndResolveObjectKey(buyerId, item.objectKey());
+            String digest = resolveContentDigest(item.contentDigest(), resolvedKey);
             String mediaType = item.mediaType() != null ? item.mediaType().trim().toUpperCase(Locale.ROOT) : CaseEvidenceEntity.MEDIA_IMAGE;
             CaseEvidenceEntity ev = new CaseEvidenceEntity(
                     UUID.randomUUID(),
@@ -683,9 +728,9 @@ public class ReturnCaseService {
                     buyerId,
                     nextSubmissionNo,
                     mediaType,
-                    item.objectKey(),
+                    resolvedKey,
                     item.textContent(),
-                    item.contentDigest(),
+                    digest,
                     item.fileSizeBytes(),
                     item.durationSeconds()
             );
@@ -1181,13 +1226,10 @@ public class ReturnCaseService {
         OrderEntity order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy đơn hàng #" + orderId));
 
-        // Kiểm tra quyền: Buyer, Seller hoặc Staff/Admin
-        if (actorId != null && !actorId.equals(order.getBuyerId()) && !actorId.equals(order.getSellerId())) {
-            // Cho phép xem nếu là KTV/Admin (actorId không bị chặn cứng nếu không phải buyer/seller nhưng có thể là staff)
-        }
+        requireReturnReader(actorId, order);
 
         CaseEntity returnCase = caseRepository.findActiveCaseByOrderId(orderId)
-                .or(() -> caseRepository.findByOrderId(orderId).stream().max((a, b) -> a.getId().compareTo(b.getId())))
+                .or(() -> caseRepository.findByOrderId(orderId).stream().filter(c -> CaseEntity.TYPE_RETURN.equals(c.getCaseType())).max((a, b) -> a.getId().compareTo(b.getId())))
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy hồ sơ trả hàng cho đơn hàng #" + orderId));
 
         return mapToDetailResponse(returnCase);
@@ -1201,7 +1243,33 @@ public class ReturnCaseService {
         CaseEntity returnCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy hồ sơ #" + caseId));
 
+        if (!CaseEntity.TYPE_RETURN.equals(returnCase.getCaseType())) {
+            throw new TrustSafetyBusinessException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Không tìm thấy hồ sơ trả hàng.");
+        }
+        requireReturnReader(actorId, requireOrderOrThrow(returnCase.getOrderId()));
         return mapToDetailResponse(returnCase);
+    }
+
+    private void requireReturnReader(Long actorId, OrderEntity order) {
+        if (actorId == null || (!actorId.equals(order.getBuyerId()) && !actorId.equals(order.getSellerId())
+                && !isKtv(actorId) && !isAdmin(actorId))) {
+            throw new org.springframework.security.access.AccessDeniedException("Không có quyền xem hồ sơ trả hàng.");
+        }
+    }
+
+    /**
+     * Tải lên tệp bằng chứng trả hàng / khiếu nại vào kho riêng tư và tính mã băm SHA-256 (BG-1).
+     */
+    public ReturnCaseDtos.EvidenceItemDto uploadReturnEvidence(
+            Long actorId,
+            org.springframework.web.multipart.MultipartFile file,
+            String mediaType,
+            Integer durationSeconds
+    ) {
+        EvidenceStorageService storage = this.evidenceStorageService != null
+                ? this.evidenceStorageService
+                : new EvidenceStorageService(null, "uploads", "uploads/media");
+        return storage.storePrivateEvidence(actorId, file, mediaType);
     }
 
     private String resolveDamageEvidenceDigest(String clientDigest, String objectKey) {
@@ -1249,6 +1317,12 @@ public class ReturnCaseService {
     private Path resolveLocalFilePath(String objectKey) {
         if (objectKey == null || objectKey.isBlank()) {
             return null;
+        }
+        if (evidenceStorageService != null) {
+            Path privatePath = evidenceStorageService.resolvePrivateFilePath(objectKey);
+            if (privatePath != null) {
+                return privatePath;
+            }
         }
         String key = objectKey.trim();
         try {
@@ -1351,6 +1425,9 @@ public class ReturnCaseService {
     }
 
     private ReturnCaseDtos.ReturnCaseDetailResponse mapToDetailResponse(CaseEntity c) {
+        if (CaseEntity.TYPE_SYSTEM_ISSUE.equals(c.getCaseType())) {
+            throw new TrustSafetyBusinessException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Không tìm thấy hồ sơ trả hàng.");
+        }
         CaseRoundEntity latestRound = caseRoundRepository.findLatestRoundByCaseId(c.getId()).orElse(null);
         ReturnCaseDtos.CaseRoundDto roundDto = null;
         List<ReturnCaseDtos.CaseEvidenceDto> evidenceDtos = List.of();
@@ -1377,7 +1454,7 @@ public class ReturnCaseService {
                             e.getSubmittedBy(),
                             e.getSubmissionNo(),
                             e.getMediaType(),
-                            e.getObjectKey(),
+                            mapObjectKeyToPrivateUrl(e.getObjectKey()),
                             e.getTextContent(),
                             e.getFileSizeBytes(),
                             e.getDurationSeconds(),
@@ -1437,7 +1514,11 @@ public class ReturnCaseService {
                 evidenceDtos,
                 eventDtos,
                 returnShipmentDto,
-                decisionDtos
+                decisionDtos,
+                c.getAssignedTo(),
+                caseEvidenceRequestRepository == null ? null : caseEvidenceRequestRepository
+                        .findByCaseIdAndStatus(c.getId(), CaseEvidenceRequestEntity.STATUS_PENDING)
+                        .map(r -> new ReturnCaseDtos.PendingEvidenceRequest(r.getId(), r.getReason(), r.getDeadlineAt())).orElse(null)
         );
     }
 
@@ -2181,7 +2262,8 @@ public class ReturnCaseService {
         // 6. Lưu bằng chứng (CaseEvidenceEntity) - BẮT BUỘC submission_no = 1 cho First-time
         Integer submissionNo = 1;
         for (ReturnCaseDtos.EvidenceItemDto item : request.evidenceList()) {
-            String digest = resolveDamageEvidenceDigest(item.contentDigest(), item.objectKey());
+            String resolvedKey = verifyAndResolveObjectKey(sellerId, item.objectKey());
+            String digest = resolveDamageEvidenceDigest(item.contentDigest(), resolvedKey);
             Long size = (item.fileSizeBytes() != null && item.fileSizeBytes() > 0) ? item.fileSizeBytes() : 1024L;
             Integer duration = null;
             if (CaseEvidenceEntity.MEDIA_VIDEO.equalsIgnoreCase(item.mediaType())) {
@@ -2194,7 +2276,7 @@ public class ReturnCaseService {
                     sellerId,
                     submissionNo,
                     item.mediaType().toUpperCase(),
-                    item.objectKey(),
+                    resolvedKey,
                     item.textContent(),
                     digest,
                     size,
@@ -2502,7 +2584,39 @@ public class ReturnCaseService {
             throw new TrustSafetyBusinessException(HttpStatus.BAD_REQUEST, "CASE_NOT_ESCALATED",
                     "Hồ sơ chưa được chuyển lên Quản trị viên (Admin) do chưa quá hạn SLA hoặc chưa được leo thang.");
         }
+        Long designatedAdminId = resolveDesignatedAdminId(caseId, round2.getId());
+        if (designatedAdminId != null && !designatedAdminId.equals(adminId)) {
+            throw new TrustSafetyBusinessException(HttpStatus.FORBIDDEN, "NOT_DESIGNATED_ADMIN",
+                    "Chỉ Quản trị viên được chỉ định (#" + designatedAdminId + ") mới có quyền đưa ra quyết định cuối cùng cho hồ sơ này.");
+        }
         return ktvDecideRound2(adminId, caseId, request);
+    }
+
+    private Long resolveDesignatedAdminId(Long caseId, Long roundId) {
+        if (caseEventRepository == null || caseId == null || roundId == null) {
+            return null;
+        }
+        List<CaseEventEntity> events = caseEventRepository.findByCaseIdOrderByOccurredAtAsc(caseId);
+        if (events == null || events.isEmpty()) {
+            Optional<CaseEventEntity> esc = caseEventRepository.findByCaseIdAndRoundIdAndEventType(caseId, roundId, CaseEventEntity.TYPE_ESCALATED);
+            return esc.map(CaseEventEntity::getRecipientId).orElse(null);
+        }
+        Long latestHandoverAdmin = null;
+        Long escalatedRecipient = null;
+        for (CaseEventEntity ev : events) {
+            if (!roundId.equals(ev.getRoundId())) {
+                continue;
+            }
+            if (CaseEventEntity.TYPE_ESCALATED.equals(ev.getEventType()) && ev.getRecipientId() != null) {
+                escalatedRecipient = ev.getRecipientId();
+            } else if (CaseEventEntity.TYPE_ASSIGNED.equals(ev.getEventType())
+                    && ev.getActorId() != null
+                    && ev.getRecipientId() != null
+                    && ((ev.getMetadata() != null && ev.getMetadata().contains("ADMIN_HANDOVER")) || isAdmin(ev.getActorId()))) {
+                latestHandoverAdmin = ev.getRecipientId();
+            }
+        }
+        return latestHandoverAdmin != null ? latestHandoverAdmin : escalatedRecipient;
     }
 
     @Transactional

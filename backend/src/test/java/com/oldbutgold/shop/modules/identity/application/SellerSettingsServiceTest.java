@@ -104,7 +104,22 @@ class SellerSettingsServiceTest {
         UpdateSellerSettingsRequest req = new UpdateSellerSettingsRequest("New Store Name", 10L, 11L);
         SellerSettingsResponse response = service.updateSettings(1L, req);
 
-        verify(jdbc).update(anyString(), eq("New Store Name"), eq(10L), eq(11L), eq("0912345678"), any(), eq(100L));
+        verify(jdbc).update(anyString(), eq("New Store Name"), eq(10L), eq(11L), eq("0912345678"), eq(false), any(), eq(100L));
+    }
+
+    @Test
+    @DisplayName("updateSettings cập nhật consent allowPublicAvatar thành true")
+    void updateSettings_UpdatesPublicAvatarConsent() {
+        UserEntity user = new UserEntity("seller@example.com", "hash", "Trần Thị B", "0912345678", clock.instant());
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(jdbc.queryForList(anyString(), eq(1L))).thenReturn(List.of(
+                Map.of("seller_profile_id", 100L, "state", "ACTIVE", "pickup_address_id", 10L, "allow_public_avatar", false)
+        ));
+
+        UpdateSellerSettingsRequest req = new UpdateSellerSettingsRequest(null, null, null, true);
+        service.updateSettings(1L, req);
+
+        verify(jdbc).update(anyString(), isNull(), isNull(), isNull(), eq("0912345678"), eq(true), any(), eq(100L));
     }
 
     @Test

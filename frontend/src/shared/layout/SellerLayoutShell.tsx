@@ -49,6 +49,12 @@ const SellerNavIcons = {
       <path d="M9 21v-4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4" />
     </svg>
   ),
+  Profile: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  ),
   Settings: () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="12" cy="12" r="3" />
@@ -113,6 +119,18 @@ export const SellerLayoutShell: React.FC = () => {
             </NavLink>
 
             <NavLink
+              to={user?.userId ? `/sellers/${user.userId}` : '/seller/settings'}
+              className={({ isActive }) =>
+                `og-seller-sidebar__item ${isActive ? 'og-seller-sidebar__item--active' : ''}`
+              }
+            >
+              <span className="og-seller-sidebar__icon" aria-hidden="true">
+                <SellerNavIcons.Profile />
+              </span>
+              <span>Hồ sơ người bán</span>
+            </NavLink>
+
+            <NavLink
               to="/seller/products/new"
               className={({ isActive }) =>
                 `og-seller-sidebar__item ${isActive ? 'og-seller-sidebar__item--active' : ''}`
@@ -126,6 +144,7 @@ export const SellerLayoutShell: React.FC = () => {
 
             <NavLink
               to="/seller/products"
+              end
               className={({ isActive }) =>
                 `og-seller-sidebar__item ${isActive ? 'og-seller-sidebar__item--active' : ''}`
               }

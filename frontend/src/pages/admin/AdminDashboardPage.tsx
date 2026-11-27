@@ -1,10 +1,9 @@
 import { Badge, Button } from '../../shared/components';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useManagementStore } from '../../features/management/useManagementStore';
-import { adminDashboardApi, DashboardStats } from '../../features/management/adminDashboardApi';
+import { adminDashboardApi, DashboardStats, ReturnsReportResponse } from '../../features/management/adminDashboardApi';
 import { ConsoleIcons } from '../../shared/layout/ConsoleIcons';
 import {
-  TableActionDropdown,
   BulkActionBar,
   TableCheckbox,
 } from '../../shared/layout/ConsoleTableActions';
@@ -14,7 +13,6 @@ export const AdminDashboardPage: React.FC = () => {
     exportUserDataCsv,
     exportRevenueDataCsv,
     exportTopSearchCsv,
-    exportReturnComplaintCsv,
   } = useManagementStore();
 
   const [stats, setStats] = useState<DashboardStats>({
@@ -95,6 +93,59 @@ export const AdminDashboardPage: React.FC = () => {
   // Multi-select for Category Returns Table
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
 
+  // UC81 Returns & Complaints report filters + snapshot state
+  const formatDateInHoChiMinh = (date: Date): string =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(date);
+
+  const [reportFromDate, setReportFromDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return formatDateInHoChiMinh(d);
+  });
+  const [reportToDate, setReportToDate] = useState<string>(() => formatDateInHoChiMinh(new Date()));
+  const [reportCaseType, setReportCaseType] = useState<'ALL' | 'RETURN' | 'SYSTEM_ISSUE'>('ALL');
+  const [returnsReport, setReturnsReport] = useState<ReturnsReportResponse | null>(null);
+  const [returnsReportLoading, setReturnsReportLoading] = useState<boolean>(false);
+  const [returnsReportError, setReturnsReportError] = useState<string | null>(null);
+  const [csvExportError, setCsvExportError] = useState<string | null>(null);
+
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const reportSequence = React.useRef(0);
+  const [appliedCategories, setAppliedCategories] = useState<string[]>();
+  const loadReturnsReport = useCallback(async () => {
+    const seq = ++reportSequence.current;
+    setReturnsReportLoading(true);
+    setReturnsReportError(null);
+    try {
+      const selectedList = selectedCategories.size > 0 ? Array.from(selectedCategories) : undefined;
+      const report = await adminDashboardApi.getReturnsReport({
+        fromDate: reportFromDate || undefined,
+        toDate: reportToDate || undefined,
+        timezone: 'Asia/Ho_Chi_Minh',
+        caseType: reportCaseType,
+        categories: selectedList,
+      });
+      if (seq !== reportSequence.current) return;
+      if (!selectedList) setCategoryOptions(report.categoryBreakdown.map(row => row.category));
+      setAppliedCategories(selectedList);
+      setReturnsReport(report);
+    } catch (err) {
+      if (seq !== reportSequence.current) return;
+      setReturnsReport(null);
+      setReturnsReportError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Chưa tổng hợp được dữ liệu thống kê hoàn trả. Vui lòng thử lại.',
+      );
+    } finally {
+      if (seq === reportSequence.current) setReturnsReportLoading(false);
+    }
+  }, [reportFromDate, reportToDate, reportCaseType, selectedCategories]);
+
+  useEffect(() => {
+    void loadReturnsReport();
+  }, [loadReturnsReport]);
+
   // Interactive Hover states for Line Charts
   const [hoveredRevenueIdx, setHoveredRevenueIdx] = useState<number | null>(null);
   const [hoveredUserIdx, setHoveredUserIdx] = useState<number | null>(null);
@@ -103,18 +154,25 @@ export const AdminDashboardPage: React.FC = () => {
   const userGrowth = stats.userGrowth;
   const topSearchedItems = stats.topSearchedItems;
   const leastSearchedItems = stats.leastSearchedItems;
-  const categoryReturns = stats.categoryReturns;
+  const categoryReturns = returnsReport?.categoryBreakdown ?? [];
 
   /** Triggers client-side fallback CSV first, then attempts authenticated backend export when available. */
   const runCsvExport = async (
     localFallback: () => void,
     remoteDownload: () => Promise<void>
   ) => {
+    setCsvExportError(null);
     localFallback();
     try {
       await remoteDownload();
-    } catch {
-      // Client-side CSV export has already run; ignore backend failure in offline/test environments
+    } catch (err) {
+      if (returnsReport) {
+        setCsvExportError(
+          err instanceof Error && err.message
+            ? err.message
+            : 'Chưa xuất được tệp báo cáo hoàn trả.',
+        );
+      }
     }
   };
 
@@ -127,15 +185,21 @@ export const AdminDashboardPage: React.FC = () => {
   const handleExportTopSearch = () =>
     runCsvExport(exportTopSearchCsv, () => adminDashboardApi.downloadSearchTrendsCsv());
 
-  const handleExportReturnComplaint = () => {
-    const selectedList = selectedCategories.size > 0 ? Array.from(selectedCategories) : undefined;
-    return runCsvExport(exportReturnComplaintCsv, () =>
-      adminDashboardApi.downloadCategoryReturnsCsv(selectedList)
-    );
+  const handleExportReturnComplaint = async () => {
+    if (!returnsReport || returnsReportLoading) return;
+    setCsvExportError(null);
+    try {
+      await adminDashboardApi.downloadCategoryReturnsCsv(appliedCategories, {
+        fromDate: returnsReport.fromDate, toDate: returnsReport.toDate, timezone: returnsReport.timezone,
+        caseType: returnsReport.caseTypeFilter, cutoffAt: returnsReport.cutoffAt,
+      });
+    } catch {
+      setCsvExportError('Chưa xuất được tệp. Vui lòng thử xuất lại báo cáo.');
+    }
   };
 
   const isAllCategoriesSelected =
-    categoryReturns.length > 0 && selectedCategories.size === categoryReturns.length;
+    categoryOptions.length > 0 && categoryOptions.every(name => selectedCategories.has(name));
   const isSomeCategoriesSelected =
     selectedCategories.size > 0 && !isAllCategoriesSelected;
 
@@ -143,7 +207,7 @@ export const AdminDashboardPage: React.FC = () => {
     if (isAllCategoriesSelected) {
       setSelectedCategories(new Set());
     } else {
-      setSelectedCategories(new Set(categoryReturns.map((c) => c.category)));
+      setSelectedCategories(new Set(categoryOptions));
     }
   };
 
@@ -875,16 +939,180 @@ export const AdminDashboardPage: React.FC = () => {
               Giúp quản trị viên theo dõi tỷ lệ tranh chấp và chất lượng hàng hóa được kiểm duyệt
             </p>
           </div>
-          <Button variant="outline" onClick={handleExportReturnComplaint}>
+          <Button variant="outline" disabled={!returnsReport || returnsReportLoading} onClick={handleExportReturnComplaint}>
             <ConsoleIcons.Download size={16} />
             <span>Kết xuất báo cáo khiếu nại (CSV)</span>
           </Button>
         </div>
 
-        {/* Bulk action bar for selected categories */}
+        {/* UC81 Bộ lọc thời gian, loại hồ sơ, mốc cutoffAt và tổng hợp phân loại */}
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '10px',
+            alignItems: 'center',
+            marginBottom: '14px',
+            padding: '10px 12px',
+            background: 'var(--og-color-bg)',
+            border: '1px solid var(--og-color-border)',
+            borderRadius: '8px',
+            fontSize: '0.82rem',
+          }}
+        >
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>Từ ngày:</span>
+            <input
+              type="date"
+              aria-label="Từ ngày báo cáo hoàn trả"
+              value={reportFromDate}
+              onChange={(e) => setReportFromDate(e.target.value)}
+            />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>Đến ngày:</span>
+            <input
+              type="date"
+              aria-label="Đến ngày báo cáo hoàn trả"
+              value={reportToDate}
+              onChange={(e) => setReportToDate(e.target.value)}
+            />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>Loại hồ sơ:</span>
+            <select
+              aria-label="Loại hồ sơ báo cáo"
+              value={reportCaseType}
+              onChange={(e) => setReportCaseType(e.target.value as 'ALL' | 'RETURN' | 'SYSTEM_ISSUE')}
+            >
+              <option value="ALL">Tất cả (Trả hàng & Sự cố)</option>
+              <option value="RETURN">Trả hàng / Khiếu nại</option>
+              <option value="SYSTEM_ISSUE">Sự cố hệ thống</option>
+            </select>
+          </label>
+          <Button variant="outline" size="sm" onClick={() => void loadReturnsReport()} disabled={returnsReportLoading}>
+            {returnsReportLoading ? 'Đang tải...' : 'Cập nhật thống kê'}
+          </Button>
+          {returnsReport?.cutoffAt && (
+            <Badge variant="info">
+              Mốc chốt số liệu: {new Date(returnsReport.cutoffAt).toLocaleString('vi-VN')} ({returnsReport.timezone})
+            </Badge>
+          )}
+        </div>
+
+        {csvExportError && (
+          <div
+            role="alert"
+            style={{
+              marginBottom: '12px',
+              padding: '10px 12px',
+              borderRadius: '8px',
+              background: '#fff5f5',
+              border: '1px solid #fecaca',
+              color: '#991b1b',
+              fontSize: '0.84rem',
+            }}
+          >
+            {csvExportError}
+          </div>
+        )}
+
+        {returnsReportError && (
+          <div
+            role="alert"
+            style={{
+              marginBottom: '12px',
+              padding: '10px 12px',
+              borderRadius: '8px',
+              background: '#fffbeb',
+              border: '1px solid #fde68a',
+              color: '#92400e',
+              fontSize: '0.84rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '10px',
+            }}
+          >
+            <span>{returnsReportError}</span>
+            <Button variant="outline" size="sm" onClick={() => void loadReturnsReport()}>
+              Thử lại
+            </Button>
+          </div>
+        )}
+
+        {returnsReport && <p>Hồ sơ đang chờ cuối kỳ: {returnsReport.openPendingCount ?? 0}</p>}
+        {returnsReport && returnsReport.totalResolvedCases === 0 && (
+          <div
+            style={{
+              marginBottom: '12px',
+              padding: '12px',
+              borderRadius: '8px',
+              background: 'var(--og-color-bg)',
+              border: '1px dashed var(--og-color-border)',
+              color: 'var(--og-color-text-secondary)',
+              fontSize: '0.85rem',
+            }}
+          >
+            Chưa có dữ liệu phát sinh trong khoảng thời gian đã chọn ({returnsReport.fromDate} → {returnsReport.toDate}).
+          </div>
+        )}
+
+        {returnsReport && returnsReport.totalResolvedCases > 0 && (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              gap: '8px',
+              marginBottom: '14px',
+            }}
+          >
+            <div style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--og-color-border)' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--og-color-text-secondary)' }}>Hồ sơ đã chốt</div>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{returnsReport.totalResolvedCases}</div>
+            </div>
+            <div style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--og-color-border)' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--og-color-text-secondary)' }}>Hoàn tiền trả hàng</div>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{returnsReport.returnRefundedCount}</div>
+            </div>
+            <div style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--og-color-border)' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--og-color-text-secondary)' }}>Miễn trả không hoàn</div>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{returnsReport.returnExemptNoRefundCount}</div>
+            </div>
+            <div style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--og-color-border)' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--og-color-text-secondary)' }}>Từ chối trả hàng</div>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{returnsReport.returnRejectedCount}</div>
+            </div>
+            <div style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--og-color-border)' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--og-color-text-secondary)' }}>Buyer rút yêu cầu</div>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{returnsReport.returnWithdrawnCount}</div>
+            </div>
+            <div style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--og-color-border)' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--og-color-text-secondary)' }}>Sự cố hệ thống xác nhận</div>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{returnsReport.systemIssueConfirmedCount}</div>
+            </div>
+            <div style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--og-color-border)' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--og-color-text-secondary)' }}>Sự cố hệ thống từ chối</div>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{returnsReport.systemIssueRejectedCount}</div>
+            </div>
+          </div>
+        )}
+
+        {categoryOptions.length > 0 && <label>Danh mục thống kê
+          <select multiple value={Array.from(selectedCategories)} onChange={event =>
+            setSelectedCategories(new Set(Array.from(event.currentTarget.selectedOptions, option => option.value)))}>
+            {categoryOptions.map(name => <option key={name}>{name}</option>)}
+          </select>
+        </label>}
+        {categoryReturns.length > 0 && <figure aria-label="Biểu đồ hồ sơ đã xử lý theo danh mục">
+          <figcaption>Hồ sơ đã xử lý theo danh mục</figcaption>
+          {categoryReturns.map(row => <div key={row.category}>{row.category} · {row.totalOrders} hồ sơ{' '}
+            <meter aria-label={row.category} min={0} max={returnsReport!.totalResolvedCases} value={row.totalOrders} />
+          </div>)}
+        </figure>}
         <BulkActionBar
           selectedCount={selectedCategories.size}
-          totalCount={categoryReturns.length}
+          totalCount={categoryOptions.length}
           onClearSelection={() => setSelectedCategories(new Set())}
           actions={[
             {
@@ -909,12 +1137,12 @@ export const AdminDashboardPage: React.FC = () => {
                   />
                 </th>
                 <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Ngành hàng / Danh mục</th>
-                <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Đơn bán</th>
+                <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Hồ sơ đã đóng</th>
                 <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Yêu cầu trả hàng</th>
-                <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Vụ khiếu nại KTV</th>
-                <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Tỷ lệ hoàn hàng</th>
-                <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Nguyên nhân phản ánh chính</th>
-                <th style={{ padding: '12px 14px', textAlign: 'right', minWidth: '95px', whiteSpace: 'nowrap' }}>Thao tác</th>
+                <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Sự cố hệ thống</th>
+                <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Tỷ trọng hồ sơ trả hàng</th>
+                <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Mốc tổng hợp</th>
+
               </tr>
             </thead>
             <tbody>
@@ -938,9 +1166,9 @@ export const AdminDashboardPage: React.FC = () => {
                     <td style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--og-color-text-primary)' }}>
                       {row.category}
                     </td>
-                    <td style={{ padding: '12px 14px', color: 'var(--og-color-text-secondary)' }}>{row.totalOrders} đơn</td>
+                    <td style={{ padding: '12px 14px', color: 'var(--og-color-text-secondary)' }}>{row.totalOrders} hồ sơ</td>
                     <td style={{ padding: '12px 14px', color: 'var(--og-color-text-secondary)', fontWeight: 700 }}>
-                      {row.returnCount} đơn
+                      {row.returnCount} hồ sơ
                     </td>
                     <td style={{ padding: '12px 14px', color: 'var(--og-color-text-secondary)', fontWeight: 700 }}>
                       {row.complaintCount} vụ
@@ -963,24 +1191,7 @@ export const AdminDashboardPage: React.FC = () => {
                     <td style={{ padding: '12px 14px', color: 'var(--og-color-text-secondary)', fontSize: '0.84rem' }}>
                       {row.primaryIssue}
                     </td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right' }}>
-                      <TableActionDropdown
-                        ariaLabel={`Thao tác danh mục ${row.category}`}
-                        items={[
-                          {
-                            label: 'Kết xuất báo cáo ngành',
-                            icon: <ConsoleIcons.Download size={16} />,
-                            onClick: handleExportReturnComplaint,
-                          },
-                          {
-                            label: 'Gửi cảnh báo siết duyệt',
-                            icon: <ConsoleIcons.AlertTriangle size={16} />,
-                            variant: 'danger',
-                            onClick: () => alert(`Đã gửi cảnh báo siết chặt quy trình kiểm duyệt ngành ${row.category}`),
-                          },
-                        ]}
-                      />
-                    </td>
+
                   </tr>
                 );
               })}

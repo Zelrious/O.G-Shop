@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CONDITION_LABELS, ProductDetail } from '../types';
 import { AuthContext } from '../../auth/context';
@@ -6,6 +6,8 @@ import { ConditionBadge } from '../../../shared/components';
 import { ChatContext } from '../../chat-offer/chatContext';
 import { Icon } from '../../../shared/components/Icon/Icon';
 import { useCart } from '../../../shared/context';
+import { publicSellerApi, PublicSellerProfile, PublicSellerReviewItem } from '../../seller/publicSellerApi';
+import { resolveReturnMediaUrl } from '../../disputes/mediaUrl';
 
 interface ProductDetailViewProps {
   product: ProductDetail;
@@ -24,6 +26,59 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
   const [authActionName, setAuthActionName] = useState<string>('');
   const [cartSuccessMsg, setCartSuccessMsg] = useState<string | null>(null);
   const [isFavorited, setIsFavorited] = useState(false);
+  const [publicSeller, setPublicSeller] = useState<PublicSellerProfile | null>(null);
+  const [sellerReviews, setSellerReviews] = useState<PublicSellerReviewItem[]>([]);
+  const [reviewsPage, setReviewsPage] = useState(0);
+  const [reviewsTotalPages, setReviewsTotalPages] = useState(0);
+  const [reviewsTotal, setReviewsTotal] = useState(0);
+  const [reviewRatingFilter, setReviewRatingFilter] = useState<number | null>(null);
+  const [onlyThisProductReviews, setOnlyThisProductReviews] = useState(false);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+    setReviewsPage(0);
+    setReviewRatingFilter(null);
+    setOnlyThisProductReviews(false);
+    publicSellerApi
+      .getPublicProfile(product.seller.sellerId)
+      .then((data) => {
+        if (!ignore) setPublicSeller(data);
+      })
+      .catch(() => {
+        if (!ignore) setPublicSeller(null);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [product.seller.sellerId, product.productId]);
+
+  useEffect(() => {
+    let ignore = false;
+    setLoadingReviews(true);
+    publicSellerApi
+      .getPublicReviews(product.seller.sellerId, reviewsPage, 5, reviewRatingFilter)
+      .then((res) => {
+        if (!ignore) {
+          setSellerReviews(res.content || []);
+          setReviewsTotalPages(res.totalPages || 0);
+          setReviewsTotal(res.totalElements || 0);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setSellerReviews([]);
+          setReviewsTotalPages(0);
+          setReviewsTotal(0);
+        }
+      })
+      .finally(() => {
+        if (!ignore) setLoadingReviews(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [product.seller.sellerId, reviewsPage, reviewRatingFilter]);
 
   const formattedPrice = `${new Intl.NumberFormat('vi-VN').format(product.listedPrice)} đ`;
   const conditionText = CONDITION_LABELS[product.condition] || product.condition;
@@ -473,15 +528,29 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
       {/* 3. Middle Section: Seller Profile (Oreka Style) */}
       <section className="og-seller-section" aria-label="Thông tin người bán">
         <div className="og-seller-left">
-          <div className="og-seller-avatar-wrap">
-            <span>{product.seller.displayName.charAt(0).toUpperCase()}</span>
+          <Link to={`/sellers/${product.seller.sellerId}`} className="og-seller-avatar-wrap" style={{ textDecoration: 'none', overflow: 'hidden' }}>
+            {publicSeller?.avatarUrl ? (
+              <img
+                src={resolveReturnMediaUrl(publicSeller.avatarUrl)}
+                alt={publicSeller.displayName || product.seller.displayName}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+              />
+            ) : (
+              <span>{(publicSeller?.displayName || product.seller.displayName).charAt(0).toUpperCase()}</span>
+            )}
             {product.seller.trustLabel === 'Đã xác minh eKYC' && (
               <span className="og-seller-avatar-badge" title="Đã xác thực eKYC">Đã eKYC</span>
             )}
-          </div>
+          </Link>
           <div className="og-seller-info">
             <div className="og-seller-name-row" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span className="og-seller-name">{product.seller.displayName}</span>
+              <Link
+                to={`/sellers/${product.seller.sellerId}`}
+                className="og-seller-name"
+                style={{ textDecoration: 'none', color: 'inherit' }}
+              >
+                {publicSeller?.displayName || product.seller.displayName}
+              </Link>
               {product.seller.trustLabel === 'Đã xác minh eKYC' ? (
                 <span
                   style={{
@@ -523,11 +592,33 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
               )}
             </div>
             <div className="og-seller-stats">
-              <span><Icon name="star" size={15} /> 5.0 (18 đánh giá)</span>
+              <span>
+                <Icon name="star" size={15} />{' '}
+                {publicSeller
+                  ? publicSeller.stats.averageRating !== null
+                    ? `${publicSeller.stats.averageRating.toFixed(1)} (${publicSeller.stats.totalReviews} đánh giá)`
+                    : 'Chưa có đánh giá'
+                  : 'Đang tải đánh giá...'}
+              </span>
               <span>•</span>
-              <span>12 sản phẩm đang bán</span>
+              <span>
+                {publicSeller
+                  ? `${publicSeller.stats.activeProductsCount} sản phẩm đang bán`
+                  : '— sản phẩm đang bán'}
+              </span>
               <span>•</span>
-              <span>8 đã giao dịch</span>
+              <span>
+                {publicSeller
+                  ? `${publicSeller.stats.completedTransactionsCount} giao dịch hoàn tất`
+                  : '— giao dịch hoàn tất'}
+              </span>
+              <span>•</span>
+              <Link
+                to={`/sellers/${product.seller.sellerId}`}
+                style={{ color: 'var(--og-color-primary)', fontWeight: 600, textDecoration: 'none' }}
+              >
+                Xem hồ sơ gian hàng &rarr;
+              </Link>
             </div>
           </div>
         </div>
@@ -621,6 +712,207 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({ product })
           {product.description}
         </div>
       </section>
+
+      {/* 6. Buyer Reviews Section */}
+      {(() => {
+        const displayedReviews = onlyThisProductReviews
+          ? sellerReviews.filter((rev) => rev.productId === product.productId)
+          : sellerReviews;
+        const productMatchedCount = sellerReviews.filter((rev) => rev.productId === product.productId).length;
+        return (
+          <section id="product-reviews" className="og-desc-card" aria-label="Đánh giá từ người mua">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+              <div>
+                <h2 style={{ margin: '0 0 4px' }}>Đánh giá từ người mua</h2>
+                <div style={{ fontSize: '0.88rem', color: 'var(--og-color-text-secondary)' }}>
+                  {publicSeller?.stats.averageRating != null
+                    ? `★ ${publicSeller.stats.averageRating.toFixed(1)} / 5 (${publicSeller.stats.totalReviews} đánh giá của gian hàng)`
+                    : `${reviewsTotal} đánh giá của gian hàng`}
+                </div>
+              </div>
+              <Link
+                to={`/sellers/${product.seller.sellerId}?tab=reviews`}
+                style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--og-color-primary)', textDecoration: 'none' }}
+              >
+                Xem tất cả đánh giá shop &rarr;
+              </Link>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setOnlyThisProductReviews(false);
+                  setReviewRatingFilter(null);
+                  setReviewsPage(0);
+                }}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 16,
+                  border: '1px solid var(--og-color-border)',
+                  background: !onlyThisProductReviews && reviewRatingFilter === null ? 'var(--og-color-primary)' : 'transparent',
+                  color: !onlyThisProductReviews && reviewRatingFilter === null ? '#fff' : 'var(--og-color-text-primary)',
+                  cursor: 'pointer',
+                  fontSize: '0.84rem',
+                  fontWeight: 600,
+                }}
+              >
+                Tất cả ({publicSeller?.stats.totalReviews ?? reviewsTotal})
+              </button>
+              <button
+                type="button"
+                onClick={() => setOnlyThisProductReviews((prev) => !prev)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 16,
+                  border: '1px solid var(--og-color-border)',
+                  background: onlyThisProductReviews ? 'var(--og-color-primary)' : 'transparent',
+                  color: onlyThisProductReviews ? '#fff' : 'var(--og-color-text-primary)',
+                  cursor: 'pointer',
+                  fontSize: '0.84rem',
+                  fontWeight: 600,
+                }}
+              >
+                Sản phẩm này ({productMatchedCount})
+              </button>
+              {[5, 4, 3, 2, 1].map((star) => {
+                const count = publicSeller?.stats.ratingDistribution?.[String(star)] ?? 0;
+                const active = reviewRatingFilter === star;
+                return (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => {
+                      setReviewRatingFilter(star);
+                      setReviewsPage(0);
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 16,
+                      border: '1px solid var(--og-color-border)',
+                      background: active ? 'var(--og-color-primary)' : 'transparent',
+                      color: active ? '#fff' : 'var(--og-color-text-primary)',
+                      cursor: 'pointer',
+                      fontSize: '0.84rem',
+                    }}
+                  >
+                    {star} ★ ({count})
+                  </button>
+                );
+              })}
+            </div>
+
+            {loadingReviews ? (
+              <div style={{ padding: '20px 0', color: 'var(--og-color-text-secondary)', fontSize: '0.9rem' }}>
+                Đang tải đánh giá từ người mua...
+              </div>
+            ) : displayedReviews.length === 0 ? (
+              <div
+                style={{
+                  padding: '24px 16px',
+                  borderRadius: 10,
+                  background: 'var(--og-color-surface-subtle, #f8fafc)',
+                  border: '1px solid var(--og-color-border)',
+                  color: 'var(--og-color-text-secondary)',
+                  fontSize: '0.9rem',
+                  textAlign: 'center',
+                }}
+              >
+                {onlyThisProductReviews
+                  ? 'Chưa có đánh giá nào gắn trực tiếp với sản phẩm này.'
+                  : reviewRatingFilter
+                    ? `Chưa có đánh giá ${reviewRatingFilter} sao nào.`
+                    : 'Người bán hiện chưa có đánh giá nào từ người mua.'}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {displayedReviews.map((rev) => {
+                  const isThisProduct = rev.productId === product.productId;
+                  return (
+                    <div
+                      key={rev.reviewId}
+                      style={{
+                        padding: 14,
+                        borderRadius: 10,
+                        border: '1px solid var(--og-color-border)',
+                        background: 'var(--og-color-surface-subtle, #f8fafc)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <strong style={{ fontSize: '0.9rem', color: 'var(--og-color-text-primary)' }}>
+                            {rev.reviewerDisplayName}
+                          </strong>
+                          <span style={{ color: '#d97706', fontWeight: 700, fontSize: '0.88rem' }}>
+                            {'★'.repeat(rev.rating)}{'☆'.repeat(Math.max(0, 5 - rev.rating))}
+                          </span>
+                          {isThisProduct && (
+                            <span
+                              style={{
+                                fontSize: '0.74rem',
+                                fontWeight: 600,
+                                color: '#059669',
+                                background: 'rgba(16, 185, 129, 0.12)',
+                                border: '1px solid rgba(16, 185, 129, 0.3)',
+                                padding: '2px 8px',
+                                borderRadius: 10,
+                              }}
+                            >
+                              ✓ Đánh giá của sản phẩm này
+                            </span>
+                          )}
+                        </div>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--og-color-text-secondary)' }}>
+                          {new Date(rev.createdAt).toLocaleDateString('vi-VN')}
+                        </span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--og-color-text-primary)', lineHeight: 1.5 }}>
+                        {rev.comment || 'Người mua không để lại nhận xét chi tiết.'}
+                      </p>
+                      {!isThisProduct && (rev.productId || rev.productTitle) && (
+                        <div style={{ marginTop: 8, fontSize: '0.82rem', color: 'var(--og-color-text-secondary)' }}>
+                          Sản phẩm đã mua:{' '}
+                          {rev.productId ? (
+                            <Link to={`/products/${rev.productId}`} style={{ color: 'var(--og-color-primary)', fontWeight: 600, textDecoration: 'none' }}>
+                              {rev.productTitle || `Sản phẩm #${rev.productId}`}
+                            </Link>
+                          ) : (
+                            <span>{rev.productTitle}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {reviewsTotalPages > 1 && (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 6 }}>
+                    <button
+                      type="button"
+                      className="og-button og-button--outline og-button--sm"
+                      disabled={reviewsPage <= 0}
+                      onClick={() => setReviewsPage((p) => Math.max(0, p - 1))}
+                    >
+                      Trước
+                    </button>
+                    <span style={{ fontSize: '0.84rem', color: 'var(--og-color-text-secondary)' }}>
+                      Trang {reviewsPage + 1} / {reviewsTotalPages}
+                    </span>
+                    <button
+                      type="button"
+                      className="og-button og-button--outline og-button--sm"
+                      disabled={reviewsPage + 1 >= reviewsTotalPages}
+                      onClick={() => setReviewsPage((p) => p + 1)}
+                    >
+                      Sau
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        );
+      })()}
 
       {/* 6. Guest Auth Guard Modal */}
       {showAuthModal && (

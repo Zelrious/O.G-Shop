@@ -24,6 +24,8 @@ export const SellerOrdersView: React.FC = () => {
     { id: 'PAID_HELD', label: ' Cần xử lý (Đã Ký quỹ)' },
     { id: 'SELLER_CONFIRMED', label: 'Đã xác nhận' },
     { id: 'PAYMENT_PENDING', label: 'Chờ thanh toán' },
+    { id: 'DISPUTED', label: '🔄 Khiếu nại / Đang hoàn trả' },
+    { id: 'REFUNDED', label: '↩️ Đã hoàn tiền' },
     { id: 'COMPLETED', label: 'Hoàn thành' },
     { id: 'CANCELLED', label: 'Đã hủy' },
     { id: 'ALL', label: 'Tất cả' },
@@ -111,6 +113,30 @@ export const SellerOrdersView: React.FC = () => {
         return (
           <span style={{ background: '#fef3c7', color: '#b45309', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
             ⏱️ Người mua chưa thanh toán
+          </span>
+        );
+      case 'SHIPPED':
+        return (
+          <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
+            🚚 Đang giao hàng
+          </span>
+        );
+      case 'DELIVERED':
+        return (
+          <span style={{ background: '#dcfce7', color: '#15803d', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>
+            ✓ Đã giao hàng
+          </span>
+        );
+      case 'DISPUTED':
+        return (
+          <span style={{ background: '#ffedd5', color: '#c2410c', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 700 }}>
+            ⚠️ Khiếu nại / Tranh chấp
+          </span>
+        );
+      case 'REFUNDED':
+        return (
+          <span style={{ background: '#fee2e2', color: '#b91c1c', padding: '3px 10px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 700 }}>
+            ↩️ Đã hoàn tiền
           </span>
         );
       case 'COMPLETED':

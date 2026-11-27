@@ -20,78 +20,15 @@ public class DisputeRepository {
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json = new ObjectMapper();
+    private com.oldbutgold.shop.modules.trustsafety.application.EvidenceStorageService evidenceStorageService;
 
     public DisputeRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
-        ensureTablesExist();
     }
 
-    private void ensureTablesExist() {
-        try {
-            jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS public.dispute_cases (
-                  dispute_id BIGSERIAL PRIMARY KEY,
-                  order_id BIGINT NOT NULL,
-                  buyer_id BIGINT NOT NULL,
-                  seller_id BIGINT NOT NULL,
-                  reason VARCHAR(64) NOT NULL,
-                  description TEXT NOT NULL,
-                  status VARCHAR(32) NOT NULL DEFAULT 'OPEN',
-                  buyer_evidence_urls TEXT NULL,
-                  video_unboxing_url TEXT NULL,
-                  seller_response TEXT NULL,
-                  seller_evidence_urls TEXT NULL,
-                  seller_response_due_at TIMESTAMP WITH TIME ZONE NULL,
-                  verdict_action VARCHAR(64) NULL,
-                  verdict_notes TEXT NULL,
-                  refund_amount NUMERIC(19, 2) NULL,
-                  penalty_points INT NOT NULL DEFAULT 0,
-                  resolved_by BIGINT NULL,
-                  resolved_at TIMESTAMP WITH TIME ZONE NULL,
-                  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """);
-        } catch (Exception ignored) {}
-
-        try {
-            jdbc.execute("CREATE SCHEMA IF NOT EXISTS og_compat");
-        } catch (Exception ignored) {}
-
-        try {
-            jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS og_compat.reviews (
-                  review_id BIGSERIAL PRIMARY KEY,
-                  order_id BIGINT NOT NULL,
-                  reviewer_id BIGINT NOT NULL,
-                  reviewee_id BIGINT NOT NULL,
-                  rating SMALLINT NOT NULL,
-                  comment VARCHAR(2000) NULL,
-                  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                  deleted_at TIMESTAMP WITH TIME ZONE NULL,
-                  record_type VARCHAR(32) NOT NULL DEFAULT 'reviews'
-                )
-                """);
-        } catch (Exception ignored) {}
-
-        try {
-            jdbc.execute("""
-                CREATE TABLE IF NOT EXISTS og_compat.penalty_ledger (
-                  entry_id UUID PRIMARY KEY,
-                  user_id BIGINT NOT NULL,
-                  report_id BIGINT NULL,
-                  policy_id BIGINT NULL,
-                  points_delta INT NOT NULL,
-                  adjustment_of UUID NULL,
-                  decided_by BIGINT NULL,
-                  reason TEXT NULL,
-                  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                  command_key VARCHAR(150) NULL,
-                  record_type VARCHAR(32) NOT NULL DEFAULT 'penalty_ledger'
-                )
-                """);
-        } catch (Exception ignored) {}
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setEvidenceStorageService(com.oldbutgold.shop.modules.trustsafety.application.EvidenceStorageService evidenceStorageService) {
+        this.evidenceStorageService = evidenceStorageService;
     }
 
     public DisputePageResponse searchDisputes(String status, String query, int page, int size) {
@@ -144,7 +81,8 @@ public class DisputeRepository {
         String selectSql = """
             SELECT d.dispute_id, d.order_id, d.buyer_id, COALESCE(b.full_name, 'Người mua #' || d.buyer_id) AS buyer_name,
                    d.seller_id, COALESCE(s.full_name, 'Người bán #' || d.seller_id) AS seller_name,
-                   o.total_amount, d.reason, d.description, d.status, d.verdict_action, d.created_at, d.updated_at,
+                   GREATEST(0, COALESCE(o.subtotal, 0) - COALESCE(o.voucher_discount_amount, 0) - COALESCE(o.points_discount_amount, 0)) AS refundable_goods_amount,
+                   d.reason, d.description, d.status, d.verdict_action, d.created_at, d.updated_at,
                    COALESCE((SELECT oi.product_title FROM public.order_items oi WHERE oi.order_id = d.order_id ORDER BY oi.order_item_id ASC LIMIT 1), 'Đơn hàng #' || d.order_id) AS product_title
             FROM public.dispute_cases d
             LEFT JOIN public.orders o ON d.order_id = o.order_id
@@ -160,7 +98,7 @@ public class DisputeRepository {
             long sellerId = rs.getLong("seller_id");
             String sellerName = rs.getString("seller_name");
             String productTitle = rs.getString("product_title");
-            BigDecimal disputeAmount = rs.getBigDecimal("total_amount");
+            BigDecimal disputeAmount = rs.getBigDecimal("refundable_goods_amount");
             if (disputeAmount == null) disputeAmount = BigDecimal.ZERO;
             String reason = rs.getString("reason");
             String description = rs.getString("description");
@@ -195,15 +133,25 @@ public class DisputeRepository {
         String sql = """
             SELECT d.dispute_id, d.order_id, d.buyer_id, COALESCE(b.full_name, 'Người mua #' || d.buyer_id) AS buyer_name,
                    b.email AS buyer_email, d.seller_id, COALESCE(s.full_name, 'Người bán #' || d.seller_id) AS seller_name,
-                   s.email AS seller_email, o.total_amount, d.reason, d.description, d.buyer_evidence_urls,
+                   s.email AS seller_email,
+                   GREATEST(0, COALESCE(o.subtotal, 0) - COALESCE(o.voucher_discount_amount, 0) - COALESCE(o.points_discount_amount, 0)) AS refundable_goods_amount,
+                   d.reason, d.description, d.buyer_evidence_urls,
                    d.video_unboxing_url, d.seller_response, d.seller_evidence_urls, d.seller_response_due_at,
                    d.status, d.verdict_action, d.verdict_notes, d.refund_amount, d.penalty_points,
                    d.resolved_by, d.resolved_at, d.created_at, d.updated_at,
+                   d.return_tracking_code, d.return_carrier, d.return_shipment_status,
+                   d.return_handed_over_at, d.return_delivered_at,
+                   sa.recipient_name AS return_recipient_name,
+                   sa.phone_number AS return_recipient_phone,
+                   CASE WHEN sa.address_id IS NOT NULL
+                        THEN CONCAT_WS(', ', sa.detail_address, sa.ward, sa.district, sa.province)
+                        ELSE NULL END AS return_recipient_address,
                    COALESCE((SELECT oi.product_title FROM public.order_items oi WHERE oi.order_id = d.order_id ORDER BY oi.order_item_id ASC LIMIT 1), 'Đơn hàng #' || d.order_id) AS product_title
             FROM public.dispute_cases d
             LEFT JOIN public.orders o ON d.order_id = o.order_id
             LEFT JOIN public.users b ON d.buyer_id = b.user_id
             LEFT JOIN public.users s ON d.seller_id = s.user_id
+            LEFT JOIN og_compat.addresses sa ON o.source_address_id = sa.address_id
             WHERE d.dispute_id = ?
             """;
         List<DisputeDetailDto> list = jdbc.query(sql, this::mapDisputeDetail, disputeId);
@@ -214,15 +162,25 @@ public class DisputeRepository {
         String sql = """
             SELECT d.dispute_id, d.order_id, d.buyer_id, COALESCE(b.full_name, 'Người mua #' || d.buyer_id) AS buyer_name,
                    b.email AS buyer_email, d.seller_id, COALESCE(s.full_name, 'Người bán #' || d.seller_id) AS seller_name,
-                   s.email AS seller_email, o.total_amount, d.reason, d.description, d.buyer_evidence_urls,
+                   s.email AS seller_email,
+                   GREATEST(0, COALESCE(o.subtotal, 0) - COALESCE(o.voucher_discount_amount, 0) - COALESCE(o.points_discount_amount, 0)) AS refundable_goods_amount,
+                   d.reason, d.description, d.buyer_evidence_urls,
                    d.video_unboxing_url, d.seller_response, d.seller_evidence_urls, d.seller_response_due_at,
                    d.status, d.verdict_action, d.verdict_notes, d.refund_amount, d.penalty_points,
                    d.resolved_by, d.resolved_at, d.created_at, d.updated_at,
+                   d.return_tracking_code, d.return_carrier, d.return_shipment_status,
+                   d.return_handed_over_at, d.return_delivered_at,
+                   sa.recipient_name AS return_recipient_name,
+                   sa.phone_number AS return_recipient_phone,
+                   CASE WHEN sa.address_id IS NOT NULL
+                        THEN CONCAT_WS(', ', sa.detail_address, sa.ward, sa.district, sa.province)
+                        ELSE NULL END AS return_recipient_address,
                    COALESCE((SELECT oi.product_title FROM public.order_items oi WHERE oi.order_id = d.order_id ORDER BY oi.order_item_id ASC LIMIT 1), 'Đơn hàng #' || d.order_id) AS product_title
             FROM public.dispute_cases d
             LEFT JOIN public.orders o ON d.order_id = o.order_id
             LEFT JOIN public.users b ON d.buyer_id = b.user_id
             LEFT JOIN public.users s ON d.seller_id = s.user_id
+            LEFT JOIN og_compat.addresses sa ON o.source_address_id = sa.address_id
             WHERE d.order_id = ?
             ORDER BY d.created_at DESC LIMIT 1
             """;
@@ -273,25 +231,124 @@ public class DisputeRepository {
                 penaltyPoints, ktvId, Timestamp.from(now), Timestamp.from(now), disputeId);
     }
 
+    public void saveReturnShipment(long disputeId, String trackingCode, String carrier, String shipmentStatus) {
+        Instant now = Instant.now();
+        jdbc.update("""
+                UPDATE public.dispute_cases
+                SET return_tracking_code = ?, return_carrier = ?, return_shipment_status = ?, updated_at = ?
+                WHERE dispute_id = ?
+                """,
+                trackingCode, carrier, shipmentStatus, Timestamp.from(now), disputeId);
+    }
+
+    public int markReturnHandedOver(long disputeId, long buyerId, Instant handedOverAt) {
+        Instant effective = handedOverAt != null ? handedOverAt : Instant.now();
+        return jdbc.update("""
+                UPDATE public.dispute_cases
+                SET return_shipment_status = 'RETURN_SHIPPING',
+                    return_handed_over_at = ?,
+                    return_handed_over_by = ?,
+                    updated_at = ?
+                WHERE dispute_id = ?
+                  AND return_shipment_status = 'RETURN_CREATED'
+                """,
+                Timestamp.from(effective), buyerId, Timestamp.from(effective), disputeId);
+    }
+
+    public int markReturnDelivered(long disputeId, Instant deliveredAt) {
+        Instant effective = deliveredAt != null ? deliveredAt : Instant.now();
+        return jdbc.update("""
+                UPDATE public.dispute_cases
+                SET return_shipment_status = 'RETURN_DELIVERED',
+                    return_delivered_at = ?,
+                    updated_at = ?
+                WHERE dispute_id = ?
+                  AND return_shipment_status = 'RETURN_SHIPPING'
+                """,
+                Timestamp.from(effective), Timestamp.from(effective), disputeId);
+    }
+
+    public void markReturnDeliveredAndRefunded(long disputeId, long actorId, BigDecimal refundAmount) {
+        Instant now = Instant.now();
+        jdbc.update("""
+                UPDATE public.dispute_cases
+                SET status = 'RESOLVED_REFUND',
+                    verdict_action = 'RESOLVED_REFUND',
+                    return_shipment_status = 'RETURN_DELIVERED',
+                    return_delivered_at = COALESCE(return_delivered_at, ?),
+                    refund_amount = COALESCE(?, refund_amount),
+                    resolved_at = COALESCE(resolved_at, ?),
+                    updated_at = ?
+                WHERE dispute_id = ?
+                """,
+                Timestamp.from(now), refundAmount, Timestamp.from(now), Timestamp.from(now), disputeId);
+    }
+
+    public void recordNotification(long userId, String type, String title, String content) {
+        Instant now = Instant.now();
+        jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) conn -> {
+            java.sql.Savepoint sp = null;
+            try {
+                sp = conn.setSavepoint("sp_dispute_notif");
+            } catch (SQLException ignored) {}
+            try (var ps = conn.prepareStatement("""
+                    INSERT INTO og_compat.notifications (
+                      user_id, type, title, content, is_read, created_at, target_data
+                    ) VALUES (?, ?, ?, ?, false, ?, '{}'::jsonb)
+                    """)) {
+                ps.setLong(1, userId);
+                ps.setString(2, type);
+                ps.setString(3, title);
+                ps.setString(4, content);
+                ps.setTimestamp(5, Timestamp.from(now));
+                ps.executeUpdate();
+                if (sp != null) {
+                    try { conn.releaseSavepoint(sp); } catch (SQLException ignored) {}
+                }
+            } catch (SQLException e) {
+                if (sp != null) {
+                    try { conn.rollback(sp); } catch (SQLException ignored) {}
+                    try { conn.releaseSavepoint(sp); } catch (SQLException ignored) {}
+                }
+            }
+            return null;
+        });
+    }
+
     public void recordPenalty(long userId, int penaltyPoints, String reason, long decidedBy) {
         if (penaltyPoints <= 0) return;
         UUID entryId = UUID.randomUUID();
         Instant now = Instant.now();
-        try {
-            jdbc.update("""
-                INSERT INTO og_compat.penalty_ledger (
-                  entry_id, user_id, points_delta, reason, decided_by, created_at, command_key, record_type
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'penalty_ledger')
-                """, entryId, userId, penaltyPoints, reason, decidedBy, Timestamp.from(now), "DISPUTE_PENALTY:" + entryId);
-        } catch (Exception e) {
+        String cmdKey = "DISPUTE_PENALTY:" + entryId;
+        jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) conn -> {
+            java.sql.Savepoint sp = null;
             try {
-                jdbc.update("""
-                    INSERT INTO public.penalty_ledger (
-                      entry_id, user_id, points_delta, reason, decided_by, created_at, command_key, record_type
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'penalty_ledger')
-                    """, entryId, userId, penaltyPoints, reason, decidedBy, Timestamp.from(now), "DISPUTE_PENALTY:" + entryId);
-            } catch (Exception ignored) {}
-        }
+                sp = conn.setSavepoint("sp_dispute_penalty");
+            } catch (SQLException ignored) {}
+            try (var ps = conn.prepareStatement("""
+                    INSERT INTO og_compat.penalty_ledger (
+                      entry_id, user_id, points_delta, reason, decided_by, created_at, command_key
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """)) {
+                ps.setObject(1, entryId);
+                ps.setLong(2, userId);
+                ps.setInt(3, penaltyPoints);
+                ps.setString(4, reason);
+                ps.setLong(5, decidedBy);
+                ps.setTimestamp(6, Timestamp.from(now));
+                ps.setString(7, cmdKey);
+                ps.executeUpdate();
+                if (sp != null) {
+                    try { conn.releaseSavepoint(sp); } catch (SQLException ignored) {}
+                }
+            } catch (SQLException e) {
+                if (sp != null) {
+                    try { conn.rollback(sp); } catch (SQLException ignored) {}
+                    try { conn.releaseSavepoint(sp); } catch (SQLException ignored) {}
+                }
+            }
+            return null;
+        });
     }
 
     public void saveReview(long orderId, long reviewerId, long revieweeId, int rating, String comment) {
@@ -316,7 +373,7 @@ public class DisputeRepository {
             }
         } else {
             try {
-                jdbc.update("INSERT INTO og_compat.reviews (order_id, reviewer_id, reviewee_id, rating, comment, created_at, updated_at, record_type) VALUES (?, ?, ?, ?, ?, ?, ?, 'reviews')",
+                jdbc.update("INSERT INTO og_compat.reviews (order_id, reviewer_id, reviewee_id, rating, comment, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         orderId, reviewerId, revieweeId, rating, comment, Timestamp.from(now), Timestamp.from(now));
             } catch (Exception e) {
                 jdbc.update("INSERT INTO public.reviews (order_id, reviewer_id, reviewee_id, rating, comment, created_at, updated_at, record_type) VALUES (?, ?, ?, ?, ?, ?, ?, 'reviews')",
@@ -379,7 +436,7 @@ public class DisputeRepository {
         long sellerId = rs.getLong("seller_id");
         String sellerName = rs.getString("seller_name");
         String sellerEmail = rs.getString("seller_email");
-        BigDecimal disputeAmount = rs.getBigDecimal("total_amount");
+        BigDecimal disputeAmount = rs.getBigDecimal("refundable_goods_amount");
         if (disputeAmount == null) disputeAmount = BigDecimal.ZERO;
         String reason = rs.getString("reason");
         String description = rs.getString("description");
@@ -387,6 +444,11 @@ public class DisputeRepository {
         String videoUnboxingUrl = rs.getString("video_unboxing_url");
         String sellerResponse = rs.getString("seller_response");
         List<String> sellerEvidenceUrls = deserializeList(rs.getString("seller_evidence_urls"));
+        if (evidenceStorageService != null) {
+            buyerEvidenceUrls = evidenceStorageService.toPrivateEvidenceUrls(buyerEvidenceUrls);
+            videoUnboxingUrl = evidenceStorageService.toPrivateEvidenceUrl(videoUnboxingUrl);
+            sellerEvidenceUrls = evidenceStorageService.toPrivateEvidenceUrls(sellerEvidenceUrls);
+        }
         Instant sellerResponseDueAt = getInstant(rs, "seller_response_due_at");
         String status = rs.getString("status");
         String verdictAction = rs.getString("verdict_action");
@@ -397,6 +459,24 @@ public class DisputeRepository {
         Instant resolvedAt = getInstant(rs, "resolved_at");
         Instant createdAt = getInstant(rs, "created_at");
         Instant updatedAt = getInstant(rs, "updated_at");
+        String returnTrackingCode = null;
+        String returnCarrier = null;
+        String returnShipmentStatus = null;
+        Instant returnHandedOverAt = null;
+        Instant returnDeliveredAt = null;
+        String returnRecipientName = null;
+        String returnRecipientPhone = null;
+        String returnRecipientAddress = null;
+        try {
+            returnTrackingCode = rs.getString("return_tracking_code");
+            returnCarrier = rs.getString("return_carrier");
+            returnShipmentStatus = rs.getString("return_shipment_status");
+            returnHandedOverAt = getInstant(rs, "return_handed_over_at");
+            returnDeliveredAt = getInstant(rs, "return_delivered_at");
+            returnRecipientName = rs.getString("return_recipient_name");
+            returnRecipientPhone = rs.getString("return_recipient_phone");
+            returnRecipientAddress = rs.getString("return_recipient_address");
+        } catch (SQLException ignored) {}
 
         String productTitle = rs.getString("product_title");
         if (productTitle == null || productTitle.isBlank()) {
@@ -430,7 +510,15 @@ public class DisputeRepository {
                 resolvedBy,
                 resolvedAt,
                 createdAt,
-                updatedAt
+                updatedAt,
+                returnTrackingCode,
+                returnCarrier,
+                returnShipmentStatus,
+                returnHandedOverAt,
+                returnDeliveredAt,
+                returnRecipientName,
+                returnRecipientPhone,
+                returnRecipientAddress
         );
     }
 

@@ -19,7 +19,7 @@ public class OrderReviewController {
         this.orderReviewService = orderReviewService;
     }
 
-    @PostMapping("/{orderId}/review")
+    @RequestMapping(value = "/{orderId}/review", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ReviewResponse> submitReview(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long orderId,

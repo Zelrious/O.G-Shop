@@ -3,8 +3,10 @@ package com.oldbutgold.shop.modules.trustsafety.api;
 import com.oldbutgold.shop.modules.trustsafety.application.CaseEvidenceRequestService;
 import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseDtos;
 import com.oldbutgold.shop.modules.trustsafety.application.ReturnCaseService;
+import com.oldbutgold.shop.modules.trustsafety.application.SystemIssueGovernanceService;
 import com.oldbutgold.shop.modules.trustsafety.application.TrustSafetyBusinessException;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -22,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * KTV console endpoints for UC83 return cases.
+ * KTV console endpoints for UC83 return cases & SYSTEM_ISSUE governance.
  * Delegates strictly to application services without accessing repositories directly.
  */
 @RestController
@@ -32,13 +34,24 @@ public class KtvCaseController {
 
     private final ReturnCaseService returnCaseService;
     private final CaseEvidenceRequestService caseEvidenceRequestService;
+    private final SystemIssueGovernanceService systemIssueGovernanceService;
 
     public KtvCaseController(
             ReturnCaseService returnCaseService,
             CaseEvidenceRequestService caseEvidenceRequestService
     ) {
+        this(returnCaseService, caseEvidenceRequestService, null);
+    }
+
+    @Autowired
+    public KtvCaseController(
+            ReturnCaseService returnCaseService,
+            CaseEvidenceRequestService caseEvidenceRequestService,
+            @Autowired(required = false) SystemIssueGovernanceService systemIssueGovernanceService
+    ) {
         this.returnCaseService = returnCaseService;
         this.caseEvidenceRequestService = caseEvidenceRequestService;
+        this.systemIssueGovernanceService = systemIssueGovernanceService;
     }
 
     private static long extractUserId(Jwt jwt) {
@@ -140,5 +153,63 @@ public class KtvCaseController {
         } else {
             return ResponseEntity.ok(result.response());
         }
+    }
+
+    @GetMapping("/admins")
+    public ResponseEntity<List<ReturnCaseDtos.AdminAssigneeOption>> listActiveAdmins() {
+        return ResponseEntity.ok(requireGovernanceService().listActiveAdmins());
+    }
+
+    @PostMapping("/system-issues/{caseId}/receive")
+    public ReturnCaseDtos.ReturnCaseDetailResponse receive(@AuthenticationPrincipal Jwt jwt, @PathVariable long caseId) {
+        return requireGovernanceService().receive(extractUserId(jwt), caseId);
+    }
+
+    @PostMapping("/system-issues/{caseId}/information")
+    public ReturnCaseDtos.ReturnCaseDetailResponse requestInformation(@AuthenticationPrincipal Jwt jwt, @PathVariable long caseId,
+            @Valid @RequestBody SystemIssueController.Supplement body) {
+        return requireGovernanceService().requestInformation(extractUserId(jwt), caseId, body.note().trim());
+    }
+
+    @GetMapping("/system-issues")
+    public ResponseEntity<List<ReturnCaseDtos.ReturnCaseDetailResponse>> listSystemIssues(@AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(requireGovernanceService().listSystemIssuesForKtv(extractUserId(jwt)));
+    }
+
+    @PostMapping("/cases/{caseId}/escalate")
+    public ResponseEntity<ReturnCaseDtos.ReturnCaseDetailResponse> escalateCase(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long caseId,
+            @Valid @RequestBody ReturnCaseDtos.KtvEscalateCaseRequest request
+    ) {
+        long ktvId = extractUserId(jwt);
+        return ResponseEntity.ok(requireGovernanceService().ktvEscalateCase(ktvId, caseId, request));
+    }
+
+    @PostMapping("/cases/{caseId}/decide-system-issue")
+    public ResponseEntity<ReturnCaseDtos.ReturnCaseDetailResponse> decideSystemIssue(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long caseId,
+            @Valid @RequestBody ReturnCaseDtos.SystemIssueDecisionRequest request
+    ) {
+        long ktvId = extractUserId(jwt);
+        return ResponseEntity.ok(requireGovernanceService().decideSystemIssue(ktvId, false, caseId, request));
+    }
+
+    @PostMapping("/cases/{caseId}/compensations")
+    public ResponseEntity<ReturnCaseDtos.CaseCompensationResponse> compensateSystemIssue(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long caseId,
+            @Valid @RequestBody ReturnCaseDtos.CaseCompensationRequest request
+    ) {
+        long ktvId = extractUserId(jwt);
+        return ResponseEntity.ok(requireGovernanceService().executeCompensation(ktvId, false, caseId, request));
+    }
+
+    private SystemIssueGovernanceService requireGovernanceService() {
+        if (systemIssueGovernanceService == null) {
+            throw new IllegalStateException("SystemIssueGovernanceService is not configured.");
+        }
+        return systemIssueGovernanceService;
     }
 }

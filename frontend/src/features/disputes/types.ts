@@ -58,6 +58,14 @@ export interface DisputeDetail {
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  returnTrackingCode?: string | null;
+  returnCarrier?: string | null;
+  returnShipmentStatus?: 'RETURN_CREATED' | 'RETURN_SHIPPING' | 'RETURN_DELIVERED' | string | null;
+  returnHandedOverAt?: string | null;
+  returnDeliveredAt?: string | null;
+  returnRecipientName?: string | null;
+  returnRecipientPhone?: string | null;
+  returnRecipientAddress?: string | null;
 }
 
 export interface DisputeDecisionRequest {

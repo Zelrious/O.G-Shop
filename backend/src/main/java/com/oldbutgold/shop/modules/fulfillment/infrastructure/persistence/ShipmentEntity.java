@@ -429,6 +429,9 @@ public class ShipmentEntity {
             effectiveDelivered = this.shippedAt;
         }
         this.deliveredAt = effectiveDelivered;
+        if ("UC83".equals(this.workflowModel)) {
+            this.validDeliveryAt = effectiveDelivered;
+        }
         this.rawGhnStatus = "delivered";
         this.updatedAt = now != null ? now : Instant.now();
         return true;
